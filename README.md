@@ -21,6 +21,23 @@ We find that core tile and bulk compute interfaces carry over from TK to HK, but
 
 We support CDNA3 and CDNA 4. 
 
+## Distributed HipKittens
+
+This fork is incubating a device-side multi-GPU layer built around parallel
+global layouts (`pgl`) and explicit peer-memory, publication, acquire, and
+replay-lifetime primitives. Kernels remain ordinary HIP C++: HipKittens does
+not hide routing, scheduling, dependency keys, or progress behind a collective
+or graph API. IRIS provides the fine-grained symmetric-memory runtime and peer
+mappings.
+
+Start with [the distributed architecture](docs/distributed/ARCHITECTURE.md),
+[source audit](docs/distributed/SOURCE_AUDIT.md), and
+[validation matrix](docs/distributed/VALIDATION.md).
+The `distributed-kernels/` tree contains the IRIS integration and the GEMM to
+ReduceScatter and fused-MoE porting work. Donor measurements and new
+abstraction rewrites are kept separate; a port does not inherit a donor's
+performance result until its architecture-specific GPU parity gates pass.
+
 **News**
 - [January 2026] HipKittens is accepted to [MLSys 2026 in Seattle]()!
 - [February 2026] Will presented HipKittens as a GPU Mode lecture, [check it out](https://www.youtube.com/watch?v=jsYyF03Fs3o)!

@@ -8,6 +8,7 @@
 #include "../../common/common.cuh"
 #include "../../types/types.cuh"
 #include "../warp/warp.cuh" // several group memory ops rely on underlying warp-scope ops
+#include "distributed/distributed.cuh"
 
 // A "warpgroup" is a special group of 4 consecutive warps defined by NVIDIA for certain SM_90+ operations.
 #define KITTENS_CHECK_WARPGROUP static_assert(N_WARPS==4, "PTX warpgroup (N_WARPS=4) function called from a non-warpgroup group.");

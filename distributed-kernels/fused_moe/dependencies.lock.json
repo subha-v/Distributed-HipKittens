@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "upstream_repository": "amd-master",
+  "source_commit": "c5a0aac71d92e229c9a1a5f1743f69e2d1279f56",
+  "measured_config_commit": "d34e5510c4672e998eb2e94672e46e2f784ca07f",
+  "rewrite_commit": "feea09b267602d78f1e51f5cd2ffd38aa0f4a76c",
+  "files": [
+    {"path": "auto-gpu-kernel/k0_fused_moe/experiments/exp_64_m2_row_striping/source_snapshot/k0pf6gm_mega.hip", "sha256": "57152a087c62aee1ffaae464cd2972e321d5e283e0681bc5a248039a6dc1ae2c"},
+    {"path": "auto-gpu-kernel/k0_fused_moe/solution/hip/hkp/hkp_sort.hpp", "sha256": "dedf49fa15b573dec3d4c780c7554a3edaf959711eee3363a6ae47ea7d57c88d"},
+    {"path": "auto-gpu-kernel/k0_fused_moe/solution/hip/hkp/hkp_sync.hpp", "sha256": "b97b7191629449305cd2863f4223ab2da6822c33bb7fb254a208b399e01e384a"},
+    {"path": "auto-gpu-kernel/k0_fused_moe/solution/hip/hkp/hkp_quant.hpp", "sha256": "6f10389662a7dd61dafa29ee99e40703161547e8b778d1f3bbf498b4c916d5d0"},
+    {"path": "auto-gpu-kernel/k0_fused_moe/prefill_opt/kernels/k0pf5_ll128.hpp", "sha256": "fa68466578a8acece071057d32ebf855c5d6bce69b4e192b4c50ef8dfbccfac3"},
+    {"path": "auto-gpu-kernel/k0_fused_moe/prefill_opt/kernels/k0pf6_chunk_release.hpp", "sha256": "1ab5a655c425548c7ef39e803144cae0c15b46143819425a665613e6f6eed03e"},
+    {"path": "auto-gpu-kernel/k0_fused_moe/solution/hip/n2_phase1_gm.cpp", "sha256": "1d90b26658b6a524db69434ddcfa0b2dcec2418c852f83874468d55dd0197dc2"},
+    {"path": "auto-gpu-kernel/k0_fused_moe/solution/hip/n2_phase2_gm.cpp", "sha256": "7d8beb039b8224e614eacdbe9b34b21837095ffa6ec4842f08d72358b7b8e025"}
+  ],
+  "compile": {
+    "architecture": "gfx950",
+    "language": "C++20/HIP",
+    "flags": ["-O3", "-DKITTENS_CDNA4", "-ffast-math", "-mllvm", "-amdgpu-mfma-vgpr-form=1", "-DK0P6GM_G=3", "-DN2GM_G=3"]
+  },
+  "measured_environment": {
+    "container_tag": "rocm/atom-dev:vllm-latest",
+    "container_digest_captured": false,
+    "torch": "2.10.0+rocm7.2.4.git3d3aa833",
+    "torch_hip": "7.2.53211",
+    "world_size": 8
+  },
+  "external_mori": {
+    "required_include": "mori/shmem/shmem.hpp",
+    "measured_location_kind": "installed Python package _jit-sources tree",
+    "version_or_commit_captured": false,
+    "role": "frozen LL128 helper build compatibility only; peer address translation is IRIS/HipKittens",
+    "policy": "Do not claim a reproducible or performance-parity build until the MoRI tree and container are content-pinned."
+  },
+  "runtime_abi": {
+    "descriptor_length": 56,
+    "symmetric_heap_descriptor_slot": 55,
+    "symmetric_heap_descriptor_bytes": 72,
+    "symmetric_heap_descriptor_alignment": 8,
+    "backend": "IRIS host-snapshotted heap bases plus kittens::distributed::translate_peer<8>",
+    "world_size": 8,
+    "timeout_recovery": "terminal; coordinated all-rank protocol-state reinitialization required before relaunch"
+  }
+}

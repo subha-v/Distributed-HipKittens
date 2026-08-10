@@ -1,5 +1,12 @@
 # Documentation 
 
+## Distributed HipKittens
+
+- [Architecture and promotion gates](distributed/ARCHITECTURE.md)
+- [PGL and primitive contracts](distributed/PRIMITIVES.md)
+- [Source audit and donor selection](distributed/SOURCE_AUDIT.md)
+- [Validation matrix](distributed/VALIDATION.md)
+
 
 ## Docker
 
@@ -18,7 +25,3 @@ Within the Docker, we run the process shown in [profiling/](https://github.com/H
 ## HipKittens
 
 We provide documentation on HipKittens in []().
-
-
-
-

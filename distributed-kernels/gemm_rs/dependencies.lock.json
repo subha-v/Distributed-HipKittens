@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "upstream_repository": "amd-master",
+  "donor_commit": "182f3e269068d3809ebf9074395217351837aec5",
+  "rewrite_commit": "feea09b267602d78f1e51f5cd2ffd38aa0f4a76c",
+  "donors": [
+    {
+      "path": "auto-gpu-kernel/k1_comm_overlap/experiments/exp_23_emit_timed/src/ladder_emit.cpp",
+      "sha256": "70ce26dacaa2f97ff57284132e2e2b42ba80bcd7fd1fac20cecb0471de666d82"
+    },
+    {
+      "path": "auto-gpu-kernel/k1_comm_overlap/experiments/exp_24_reduce/src/ladder_reduce.cpp",
+      "sha256": "62d8d61358ea5a6b3d8ea98579f1a16cab8078d2659a5fabe3e573f9fd211eb4"
+    }
+  ],
+  "target": {
+    "architecture": "gfx950",
+    "language": "C++20/HIP",
+    "defines": ["KITTENS_CDNA4", "HIP_ENABLE_WARP_SYNC_BUILTINS"],
+    "required_headers": ["kittens.cuh", "pyutils/pyutils.cuh"]
+  },
+  "runtime": {
+    "world_size": 8,
+    "symmetric_heap": "IRIS fine-grained IPC heap; host snapshots allocation-adjusted named bases",
+    "symmetric_descriptor_bytes": 72,
+    "symmetric_descriptor_alignment": 8,
+    "signal_words_per_rank": 8256,
+    "epoch_words_per_rank": 8192
+  }
+}
