@@ -252,27 +252,13 @@ __device__ __forceinline__ void k0p6_part_arrive(int b, int tid, const long long
   }
 }
 
-// ---- MPS role packing + the phase-2 done hook --------------------------------
-// role word: [31] service | [30:16] dense id | [15:0] pool count. The vendored
-// phase-2 body strides its task loop by these values so logical compute ids
-// cover every (tile, nc) task exactly once.
-__device__ __forceinline__ unsigned int k0p6_mps_pack_role(bool service,
-                                                           unsigned int id,
-                                                           unsigned int count) {
-  return (service ? 0x80000000u : 0u) | ((id & 0x7FFFu) << 16) |
-         (count & 0xFFFFu);
-}
-__device__ __forceinline__ int k0p6_mps_task_start(unsigned int role, int bid) {
-  return (role & 0x80000000u) ? bid : (int)((role >> 16) & 0x7FFFu);
-}
-__device__ __forceinline__ int k0p6_mps_task_stride(unsigned int role, int nct) {
-  return (role & 0x80000000u) ? nct : (int)(role & 0xFFFFu);
-}
-
-// Phase-2 task-done hook. Stream mode (2): publish the (b, nc) tile event off
-// the GEMM wave — one agent release + one relaxed 32-bit store by tid0, after
-// the vendored body drained every lane's epilogue atomics. Other modes keep the
-// parity part_done bump so M0's zeroing contract is unchanged.
+// ---- MPS phase-2 done hook -----------------------------------------------------
+// Stream mode (2): publish the (b, nc) tile event off the GEMM wave — one
+// agent release + one relaxed 32-bit store by tid0, after the vendored body
+// drained every lane's epilogue atomics. Other modes keep the parity part_done
+// bump so M0's zeroing contract is unchanged. The config word is re-read per
+// task through the same volatile descriptor channel the a2/part bumps use, so
+// nothing tuneable is kept live across the MFMA mainloop.
 __device__ __forceinline__ void k0p6_mps_task_done(int b, int nc, int tid,
                                                    const long long* k0p6_desc) {
   if (tid != 0) return;
@@ -313,13 +299,14 @@ __device__ __forceinline__ void k0p6_mps_task_done(int b, int nc, int tid,
 #define N2_P2_QUAL __device__ __forceinline__
 #define N2_P2_NAME n2p6gm_mps_phase2_body
 #define N2_KERNELS_ONLY
-#define N2_HOOK_CTX_ARG , const long long* __restrict__ k0p6_desc, const unsigned int k0p6_role
+#define N2_HOOK_CTX_ARG , const long long* __restrict__ k0p6_desc, const int k0p6_task_start, const int k0p6_task_stride
 #define N2GM_TASK_WAIT_HOOK \
   if (!k0p6_a2_wait(b, tid, k0p6_desc)) return;
 #define N2GM_TASK_DONE_HOOK k0p6_mps_task_done(b, nc, tid, k0p6_desc);
 #define N2GM_TASK_DONE_DRAIN_HOOK asm volatile("s_waitcnt vmcnt(0)" ::: "memory");
-#define N2GM_TASK_START k0p6_mps_task_start(k0p6_role, (int)blockIdx.x)
-#define N2GM_TASK_STRIDE k0p6_mps_task_stride(k0p6_role, (int)gridDim.x)
+// Plain uniform ints, exactly the donor's loop-latch register class.
+#define N2GM_TASK_START k0p6_task_start
+#define N2GM_TASK_STRIDE k0p6_task_stride
 #include "n2_phase2_gm_mps.cpp"
 #undef N2GM_TASK_STRIDE
 #undef N2GM_TASK_START
@@ -345,6 +332,105 @@ __device__ __forceinline__ float k0p6q_bf16_to_f32(unsigned short b) {
   return __uint_as_float((unsigned int)b << 16);
 }
 
+// One M8 combine batch (NT tokens) over a caller-selected row base function.
+// The arithmetic is byte-stable with the parity M8 body; splitting the loop
+// into pull/slot instantiations at the call site keeps the two address forms
+// out of each other's live ranges (resource-gate requirement).
+template<int NT, typename BaseFor>
+__device__ __forceinline__ void k0p6_mps_m8_batch(
+    int tok0, int T, unsigned int epoch32, long long spin_limit,
+    const int* __restrict__ pull_ptr, const int* __restrict__ pull_src,
+    const unsigned int* __restrict__ row_ready, int T_loc_max,
+    int* __restrict__ pperr, int lane, unsigned short* __restrict__ out,
+    BaseFor&& base_for) {
+  bool batch_ready = true;
+  int lo2[NT], fanout[NT];
+  bool live[NT];
+#pragma unroll
+  for (int t = 0; t < NT; ++t) {
+    const int tok = tok0 + t;
+    live[t] = (tok < T);
+    lo2[t] = live[t] ? pull_ptr[tok] : 0;
+    fanout[t] = live[t] ? (pull_ptr[tok + 1] - lo2[t]) : 0;
+  }
+  unsigned long long pbase[NT];
+#pragma unroll
+  for (int t = 0; t < NT; ++t) {
+    pbase[t] = 0ull;
+    if ((lane >> 3) == t) {
+      const int j2 = lane & 7;
+      if (j2 < fanout[t]) {
+        const int p = pull_src[(size_t)(lo2[t] + j2) * 2 + 0];
+        const int row = pull_src[(size_t)(lo2[t] + j2) * 2 + 1];
+        // exp_56 fix (8, site 1/4 — the combine poll = 33554432 bit): CROSS-GPU
+        // poll of row_ready (relaxed SYSTEM store). nt-only load never
+        // invalidates => spins on a stale row_ready line forever. System-scope
+        // atomic load.
+        batch_ready = hk_moe::poll_epoch_system(
+            row_ready + (size_t)p * T_loc_max + row, epoch32,
+            (std::uint64_t)spin_limit,
+            hk_moe::set_error_bit{pperr, 33554432});
+        pbase[t] = base_for(p, row);
+      }
+    }
+  }
+  // A timeout must not mint a usable peer payload. Skip this token batch
+  // uniformly across the wave after recording pperr; M9 still retires the
+  // launch, so the negative control fails without wedging the node.
+  if (__ballot(batch_ready) != ~0ull) return;
+  // Only lanes 0..31 poll readiness, while all lanes consume the shuffled
+  // bases. Apply one convergent wave acquire before any payload load.
+  hk_moe::acquire_payload_system();
+  __syncwarp();
+#pragma unroll 1
+  for (int c = 0; c < 14; ++c) {
+    const size_t off = (size_t)(c << 10) + (size_t)(lane << 4);
+    float acc[NT][8];
+#pragma unroll
+    for (int t = 0; t < NT; ++t) {
+#pragma unroll
+      for (int e = 0; e < 8; ++e) acc[t][e] = 0.f;
+    }
+#pragma unroll 1
+    for (int jb = 0; jb < 8; jb += 4) {
+      uint4 v2[NT][4];
+#pragma unroll
+      for (int t = 0; t < NT; ++t) {
+#pragma unroll
+        for (int jj = 0; jj < 4; ++jj) {
+          const unsigned long long pb = __shfl(pbase[t], 8 * t + jb + jj);
+          v2[t][jj] = *reinterpret_cast<const uint4*>(
+              reinterpret_cast<const unsigned char*>(pb) + off);
+        }
+      }
+#pragma unroll
+      for (int t = 0; t < NT; ++t) {
+#pragma unroll
+        for (int jj = 0; jj < 4; ++jj) {
+          if (jb + jj < fanout[t]) {
+            const unsigned short* const u16 =
+                reinterpret_cast<const unsigned short*>(&v2[t][jj]);
+#pragma unroll
+            for (int e = 0; e < 8; ++e) acc[t][e] += k0p6_bf16_to_f32(u16[e]);
+          }
+        }
+      }
+    }
+#pragma unroll
+    for (int t = 0; t < NT; ++t) {
+      if (!live[t]) continue;
+      unsigned short* const orow = out + (size_t)(tok0 + t) * (size_t)K0P6_H;
+      union {
+        uint4 pack;
+        unsigned short u16[8];
+      } pk;
+#pragma unroll
+      for (int e = 0; e < 8; ++e) pk.u16[e] = k0p6_f32_to_bf16_rne(acc[t][e]);
+      *reinterpret_cast<uint4*>(reinterpret_cast<unsigned char*>(orow) + off) = pk.pack;
+    }
+  }
+}
+
 // ================================================================================================
 extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
     const long long* __restrict__ desc, int* __restrict__ pperr, long long spin_limit) {
@@ -358,13 +444,16 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
   const int MAXTOK = (int)k0p6_dread(desc, K0P6_D_MAXTOK);   // exp_56: per-source segment stride
   const int input_tokens = (int)k0p6_dread(desc, K0P6_D_T);
   const long long symmetric_address = k0p6_dread(desc, K0P6_D_SYMMETRIC);
-  const hk_moe::mps::config mps_cfg = hk_moe::mps::decode_config(
-      (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
   __shared__ __align__(16) unsigned char s_row[4][7488];
   __shared__ int s_cnt[K0P6_MAXE];
   __shared__ unsigned int s_total;
   // exp_64: M2 row-striping. Pass A records each (source,chunk) live fill; the per-source sum
   // s_ns[s] is the dense live extent of source s's segment. world*nchunks <= 64, world <= 8.
+  // MPS lifetime note (resource-gate): s_fill/s_ns are WRITTEN and last READ
+  // only inside M2 (Pass-A tables, Pass-B extents, sentinel pass) and are dead
+  // from the M3 barrier onward. M6.9 reuses s_ns[4] as the role broadcast slot
+  // and M8's dynamic ticket loop reuses s_ns[0..3] as its per-wave broadcast
+  // words. No overlapping live ranges exist for those pairs.
   __shared__ int s_fill[64];
   __shared__ int s_ns[8];
 
@@ -386,22 +475,25 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
     return;
   }
   // MPS guard: the config word must be valid, the event wire format must fit
-  // every block of this run, and every MPS buffer must be present. bcap fits
-  // the event's 14-bit block field: bcap = PADMAX/32 <= 16383.
-  const int bcap = PADMAX / 32;
-  const std::uint32_t queue_capacity =
-      (std::uint32_t)bcap * 16u;
-  if (!hk_moe::mps::config_is_valid(mps_cfg) || bcap > 16383 ||
-      k0p6_dread(desc, K0P6_D_MPS_Q) == 0 ||
-      k0p6_dread(desc, K0P6_D_MPS_NCARR) == 0 ||
-      k0p6_dread(desc, K0P6_D_MPS_PUSHED) == 0 ||
-      k0p6_dread(desc, K0P6_D_MPS_CLAIM) == 0 ||
-      k0p6_dread(desc, K0P6_D_MPS_STATE) == 0 ||
-      (k0p6_dread(desc, K0P6_D_MPS_STATE) & 7) != 0 ||
-      k0p6_dread(desc, K0P6_D_MPS_SLOTS) == 0 ||
-      (k0p6_dread(desc, K0P6_D_MPS_SLOTS) & 15) != 0) {
-    if (bid == 0 && tid == 0) atomicOr(pperr, K0P6_MPS_ERR_CONFIG);
-    return;
+  // every block of this run (bcap = PADMAX/32 <= 16383), and every MPS buffer
+  // must be present. The decoded config fields and capacity math stay LOCAL to
+  // this scope — the donor's no-cross-phase-state rule applies to MPS tuning
+  // words too: every consuming phase reloads its own from k0p6_dread.
+  {
+    const hk_moe::mps::config entry_cfg = hk_moe::mps::decode_config(
+        (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
+    if (!hk_moe::mps::config_is_valid(entry_cfg) || PADMAX / 32 > 16383 ||
+        k0p6_dread(desc, K0P6_D_MPS_Q) == 0 ||
+        k0p6_dread(desc, K0P6_D_MPS_NCARR) == 0 ||
+        k0p6_dread(desc, K0P6_D_MPS_PUSHED) == 0 ||
+        k0p6_dread(desc, K0P6_D_MPS_CLAIM) == 0 ||
+        k0p6_dread(desc, K0P6_D_MPS_STATE) == 0 ||
+        (k0p6_dread(desc, K0P6_D_MPS_STATE) & 7) != 0 ||
+        k0p6_dread(desc, K0P6_D_MPS_SLOTS) == 0 ||
+        (k0p6_dread(desc, K0P6_D_MPS_SLOTS) & 15) != 0) {
+      if (bid == 0 && tid == 0) atomicOr(pperr, K0P6_MPS_ERR_CONFIG);
+      return;
+    }
   }
   const int T_ext = world * MAXTOK;   // exp_56: swept segmented extent
   const int lo = cur * E;
@@ -454,7 +546,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
       std::uint32_t* mps_state = (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_STATE);
       const int gtid0 = bid * (int)blockDim.x + tid;
       const int gstride0 = nct * (int)blockDim.x;
-      for (int i = gtid0; i < (int)queue_capacity; i += gstride0) mps_q[i] = 0u;
+      for (int i = gtid0; i < (PADMAX / 32) * 16; i += gstride0) mps_q[i] = 0u;
       for (int i = gtid0; i < T_ext * 16; i += gstride0) mps_arr[i] = 0u;
       for (int i = gtid0; i < T_ext; i += gstride0) {
         mps_pushed[i] = 0u;
@@ -1029,30 +1121,37 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
   // (256-C) so every (tile, nc) task still executes exactly once. Mode 1 keeps
   // the identity partition (no reservation, no overlap). No grid barrier is
   // added: the partition rides M6's own completion order.
-  unsigned int k0p6_role;
+  //
+  // Plain-int task bounds, not an opaque packed role: the phase-2 loop latch
+  // must look exactly like the donor's (uniform start + uniform stride, no
+  // bitfield extraction, no gridDim.x read). Compute CTAs get
+  // (compute_id, 256-C); service CTAs get (service_id, 0) and skip M7.
+  // These two ints are the ONLY MPS values allowed to live across the M7 MFMA
+  // body; the config word is re-decoded phase-locally everywhere else.
+  int mps_m7_start = bid;
+  int mps_m7_stride = nct;
   {
-    std::uint32_t* mps_state = (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_STATE);
-    if (mps_cfg.mode == 1u) {
-      k0p6_role = k0p6_mps_pack_role(false, (unsigned int)bid,
-                                     (unsigned int)nct);
-    } else {
+    const hk_moe::mps::config pcfg = hk_moe::mps::decode_config(
+        (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
+    if (pcfg.mode != 1u) {
+      std::uint32_t* mps_state =
+          (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_STATE);
       const kittens::distributed::role_partition mps_part =
           kittens::distributed::finish_order_partition(
-              mps_state + K0P6_MPS_ST_TICKET, mps_cfg.reserved_comm_ctas,
-              (std::uint32_t)nct);
-      k0p6_role = k0p6_mps_pack_role(
-          mps_part.service, mps_part.service ? mps_part.service_id
-                                             : mps_part.compute_id,
-          mps_part.service ? 1u : (unsigned int)mps_part.compute_count);
+              mps_state + K0P6_MPS_ST_TICKET, pcfg.reserved_comm_ctas,
+              (std::uint32_t)nct, (std::uint32_t*)&s_ns[4]);
+      mps_m7_start = mps_part.service ? (int)mps_part.service_id
+                                      : (int)mps_part.compute_id;
+      mps_m7_stride = mps_part.service ? 0 : (int)mps_part.compute_count;
     }
   }
-  const bool mps_service = (k0p6_role & 0x80000000u) != 0u;
 
   // ================= M7: N2 phase2 over the logical compute pool ================
-  // Service CTAs skip the GEMM body entirely; compute CTAs stride num_tasks by
-  // the dense pool count. The per-(b, nc) completion hook is semantics-only:
-  // stream mode publishes tile events; modes 0/1 bump part_done as in parity.
-  if (!mps_service) {
+  // Service CTAs skip the GEMM body entirely (stride 0); compute CTAs stride
+  // num_tasks by the dense pool count. The per-(b, nc) completion hook is
+  // semantics-only: stream mode publishes tile events; modes 0/1 bump
+  // part_done as in parity.
+  if (mps_m7_stride != 0) {
     production_fused_moe::n2::n2p6gm_mps_phase2_body(
         (const std::uint8_t*)k0p6_dread(desc, K0P6_D_A2Q),
         (const float*)k0p6_dread(desc, K0P6_D_DQ2),
@@ -1065,70 +1164,73 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
         (__hip_bfloat16*)k0p6_dread(desc, K0P6_D_PART),
         (const int*)k0p6_dread(desc, K0P6_D_TILE_DESC),
         (int)((const int*)k0p6_dread(desc, K0P6_D_NUM_TILES))[0], desc,
-        k0p6_role);
+        mps_m7_start, mps_m7_stride);
     if (tid == 0) {
       std::uint32_t* mps_state =
           (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_STATE);
       std::uint64_t* mps_ts = (std::uint64_t*)(mps_state + K0P6_MPS_ST_WORDS);
-      hk_moe::mps::ts_last(mps_ts + K0P6_MPS_TS_M7_DONE, mps_cfg.timestamps);
+      const hk_moe::mps::config m7cfg = hk_moe::mps::decode_config(
+          (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
+      hk_moe::mps::ts_last(mps_ts + K0P6_MPS_TS_M7_DONE, m7cfg.timestamps);
     }
   }
   if (debug_stop == 6) return;
-
-  // payload-validity contract: modes 0/1 compute it at the M7.5 barrier (parity
-  // discipline); mode 2 computes it per-CTA at M8 entry. Declared here so M8
-  // sees one variable.
-  bool phase2_payload_valid = true;
 
   // ================= M7.6: minimum-progress service waves (stream mode) ========
   // Wave-striped consumption of the (b, nc) event queue: slice arrival
   // bookkeeping, group claiming, payload push into owner-resident slots, and
   // batched owner-only row_ready publication. Runs ONLY on the reserved
-  // service CTAs in mode 2. All waits are bounded and watch pperr; a failure
-  // exits the loop and the launch fails closed through the usual paths.
-  if (mps_cfg.mode == 2u && mps_service) {
-    const auto* symmetric = k0p6_symmetric(desc);
-    const int* nvi = (const int*)k0p6_dread(desc, K0P6_D_NVI);
-    const std::uint32_t events_total = ((std::uint32_t)nvi[0] >> 5) * 16u;
-    std::uint32_t* mps_state =
-        (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_STATE);
-    if (events_total > queue_capacity) {
-      if (tid == 0) atomicOr(pperr, K0P6_MPS_ERR_CONFIG);
-    } else {
-      hk_moe::mps::service_env env;
-      env.q = (const std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_Q);
-      env.nc_arr = (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_NCARR);
-      env.pushed = (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_PUSHED);
-      env.claim = (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_CLAIM);
-      env.row_rem = (std::uint32_t*)k0p6_dread(desc, K0P6_D_ROW_REM);
-      env.sti = (const int*)k0p6_dread(desc, K0P6_D_STI);
-      env.part = (const unsigned short*)k0p6_dread(desc, K0P6_D_PART);
-      env.slots = (unsigned short*)k0p6_dread(desc, K0P6_D_MPS_SLOTS);
-      env.row_ready = (std::uint32_t*)k0p6_dread(desc, K0P6_D_ROW_READY);
-      env.pperr = pperr;
-      env.ts = (std::uint64_t*)(mps_state + K0P6_MPS_ST_WORDS);
-      env.symmetric = symmetric;
-      env.cur = cur;
-      env.world = world;
-      env.maxtok = MAXTOK;
-      env.t_ext = T_ext;
-      env.t_loc_max = T_loc_max;
-      env.epoch32 = (std::uint32_t)k0p6_epoch(desc);
-      env.group_slices = mps_cfg.group_slices;
-      env.flush_rows = mps_cfg.flush_rows;
-      env.spin_limit = (std::uint64_t)spin_limit;
-      env.events_total = events_total;
-      env.queue_capacity = queue_capacity;
-      env.ts_enable = mps_cfg.timestamps;
-      // The wave scratch unions with the M1 staging slice: M1's s_row use is
-      // long dead by M7.6, and 276 B per wave fits s_row[wid]'s 7488 B.
-      static_assert(sizeof(hk_moe::mps::wave_scratch) <= 7488,
-                    "MPS wave scratch must fit the reused M1 staging slice");
-      hk_moe::mps::wave_scratch* mps_scratch =
-          reinterpret_cast<hk_moe::mps::wave_scratch*>(&s_row[wid][0]);
-      hk_moe::mps::run_service(env, *mps_scratch,
-                               (k0p6_role >> 16) & 0x7FFFu,   // service_id
-                               mps_cfg.reserved_comm_ctas, wid, lane);
+  // service CTAs (stride 0) in mode 2. All waits are bounded and watch pperr;
+  // a failure exits the loop and the launch fails closed through the usual
+  // paths.
+  {
+    const hk_moe::mps::config scfg = hk_moe::mps::decode_config(
+        (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
+    if (scfg.mode == 2u && mps_m7_stride == 0) {
+      const auto* symmetric = k0p6_symmetric(desc);
+      const int* nvi = (const int*)k0p6_dread(desc, K0P6_D_NVI);
+      const std::uint32_t events_total = ((std::uint32_t)nvi[0] >> 5) * 16u;
+      const std::uint32_t queue_capacity = (std::uint32_t)(PADMAX / 32) * 16u;
+      std::uint32_t* mps_state =
+          (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_STATE);
+      if (events_total > queue_capacity) {
+        if (tid == 0) atomicOr(pperr, K0P6_MPS_ERR_CONFIG);
+      } else {
+        hk_moe::mps::service_env env;
+        env.q = (const std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_Q);
+        env.nc_arr = (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_NCARR);
+        env.pushed = (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_PUSHED);
+        env.claim = (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_CLAIM);
+        env.row_rem = (std::uint32_t*)k0p6_dread(desc, K0P6_D_ROW_REM);
+        env.sti = (const int*)k0p6_dread(desc, K0P6_D_STI);
+        env.part = (const unsigned short*)k0p6_dread(desc, K0P6_D_PART);
+        env.slots = (unsigned short*)k0p6_dread(desc, K0P6_D_MPS_SLOTS);
+        env.row_ready = (std::uint32_t*)k0p6_dread(desc, K0P6_D_ROW_READY);
+        env.pperr = pperr;
+        env.ts = (std::uint64_t*)(mps_state + K0P6_MPS_ST_WORDS);
+        env.symmetric = symmetric;
+        env.cur = cur;
+        env.world = world;
+        env.maxtok = MAXTOK;
+        env.t_ext = T_ext;
+        env.t_loc_max = T_loc_max;
+        env.epoch32 = (std::uint32_t)k0p6_epoch(desc);
+        env.group_slices = scfg.group_slices;
+        env.flush_rows = scfg.flush_rows;
+        env.spin_limit = (std::uint64_t)spin_limit;
+        env.events_total = events_total;
+        env.queue_capacity = queue_capacity;
+        env.ts_enable = scfg.timestamps;
+        // The wave scratch unions with the M1 staging slice: M1's s_row use
+        // is long dead by M7.6, and 524 B per wave fits s_row[wid]'s 7488 B.
+        static_assert(sizeof(hk_moe::mps::wave_scratch) <= 7488,
+                      "MPS wave scratch must fit the reused M1 staging slice");
+        hk_moe::mps::wave_scratch* mps_scratch =
+            reinterpret_cast<hk_moe::mps::wave_scratch*>(&s_row[wid][0]);
+        hk_moe::mps::run_service(env, *mps_scratch,
+                                 (std::uint32_t)mps_m7_start,   // service_id
+                                 scfg.reserved_comm_ctas, wid, lane);
+      }
     }
   }
 
@@ -1158,7 +1260,8 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
   //      live row it owns, so no consumer can hang. Each relaxed row_ready store is release-ordered
   //      by its publishing leader's preceding fence, and the M8 poll SYSTEM-acquires. The second
   //      leader release is necessary to carry the grid-acquired payload ordering to remote flags.
-  if (mps_cfg.mode == 0u) {
+  if (hk_moe::mps::decode_config(
+          (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG)).mode == 0u) {
     unsigned int* row_remaining = (unsigned int*)k0p6_dread(desc, K0P6_D_ROW_REM);
     unsigned int* row_ready = (unsigned int*)k0p6_dread(desc, K0P6_D_ROW_READY);
     const unsigned int epoch32 = (unsigned int)k0p6_epoch(desc);
@@ -1176,11 +1279,11 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
       hkp::grid_barrier(bar, tid, bar_err);
     }
     hk_moe::acquire_payload_agent();
-    phase2_payload_valid = !hk_moe::error_bit_set_agent(
+    const bool payload_ok = !hk_moe::error_bit_set_agent(
         pperr, 16777216 | 2097152);
     // CTA-leader-only publication keeps the formal release sequence and limits the second-stage
     // release count to 256/rank. Nonleaders may enter M8 immediately and poll while leaders publish.
-    if (phase2_payload_valid && tid == 0) {
+    if (payload_ok && tid == 0) {
       const auto* symmetric = k0p6_symmetric(desc);
       hk_moe::release_signal_batch_system();
       // Each CTA leader owns r = bid (mod nct) over the receive-row EXTENT. row_remaining!=0
@@ -1214,7 +1317,8 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
   // CTAs ran M7 unreserved; payload transport switches to posted pushes into
   // owner-resident slots; flags go to the row's owner ONLY (1 store vs 8);
   // publication timing is still bulk (one barrier, then stripes).
-  if (mps_cfg.mode == 1u) {
+  if (hk_moe::mps::decode_config(
+          (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG)).mode == 1u) {
     unsigned int* row_remaining = (unsigned int*)k0p6_dread(desc, K0P6_D_ROW_REM);
     std::uint32_t* row_ready = (std::uint32_t*)k0p6_dread(desc, K0P6_D_ROW_READY);
     unsigned short* slots = (unsigned short*)k0p6_dread(desc, K0P6_D_MPS_SLOTS);
@@ -1231,9 +1335,9 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
       hkp::grid_barrier(bar, tid, bar_err);
     }
     hk_moe::acquire_payload_agent();
-    phase2_payload_valid = !hk_moe::error_bit_set_agent(
+    const bool payload_ok = !hk_moe::error_bit_set_agent(
         pperr, 16777216 | 2097152);
-    if (phase2_payload_valid) {
+    if (payload_ok) {
       const auto* symmetric = k0p6_symmetric(desc);
       const size_t row_bytes = (size_t)K0P6_H * 2u;
       // (3) push whole rows, grid-strided by CTA: bid owns rows r ≡ bid (mod
@@ -1278,168 +1382,120 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
   }
 
   // ================= M8: streaming mtab4 combine (everything re-read from desc) ============
-  // Three structural variants, one arithmetic body:
-  //   mode 0 (reserve-only): parity behavior — static wave stripes, peer-part pull.
-  //   mode 1 (bulk-push):    static wave stripes, owner-LOCAL slot reads.
+  // Four structural paths, one stable arithmetic body (k0p6_mps_m8_batch):
+  //   mode 0 (reserve-only): parity behavior — parity's exact static wave
+  //                          stripes over peer-part pulls.
+  //   mode 1 (bulk-push):    static wave stripes over owner-LOCAL slot rows.
   //   mode 2 (stream):       DYNAMIC per-wave batch tickets so early-drained
   //                          compute CTAs start immediately and late-joining
   //                          service CTAs mix in; owner-local slot reads (or
-  //                          peer-part pull under the pull_fallback diagnostic).
+  //                          peer-part pulls under the pull_fallback diagnostic).
+  // The pull and local-slot address forms live in DISJOINT branches now, and
+  // the static loop is restored separately from the dynamic-ticket loop:
+  // resource-gate terms. Payload validity is computed phase-locally here (the
+  // parity block's cross-phase bool is gone): any error bit on this CTA
+  // suppresses all batches; the counted M9 arrival still retires a failed
+  // launch.
   {
-    const bool m8_pull = (mps_cfg.mode == 0u) || mps_cfg.pull_fallback;
-    const bool m8_dynamic = (mps_cfg.mode == 2u);
-    // Keep every M8 descriptor-derived value inside this phase scope. M9
-    // deliberately reloads its own state after the scope ends.
-    const auto* symmetric = m8_pull ? k0p6_symmetric(desc) : nullptr;
+    const hk_moe::mps::config m8cfg = hk_moe::mps::decode_config(
+        (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
+    const bool m8_pull = (m8cfg.mode == 0u) || m8cfg.pull_fallback;
+    const bool m8_dynamic = (m8cfg.mode == 2u);
     std::uint32_t* mps_state = (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_STATE);
-    std::uint32_t* m8_next = mps_state + K0P6_MPS_ST_M8NEXT;
     std::uint64_t* mps_ts = (std::uint64_t*)(mps_state + K0P6_MPS_ST_WORDS);
-    // Stream mode has no M7.5 barrier: compute the same payload-validity gate
-    // per CTA here. Any error bit (a2 timeout, grid-barrier timeout, service
-    // timeout, config guard) suppresses all batches on this CTA; the counted
-    // M9 arrival still retires the failed launch.
-    if (mps_cfg.mode == 2u) {
-      phase2_payload_valid = !hk_moe::error_bit_set_agent(
-          pperr, 16777216 | 2097152 | K0P6_MPS_ERR_SERVICE | K0P6_MPS_ERR_CONFIG);
-    }
-    const std::uint64_t epoch = k0p6_epoch(desc);
-    const unsigned int epoch32 = (unsigned int)epoch;
-    const int T = phase2_payload_valid ? (int)k0p6_dread(desc, K0P6_D_T) : 0;
-    unsigned short* out = (unsigned short*)k0p6_dread(desc, K0P6_D_OUT);
+    // Keep every M8 descriptor-derived value inside this phase scope. M9
+    // deliberately reloads its own state after the scope ends. Only the pull
+    // paths materialize the IRIS descriptor (one of the six counted sites).
+    const auto* symmetric = m8_pull ? k0p6_symmetric(desc) : nullptr;
     const unsigned short* part = m8_pull
         ? (const unsigned short*)k0p6_dread(desc, K0P6_D_PART) : nullptr;
     const unsigned short* slots = m8_pull
         ? nullptr : (const unsigned short*)k0p6_dread(desc, K0P6_D_MPS_SLOTS);
+    const std::uint64_t epoch = k0p6_epoch(desc);
+    const unsigned int epoch32 = (unsigned int)epoch;
+    const bool payload_ok = !hk_moe::error_bit_set_agent(
+        pperr, 16777216 | 2097152 |
+        (m8_dynamic ? (K0P6_MPS_ERR_SERVICE | K0P6_MPS_ERR_CONFIG) : 0));
+    const int T = payload_ok ? (int)k0p6_dread(desc, K0P6_D_T) : 0;
+    unsigned short* out = (unsigned short*)k0p6_dread(desc, K0P6_D_OUT);
     const int* pull_ptr = (const int*)k0p6_dread(desc, K0P6_D_PULL_PTR);
     const int* pull_src = (const int*)k0p6_dread(desc, K0P6_D_PULL_SRC);
     const unsigned int* row_ready =
         (const unsigned int*)k0p6_dread(desc, K0P6_D_ROW_READY);
 
+    // mode 0 (+pull_fallback): the producer's remote part row over xGMI.
+    // slot modes: the producer's slice-landing slot in THIS rank's own memory
+    // — row names a row on producer p in [cur*MAXTOK, (cur+1)*MAXTOK).
+    const auto base_pull =
+        [part, symmetric](int p, int row) -> unsigned long long {
+      return (unsigned long long)hk_moe::peer_ptr(
+          part + (size_t)row * (size_t)K0P6_H, p, symmetric);
+    };
+    const auto base_slot =
+        [slots, cur, MAXTOK](int p, int row) -> unsigned long long {
+      return (unsigned long long)(slots +
+             ((size_t)p * (size_t)MAXTOK + (size_t)row -
+              (size_t)cur * (size_t)MAXTOK) *
+                 (size_t)K0P6_H);
+    };
+
     const int gw = bid * (blockDim.x >> 6) + wid;
     const int nw = nct * (blockDim.x >> 6);
     constexpr int NT = 4;
-    const int nbatches = (T + NT - 1) / NT;
-    __shared__ unsigned int s_batch_no[4];
-    int next_static = gw;
-    while (true) {
-      int batch;
-      if (m8_dynamic) {
-        if (lane == 0) {
-          s_batch_no[wid] =
-              kittens::distributed::fetch_add_relaxed<hk_moe::scope::agent>(
-                  m8_next, 1u);
+    if (!m8_dynamic) {
+      // Parity's static wave stripes, one per address form.
+      if (m8_pull) {
+        for (int tok0 = gw * NT; tok0 < T; tok0 += nw * NT) {
+          k0p6_mps_m8_batch<NT>(tok0, T, epoch32, spin_limit, pull_ptr,
+                                pull_src, row_ready, T_loc_max, pperr, lane,
+                                out, base_pull);
         }
-        __syncwarp();
-        batch = (int)s_batch_no[wid];
-        if (batch >= nbatches) break;
       } else {
-        if (next_static >= nbatches) break;
-        batch = next_static;
-        next_static += nw;
-      }
-      const int tok0 = batch * NT;
-      bool batch_ready = true;
-      int lo2[NT], fanout[NT];
-      bool live[NT];
-#pragma unroll
-      for (int t = 0; t < NT; ++t) {
-        const int tok = tok0 + t;
-        live[t] = (tok < T);
-        lo2[t] = live[t] ? pull_ptr[tok] : 0;
-        fanout[t] = live[t] ? (pull_ptr[tok + 1] - lo2[t]) : 0;
-      }
-      unsigned long long pbase[NT];
-#pragma unroll
-      for (int t = 0; t < NT; ++t) {
-        pbase[t] = 0ull;
-        if ((lane >> 3) == t) {
-          const int j2 = lane & 7;
-          int p = cur;
-          int row = 0;
-          if (j2 < fanout[t]) {
-            p = pull_src[(size_t)(lo2[t] + j2) * 2 + 0];
-            row = pull_src[(size_t)(lo2[t] + j2) * 2 + 1];
-            // exp_56 fix (8, site 1/4 — the combine poll = 33554432 bit): CROSS-GPU poll of
-            // row_ready (relaxed SYSTEM store). nt-only load never
-            // invalidates => spins on a stale row_ready line forever. This is an INDEPENDENT instance
-            // of the same defect, NOT merely downstream of the chunk poll. System-scope atomic load.
-            batch_ready = hk_moe::poll_epoch_system(
-                row_ready + (size_t)p * T_loc_max + row, epoch32,
-                (std::uint64_t)spin_limit,
-                hk_moe::set_error_bit{pperr, 33554432});
-          }
-          // Base pointer: mode 0 (+pull_fallback) reads the producer's remote
-          // part row over xGMI; slot modes read the producer's slice-landing
-          // slot in THIS rank's own memory. row names a row on producer p in
-          // [cur*MAXTOK, (cur+1)*MAXTOK): pos = row - cur*MAXTOK.
-          pbase[t] = m8_pull
-              ? (unsigned long long)hk_moe::peer_ptr(
-                    part + (size_t)row * (size_t)K0P6_H, p, symmetric)
-              : (unsigned long long)(slots +
-                    ((size_t)p * (size_t)MAXTOK +
-                     (size_t)row - (size_t)cur * (size_t)MAXTOK) *
-                        (size_t)K0P6_H);
+        for (int tok0 = gw * NT; tok0 < T; tok0 += nw * NT) {
+          k0p6_mps_m8_batch<NT>(tok0, T, epoch32, spin_limit, pull_ptr,
+                                pull_src, row_ready, T_loc_max, pperr, lane,
+                                out, base_slot);
         }
       }
-      // A timeout must not mint a usable peer payload. Skip this token batch
-      // uniformly across the wave after recording pperr; M9 still retires the
-      // launch, so the negative control fails without wedging the node.
-      if (__ballot(batch_ready) != ~0ull) continue;
-      // Only lanes 0..31 poll readiness, while all lanes consume the shuffled
-      // peer bases. Apply one convergent wave acquire before any payload load.
-      hk_moe::acquire_payload_system();
-      __syncwarp();
-#pragma unroll 1
-      for (int c = 0; c < 14; ++c) {
-        const size_t off = (size_t)(c << 10) + (size_t)(lane << 4);
-        float acc[NT][8];
-#pragma unroll
-        for (int t = 0; t < NT; ++t) {
-#pragma unroll
-          for (int e = 0; e < 8; ++e) acc[t][e] = 0.f;
-        }
-#pragma unroll 1
-        for (int jb = 0; jb < 8; jb += 4) {
-          uint4 v2[NT][4];
-#pragma unroll
-          for (int t = 0; t < NT; ++t) {
-#pragma unroll
-            for (int jj = 0; jj < 4; ++jj) {
-              const unsigned long long pb = __shfl(pbase[t], 8 * t + jb + jj);
-              v2[t][jj] = *reinterpret_cast<const uint4*>(
-                  reinterpret_cast<const unsigned char*>(pb) + off);
-            }
+    } else {
+      // Stream mode: dynamic per-wave batch claiming through the M8 ticket.
+      // The broadcast word reuses dead M2 storage (see s_ns lifetime note).
+      const int nbatches = (T + NT - 1) / NT;
+      std::uint32_t* m8_next = mps_state + K0P6_MPS_ST_M8NEXT;
+      int* batch_slot = &s_ns[wid];
+      if (m8_pull) {
+        while (true) {
+          if (lane == 0) {
+            *batch_slot =
+                kittens::distributed::fetch_add_relaxed<hk_moe::scope::agent>(
+                    m8_next, 1u);
           }
-#pragma unroll
-          for (int t = 0; t < NT; ++t) {
-#pragma unroll
-            for (int jj = 0; jj < 4; ++jj) {
-              if (jb + jj < fanout[t]) {
-                const unsigned short* const u16 =
-                    reinterpret_cast<const unsigned short*>(&v2[t][jj]);
-#pragma unroll
-                for (int e = 0; e < 8; ++e) acc[t][e] += k0p6_bf16_to_f32(u16[e]);
-              }
-            }
-          }
+          __syncwarp();
+          const int batch = *batch_slot;
+          if (batch >= nbatches) break;
+          k0p6_mps_m8_batch<NT>(batch * NT, T, epoch32, spin_limit, pull_ptr,
+                                pull_src, row_ready, T_loc_max, pperr, lane,
+                                out, base_pull);
         }
-#pragma unroll
-        for (int t = 0; t < NT; ++t) {
-          if (!live[t]) continue;
-          unsigned short* const orow = out + (size_t)(tok0 + t) * (size_t)K0P6_H;
-          union {
-            uint4 pack;
-            unsigned short u16[8];
-          } pk;
-#pragma unroll
-          for (int e = 0; e < 8; ++e) pk.u16[e] = k0p6_f32_to_bf16_rne(acc[t][e]);
-          *reinterpret_cast<uint4*>(reinterpret_cast<unsigned char*>(orow) + off) = pk.pack;
+      } else {
+        while (true) {
+          if (lane == 0) {
+            *batch_slot =
+                kittens::distributed::fetch_add_relaxed<hk_moe::scope::agent>(
+                    m8_next, 1u);
+          }
+          __syncwarp();
+          const int batch = *batch_slot;
+          if (batch >= nbatches) break;
+          k0p6_mps_m8_batch<NT>(batch * NT, T, epoch32, spin_limit, pull_ptr,
+                                pull_src, row_ready, T_loc_max, pperr, lane,
+                                out, base_slot);
         }
       }
     }
     if (tid == 0) {
       hk_moe::mps::ts_last(mps_ts + K0P6_MPS_TS_REDUCE_DONE,
-                           mps_cfg.timestamps);
+                           m8cfg.timestamps);
     }
   }
 
