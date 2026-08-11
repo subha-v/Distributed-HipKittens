@@ -332,13 +332,15 @@ __device__ __forceinline__ void* slice_group_dst(
 // no fence, no completion work here (flush_pending owns both).
 __device__ __forceinline__ void push_slice_group(const service_env& env,
         std::uint32_t r, std::uint32_t group_base, int lane) {
-    // exp_17: STREAMING copy. This payload is read once and written once and is
-    // reused by nobody, but it was being fully cached (exp_03's ISA read found
-    // no sc0/sc1/nt on the emitted store), so the pool's hundreds of MB were
-    // evicting the concurrent GEMM's weights from the per-XCD L2 and the 256 MB
-    // LLC. exp_16 bounded that payload contention at ~1,000 us of M7 -- the
-    // largest single cost left in the kernel.
-    kittens::distributed::store_peer_packets_streaming(
+    // exp_17 tried the streaming (nt) form here and it was a measured NULL --
+    // and the `nt` bits provably reached the ISA (`flat_load_dwordx4 ... nt`,
+    // `flat_store_dwordx4 ... nt`), so the hint was applied and simply did not
+    // help. Conclusion: the pool's interference with the concurrent GEMM is
+    // BANDWIDTH contention, not cache-capacity pollution, and no replacement
+    // policy hint can move it. That also kills the M1/M2 cache-bit class for
+    // this problem. The only remaining lever is moving fewer bytes -- see
+    // exp_17_streaming_copy/result.md.
+    kittens::distributed::store_peer_packets(
         slice_group_dst(env, r, group_base),
         slice_group_src(env, r, group_base),
         kSliceBytes * env.group_slices, (unsigned int)lane, 64u);

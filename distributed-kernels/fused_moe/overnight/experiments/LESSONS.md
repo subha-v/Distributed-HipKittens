@@ -749,3 +749,41 @@
   (claim) and exp_16 (arrival) each required hand-deriving a DEGENERATE case of
   the same group-completion protocol. A `counter.cuh` that owned group
   completion would specialise all three automatically from the group size.
+
+- 2026-08-11 exp_17 **streaming (nt) peer copy is a NULL, and the nt bits
+  PROVABLY reached the ISA** -- `flat_load_dwordx4 ... nt` x2 and
+  `flat_store_dwordx4 ... nt` appear where before there were none (3 of 352
+  dwordx4 accesses). So the mechanism was TESTED, not merely requested. Deltas
+  at C=32/48/64/96: -7.4 / -73.8 / +14.2 / -11.4 us on M7, no consistent sign,
+  totals unchanged. **Conclusion: the service pool's interference with the
+  concurrent GEMM is BANDWIDTH contention, not cache-capacity pollution.** A
+  cache hint changes what gets evicted, not how many bytes cross the memory
+  system.
+- 2026-08-11 **M1 and M2 are DEAD for this problem.** Both are cache-bit
+  experiments on the payload store (sc0/sc1 bypass, nt hit-evict). M2 is
+  directly falsified by exp_17; M1's premise was already corrected by exp_03
+  (the payload store carries no sc bits, so the buffer_wbl2 is load-bearing, not
+  redundant). Neither has remaining motivation.
+- 2026-08-11 **A11/M11 is now the whole game, and its prize is QUANTIFIED.**
+  Payload traffic per rank per epoch today: M7's epilogue writes `part`
+  (~312 MB) + the pool reads `part` (~312 MB) + the pool writes peer slots
+  (~312 MB) = **~936 MB**. If the compute CTA's epilogue accumulated DIRECTLY
+  into the owner's slot, all three collapse into one remote accumulate:
+  **~936 MB -> ~312 MB, a 3x cut**, the pool's payload role disappears entirely
+  (it would carry only readiness and flags), and that should remove essentially
+  all of the ~1,000 us of bandwidth interference.
+  Blocker, and it stands: the epilogue uses `global_atomic_pk_add_bf16` to
+  accumulate `part` across the several blocks contributing to a row, so going
+  direct means REMOTE bf16 atomic accumulation, which turns slice-completion
+  detection into a remote-atomic ordering problem. **Protocol-review signoff
+  required before build.** Precedent: AMD Research SC24, 12% on fused
+  GEMM+All-to-All with exactly this vertical zero-copy shape.
+- 2026-08-11 `primitives:` `packet.cuh` now carries three transport forms --
+  plain, multi-region (exp_04), streaming (exp_17) -- and only the plain one is
+  called. That is not waste: each was added to test a specific hypothesis about
+  where the cost lives, and the two unused ones encode negative results that
+  would otherwise be re-derived. The gap they collectively expose: **a transport
+  primitive's cost model is invisible in its signature.** Nothing about
+  `store_peer_packets` tells a caller whether it is latency-bound,
+  bandwidth-bound or cache-bound, and this campaign answered that question three
+  times by experiment.
