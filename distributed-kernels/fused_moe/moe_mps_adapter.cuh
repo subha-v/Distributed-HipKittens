@@ -230,6 +230,30 @@ struct wave_scratch {
 static_assert(sizeof(wave_scratch) == 524,
               "wave_scratch must stay inside the reused M1 staging slice");
 
+// exp_07: arrival-counter address, CHUNK-MAJOR.
+//
+// The natural layout `nc_arr[r*16 + nc]` puts consecutive rows exactly 16
+// uint32 = 64 B apart, i.e. **exactly one cache line apart**, so the 32 live
+// lanes of one event — which handle 32 different rows of the same block —
+// touch 32 DISTINCT cache lines on every arrival. exp_05/exp_06 measured that
+// footprint as the larger half of a g-independent +1,159 us M7 interference
+// floor (scope accounted for only ~30%).
+//
+// Chunk-major `nc_arr[nc*T_ext + r]` puts those same 32 rows in 32 CONSECUTIVE
+// uint32 = 2 cache lines. Identical semantics, identical buffer and size, no
+// ABI change: only the two service call sites and this helper know the layout,
+// and M0 still zeroes the whole array.
+//
+// Predicted trade: the group-completion probe loop walks `nc` for a FIXED row,
+// which was one shared cache line under row-major and becomes `g` separate
+// lines here. So this should WIN at g=1 (probe loop degenerate, arrivals
+// dominate) and LOSE at g=16. That asymmetry is the experiment.
+__device__ __forceinline__ std::uint32_t* nc_arr_at(
+        const service_env& env, std::uint32_t r, std::uint32_t nc) {
+    return env.nc_arr + (std::size_t)nc * (std::size_t)env.t_ext +
+           (std::size_t)r;
+}
+
 inline constexpr std::size_t kSliceBytes = 448u * 2u;   // 896
 // How many claimed row groups the service wave copies concurrently. A single
 // group is 896*g bytes = at most 56*g packets, so at g=1 it does not even give
@@ -408,15 +432,11 @@ __device__ __forceinline__ void run_service(
         if (live) {
             // exp_06 measured what this site's SCOPE costs: relaxing it to
             // fetch_add_relaxed recovered 354 us of the 1,159 us M7 interference
-            // floor at g=1 (157 us at g=16), i.e. ~30%. The other ~70% is the
-            // atomic's 32-scattered-cache-lines-per-event footprint. The relaxed
-            // form is NOT correctness-preserving (it drops the acquire edge the
-            // probe loop below relies on) and was reverted; the measurement is
-            // the justification for M4, whose per-XCD counters cut scope and
-            // footprint together. See exp_06_atomic_scope/result.md.
+            // floor at g=1 (157 us at g=16), i.e. ~30%. The other ~70% is
+            // FOOTPRINT, which exp_07 attacks by transposing the counter array.
             const std::uint32_t old =
                 kittens::distributed::detail::fetch_add_acq_rel<scope::agent>(
-                    env.nc_arr + (std::size_t)r * 16u + (std::size_t)nc, 1u);
+                    nc_arr_at(env, r, (std::uint32_t)nc), 1u);
             if (old + 1u == target) {
                 // Slice (r,nc) final. Group-check with acq_rel RMW probes so
                 // (a) the check itself is in the per-counter RMW order: the
@@ -430,7 +450,7 @@ __device__ __forceinline__ void run_service(
                      n2 < (std::uint32_t)group_base + g; ++n2) {
                     const std::uint32_t cur_count =
                         kittens::distributed::detail::fetch_add_acq_rel<scope::agent>(
-                            env.nc_arr + (std::size_t)r * 16u + n2, 0u);
+                            nc_arr_at(env, r, n2), 0u);
                     if (cur_count != target) { all = false; break; }
                 }
                 if (all) {
