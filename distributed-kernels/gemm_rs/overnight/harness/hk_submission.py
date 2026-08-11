@@ -13,12 +13,16 @@ so every rank calls custom_kernel the same number of times. The device-derived
 per-CTA epochs therefore stay in lockstep across ranks, which is the one thing
 this protocol requires of its caller.
 
-State is cached per shape. Allocation, IPC exchange and descriptor construction
-happen once per shape on every rank, never inside the timed region.
+State is cached per (rank, shape) and survives destroy_process_group, so the
+allocation, the IPC exchange and the descriptor construction happen once per
+rank per shape for the life of the process, never inside the timed region.
 """
 
+import faulthandler
 import importlib.util
 import os
+import sys
+import time
 
 import torch
 import torch.distributed as dist
@@ -42,13 +46,42 @@ _entry = _kernel.gemm_rs_mi300x
 WORLD = 8
 SPIN_LIMIT = int(os.environ.get("HK_SPIN_LIMIT", 20_000_000))
 DEBUG = bool(int(os.environ.get("HK_DEBUG", "0")))
+DUMP_AFTER = float(os.environ.get("HK_DUMP_AFTER", 120))
+
+# Set on entry to custom_kernel so every line carries the rank even outside a
+# process group. pid is printed with it because the pool's worker-to-rank map
+# is what has to be read out of these logs.
+_RANK = -1
+
+
+def _say(message):
+    """time.monotonic() is CLOCK_MONOTONIC, so the eight logs are comparable."""
+    print(f"[hk {time.monotonic():.6f} pid {os.getpid()} rank {_RANK}] "
+          f"{message}", file=sys.stderr, flush=True)
 
 
 def _log(message):
     if DEBUG:
-        import sys
-        rank = dist.get_rank() if dist.is_initialized() else -1
-        print(f"[hk rank {rank}] {message}", file=sys.stderr, flush=True)
+        _say(message)
+
+
+_ARMED_PID = None
+
+
+def _arm_watchdog():
+    """Turn a wedged rank into eight Python stacks instead of a pool timeout.
+
+    Armed from custom_kernel rather than at import: dump_traceback_later's
+    timer thread does not survive a fork, so a worker that inherited this
+    module from the parent would carry no watchdog at all.
+    """
+    global _ARMED_PID
+    if not DEBUG or _ARMED_PID == os.getpid():
+        return
+    faulthandler.enable(file=sys.stderr, all_threads=True)
+    faulthandler.dump_traceback_later(DUMP_AFTER, exit=False, repeat=True)
+    _ARMED_PID = os.getpid()
+    _say(f"watchdog armed, dumping every {DUMP_AFTER:g}s")
 
 
 class _Device:
@@ -81,7 +114,7 @@ def _align(value, alignment=4096):
     return ((value + alignment - 1) // alignment) * alignment
 
 
-# State is bound to the process-group generation, not just to the shape.
+# State is keyed by (rank, shape) and lives as long as the process does.
 #
 # eval.py drives the ranks with multiprocessing.Pool(8) and calls
 # init_process_group / destroy_process_group once per test case. The pool
@@ -89,14 +122,22 @@ def _align(value, alignment=4096):
 # across test cases: a worker that served rank 6 can serve rank 1 next. A cache
 # keyed only by shape therefore hands a later rank an allocation belonging to
 # another device, which the evaluator catches as
-# "Output device mismatch: cuda:6 != cuda:1".
+# "Output device mismatch: cuda:6 != cuda:1". Hence the rank in the key, and
+# hence torch.cuda.set_device(rank) before anything is allocated or launched.
 #
-# Keying by rank alone would not be enough either: the lazy setup performs
-# collectives, so every rank has to enter it on the same call. Detecting the
-# process group's identity gives exactly that -- all ranks see a new group on
-# their first call of a test case, so they initialize together.
-_STATE = None
-_STATE_PG = None
+# Nothing is bound to the process group any more. Discarding state per group
+# meant a fresh heap and a fresh IPC exchange for a shape this process had
+# already mapped, and hipIpcOpenMemHandle answers hipErrorAlreadyMapped when a
+# handle resolves to an allocation this process already imported -- which kills
+# the ranks it hits and leaves the rest wedged in the next collective.
+#
+# The group is still tracked, but only to decide when the collective setup path
+# has to be re-entered: the first call of a new group, and any call whose shape
+# differs from the last one. _LAST_PG holds a strong reference so a recycled
+# object address cannot make a new group look like the old one.
+_STATES = {}      # (rank, m, n, k, has_bias) -> _ShapeState
+_LAST_PG = None
+_LAST_KEY = None
 _RETAINED = []   # keeps every allocation alive; see custom_kernel's docstring
 
 
@@ -152,28 +193,35 @@ class _ShapeState:
         self.out_view = Tensor(self.out.data_ptr(),
                                (1, 1, self.slice_rows, n))
 
-        # Every rank must finish setup before any rank launches: a producer
-        # writes into a peer's heap on its very first tile. A NCCL barrier is
-        # only enqueued, so it is followed by a device sync.
-        _log("setup barrier")
-        dist.barrier()
-        torch.cuda.synchronize(rank)
-        _log("setup barrier done")
-
     def _exchange(self, local_pointer, rank, label):
         """Publish this rank's allocation and open every peer's."""
-        _log(f"{label}: get_ipc_handle")
         handle = rt.ipc_get_handle(rank, local_pointer)
+        _log(f"{label}: get_ipc_handle done {handle[:6].hex()}")
         handles = [None] * WORLD
-        _log(f"{label}: all_gather_object")
         dist.all_gather_object(handles, handle)
-        _log(f"{label}: gathered {sum(h is not None for h in handles)}/8")
+        # The handle prefixes identify the exported allocations: two exchanges
+        # that gather the same prefix for the same peer are re-importing memory
+        # this process already holds, which is what hipErrorAlreadyMapped is
+        # complaining about.
+        digests = [h[:6].hex() if h else None for h in handles]
+        _log(f"{label}: all_gather_object done "
+             f"{sum(h is not None for h in handles)}/{WORLD} {digests}")
         bases = []
         for peer in range(WORLD):
             if peer == rank:
                 bases.append(local_pointer)
-            else:
+                continue
+            try:
                 bases.append(rt.ipc_open_handle(rank, handles[peer]))
+            except Exception as error:
+                # dhk_rt raises "hipIpcOpenMemHandle: <hipGetErrorString>";
+                # printed here because the pool holds the traceback until every
+                # other rank has already timed out.
+                _say(f"{label}: hipIpcOpenMemHandle FAILED peer {peer} "
+                     f"handle {digests[peer]}: "
+                     f"{type(error).__name__}: {error}")
+                raise
+            _log(f"{label}: opened peer {peer} at {hex(bases[peer])}")
         _log(f"{label}: opened all peers")
         return bases
 
@@ -201,6 +249,44 @@ class _ShapeState:
         raw = rt.device_to_host(self.rank, self.err, 4)
         return int.from_bytes(raw, "little", signed=True)
 
+
+def _setup(key, m, n, k, has_bias, rank, state):
+    """Bring this rank to a usable state for `key`, in step with the other seven.
+
+    The vote is the point of this function. Whether a worker already holds
+    state for a key depends on which rank the pool handed it last time, so the
+    local answer is not the group's answer: after a permutation some workers
+    hold the key and others do not, and a rank that skipped the exchange while
+    its peers entered it would hang all seven of them. Every rank that is not
+    already settled on (this group, this key) reaches this vote, the vote is
+    unanimous-or-rebuild, and so all eight then run the same collectives.
+
+    Rebuilding on ranks that already had state is deliberate. A rebuild zeroes
+    that rank's signal region and epoch cells; a partial rebuild would leave
+    rank A publishing epoch e+1 into a peer whose reducers are waiting for 1.
+    """
+    votes = [None] * WORLD
+    dist.all_gather_object(votes, state is not None)
+    _log(f"cache vote {votes}")
+
+    if not all(votes):
+        state = _ShapeState(m, n, k, has_bias, rank)
+        state.key = key
+        _STATES[key] = state
+        _RETAINED.append(state)
+
+    # Every rank must finish setup before any rank launches: a producer writes
+    # into a peer's heap on its very first tile. A NCCL barrier is only
+    # enqueued, so it is followed by a device sync -- on the reuse path too,
+    # where the heaps are old but the group and its streams are new.
+    _log("setup barrier")
+    dist.barrier()
+    _log("setup barrier returned")
+    torch.cuda.synchronize(rank)
+    _log("device synchronize returned")
+    return state
+
+
 def custom_kernel(data):
     """Nothing is ever freed, deliberately.
 
@@ -212,35 +298,43 @@ def custom_kernel(data):
     few hundred MB per device across the whole case list and removes both
     hazards.
     """
-    global _STATE, _STATE_PG
+    global _LAST_PG, _LAST_KEY, _RANK
 
     x, w, bias = data
     rank = dist.get_rank()
+    _RANK = rank
+    _arm_watchdog()
     torch.cuda.set_device(rank)
 
     m, k_local = x.shape
     n = w.shape[0]
     k_global = k_local * WORLD
     key = (rank, m, n, k_global, bias is not None)
+    _log(f"enter custom_kernel key={key}")
 
+    # Settled means this rank used this very state on its previous call in this
+    # very group, which every other rank did too: within a group the rank is
+    # fixed and the shape is the group's, so the three tests below give the same
+    # answer on all eight. An unavailable group identity settles nothing and
+    # falls back to voting on every call -- slow, but still symmetric.
     group = _current_group()
-    stale = (_STATE is None or _STATE_PG is not group or _STATE.key != key)
-    if stale:
-        reason = ("no state" if _STATE is None else
-                  "new process group" if _STATE_PG is not group else
-                  f"key {_STATE.key} -> {key}")
-        _log(f"building state: {reason}")
-        state = _ShapeState(m, n, k_global, bias is not None, rank)
-        state.key = key
-        _RETAINED.append(state)
-        _STATE = state
-        _STATE_PG = group
-        _log("state ready")
+    state = _STATES.get(key)
+    settled = (state is not None and group is not None
+               and group is _LAST_PG and key == _LAST_KEY)
+    _log(f"cache {'hit' if state is not None else 'miss'} "
+         f"settled={settled} keys={len(_STATES)}")
+    if not settled:
+        state = _setup(key, m, n, k_global, bias is not None, rank, state)
+        _LAST_PG = group
+        _LAST_KEY = key
+    _log("state ready")
 
-    out = _STATE.launch(x, w, bias)
+    out = state.launch(x, w, bias)
+    _log("launch issued")
     if DEBUG:
         torch.cuda.synchronize(rank)
-        bits = _STATE.error_bits()
+        _log("launch synchronized")
+        bits = state.error_bits()
         if bits:
-            _log(f"ERROR BITS 0x{bits:x}")
+            _say(f"ERROR BITS 0x{bits:x}")
     return out
