@@ -116,7 +116,14 @@ __host__ __device__ __forceinline__ bool mode_is_stream(config c) {
 }
 
 __host__ __device__ __forceinline__ bool config_is_valid(config c) {
-    if (c.reserved_comm_ctas > 64u) return false;
+    // exp_13: cap raised 64 -> 128. Before compute-CTA fall-through (exp_12)
+    // the service cost obeyed a 1/C law and the tax curve made large C strictly
+    // worse, so the cap was left alone deliberately. Fall-through inverts that:
+    // the drain is no longer pool-limited, and larger C now buys more push
+    // overlapped with M7 (combine falls 1,646 -> 649 us from C=4 to C=64) for a
+    // net win at every point measured. 128 of 256 is 50%, above COMET's
+    // 14-35% band, so this is an extrapolation the sweep has to justify.
+    if (c.reserved_comm_ctas > 128u) return false;
     if (c.reserved_comm_ctas >= 256u) return false;
     if (c.group_slices != 1u && c.group_slices != 2u && c.group_slices != 4u &&
         c.group_slices != 16u) return false;
