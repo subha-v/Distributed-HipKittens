@@ -491,30 +491,15 @@ __device__ __forceinline__ void run_service(
             }
         }
         bool push_lead = false;
-        if (live && g == 1u && target == 1u) {
-            // exp_16: SINGLE-CONTRIBUTOR FAST PATH -- skip the arrival atomic
-            // entirely. `target == row_rem[r] == 1` means exactly ONE block
-            // contributes to row r, and this event is from that block. So:
-            //   (a) the counter could only ever reach 1, so the fetch_add
-            //       cannot report anything we do not already know;
-            //   (b) the acquire edge it would have carried is already held --
-            //       the producing CTA published this event with a release and
-            //       this wave did `thread_acquire<agent>` after reading it, and
-            //       that producer is the row's ONLY contributor, so there is no
-            //       other writer's payload left to acquire;
-            //   (c) uniqueness is structural rather than earned: no other event
-            //       covers (r, nc), so exactly one lane grid-wide reaches here.
-            // `nc_arr[r][nc]` is then never incremented for these rows, which is
-            // safe because its only other reader is the g > 1 probe loop.
-            // `row_rem` averages ~1.53 on this workload, so this removes the
-            // arrival atomic for the majority of rows.
-            push_lead = true;
-        } else if (live) {
+        if (live) {
             // exp_06 measured what this site's SCOPE costs: relaxing it to
             // fetch_add_relaxed recovered 354 us of the 1,159 us M7 interference
-            // floor at g=1 (157 us at g=16), i.e. ~30%. The rest is the atomic's
-            // operation count and the contention it creates (exp_07 ruled out
-            // cache-line footprint), which is what exp_14 and exp_16 attack.
+            // floor at g=1 (157 us at g=16), i.e. ~30%. The other ~70% is the
+            // atomic's 32-scattered-cache-lines-per-event footprint. The relaxed
+            // form is NOT correctness-preserving (it drops the acquire edge the
+            // probe loop below relies on) and was reverted; the measurement is
+            // the justification for M4, whose per-XCD counters cut scope and
+            // footprint together. See exp_06_atomic_scope/result.md.
             const std::uint32_t old =
                 kittens::distributed::detail::fetch_add_acq_rel<scope::agent>(
                     env.nc_arr + (std::size_t)r * 16u + (std::size_t)nc, 1u);

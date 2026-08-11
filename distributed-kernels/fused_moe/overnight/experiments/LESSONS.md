@@ -707,3 +707,45 @@
   atomic count falls (no probes, no claims, no `pushed` counter -- roughly
   535,040 instead of ~1.07M). **Per-row arrival counting is therefore the next
   experiment, not a predicted failure.**
+
+- 2026-08-11 exp_16 **single-contributor fast path is a NULL -- and it is the
+  most informative null of the campaign.** When `row_rem[r] == 1` exactly one
+  block contributes to the row, so the arrival `fetch_add_acq_rel` is provably
+  pointless (counter can only reach 1; the acquire edge is already held from the
+  event's own release/acquire pair; uniqueness is structural). Skipping it
+  measured **+10.0 us on M7 at C=64 and +1.1 at C=96** -- pure noise. Cause:
+  `row_rem[r] == 1` is RARE. My "~1.53 average so most rows are singletons" was
+  bad reasoning -- an average of 1.53 does not imply a mode of 1, and with
+  topk=8 the distribution is concentrated above 1. **Reverted** (correct but
+  buys nothing here and adds a branch to the hottest loop); re-testable on lower
+  topk or heavier skew.
+- 2026-08-11 **THE REMAINING BOTTLENECK IS PAYLOAD, NOT ATOMICS -- and this
+  retracts my retraction of M10.** exp_14 removed ~698,112 atomics for **-306 us**
+  of M7, a rate of ~**0.44 us per thousand atomics**. Applying it to the 535,040
+  arrival atomics that remain: removing **every** one would be worth only about
+  **-235 us** against the **+1,249 us** of M7 interference outstanding. **The
+  atomics can account for at most ~19% of what is left; the residue (~1,000 us)
+  is the service pool's own memory traffic contending with M7's.**
+  This does NOT contradict exp_05: that experiment showed interference rises
+  with g while payload is constant, which proves atomics CONTRIBUTE -- it never
+  showed payload contributes nothing. **I retracted M10 (SDMA) on the argument
+  "SDMA offloads the payload and the payload is not the problem"; the first half
+  is right and the second half is now WRONG.**
+- 2026-08-11 **two directions on the payload residue, not equivalent.**
+  (1) **Move the bytes off the CU memory path** -- M10 / mori CCO device-side
+  `ccoSdma`. Historical AMD guidance says SDMA loses to vector stores at
+  4-64 KB, but that is throughput IN ISOLATION; the cost that decides it here is
+  interference with a concurrent GEMM, which nobody has measured. Bounded by
+  whether ccoSdma is usable from inside a persistent megakernel.
+  (2) **Halve the bytes.** The service pool does `load(part)` PLUS
+  `store(peer)` -- it touches every byte twice. A compute CTA writing its
+  epilogue result straight into the owner's slot touches each byte once and the
+  value is already in registers, so the 312 MB read of `part` leaves the M7
+  window entirely. That is A11/M11, precedent AMD Research SC24 (12% on fused
+  GEMM+All-to-All), and CLAUDE.md requires **protocol-review signoff before
+  build** -- correctly, since it makes slice completion a remote-atomic ordering
+  problem. Larger prize, larger risk.
+- 2026-08-11 `primitives:` seventh convergent finding. exp_14 (probe), exp_14
+  (claim) and exp_16 (arrival) each required hand-deriving a DEGENERATE case of
+  the same group-completion protocol. A `counter.cuh` that owned group
+  completion would specialise all three automatically from the group size.
