@@ -17,16 +17,21 @@ resolution, experiment selection, node lease, and final judgment.
 3. **Benchmark** `mps_mega` vs `production` (7,703 µs) AND vs the previous
    best megakernel `pf6gm_mega` (6,902 µs), five rotated processes, median
    rank-max p50. THE user's question: does the MPS arm beat BOTH?
-4. **Sweep** the split space: mode 0 (`C∈{4,8,16}` pure tax) → mode 1
-   (push layout) → mode 2 (`C×g∈{4,8,16}×{1,2,4}` full stream) →
+4. **Sweep** the split space: mode 0 (`C∈{4,8,16,32,48,64}` pure tax) → mode 1
+   (push layout) → mode 2 (`C×g∈{8,32,48,64}×{1,2,4}` full stream) →
    `pull_fallback` at the best point → one timestamps-on attribution run.
    One campaign per point, arms `production,pf6gm_mega,mps_mega` always.
+   **`C` must reach ~15–35% of 256 or the axis is untested** — see the A1
+   correction below; the old `C≤16` range sits in a measured collapse band.
 5. **Extend the technique**: role-split specialization at other boundaries
    (dispatch/streaming streams under compute, COMET layer-1 ideas for M6/M7
    tails, TileLink-style peeling), additively, one variable per experiment.
    Read COMET (https://arxiv.org/pdf/2502.19811) and the MoK kernel first.
    Every candidate obeys the **kernel design mandate** below: built on the
    Distributed-HipKittens primitives, and a CTA role-split megakernel.
+   The concrete queue for this step is the **M-series ablation program** below —
+   it mirrors the exact experiments MoK and COMET ran, plus the AMD-specific
+   ones they could not, so our numbers are directly comparable to theirs.
 
 ## Standing objective — widen the win over `production` (this outlives the list)
 
@@ -125,14 +130,14 @@ mechanism off), then the mechanism on. Every point gets the full gate ladder
 
 | # | Axis | Sweep points | What it isolates | Pre-registered expectation |
 |---:|---|---|---|---|
-| A1 | reserved CTAs `C` | 0,4,8,16,32 | capacity tax vs progress headroom | tax ≈ 29/60/123/264 µs; service curve needs ≥ 4/8/16 CTAs' issue rate |
+| A1 | reserved CTAs `C` | 0,4,8,16,**32,48,64,90** | capacity tax vs progress headroom | **CORRECTED**: `C ≤ 16` is 1.6–6.3% of 256, below COMET's 14–35% and MoK's 2.7–35% optima, and inside a band where under-provisioning measured **1.91× SLOWER than no overlap**. Expect `C ≤ 16` to look flat or bad; that is NOT a kill. The useful range starts near `C = 32`. |
 | A2 | slice grouping `g` | 1,2,4,16 | fence amortization vs readiness latency | g=4 sweet spot; g=16 = row-granular push |
 | A3 | mode | 0,1,2 | tax control | layout-only | full overlap | m0 > pf6gm ⇒ stop; m1 ≈ m0+layout; m2 − m0 = overlap gain |
 | A4 | `pull_fallback` | 0,1 | streamed readiness vs push transport | if clean+fast ⇒ transport was the lever |
 | A5 | `flush_rows` | 1,4,16,64 | release count vs flag latency | ≥16 with <50µs service lag |
 | A6 | **flag granularity** (row vs row+nc sub-flag) | row, (row,nc) | owner unblocking granularity | (row,nc) starts token reduction earlier; costs 16× flag stores — likely LOSES (release-count measured flat 6×), run LAST as a falsifier |
-| A7 | **service-pool internal split** | unified vs push/flag split | whether bookkeeping+push+flag on one starves progress | unified wins if queue lag < M7; split if lag dominates |
-| A8 | **reservation placement** | tail / head (`bid<C`) / strided (`bid%G=0`) | XCD/L2 locality of the pushers | flat-to-small; strided may spread L2 banks better |
+| A7 | ~~service-pool internal split~~ | — | ~~whether bookkeeping+push+flag on one starves progress~~ | **STRUCK — premise disproven.** Occupancy is one block per CU (256 VGPR + 256 AGPR ⇒ 1 wave/SIMD; 155,428 B LDS of 160 KB), so a service CTA is never co-resident with an MFMA CTA. There is no issue-slot contention to measure and `s_setprio` cannot apply. |
+| A8 | **reservation placement** | tail / head (`bid<C`) / strided (`bid%8==0`) | XCD/L2 locality of the pushers | **CORRECTED — the old expectation was backwards.** XCD dispatch is round-robin with chunk size 1 (`xcd = wg_id % 8`), so contiguous `bid<C` **spreads** one service CTA per XCD and strided `bid%8==0` **concentrates** all of them on XCD 0. Read the arms as: contiguous = pollute eight 4 MB L2s; strided = sacrifice one die, keep seven clean. |
 | A9 | **reservation point** | M6.9 (current) vs right-after-M5 | M6+M7 window (5.1 ms cover) vs tax double | M5 costs ~2.5× the tax; only try if A1 says C=8 hides < 500 µs |
 | A10 | **enqueue release class** | per-(b,nc) fence vs per-task amortized fence (one for all G=3 sub-events) | 66 vs 22 fences/CTA | −2–5 µs; cheap to try after A1 |
 | A11 | **owner reduce target** | slots→local reduce (current) vs direct remote bf16 atomic accumulation into `out` | the whole M8 reduce pass | the dream end-state, but makes slice completion detection a remote-atomic ordering problem — needs protocol-review signoff BEFORE build |
@@ -145,27 +150,125 @@ measured kills (release count, publication granularity, acquire-fence,
 grid-barrier, G3/chunk/K-split, broad MLP) unless a scope column says
 re-testable.
 
+## Measured hardware budget (stop guessing; these are the real numbers)
+
+`DOCUMENTED` from the [CDNA4 whitepaper](https://www.amd.com/content/dam/amd/en/documents/instinct-tech-docs/white-papers/amd-cdna-4-architecture-whitepaper.pdf)
+and the [CDNA4 ISA reference](https://www.amd.com/content/dam/amd/en/documents/instinct-tech-docs/instruction-set-architectures/amd-instinct-cdna4-instruction-set-architecture.pdf):
+
+- **8 XCDs × 32 active CU = 256 CU.** 4 MB 16-way L2 per XCD. **256 MB
+  memory-side Infinity Cache** shared by all XCDs. 288 GB HBM3E @ 8 TB/s.
+- **Infinity Fabric: 76.8 GB/s per direction per link** (16-bit × 38.4 Gbps);
+  7 links to peers, **fully connected, single hop, no routing**; one link is
+  PCIe Gen5. **Aggregate egress 537.6 GB/s.** (An AMD datasheet says "160 GB/s
+  bidirectional"; 153.6 is the derivable number — use it.)
+- Therefore the cost model's **~148 GB/s service requirement is 27.5% of
+  egress**, not 34% of a posted-write floor. Achieved-vs-peak for sub-4 KB peer
+  writes is **not published**; nearest data is ~75% of raw on MI300X links
+  (`REPORTED`). Do not quote a small-message curve we have not measured.
+- **Occupancy is ONE block per CU.** At 256 VGPR + 256 AGPR you get exactly one
+  wave per SIMD (ISA §3.6.4: 512 registers per SIMD, "up to 512 total VGPRs,
+  256 of each type"), and 155,428 B of the 160 KB LDS forces one block per CU
+  independently.
+
+## Mirror-the-literature ablation program (M-series)
+
+These reproduce the *exact* experiments MoK and COMET ran, plus the AMD-specific
+ones they could not run, so our results are directly comparable to theirs. Same
+gate ladder as everything else: correctness + negative control + soak, then
+timing, one campaign per point, arms `production,pf6gm_mega,mps_mega`.
+
+### FIRST: three corrections to the A-map above (apply before running it)
+
+1. **A1 is sized wrong — this is the highest-value change tonight.** COMET's
+   profiled optimum puts **14–35%** of blocks on communication (`n_c` =
+   18/26/46 of 132 SMs); MoK exposes **4–52 comms SMs of ~148 (2.7–35%)**. Our
+   `C ∈ {4,8,16}` of 256 is **1.6–6.3%** — below both. ICPP'26 measured that
+   under-provisioning does not merely underperform, it **collapses**: `cCTA=2`
+   (1.9%) ran up to **1.91× SLOWER than no overlap at all**, worse under routing
+   skew, while over-provisioning is only mildly bad. **Extend A1 to
+   `C ∈ {32,48,64,90}`. A flat or bad curve at `C ≤ 16` is the EXPECTED result
+   and must NOT be logged as a kill on role specialization** — the axis has not
+   been tested until it reaches ~15–35%.
+2. **A7's premise is DEAD — strike it.** Occupancy is one block per CU, so a
+   service CTA can **never be co-resident with an MFMA CTA**. There is no
+   issue-slot theft to measure; the cost of `C` is purely the capacity tax we
+   already model. Strike every A7 variant premised on bookkeeping starving
+   compute, and note `s_setprio` is irrelevant to this split (it reorders waves
+   sharing a SIMD, which by construction never happens here).
+3. **A8 is INVERTED.** Workgroups go **round-robin to XCDs with chunk size one**
+   (`xcd = wg_id % 8`; `DOCUMENTED` round-robin, `REPORTED` chunk=1). So
+   contiguous `bid < C` at C=8 puts **one service CTA on each of the 8 XCDs**,
+   and strided `bid % 8 == 0` puts them **all on XCD 0** — the opposite of the
+   pre-registered expectation. Relabel the arms: contiguous = spread pollution
+   across eight 4 MB L2s; strided = sacrifice one die, keep seven clean. Confirm
+   placement in-kernel with `s_getreg_b32 hwreg(HW_REG_XCC_ID, 0, 4)`.
+4. Related, on A2: the push unit is `896·g` B = **14 KiB even at g=16**, roughly
+   **70× below the ~1 MiB knee** where COMET measured bandwidth saturating. `g`
+   alone cannot reach the knee — that needs M3.
+
+### The M-series
+
+| # | Ablation (arm A vs arm B) | Source and what they actually measured | Expectation here | Confidence |
+|---|---|---|---|---|
+| M1 | `sc0 sc1` payloads + bare `s_waitcnt vmcnt` + scoped flag store **vs** `__threadfence_system()` release | CDNA4 ISA Table 50: an `sc0 sc1` store already takes **Coherent Cache Bypass**, so it leaves nothing dirty in the local L2 and the `buffer_wbl2` is provably redundant | deletes an L2-writeback ACK from every publish in the 1,309 µs tail | `DOCUMENTED` |
+| M2 | `nt=1` **vs** `nt=0` on combine payload stores | ISA §9.1.10.2: `nt=1` gives LLC **Hit Evict** | stops combine traffic evicting M7's weights from the 256 MB Infinity Cache — aims at the **1,844 µs**, not the tail | bit `DOCUMENTED`, effect `UNCERTAIN` |
+| M3 | **≥256 KiB contiguous multi-row bands** vs the `896·g` slice | COMET §3.3.2 measured: per-tile 32–64 KiB transfers sit far from saturation, 87 GB/s at 8 SMs only near 1 MiB; they ship full-width row bands. FlashOverlap coarsens tile→wave-group for the same reason | gates whether the assumed ~148 GB/s is reachable **at all** | measured (COMET) |
+| M4 | per-XCD L2 arrival counter, one cross-XCD release per XCD **vs** per-`(b,nc)` global fence | AMD Research **Fleet**, a persistent megakernel measured **on MI350X in our exact shape**: per-XCD device-scope atomics resolve in local L2, "**no fence is required**"; only the last worker per XCD issues a threadfence | cuts fences to **8 per epoch**; generalizes A10 | `REPORTED`, measured |
+| M5 | `s_waitcnt vmcnt(N)` overlapping slice *k*/*k+1* **vs** `vmcnt(0)` drain | ISA §4.4: "Memory reads and writes return in the order they were issued" — so a partial count is legal | removes a full drain per slice from service-pool queue lag | `DOCUMENTED` |
+| M6 | `MORI_SHMEM_HEAP_TYPE=uncached` **vs** `normal` | mori SHMEM guide: `uncached` is the default | decides whether M1 is load-bearing or already a no-op — **run before M1** | default `DOCUMENTED`, effect `UNCERTAIN` |
+| M7 | COMET **layer-0**: sort M6 input by source rank, local-token tiles first **vs** current order | COMET §3.1.1/Fig 5, decompose along **M (tokens)**, never the embedding dim (the GEMM reduces along it) | hide M1+M2 (757 µs) under M6 (2,773 µs) — the largest untouched pool | mechanism measured; our 757 µs being *exposed* is `INFERRED`, profile first |
+| M8 | COMET **layer-1** reschedule: GroupGEMM column-wise across experts (nc-major) **vs** block-major | COMET §3.1.2/Fig 6, decompose along **N only** (an M-split creates token interdependencies in the top-k reduce) | reduce+send starts after the first `T_N` columns instead of after every expert | mechanism measured |
+| M9 | **pull-based combine vs push-based** | MoK's headline: **103 µs push vs 18 µs pull** signalling | **Weakest transfer in the set.** Their gap is manufactured by 71-peer fan-in + a rack-wide fence; at 7 peers with an agent-scope fence most of it should evaporate, and their bandwidth half is an NCU measurement of **NVLink framing**, silent on xGMI. **Reproduce as a microbenchmark with rocprof link counters BEFORE building a pull arm** | `STATED` by MoK, low transferability |
+| M10 | mori CCO device-side `ccoSdma` put **vs** in-kernel vector stores | mori PR #454 / CCO guide: a device-only session appends COPY + ATOMIC packets to host-created queues — **in-kernel SDMA is real on our stack** | only mechanism that recovers the **whole** C-CTA capacity tax; historical AMD guidance says SDMA loses on Infinity Fabric at 4–64 KB, so rank last but do not strike | runnable `REPORTED`; crossover size unpublished |
+| M11 | direct remote bf16 atomic accumulation into `out` **vs** slot staging | AMD Research SC24 measured **12%** on fused GEMM+All-to-All on AMD via *vertical* fusion (WGs push their own results, zero-copy over Infinity Fabric, last WG per slice issues the PUT then `sliceRdy`) | removes part of the 1,309 µs; this is A11 with a measured precedent | needs **protocol-review signoff before build** |
+
+**Honesty note on MoK, so we weight it correctly:** the post contains only
+**three** quantitative internal ablations (an NCU protocol-byte table, the
+103/18 µs signalling microbenchmark, and a minibatch-size sweep) plus an
+unsupported "29% bandwidth" claim. Everything else is design reasoning with a
+named alternative but **no measurement**. Do not treat an unmeasured MoK
+preference as a result. Also: MoK **abandoned the kittens-style abstraction
+layer** this year and wrote the megakernel without a framework. That is a real
+counterexample to our primitives-first mandate — it does not overturn it, but
+the mandate is now on probation and gets judged by the `## Primitives` sections
+we accumulate.
+
+**One counterpoint that keeps mode 1 honest:** AMD's own SC24 result got 12% by
+*vertical* fusion — WGs pushing their own results — which is exactly the thing
+COMET rejects. So the horizontal/vertical question is genuinely open on CDNA4.
+Keep mode 1 as a real control arm, not a formality.
+
+### Struck — no CDNA4 equivalent, do not build
+
+TMA / `mbarrier` transaction counts (CDNA4 has direct global→LDS but no
+descriptor engine, no multicast, no transaction barrier) · programmatic
+dependent launch (no HIP analogue, and vacuous inside a single-launch
+megakernel) · NVSHMEM fused `put_signal` (mori LSA hands back a raw peer
+pointer; payload-store/fence/flag-store stays explicit) · Hopper `setmaxnreg`
+register reallocation (CDNA4 allocation is static) · CTA clusters / DSMEM
+(cluster scope falls back to agent on gfx950) · L2 persistence carve-outs (the
+per-instruction `sc`/`nt` bits are the only lever) · disjoint-SM multi-kernel
+with stream priority (our CTA reservation is strictly cheaper) · splitting
+combine along **M**, or layer-0 along the embedding dimension (COMET proves both
+infeasible) · chunked/micro-batch decomposition of M6 or M7 (matches our own
+measured G3/chunk/K-split kill) · **intra-CTA producer/consumer warp
+specialization** — HipKittens (MLSys 2026) measured NVIDIA-style wave
+specialization reaching only **80% of peak BF16 GEMM on MI355X** because static
+register allocation makes producer waves consume registers without computing.
+Our CTA-level split sidesteps that; any intra-CTA variant inherits it.
+
 ## Working maps (read before editing anything)
 
 - Design contract, buffer/edge/count tables, rejected alternatives:
   `../DESIGN_MPS.md`; sweep protocol: `../BENCHMARKING.md`; build roots:
   `../BUILDING.md`; provenance + measured tuple: `../PROVENANCE.md`.
-- **THE `(nil)` FAULT IS ROOT-CAUSED — the handoff's suspect ranking is DEAD.**
-  Read `overnight/experiments/exp_01_nil_fault/root_cause.md`, NOT the ranking
-  in `../MPS_OVERNIGHT_HANDOFF.md`, which is superseded and will send you down
-  three dead paths. The defect: in the MPS M8 body `pbase[t]` is assigned only
-  inside the `j2 < fanout[t]` guard, while the reference assigns it
-  unconditionally with safe defaults `p = cur; row = 0;`. The consumer at
-  `..._mps.hip:408-410` is NOT fanout-guarded, so out-of-fanout lanes shuffle a
-  `pb == 0` and load from `0 + off`; at `c==0, lane==0` that is exactly address
-  0. Fix = hoist the assignment out of the guard, restoring reference parity.
-  All three old suspects are falsified by measurement: **`mode=1` at `C=0` still
-  faults** (no service CTA exists, so #3 `run_service` is impossible); `desc[61]`
-  is a valid mori pointer 1.71 GiB into a 32 GiB heap and `base_slot` never
-  calls `peer_ptr` (#1 dead); `pull_fallback=1` did not save it (#2 unsupported).
-  debug_stop=1..6 CLEAN still holds — but note `K0_MPS_DEBUG_STOP` rides
-  descriptor slot 49, the donor's `K0_PF6_DEBUG_PHASE` word, so confirm the
-  kernel's reading of that slot before quoting the bisect as settled.
+- **The authoritative evidence ledger and agent prompt for the CURRENT fault:**
+  `../MPS_OVERNIGHT_HANDOFF.md`. Its suspect ranking #1 is the slot-61
+  pointer-flavor/heap-relative offset (verify range membership FIRST, before
+  believing anything else), #2 the M8 dynamic-claim/slot path, #3
+  `run_service` internals. debug_stop=1..6 runs are CLEAN; the fault is in
+  that tail. Redo any probe marked "invalid/annotated" there before trusting
+  its old result.
 - Kernel sources: `../k0pf6gm_device_tile_mps.hip` (entry `k0pf6gm_mps_mega`),
   `../moe_mps_adapter.cuh`, `../n2_phase2_gm_mps.cpp`, `../moe_host_abi.hpp`.
 - The clean reference: `../k0pf6gm_device_tile.hip` (parity port, entry
