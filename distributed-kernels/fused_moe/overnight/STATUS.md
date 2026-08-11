@@ -11,11 +11,16 @@ reason is now measured rather than guessed.**
 
 | arm | µs (5-rotation median rank-max p50) | vs `production` |
 |---|---:|---:|
-| `production` | 7,702.1 | 1.000 |
-| **`pf6gm_mega` — still the ratchet** | **6,905.8** | **0.897** |
-| `mps_mega`, best point (C=64, g=1, mode 2) | 10,107.0 | 1.312 |
+| `production` | 7,731.2 | 1.000 |
+| **`pf6gm_mega` — still the ratchet** | **6,904.1** | **0.893** |
+| `mps_mega`, best point (C=64, g=1, mode 2) | 10,075.8 | 1.303 |
 
-Three full decision campaigns, 15 correctness gates each, every one green.
+Final verification campaign `dec05` on the shipped tree, 15 correctness gates,
+5/5 negative controls, 5/5 600-epoch soaks, zero faults. Four full decision
+campaigns were run tonight (`dec01` C=8 → 57,347; `dec02` C=64 pre-MLP →
+10,643.3; `dec03` C=64 post-MLP → 10,107.0; `dec05` final → 10,075.8). A fifth,
+`dec04`, was **discarded** — a node resync mid-campaign mixed two kernels into
+one summary; the guard for that is now in the driver.
 
 ## What was established
 
@@ -77,12 +82,18 @@ Two consequences:
   *(This retracts an earlier inference in this file that M10/SDMA should be
   promoted to first. SDMA offloads the bytes, which are not the problem. M10
   goes back down.)*
-- **So M4 is the top experiment for this path, on measured grounds.** At g=1 the
-  probe loop is degenerate yet +1,159 µs of interference remains, pointing at
-  the `g`-independent per-lane arrival counter — `fetch_add_acq_rel` across 32
-  scattered cache lines per event (`moe_mps_adapter.cuh:329-330`). AMD Research's
-  *Fleet* mechanism (per-XCD device-scope atomics resolving in the local L2, no
-  fence required) targets the floor and the `g`-term at once.
+- **The floor decomposes: ~30% ordering scope, ~70% operation count.** exp_06
+  relaxed the arrival RMW (a labelled, reverted, non-correctness-preserving
+  diagnostic) and recovered 354 µs of the 1,159 µs floor at g=1. exp_07 then
+  tested whether the rest was cache-line *footprint* by transposing the counter
+  array so 32 lanes hit 2 lines instead of 32 — **and it was at least 10x
+  slower**. Coalescing is right for loads and wrong for atomics: 32 RMWs to 2
+  lines serialize at the line, where 32 RMWs to 32 lines proceed in parallel
+  across L2 banks. **Scattering atomics is a feature of the current layout.**
+- **So M4 must reduce the NUMBER of arrivals, not relocate them.** Per-XCD
+  aggregation with one cross-XCD release per XCD (AMD Research's *Fleet* shape)
+  is exactly that, and remains the top experiment. Any variant that merely moves
+  counters around is predicted to fail — exp_07 is the evidence.
 
 ## The thesis of the night
 
@@ -188,6 +199,18 @@ Partial answer, from measurement rather than opinion:
 - **The node checkout IS the arm** (containers bind-mount it read-only). Both
   the screening driver and the campaign driver now `git reset --hard` before
   every run and print the newest hsaco mtime before and after.
+
+## Experiment index
+
+| # | subject | verdict |
+|---|---|---|
+| `exp_01` | the `address (nil)` fault | **fixed**, full gate ladder green, resource-neutral; plus an ordering-hole probe (12/12 clean) |
+| `exp_02` | decision campaign, C=8 | `mps_mega` 8.33x slower — the mission's question answered |
+| `exp_03` | the (C, g, mode) map | 1/C law; `g` is an atomics knob; ceiling ~0.88x; A1 closed by fitted law |
+| `exp_04` | MLP fan-out in the peer copy | **kept**, −5.0% campaign-confirmed; copy is only ~19% of service cost |
+| `exp_05` | phase attribution (stage 0) | instrument fixed and working; **the interference finding** |
+| `exp_06` | atomic ordering scope | scope ≈ 30% of the interference floor (diagnostic, reverted) |
+| `exp_07` | chunk-major counter layout | **≥10x slower, reverted** — coalescing atomics is a trap |
 
 ## Method note worth keeping
 

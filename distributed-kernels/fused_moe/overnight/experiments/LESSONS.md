@@ -478,3 +478,13 @@
   an order of magnitude, in the OPPOSITE direction from loads**. If the library
   owns arrival counting it should own counter ALLOCATION too, precisely so a
   caller cannot make the exp_07 mistake.
+
+- 2026-08-11 **dec05, final verification campaign on the shipped tree** (HEAD
+  source = exp_04 MLP kept + timestamps additive + exp_06/07 reverted), 5
+  rotations, 3 paired arms, all gates green: `production 7,731.2` /
+  `pf6gm_mega 6,904.1` (**0.89301**) / `mps_mega 10,075.8` (1.4594x pf6gm).
+  Matches dec03 (10,107.0) so nothing regressed across exp_05/06/07.
+  **Ratchet unchanged all night: pf6gm_mega at ~0.894x production.**
+  Campaign ledger: dec01 C=8 -> 57,347.4 | dec02 C=64 pre-MLP -> 10,643.3 |
+  dec03 C=64 post-MLP -> 10,107.0 | **dec04 DISCARDED** (node resynced
+  mid-campaign, two kernels mixed into one summary) | dec05 final -> 10,075.8.
