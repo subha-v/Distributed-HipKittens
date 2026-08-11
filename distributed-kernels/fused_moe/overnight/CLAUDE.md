@@ -25,6 +25,8 @@ resolution, experiment selection, node lease, and final judgment.
    (dispatch/streaming streams under compute, COMET layer-1 ideas for M6/M7
    tails, TileLink-style peeling), additively, one variable per experiment.
    Read COMET (https://arxiv.org/pdf/2502.19811) and the MoK kernel first.
+   Every candidate obeys the **kernel design mandate** below: built on the
+   Distributed-HipKittens primitives, and a CTA role-split megakernel.
 
 ## Standing objective — widen the win over `production` (this outlives the list)
 
@@ -48,6 +50,65 @@ not a checklist that ends the night when ticked.
 - After every campaign, append the running best to
   `overnight/experiments/LESSONS.md`: config, `arm_p50_us` for all three arms,
   ratio vs `production`, and ratio vs the previous best.
+
+## Kernel design mandate — every new kernel is a CTA role-split megakernel
+
+A standing constraint on mission step 5 and everything after it: two
+non-negotiables and one research question.
+
+**1. Build on the Distributed-HipKittens primitives — the kernels exist to teach
+us about the primitives.** Every new kernel is written against
+`include/cdna4/ops/group/distributed/` and expresses its protocol in that
+vocabulary instead of open-coding it:
+
+| concern | primitive | header |
+|---|---|---|
+| role split | `finish_order_partition` → `role_partition` (`is_service`/`is_compute`, dense `service_id`/`compute_id`) | `roles.cuh` |
+| peer addressing | `translate_peer`, `peer_offset` | `peer.cuh` |
+| payload transport | `store_peer_packets[_checked]`, `store_packet_row`, `packet16`, `packet_contract` | `packet.cuh` |
+| release / acquire | `thread_release`, `thread_acquire`, `producer_drain_release`, `cta_acquire`, `consumer_drain` | `sync.cuh` |
+| publish / observe readiness | `release_and_publish`, `publish_epoch_relaxed`, `bounded_poll_relaxed_into`, `bounded_observe_acquire_into`, `epoch_ready` | `completion.cuh` |
+| arrival counting | `counted_arrive_into`, `counted_arrive_release_into`, `epoch32` | `counter.cuh` |
+| slot reuse | `bounded_wait_slot_reusable_into`, `drain_and_retire_slot` | `lifetime.cuh` |
+| tile publish / consume | `publish_tile_release`, `wait_tile_acquire_into`, `retire_epoch` | `roles.cuh` |
+
+Extending those headers is **allowed and expected whenever a kernel needs
+something the library cannot yet express** — that is a result, not a detour. The
+rule is: reach for the primitive first; if it does not fit, never open-code
+around it silently — add or widen the primitive additively, keep every existing
+caller bit-identical, and say so. Open-coding a protocol the library already
+covers is a defect even when it is fast.
+
+**So every `result.md` carries a `## Primitives` section**: which primitives the
+kernel used; which one was missing, wrong-shaped, or forced an awkward call
+sequence; what was added or changed and why; what the surface should look like
+in hindsight. A kernel that teaches us nothing about the primitives is a
+half-finished experiment. Negative findings here are as valuable as speedups —
+log them in `LESSONS.md` under a `primitives:` tag.
+
+**2. Every new kernel is a megakernel with CTA-level comm/compute overlap — not
+the homogeneous shape.** `pf6gm_mega`, the current best, has every CTA run the
+whole pipeline end to end, so communication and computation interleave only
+within a single CTA's instruction stream. That shape is the DENOMINATOR, not the
+template. New kernels partition the grid **by role**, so at any instant some
+CTAs are moving data while *different* CTAs are issuing MFMA — real concurrency
+across CTAs, not just latency hiding inside one. `mps_mega` is the first
+instance of the shape (a service pool of `C` CTAs); step 5 carries it to other
+boundaries. A candidate in which every CTA still runs the entire pipeline is not
+an entry in this line of work however fast it is — bank the number and move on.
+
+**3. The research question, and our prior.** Can CTA-level communication /
+computation overlap be made *extremely* performant on AMD GPUs? **Be optimistic
+and push hard.** The enabling pieces on CDNA4 are real: a persistent megakernel
+keeps the role partition alive across phase boundaries with no relaunch,
+`finish_order_partition` costs one agent-scope atomic and needs no grid barrier,
+and the XCD/L2 structure gives the service pool somewhere to run that is not
+stealing MFMA issue slots. Treat a disappointing result as a bug in the split —
+wrong `C`, wrong boundary, wrong granularity, fences too coarse — before
+treating it as a verdict on the technique. Falsifiers stay pre-registered and
+honest (the cost model below still kills a config that lands above 6,919.8 µs at
+C=8/mode 2), but **a config-level kill is not a technique-level kill**. Only a
+swept, attributed, soaked set of negatives closes the line.
 
 ## Assessment & full ablation map
 
@@ -117,8 +178,10 @@ re-testable.
 
 - **You own:** this `overnight/` tree (all experiment folders, logs, ledgers),
   `../k0pf6gm_device_tile_mps.hip`, `../moe_mps_adapter.cuh`, `../DESIGN_MPS.md`,
-  `include/cdna4/ops/group/distributed/roles.cuh`, `../moe_host_abi.hpp` (ABI
-  additions only — never break the 56-word parity contract).
+  all of `include/cdna4/ops/group/distributed/**` (the primitive library —
+  additive changes only: new primitives, or widened ones that leave every
+  existing caller bit-identical), `../moe_host_abi.hpp` (ABI additions only —
+  never break the 56-word parity contract).
 - **Read-only:** `../k0pf6gm_device_tile.hip` (parity port), every other
   `distributed-kernels/` module, all of `~/amd-master/auto-gpu-kernel/**`
   EXCEPT the two harness files below.
