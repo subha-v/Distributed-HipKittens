@@ -7,6 +7,10 @@
 
 #include <cstddef>
 
+#if defined(__HIP_DEVICE_COMPILE__)
+#include <hip/hip_bf16.h>   // __hip_bfloat162 + unsafeAtomicAdd (accumulate_peer_bf162)
+#endif
+
 #include "detail/config.cuh"
 
 namespace kittens::distributed {
@@ -168,6 +172,42 @@ KITTENS_DISTRIBUTED_DEVICE_INLINE void load_peer_packets(
     for (std::size_t packet = tid; packet < count; packet += threads) {
         out[packet] = in[packet];
     }
+}
+
+/**
+ * Accumulating peer transport: one packed-bf16 read-modify-write on an address
+ * that may belong to a peer. Unlike every other transport in this header, this
+ * is an ATOMIC, and its contract is deliberately narrow:
+ *
+ *  * **Allocation grain:** the caller must know the target supports system-scope
+ *    remote RMW. HIP documents `unsafeAtomicAdd` on fine-grained global memory
+ *    as undefined; mori's symmetric heap is HIP-VMM `HeapType::Uncached`, whose
+ *    grain is unpublished. Measured on gfx950 over xGMI: exact under both
+ *    sequential remote RMWs and cross-device contention on the same cells
+ *    (`overnight/experiments/exp_18_direct_accumulate/`), confirmed on the mori
+ *    heap itself by the mode-7 in-harness detector (`exp_21`). A caller on any
+ *    other allocation must re-establish this before use.
+ *  * **Ordering:** the builtin takes no memory-scope argument; the RMW is
+ *    performed at the coherence point of the ADDRESS (fabric-side for a peer
+ *    VA). There is no return value and no fence; visibility to the owner is
+ *    established by the CALLER's drain (`s_waitcnt vmcnt(0)` waits for the
+ *    fabric acknowledgement) and its release/acquire chain — exactly the
+ *    discipline `store_peer_packets` already requires.
+ *  * **Width:** 4 bytes is the hardware's only packed-fp16 atomic width on
+ *    gfx950; there is no 16-byte atomic form, so an accumulating transport
+ *    cannot borrow `store_peer_packets`' op count. A design that feeds it
+ *    must justify the fabric's per-line RMW rate (the exp_21 preamble
+ *    microbenchmark measures exactly this).
+ */
+KITTENS_DISTRIBUTED_DEVICE_INLINE void accumulate_peer_bf162(
+        void* destination, unsigned int packed_bf16x2) {
+#if defined(__HIP_DEVICE_COMPILE__)
+    __hip_bfloat162* const p =
+        reinterpret_cast<__hip_bfloat162*>(destination);
+    unsafeAtomicAdd(p, *reinterpret_cast<const __hip_bfloat162*>(&packed_bf16x2));
+#else
+    (void)destination; (void)packed_bf16x2;
+#endif
 }
 
 template<std::size_t Chunks>

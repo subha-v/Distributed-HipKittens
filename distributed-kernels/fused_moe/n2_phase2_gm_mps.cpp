@@ -79,14 +79,26 @@ static_assert(kThreads == kBlockM * kAChunks,
               "the A2 tile fill must be exactly one 16 B load per thread");
 static_assert(kAChunks * kAChunkBytes == 128, "one K128 group per A2 tile row");
 
-// The write-once epilogue, JMAX N16 tiles at a time (n1g's wave-local
-// transpose idiom, unchanged in form; JMAX is compile-time so the loops unroll).
+// exp_21 (MPS-DELTA (3)) — DIRECT REMOTE ACCUMULATE target override for the
+// write-once epilogue. When the body built a remote target (peer_tab != null),
+// each row's atomic goes to the OWNER's slot instead of local `part`:
+//   addr = tab[xtok>>sh] + slot_off + ((xtok & mask)*kHidden + col)*2,
+// the exact translate_peer arithmetic pre-tabulated into 64 B of LDS (tab[cur]
+// holds the local heap base, so the uniform expression covers own-rank rows
+// with no select). MAXTOK is a power of two (entry guard), so div/mod are a
+// shift/mask and nothing here is a spill candidate. `dual` additionally keeps
+// the legacy local-part write -- the review-mandated lost-update DETECTOR
+// (M8 compares the two towers row-by-row). When peer_tab == null the whole
+// construct folds away and the donor's addressing is byte-identical.
 template <int JMAX>
 __device__ __forceinline__ void epilogue_write(
     std::uint32_t (&xp)[kBlockM][32], racc (&acc)[JMAX][2],
     const float (&sw2)[2], const bool (&lv2)[2], const int (&xtok)[16], int T,
     int q, int r, int rowh, int dcol, std::size_t col_base,
-    __hip_bfloat16* __restrict__ OUT) {
+    __hip_bfloat16* __restrict__ OUT,
+    const unsigned long long* __restrict__ peer_tab,
+    unsigned long long slot_off, int maxtok_sh, unsigned int tok_mask,
+    bool dual) {
   // PHASE 1 (write, MFMA layout): lane 16q+r holds sorted rows {r, 16+r}.
 #pragma unroll
   for (int m = 0; m < 2; ++m) {
@@ -117,15 +129,43 @@ __device__ __forceinline__ void epilogue_write(
   // atomic is UNBOUNDED: `xtok[i] < T` is uniform across each 32-lane half, so
   // a padding row's half-wave is EXEC-masked off and forms no address at all.
   if (dcol < 8 * JMAX) {
+    if (peer_tab != nullptr) {
+      // exp_21 remote-accumulate: the uniform branch is hoisted out of the
+      // unrolled body deliberately; the per-row work is shift/mask + one ds
+      // read2 + one wide IMAD on top of the donor's atomic form, and its
+      // 128B-per-half-wave contiguity is IDENTICAL to the donor's (the
+      // fabric's merging behavior is what exp_21 measures).
 #pragma unroll
-    for (int i = 0; i < 16; ++i) {
-      const int row = 2 * i + rowh;
-      const std::uint32_t d = xp[row][dcol ^ (2 * (row & 15))];
-      if (xtok[i] < T) {
-        __hip_bfloat162* p = reinterpret_cast<__hip_bfloat162*>(
-            OUT + static_cast<std::size_t>(xtok[i]) * kHidden + col_base +
-            2 * dcol);
-        unsafeAtomicAdd(p, *reinterpret_cast<const __hip_bfloat162*>(&d));
+      for (int i = 0; i < 16; ++i) {
+        const int row = 2 * i + rowh;
+        const std::uint32_t d = xp[row][dcol ^ (2 * (row & 15))];
+        if (xtok[i] < T) {
+          const unsigned int xr = (unsigned int)xtok[i];
+          const std::uintptr_t a =
+              (std::uintptr_t)peer_tab[xr >> maxtok_sh] + slot_off +
+              ((std::size_t)(xr & tok_mask) * kHidden + col_base + 2 * dcol) *
+                  2u;
+          kittens::distributed::accumulate_peer_bf162(
+              reinterpret_cast<void*>(a), d);
+          if (dual) {   // detector: keep the local tower in exact lock-step
+            __hip_bfloat162* pl = reinterpret_cast<__hip_bfloat162*>(
+                OUT + static_cast<std::size_t>(xtok[i]) * kHidden + col_base +
+                2 * dcol);
+            unsafeAtomicAdd(pl, *reinterpret_cast<const __hip_bfloat162*>(&d));
+          }
+        }
+      }
+    } else {
+#pragma unroll
+      for (int i = 0; i < 16; ++i) {
+        const int row = 2 * i + rowh;
+        const std::uint32_t d = xp[row][dcol ^ (2 * (row & 15))];
+        if (xtok[i] < T) {
+          __hip_bfloat162* p = reinterpret_cast<__hip_bfloat162*>(
+              OUT + static_cast<std::size_t>(xtok[i]) * kHidden + col_base +
+              2 * dcol);
+          unsafeAtomicAdd(p, *reinterpret_cast<const __hip_bfloat162*>(&d));
+        }
       }
     }
   }
@@ -180,6 +220,48 @@ N2_P2_QUAL void N2_P2_NAME(
   const int q = lane >> 4;
   const int r = lane & 15;
   const int T = nvi[1];
+
+  // MPS-DELTA (3) — exp_21 mode 7 target construction. Runs ONCE per body.
+  // The live footprint across the task loop is three scalars + 64 B of LDS:
+  // the descriptor's ten-pointer carriage never enters a register live range
+  // near the MFMA peak, which is the resource discipline the donor demands.
+  __shared__ unsigned long long m7tab[8];
+  const unsigned long long* m7_peer_tab = nullptr;
+  unsigned long long m7_slot_off = 0ull;
+  int m7_sh = 0;
+  unsigned int m7_tok_mask = 0u;
+  bool m7_dual = false;
+#ifdef N2GM_TASK_DONE_HOOK
+  {
+    const unsigned long long m7cfg =
+        (unsigned long long)k0p6_dread(k0p6_desc, K0P6_D_MPS_CFG);
+    if (((m7cfg >> 16) & 0xFFull) == 7ull) {
+      const auto* m7sym = k0p6_symmetric(k0p6_desc);
+      const unsigned long long m7_slots =
+          (unsigned long long)k0p6_dread(k0p6_desc, K0P6_D_MPS_SLOTS);
+      const int m7_cur = (int)k0p6_dread(k0p6_desc, K0P6_D_CUR);
+      const unsigned int m7_mtok =
+          (unsigned int)k0p6_dread(k0p6_desc, K0P6_D_MAXTOK);
+      if (tid < 8) {
+        const void* pb = (tid == m7_cur)
+            ? (const void*)m7sym->local_heap_base
+            : (const void*)m7sym->heap_bases.select<8>(tid);
+        m7tab[tid] = (unsigned long long)(std::uintptr_t)pb;
+      }
+      m7_sh = 31 - __clz((unsigned int)m7_mtok);  // MAXTOK = 2^m7_sh (guard)
+      m7_tok_mask = m7_mtok - 1u;
+      m7_slot_off =
+          (m7_slots - (unsigned long long)(std::uintptr_t)m7sym->local_heap_base)
+          + (unsigned long long)m7_cur * (unsigned long long)m7_mtok *
+                ((unsigned long long)kHidden * 2ull);
+      m7_peer_tab = m7tab;
+      m7_dual = ((m7cfg >> 8) & 0x10ull) != 0ull;
+      // The first epilogue reads the table at the END of task 0; the task
+      // loop's own LDS-fill __syncthreads() orders the fill before it, so no
+      // extra barrier is spent here.
+    }
+  }
+#endif
 
   // exp_59: task = (tile, n-chunk nc); 16 n-chunks per tile. tile_desc packs
   // (b0<<4)|gcount. At kGM==1, num_tiles == padded/32 and this equals the donor's
@@ -418,13 +500,15 @@ N2_P2_QUAL void N2_P2_NAME(
                         *reinterpret_cast<racc(*)[4][2]>(&acc[sb][0]), sw2, lv2,
                         xtok, T, q, r, rowh, dcol,
                         static_cast<std::size_t>(kChunkN) * nc + kWaveCols2 * wv,
-                        OUT);
+                        OUT, m7_peer_tab, m7_slot_off, m7_sh, m7_tok_mask,
+                        m7_dual);
       epilogue_write<3>(xp_lds[wv],
                         *reinterpret_cast<racc(*)[3][2]>(&acc[sb][4]), sw2, lv2,
                         xtok, T, q, r, rowh, dcol,
                         static_cast<std::size_t>(kChunkN) * nc +
                             kWaveCols2 * wv + 64,
-                        OUT);
+                        OUT, m7_peer_tab, m7_slot_off, m7_sh, m7_tok_mask,
+                        m7_dual);
     }
     // MPS-DELTA (2): per-thread VMEM drain BEFORE the task-end barrier. The
     // epilogue's global_atomic_pk_add_bf16 stores are asynchronous;

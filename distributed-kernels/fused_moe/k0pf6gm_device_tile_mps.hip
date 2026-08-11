@@ -101,7 +101,7 @@
 // .cuh-only change, then confirm a new hsaco mtime under
 // ~/.cache/k0-mok-synthetic-prefill/mori/jit/gfx950_mlx5/*/ before believing
 // any number. The value is never read; only its presence in the hash matters.
-#define K0P6_MPS_SRC_REV 16
+#define K0P6_MPS_SRC_REV 17
 
 // exp_56 (Option C): per-source SEGMENTED receive layout + chunk-counted release.
 //  * Row index = source*MAXTOK + fetch_add(dest_counter[source] on dest, 1)  (waitless).
@@ -295,16 +295,28 @@ __device__ __forceinline__ void k0p6_mps_task_done(int b, int nc, int tid,
                                                    const long long* k0p6_desc) {
   if (tid != 0) return;
   // Stream modes ONLY: 2 (tail pool), 3 (whole-die pool), 4 (exp_20 paced
-  // tail pool). exp_20's modes 5/6 reserve a pool but keep mode 0's parity
-  // publication, so they must keep the parity part_done bump in the else arm --
-  // an open-ended `>= 2` would have silently enqueued events nobody consumes.
-  if (((unsigned long long)k0p6_dread(k0p6_desc, K0P6_D_MPS_CFG) >> 16 &
-       0xFFull) - 2ull <= 2ull) {
+  // tail pool), 7 (exp_21 remote accumulate). exp_20's modes 5/6 reserve a
+  // pool but keep mode 0's parity publication, so they must keep the parity
+  // part_done bump in the else arm -- an open-ended `>= 2` would have
+  // silently enqueued events nobody consumes.
+  const unsigned long long m7mode =
+      ((unsigned long long)k0p6_dread(k0p6_desc, K0P6_D_MPS_CFG) >> 16 &
+       0xFFull);
+  if (m7mode - 2ull <= 2ull || m7mode == 7ull) {
     std::uint32_t* mps_q = (std::uint32_t*)k0p6_dread(k0p6_desc, K0P6_D_MPS_Q);
     std::uint32_t* mps_state =
         (std::uint32_t*)k0p6_dread(k0p6_desc, K0P6_D_MPS_STATE);
-    hk_moe::mps::enqueue_tile_release(
-        mps_q, mps_state + K0P6_MPS_ST_TAIL, b, nc);
+    if (m7mode == 7ull) {
+      // exp_21: the payload now lives in the OWNER's memory, so the release
+      // chain that publishes it (event store -> service acquire -> flush's
+      // system release -> owner acquire) starts HERE, at system scope. The
+      // queue cell remains agent-local; only the fence widens.
+      hk_moe::mps::enqueue_tile_release<hk_moe::scope::system>(
+          mps_q, mps_state + K0P6_MPS_ST_TAIL, b, nc);
+    } else {
+      hk_moe::mps::enqueue_tile_release(
+          mps_q, mps_state + K0P6_MPS_ST_TAIL, b, nc);
+    }
   } else {
     hk_moe::arrive_local_count(
         ((unsigned int*)k0p6_dread(k0p6_desc, K0P6_D_PART_DONE)) + b);
@@ -373,13 +385,34 @@ __device__ __forceinline__ float k0p6q_bf16_to_f32(unsigned short b) {
 // The arithmetic is byte-stable with the parity M8 body; splitting the loop
 // into pull/slot instantiations at the call site keeps the two address forms
 // out of each other's live ranges (resource-gate requirement).
-template<int NT, typename BaseFor>
+//
+// exp_21 mode-7 additions (both inert for every other mode/config):
+//   * `zero_slots` — consume-and-zero. The slot row's contributions are
+//     accumulated atomics, so the cell must be zero before the NEXT epoch's
+//     first accumulate. The owner zeroes each fanout row in the same lane/16B
+//     geometry it just read, AFTER the read, and BEFORE the M9 retirement
+//     (which is the cross-rank ordering point that protects the next epoch's
+//     producers). Rows are single-consumer (unique (p,row) per pull_src
+//     entry), so no intra-epoch reader ever sees a zeroed-then-read row.
+//     DUMMY (cur,0) bases of out-of-fanout lanes are never dereferenced: the
+//     store is guarded by fanout exactly like the accumulate.
+//   * `detect` — the review-mandated lost-update DETECTOR. The epilogue
+//     dual-wrote slots AND local part, so this batch ALSO pulls the
+//     producer's part row for the same (p,row) ordinal and compares
+//     elementwise. Two independently ordered bf16 fan-ins of the same addends
+//     can differ by a couple of ulps anywhere; a lost update differs by one
+//     whole addend, so a 10% relative (+ small absolute) gross-loss threshold
+//     flags systematic loss without false-positive noise. One atomicOr per
+//     batch at most. Diagnostic only: doubles M8's pull traffic.
+template<int NT, typename BaseFor, typename BaseFor2,
+         bool Detect = false, bool Zero = false>
 __device__ __forceinline__ void k0p6_mps_m8_batch(
     int tok0, int T, unsigned int epoch32, long long spin_limit,
     const int* __restrict__ pull_ptr, const int* __restrict__ pull_src,
     const unsigned int* __restrict__ row_ready, int T_loc_max,
     int* __restrict__ pperr, int lane, int cur,
-    unsigned short* __restrict__ out, BaseFor&& base_for) {
+    unsigned short* __restrict__ out, BaseFor&& base_for,
+    BaseFor2&& base_for2) {
   bool batch_ready = true;
   int lo2[NT], fanout[NT];
   bool live[NT];
@@ -391,9 +424,11 @@ __device__ __forceinline__ void k0p6_mps_m8_batch(
     fanout[t] = live[t] ? (pull_ptr[tok + 1] - lo2[t]) : 0;
   }
   unsigned long long pbase[NT];
+  unsigned long long pbase2[NT];
 #pragma unroll
   for (int t = 0; t < NT; ++t) {
     pbase[t] = 0ull;
+    pbase2[t] = 0ull;
     if ((lane >> 3) == t) {
       const int j2 = lane & 7;
       // The consumer below shuffles all 8 lanes of the group unconditionally
@@ -415,6 +450,7 @@ __device__ __forceinline__ void k0p6_mps_m8_batch(
             hk_moe::set_error_bit{pperr, 33554432});
       }
       pbase[t] = base_for(p, row);
+      if constexpr (Detect) pbase2[t] = base_for2(p, row);
     }
   }
   // A timeout must not mint a usable peer payload. Skip this token batch
@@ -425,6 +461,7 @@ __device__ __forceinline__ void k0p6_mps_m8_batch(
   // bases. Apply one convergent wave acquire before any payload load.
   hk_moe::acquire_payload_system();
   __syncwarp();
+  bool dual_mismatch = false;
 #pragma unroll 1
   for (int c = 0; c < 14; ++c) {
     const size_t off = (size_t)(c << 10) + (size_t)(lane << 4);
@@ -437,6 +474,7 @@ __device__ __forceinline__ void k0p6_mps_m8_batch(
 #pragma unroll 1
     for (int jb = 0; jb < 8; jb += 4) {
       uint4 v2[NT][4];
+      uint4 w2[Detect ? NT : 1][4];
 #pragma unroll
       for (int t = 0; t < NT; ++t) {
 #pragma unroll
@@ -444,6 +482,12 @@ __device__ __forceinline__ void k0p6_mps_m8_batch(
           const unsigned long long pb = __shfl(pbase[t], 8 * t + jb + jj);
           v2[t][jj] = *reinterpret_cast<const uint4*>(
               reinterpret_cast<const unsigned char*>(pb) + off);
+          if constexpr (Detect) {
+            const unsigned long long pb2 =
+                __shfl(pbase2[t], 8 * t + jb + jj);
+            w2[t][jj] = *reinterpret_cast<const uint4*>(
+                reinterpret_cast<const unsigned char*>(pb2) + off);
+          }
         }
       }
 #pragma unroll
@@ -455,6 +499,27 @@ __device__ __forceinline__ void k0p6_mps_m8_batch(
                 reinterpret_cast<const unsigned short*>(&v2[t][jj]);
 #pragma unroll
             for (int e = 0; e < 8; ++e) acc[t][e] += k0p6_bf16_to_f32(u16[e]);
+            if constexpr (Detect) {
+              const unsigned short* const q16 =
+                  reinterpret_cast<const unsigned short*>(&w2[t][jj]);
+#pragma unroll
+              for (int e = 0; e < 8; ++e) {
+                const float vs = k0p6_bf16_to_f32(u16[e]);
+                const float vp = k0p6_bf16_to_f32(q16[e]);
+                const float ad = fabsf(vs - vp);
+                if (ad > 0.005f + 0.10f * fmaxf(fabsf(vs), fabsf(vp))) {
+                  dual_mismatch = true;
+                }
+              }
+            }
+            if constexpr (Zero) {
+              // Zero THIS lane's 16 B of this live contribution's chunk
+              // (same geometry as the read; dummy bases excluded).
+              const unsigned long long pz = __shfl(pbase[t], 8 * t + jb + jj);
+              uint4 z4{0u, 0u, 0u, 0u};
+              *reinterpret_cast<uint4*>(
+                  reinterpret_cast<unsigned char*>(pz) + off) = z4;
+            }
           }
         }
       }
@@ -470,6 +535,11 @@ __device__ __forceinline__ void k0p6_mps_m8_batch(
 #pragma unroll
       for (int e = 0; e < 8; ++e) pk.u16[e] = k0p6_f32_to_bf16_rne(acc[t][e]);
       *reinterpret_cast<uint4*>(reinterpret_cast<unsigned char*>(orow) + off) = pk.pack;
+    }
+  }
+  if constexpr (Detect) {
+    if (__ballot(dual_mismatch) != 0ull && lane == 0) {
+      atomicOr(pperr, K0P6_MPS_ERR_DUAL);
     }
   }
 }
@@ -539,7 +609,13 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
         k0p6_dread(desc, K0P6_D_MPS_STATE) == 0 ||
         (k0p6_dread(desc, K0P6_D_MPS_STATE) & 7) != 0 ||
         k0p6_dread(desc, K0P6_D_MPS_SLOTS) == 0 ||
-        (k0p6_dread(desc, K0P6_D_MPS_SLOTS) & 15) != 0) {
+        (k0p6_dread(desc, K0P6_D_MPS_SLOTS) & 15) != 0 ||
+        // exp_21 mode 7: owner/pos are recovered from the row index by
+        // shift/mask inside the epilogue's unrolled loop, so a power-of-two
+        // MAXTOK is a hard requirement there (the donor's division would be a
+        // spill machine at the pointer peak).
+        (hk_moe::mps::mode_is_remote_accum(entry_cfg) &&
+         (MAXTOK & (MAXTOK - 1)) != 0)) {
       if (bid == 0 && tid == 0) atomicOr(pperr, K0P6_MPS_ERR_CONFIG);
       return;
     }
@@ -1301,7 +1377,8 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
         env.t_ext = T_ext;
         env.t_loc_max = T_loc_max;
         env.epoch32 = (std::uint32_t)k0p6_epoch(desc);
-        env.group_slices = scfg.group_slices;
+        env.group_slices = hk_moe::mps::physical_g(scfg);
+        env.mode = scfg.mode;
         // exp_20 mode 4 pins the flag-batch depth at 16 and reinterprets the
         // flush_rows field as the pacing magnitude, so pacing is the single
         // variable between mode 4 and the mode-2 ratchet.
@@ -1538,12 +1615,18 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
     const bool m8_dynamic = hk_moe::mps::mode_is_stream(m8cfg);
     std::uint32_t* mps_state = (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_STATE);
     std::uint64_t* mps_ts = (std::uint64_t*)(mps_state + K0P6_MPS_ST_WORDS);
+    // exp_21 mode 7: detect (the dual-write detector) also pulls the
+    // producer's part row, so slot-mode M8 must materialize the IRIS
+    // descriptor + part for exactly that config as well.
+    const bool m7_detect = hk_moe::mps::detect_dual(m8cfg);
     // Keep every M8 descriptor-derived value inside this phase scope. M9
     // deliberately reloads its own state after the scope ends. Only the pull
     // paths materialize the IRIS descriptor (one of the six counted sites).
-    const auto* symmetric = m8_pull ? k0p6_symmetric(desc) : nullptr;
-    const unsigned short* part = m8_pull
-        ? (const unsigned short*)k0p6_dread(desc, K0P6_D_PART) : nullptr;
+    const auto* symmetric =
+        (m8_pull || m7_detect) ? k0p6_symmetric(desc) : nullptr;
+    const unsigned short* part =
+        (m8_pull || m7_detect)
+            ? (const unsigned short*)k0p6_dread(desc, K0P6_D_PART) : nullptr;
     const unsigned short* slots = m8_pull
         ? nullptr : (const unsigned short*)k0p6_dread(desc, K0P6_D_MPS_SLOTS);
     const std::uint64_t epoch = k0p6_epoch(desc);
@@ -1583,13 +1666,13 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
         for (int tok0 = gw * NT; tok0 < T; tok0 += nw * NT) {
           k0p6_mps_m8_batch<NT>(tok0, T, epoch32, spin_limit, pull_ptr,
                                 pull_src, row_ready, T_loc_max, pperr, lane,
-                                cur, out, base_pull);
+                                cur, out, base_pull, base_pull);
         }
       } else {
         for (int tok0 = gw * NT; tok0 < T; tok0 += nw * NT) {
           k0p6_mps_m8_batch<NT>(tok0, T, epoch32, spin_limit, pull_ptr,
                                 pull_src, row_ready, T_loc_max, pperr, lane,
-                                cur, out, base_slot);
+                                cur, out, base_slot, base_slot);
         }
       }
     } else {
@@ -1610,7 +1693,42 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
           if (batch >= nbatches) break;
           k0p6_mps_m8_batch<NT>(batch * NT, T, epoch32, spin_limit, pull_ptr,
                                 pull_src, row_ready, T_loc_max, pperr, lane,
-                                cur, out, base_pull);
+                                cur, out, base_pull, base_pull);
+        }
+      } else if (m7_detect) {
+        // exp_21 DETECTOR instantiation: consume slots, compare against the
+        // producer's part row, zero slots. Doubled traffic is diagnostic-only.
+        while (true) {
+          if (lane == 0) {
+            *batch_slot =
+                kittens::distributed::fetch_add_relaxed<hk_moe::scope::agent>(
+                    m8_next, 1u);
+          }
+          __syncwarp();
+          const int batch = *batch_slot;
+          if (batch >= nbatches) break;
+          k0p6_mps_m8_batch<NT, decltype(base_slot)&, decltype(base_pull)&,
+                            true, true>(
+              batch * NT, T, epoch32, spin_limit, pull_ptr, pull_src,
+              row_ready, T_loc_max, pperr, lane, cur, out, base_slot, base_pull);
+        }
+      } else if (hk_moe::mps::mode_is_remote_accum(m8cfg)) {
+        // exp_21 mode 7: the owner CONSUMES-AND-ZEROES each accumulated slot
+        // row (the retirement gate orders this zeroing before any peer's
+        // next-epoch accumulate could need the cell zero).
+        while (true) {
+          if (lane == 0) {
+            *batch_slot =
+                kittens::distributed::fetch_add_relaxed<hk_moe::scope::agent>(
+                    m8_next, 1u);
+          }
+          __syncwarp();
+          const int batch = *batch_slot;
+          if (batch >= nbatches) break;
+          k0p6_mps_m8_batch<NT, decltype(base_slot)&, decltype(base_slot)&,
+                            false, true>(
+              batch * NT, T, epoch32, spin_limit, pull_ptr, pull_src,
+              row_ready, T_loc_max, pperr, lane, cur, out, base_slot, base_slot);
         }
       } else {
         while (true) {
@@ -1624,7 +1742,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
           if (batch >= nbatches) break;
           k0p6_mps_m8_batch<NT>(batch * NT, T, epoch32, spin_limit, pull_ptr,
                                 pull_src, row_ready, T_loc_max, pperr, lane,
-                                cur, out, base_slot);
+                                cur, out, base_slot, base_slot);
         }
       }
     }

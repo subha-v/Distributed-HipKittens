@@ -28,7 +28,7 @@ namespace hk_moe::mps {
 
 // ---- pperr bits added by MPS (donor/parity bits 16..25 are unchanged) -------
 #define K0P6_MPS_ERR_SERVICE 67108864    // 1<<26: service/event poll timeout
-#define K0P6_MPS_ERR_CONFIG 268435456    // 1<<27: MPS config/shape guard
+#define K0P6_MPS_ERR_CONFIG 268435456    // 1<<28: MPS config/shape guard
 
 // ---- K0P6_D_MPS_STATE scalar word lanes -------------------------------------
 #define K0P6_MPS_ST_TICKET 0   // finish-order role tickets (agent monotonic)
@@ -139,7 +139,42 @@ inline constexpr std::uint32_t kDiagVariantRead = 2u;
 inline constexpr std::uint32_t kDiagVariantWrite = 4u;
 
 __host__ __device__ __forceinline__ bool mode_is_stream(config c) {
-    return c.mode == 2u || c.mode == 3u || c.mode == 4u;
+    return c.mode == 2u || c.mode == 3u || c.mode == 4u || c.mode == 7u;
+}
+
+// ---- exp_21 mode 7: DIRECT REMOTE ACCUMULATE (A11/M11) ----------------------
+// The M7 epilogue accumulates each tile DIRECTLY into the owner's slot with
+// the remote packed-bf16 atomic exp_18 proved over xGMI: the ~936 MB
+// part-write / pool-read / pool-push protocol collapses to ~312 MB of remote
+// RMWs and the pool keeps only the readiness bookkeeping (arrivals, chunk
+// counts, flags), so C can shrink an order of magnitude. The owner zeroes
+// each slot row right after consuming it in M8 ("consume-and-zero", made
+// sound by the retirement gate + this harness's terminal-pperr semantics --
+// see exp_21_direct_accumulate/design.md).
+//
+// Field discipline (exp_20 idiom -- the host bridge signature never changes):
+// mode 7 requires physical g == 1 (there are no push groups), and the `g`
+// field's bit 4 carries the DUAL-WRITE DETECTOR (g = 1 | 0x10): the epilogue
+// also writes local `part`, and M8 compares each consumed slot row against
+// the producer's part row, setting pperr bit 1<<28 on a lost update. This is
+// the review-mandated lost-update detector; rel_L1 alone cannot see it.
+inline constexpr std::uint32_t kModeRemoteAccum = 7u;
+inline constexpr std::uint32_t kRemoteAccumGMask = 0xFu;   // physical g bits
+inline constexpr std::uint32_t kRemoteAccumDetectBit = 0x10u;
+#define K0P6_MPS_ERR_DUAL 134217728    // 1<<27: mode-7 dual-write detector mismatch
+
+__host__ __device__ __forceinline__ bool mode_is_remote_accum(config c) {
+    return c.mode == kModeRemoteAccum;
+}
+
+__host__ __device__ __forceinline__ bool detect_dual(config c) {
+    return mode_is_remote_accum(c) &&
+           (c.group_slices & kRemoteAccumDetectBit) != 0u;
+}
+
+__host__ __device__ __forceinline__ std::uint32_t physical_g(config c) {
+    return mode_is_remote_accum(c) ? (c.group_slices & kRemoteAccumGMask)
+                                   : c.group_slices;
 }
 
 // Modes that reserve a pool but keep mode 0's publication and combine paths.
@@ -174,9 +209,18 @@ __host__ __device__ __forceinline__ bool config_is_valid(config c) {
     // 14-35% band, so this is an extrapolation the sweep has to justify.
     if (c.reserved_comm_ctas > 128u) return false;
     if (c.reserved_comm_ctas >= 256u) return false;
-    if (c.group_slices != 1u && c.group_slices != 2u && c.group_slices != 4u &&
-        c.group_slices != 16u) return false;
-    if (c.mode > 6u) return false;
+    if (mode_is_remote_accum(c)) {
+        // exp_21 mode 7: physical g must be 1 (there are no push groups) and
+        // the only legal extra bit is the 0x10 dual-write detector.
+        if ((c.group_slices & kRemoteAccumGMask) != 1u) return false;
+        if ((c.group_slices & ~(kRemoteAccumGMask | kRemoteAccumDetectBit)) != 0u)
+            return false;
+        // Part is never written in mode 7, so a remote-part pull has nothing
+        // to read: forbid rather than silently corrupt.
+        if (c.pull_fallback) return false;
+    } else if (c.group_slices != 1u && c.group_slices != 2u &&
+               c.group_slices != 4u && c.group_slices != 16u) return false;
+    if (c.mode > 7u) return false;
     if (mode_is_stream(c) && c.reserved_comm_ctas == 0u) return false;
     // exp_20 diagnostics: a pool of zero has nothing to run.
     if (mode_is_diag_pool(c) && c.reserved_comm_ctas == 0u) return false;
@@ -280,12 +324,17 @@ __device__ __forceinline__ void ts_last(std::uint64_t* cell, bool enable) {
 // Readiness timestamps (first/last-ready) are captured by the SERVICE waves
 // consuming these events, keeping the memory-clobbering s_memrealtime asm
 // entirely off the MFMA wave (resource gate).
+// EnqueueScope: exp_21 mode 7 releases at SYSTEM scope, because the payload
+// now lives in the OWNER's memory: the chain that publishes it (event store ->
+// service acquire -> flush's system release -> owner acquire) is only as
+// strong as its first link. Modes 2/3/4 keep agent (unchanged ratchet arm).
+template<scope EnqueueScope = scope::agent>
 __device__ __forceinline__ void enqueue_tile_release(
         std::uint32_t* __restrict__ q, std::uint32_t* __restrict__ tail,
         int b, int nc) {
     const std::uint32_t ticket =
         kittens::distributed::fetch_add_relaxed<scope::agent>(tail, 1u);
-    kittens::distributed::publish_tile_release<scope::agent>(
+    kittens::distributed::publish_tile_release<EnqueueScope>(
         q + ticket, encode_event(b, nc));
 }
 
@@ -310,9 +359,10 @@ struct service_env {
     int t_ext;
     int t_loc_max;
     std::uint32_t epoch32;
-    std::uint32_t group_slices;              // g in {1,2,4,16}
+    std::uint32_t group_slices;              // g in {1,2,4,16} (physical)
     std::uint32_t flush_rows;                // flags per system release
     std::uint32_t pace;                      // exp_20 mode 4: s_sleep units/push
+    std::uint32_t mode;                      // exp_21: 7 = remote accumulate
     std::uint64_t spin_limit;
     std::uint32_t events_total;              // E = (nvi[0] >> 5) * 16
     std::uint32_t queue_capacity;            // (PADMAX/32)*16
@@ -545,8 +595,17 @@ __device__ __forceinline__ void run_service(
         const std::uint32_t ev = s.event;
         if (ev == 0u) break;
         // Wave-local payload acquire (a CTA-scope cta_acquire would deadlock:
-        // the waves of one CTA iterate different stripe lengths).
-        kittens::distributed::thread_acquire<scope::agent>();
+        // the waves of one CTA iterate different stripe lengths). Mode 7
+        // acquires at SYSTEM scope: it is the middle link of the chain that
+        // carries the producer's remote atomics to the owner's flag
+        // (producer system-release -> this acquire -> flush's system
+        // release). Modes 2/3/4 push a payload they read locally, so agent
+        // remains correct there and is byte-identical to the ratchet.
+        if (env.mode == kModeRemoteAccum) {
+            kittens::distributed::thread_acquire<scope::system>();
+        } else {
+            kittens::distributed::thread_acquire<scope::agent>();
+        }
         // Readiness timestamps live on the SERVICE wave (off the MFMA wave):
         // first/last tile-event observed. Service waves already poll at the
         // queue tail, so this is the earliest observable readiness point
@@ -646,6 +705,19 @@ __device__ __forceinline__ void run_service(
         }
         __syncwarp();
         const std::uint32_t npush = s.push_count;
+        if (env.mode == kModeRemoteAccum) {
+            // exp_21 mode 7: bookkeeping only. The completing lane of each
+            // (row, chunk) counter counts the CHUNK toward the row's 16; the
+            // payload reached the owner in the producer's own epilogue RMWs.
+            // `pushed` therefore reads "chunks done", target unchanged (16),
+            // and retire_pushed_row's existing flush path is exact. No claim:
+            // g is pinned 1, and the RMW order makes the chunk's completing
+            // lane unique exactly as in stream mode's g==1 arm.
+            for (std::uint32_t i = 0; i < npush; ++i) {
+                retire_pushed_row(env, s, s.rows[i], 1u, lane);
+            }
+            continue;
+        }
         // Copy kPushBatch groups per pass so each lane keeps kPushBatch loads
         // in flight; the per-row accounting stays strictly one row at a time so
         // the flag/flush discipline above is unchanged.
