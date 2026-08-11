@@ -90,6 +90,47 @@
   `RESULTS.md` must be taken with `HK_DEBUG=0`. Debug output is for localizing
   the hang, never for a number.
 
+- **WIN, exp_02: uniform NR=32 landed. Geomean 285.02 → 280.74 µs (−1.5%).**
+  Shape 6 **2865.78 → 2633.04 µs (−8.1%)**; shapes 1/3/4/5 within noise, shape
+  2 −1.5%. Full ladder passed (M3 17/17 at both tolerances, M4 all three
+  controls, M5 600-epoch soak). The pre-registered prediction was 2632 µs on
+  shape 6 and ~281 µs geomean — the mechanism (the donor's `NR=8` leaves eight
+  reducer CTAs starving against 296 producers on the largest output) predicted
+  the magnitude to within a microsecond.
+
+- **WIN, exp_04a: the tile table was inherited too. Geomean 280.74 → 269.96 µs
+  (−3.8%), from shape 1 alone at −20.3% (107.86 → 85.93 µs).** Shape 1
+  (64×7168×18432) was running `32/256/32`, which gives `(64/32)·⌈7168/256⌉ =
+  56` tiles against **272 producer CTAs — 21% of the machine, with 216 CTAs
+  executing the tile loop zero times** — and 72 k-iterations. Moving it to
+  `32/64/64` gives 224 tiles (0.82 waves) and 36 k-iterations, needs **no new
+  instantiation** (that template already existed as the generic fallback row),
+  and is a two-line change. Full ladder passed.
+  Generalizable lesson: **every column of a donor's shape table is a
+  hypothesis, not a constant.** Both the `NR` column and the `BM/BN/BK` column
+  came from RadeonFlow's submitted values and both were wrong for this kernel;
+  together they were worth 5.3%. The existing attribution had missed this
+  because it was measured only on the largest shape, where occupancy is a
+  non-issue — but the ranking statistic is a *geometric* mean, so the small
+  shapes carry equal weight.
+
+- **NEGATIVE (by analysis, not run — and the reasoning is the useful part):
+  do NOT retile shape 3, and more generally the per-tile release tax gates the
+  whole tile axis.** Shape 3 (2048×2880×2880) is ragged in N (`⌈2880/256⌉ = 12`
+  vs `11.25`, so 6% of its GEMM is padding) and uses only 0.71 of the producer
+  CTAs, so `BN=64` (45 columns exactly, 720 tiles) looks obviously right. It is
+  not: `producer_drain_release` is issued **once per tile**, shape 3 already
+  spends **12.5 µs** there at 192 tiles, and 720 tiles is 3.75× that — about
+  **+35 µs** against a ragged-N saving of ~1.5 µs, since shape 3's GEMM is only
+  23.6 µs of its 96.9. Shape 1 tolerated 4× the tiles only because its release
+  cost was 0.4 µs.
+  **Consequence: E3 (release granularity) is a prerequisite for E4, not an
+  independent 9%.** Amortizing the release unlocks an axis that is otherwise
+  closed everywhere except the one shape where it happened not to matter.
+  Recomputing the geometry for the other rows shows none has shape 1's defect
+  (last-wave fill is 94% on shapes 2, 4, 5 and 6), so **the tile axis is close
+  to exhausted** until E3 lands.
+
 ## Session 1 — 2026-08-11 (bring-up)
 
 - **2026-08-11 (baseline, pre-overnight).** First hardware bring-up of the

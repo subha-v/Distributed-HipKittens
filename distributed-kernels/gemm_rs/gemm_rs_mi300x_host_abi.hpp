@@ -29,8 +29,14 @@ inline constexpr int cta_threads = CTA_THREADS;
 // Shape table. Key = (M, N, K_LOCAL = K_global / 8, has_bias): the evaluator
 // shards K evenly (verified against the official evaluator; gate 4).
 // BM/BN/BK are the frozen gfx942 rank-1 tile choices with BM | (M/8) checked
-// at construction and again statically; reducer-CTA counts are RadeonFlow's
-// submitted scored values.
+// at construction and again statically.
+//
+// Reducer-CTA counts were originally carried over verbatim from RadeonFlow's
+// submitted scored values (32/48/48/48/32/8). Sweeping {8,16,24,32,40,48} per
+// shape on this node showed a uniform NR=32 is optimal or within noise on all
+// six, and beats the inherited table by 8.3% on the largest shape
+// (2850.2 -> 2632.1 us at 8192x8192x29568, where the donor value of 8 starves
+// the reduce side). Carrying over a donor's constants was not free.
 // ---------------------------------------------------------------------------
 struct shape_key {
     int m, n, k_local;
@@ -45,12 +51,12 @@ struct shape_config {
 struct shape_entry { shape_key key; shape_config cfg; };
 
 inline constexpr std::array<shape_entry, 6> scored_shapes{{
-    {{  64, 7168, 2304, false}, { 32, 256, 32, 32, 1}},
-    {{ 512, 4096, 1536,  true}, { 64,  64, 64, 48, 2}},
-    {{2048, 2880,  360,  true}, {128, 256, 32, 48, 3}},
-    {{4096, 4096,  512, false}, {256, 256, 32, 48, 4}},
+    {{  64, 7168, 2304, false}, { 32,  64, 64, 32, 1}},
+    {{ 512, 4096, 1536,  true}, { 64,  64, 64, 32, 2}},
+    {{2048, 2880,  360,  true}, {128, 256, 32, 32, 3}},
+    {{4096, 4096,  512, false}, {256, 256, 32, 32, 4}},
     {{8192, 4096, 1792,  true}, {256, 256, 32, 32, 5}},
-    {{8192, 8192, 3696, false}, {256, 256, 32,  8, 6}},
+    {{8192, 8192, 3696, false}, {256, 256, 32, 32, 6}},
 }};
 
 // Generic fallback row (correctness path for every other evaluator-legal

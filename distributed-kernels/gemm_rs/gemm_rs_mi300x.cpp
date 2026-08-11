@@ -425,7 +425,7 @@ static void launch_fixed(const mi300x_globals& g_plan) {
 
 void dispatch_gemm_rs_mi300x(mi300x_globals g) {
     switch (g.config_row) {
-        case 1: launch_fixed< 32, 256, 32, false>(g); return;
+        case 1: launch_fixed< 32,  64, 64, false>(g); return;
         case 2: launch_fixed< 64,  64, 64, false>(g); return;
         case 3: launch_fixed<128, 256, 32,  true>(g); return;
         case 4: launch_fixed<256, 256, 32, false>(g); return;
