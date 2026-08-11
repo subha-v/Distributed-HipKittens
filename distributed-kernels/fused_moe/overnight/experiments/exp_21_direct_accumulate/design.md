@@ -97,6 +97,73 @@ needs; a later ablation can strip it).
   cross-CTA count no single CTA holds; moving the RMWs into the M7 epilogue
   lengthens the critical epilogue. The C CTAs are nearly free (C ~ 8-16).
 
+## Synthesis with the competition analysis (docs/distributed/competition-analysis)
+
+Read against the leaderboard winners, mode 12 is deliberately NOT a bigger
+service pool — it is the two mechanisms they actually won with:
+
+- **Elimination (axis G).** The winners fused the collective into the GEMM
+  epilogue and deleted data passes. Mode 12 deletes the `part` write and the
+  pool's read+push pass entirely: the combine's transport is folded into the
+  existing G-stack epilogue, SC24's 12% shape.
+- **Outstanding-request depth, not CU count (axis F).** gemm-rs rank02 sized
+  its network pool to ~7-16 CTAs and bought bandwidth with 32 in-flight
+  16-B loads/lane. Mode 12's transport depth comes free: the epilogue already
+  issues 16-32 independent atomics per thread per task (they're the same
+  `unsafeAtomicAdd` stream the donor emits, re-pointed), so the payload moves
+  at high memory-level parallelism with ZERO service-CTA capacity spent on
+  moving bytes. The residual pool (readiness bookkeeping) then wants
+  `C ≈ 8-16`, which is exactly the topology/depth sizing the analysis
+  prescribes — our current C=64 (25% of the grid) is plausible interference
+  over-provisioning per the analysis, and mode 12 lets the sweep find out.
+
+The analysis's strongest counter-evidence is aimed at what mode 12 KEEPS, not
+at what it removes: **per-tile/per-row readiness signalling** (gemm-rs rank05's
+"our design" was 23% slower than one barrier; exp_05-07 measured the same
+pressure here). If mode 12's profile still shows a large bookkeeping term,
+the follow-ups are: per-row target-16·row_rem counters (deletes `pushed`,
+~40% of remaining protocol atomics; STATUS's live-queue item 1 with its
+exp_09 objection withdrawn), exec-mask fan-in instead of atomics where
+fan-in ≤ 64, and harder poll backoff (exp_20 mode 8's axis).
+
+Where we disagree with the analysis's defaults, on record:
+- **Pull-vs-push symmetry**: mode 12 keeps producer-side writes; the analysis
+  prefers pull. At 4-B accumulate semantics the pull cannot exist (a remote
+  RMW is inherently initiated by the contributor). So this particular
+  recommendation is pre-empted by the numeric mechanism — recorded so the
+  review can argue it.
+- **The ticket machinery (their "do not build" #11)**: the streaming tail
+  needs the dynamic ticket (exp_12's +1.464x→1.077x is measured, not
+  speculative). The analysis's cold-water is about tickets for *overlap
+  scheduling*; the drain ticket serves *work distribution at the tail*.
+
+### Named follow-up candidates (for the ablation queue, not this build)
+
+1. **Direct-to-out accumulation.** Take elimination to its limit: the
+   epilogue accumulates weighted contributions straight into the owner's
+   `out[tau]`, retiring the slots buffer AND M8 AND the readiness protocol —
+   the service-pool concept itself disappears (the only per-epoch completion
+   needed at kernel scope is the retirement handshake). Needs a tau-delivery
+   channel in dispatch (one 4 B remote store per (token, route) at M1,
+   `tau_table[src*MAXTOK+pos] = tau`), `out` zeroed per epoch (58 MB/rank,
+   ~10 µs, end-of-prior-epoch), and an M9 cross-rank arrival before launch
+   return. Numerics: per-cell bf16 fan-in degree grows from ~row_rem to
+   ~top-k·(producers) with no fp32 plane combine — a tolerance-gates
+   question, not a new rounding class. This is the mode-16-scale experiment;
+   mode 12 measures its shared risk (fabric atomic rate) first, cheaply.
+2. **Dependency-ordered tile scheduling (axis E).** M3-M5 already computes a
+   plan; order M7's tiles so rows complete STEADILY rather than in bursts
+   (flattens the demand curve; strictly cheaper than role machinery, costs
+   zero CTAs). Substitute for phase-adaptivity on the capacity term — should
+   be measured as an alternative, per the analysis.
+3. **Demand-curve instrumentation.** Timestamp each tile-event enqueue;
+   histogram; mean/peak × the bookkeeping pool's capacity share is the hard
+   ceiling for any adaptive-join mechanism.
+4. **Bandwidth-aware ticket (novel, from the letter).** A drain-join rule
+   driven by queue depth AND a memory-pressure proxy rather than by
+   completion order alone — the genuinely new scheduling idea, to be invoked
+   only once the counters exist.
+
 ## Invariants to check in the ISA/build gate
 
 - Resource tuple: `SGPR ≤ 104+ε, VGPR 256, AGPR 256, scratch ≤ 60 B`, zero

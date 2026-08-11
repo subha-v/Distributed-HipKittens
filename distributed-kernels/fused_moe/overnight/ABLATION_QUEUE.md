@@ -157,6 +157,39 @@ already down to 108 µs before any fall-through contribution.
 
 ---
 
+## Tier 3.5 — elimination candidates surfaced by exp_21 + the competition analysis
+
+Mode registry (allocated): modes 0-3 original; exp_20 diagnostics hold 4-8
+(E1 pacing, E2 traffic, E3 LDS-spin, payload-free stream, poll backoff);
+exp_21 holds 12 (direct remote accumulate). Next free: 13. **Coordinate before
+taking a number.**
+
+1. **X1. Per-row target counters.** Replace `nc_arr[r*16+nc]` (target
+   `row_rem[r]` per chunk) with one counter per row, target `16·row_rem[r]`.
+   Deletes the `pushed` cell entirely (~40% of mode 12's remaining protocol
+   atomics). exp_09's old objection is WITHDRAWN per STATUS.md (32 live lanes
+   of an event address 32 different rows, so exp_07's essential line-spread is
+   preserved). Cheap; high-confidence.
+2. **X2. Direct-to-out accumulation (mode-16-scale).** Elimination to the
+   limit: no slots, no M8, no readiness protocol, no service pool — weighted
+   contributions go straight into the owner's `out[tau]`; per-epoch
+   completion rides the retirement handshake. Needs: `tau_table` written at
+   M1 (one 4 B remote store per (token, route)), per-epoch `out` zeroing
+   (58 MB/rank), an M9 cross-rank arrival. Prize: the remaining 446 µs
+   combine tail + every readiness atomic + every service CTA. Mode 12
+   de-risks its shared bottleneck (fabric RMW rate) first.
+3. **X3. Dependency-ordered M7 tiles.** M3-M5 already computes a plan; order
+   M7 tasks so rows complete steadily (flatten the demand curve). Zero CTAs,
+   no protocol. Substitute for T1's capacity term — the comparison against
+   T1 is the point of running both.
+4. **X4. Demand-curve instrumentation.** Histogram per-tile-event enqueue
+   times inside M7. mean/peak × the pool's capacity share = the hard ceiling
+   on what any adaptive-join can reclaim. Cheap (timestamps infra exists).
+5. **X5. Bandwidth-aware ticket.** Join the drain by queue depth AND a
+   memory-pressure proxy, not completion order — the novel scheduling idea;
+   build only after X4 tells us the demand shape.
+
+
 ## Tier 4 — does adaptivity actually buy generality?
 
 ### G1. Re-run the C sweep under routing skew

@@ -515,7 +515,8 @@ __device__ __forceinline__ void k0p6_mps_m8_batch(
               // Zero THIS lane's 16 B of this live contribution's chunk
               // (same geometry as the read; dummy bases excluded).
               const unsigned long long pz = __shfl(pbase[t], 8 * t + jb + jj);
-              uint4 z4{0u, 0u, 0u, 0u};
+              uint4 z4;
+              z4.x = 0u; z4.y = 0u; z4.z = 0u; z4.w = 0u;
               *reinterpret_cast<uint4*>(
                   reinterpret_cast<unsigned char*>(pz) + off) = z4;
             }
