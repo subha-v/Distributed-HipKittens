@@ -26,6 +26,41 @@ resolution, experiment selection, node lease, and final judgment.
    tails, TileLink-style peeling), additively, one variable per experiment.
    Read COMET (https://arxiv.org/pdf/2502.19811) and the MoK kernel first.
 
+## Assessment & full ablation map
+
+**Will it beat the current best?** The cost model says a real but bounded win:
+`6,919.8 − 700 − 60 < T < 6,919.8` at C=8/mode 2, IF the service pool sustains
+~148 GB/s (≈34% of the measured posted-write floor) under M7's traffic. A
+result ABOVE 6,919.8 falsifies the mechanism. Between 6,650–6,850 = partial
+hiding, keep tuning; below ~6,300 = pipeline confirmed. This axis alone cannot
+reach ≥1.5× region-class wins — compose it with large-M expert tiles for that.
+
+Sweep order for every axis below: control FIRST (what the axis costs with its
+mechanism off), then the mechanism on. Every point gets the full gate ladder
+(modes 0/1/2 use their own config), one campaign per point, three arms.
+
+| # | Axis | Sweep points | What it isolates | Pre-registered expectation |
+|---:|---|---|---|---|
+| A1 | reserved CTAs `C` | 0,4,8,16,32 | capacity tax vs progress headroom | tax ≈ 29/60/123/264 µs; service curve needs ≥ 4/8/16 CTAs' issue rate |
+| A2 | slice grouping `g` | 1,2,4,16 | fence amortization vs readiness latency | g=4 sweet spot; g=16 = row-granular push |
+| A3 | mode | 0,1,2 | tax control | layout-only | full overlap | m0 > pf6gm ⇒ stop; m1 ≈ m0+layout; m2 − m0 = overlap gain |
+| A4 | `pull_fallback` | 0,1 | streamed readiness vs push transport | if clean+fast ⇒ transport was the lever |
+| A5 | `flush_rows` | 1,4,16,64 | release count vs flag latency | ≥16 with <50µs service lag |
+| A6 | **flag granularity** (row vs row+nc sub-flag) | row, (row,nc) | owner unblocking granularity | (row,nc) starts token reduction earlier; costs 16× flag stores — likely LOSES (release-count measured flat 6×), run LAST as a falsifier |
+| A7 | **service-pool internal split** | unified vs push/flag split | whether bookkeeping+push+flag on one starves progress | unified wins if queue lag < M7; split if lag dominates |
+| A8 | **reservation placement** | tail / head (`bid<C`) / strided (`bid%G=0`) | XCD/L2 locality of the pushers | flat-to-small; strided may spread L2 banks better |
+| A9 | **reservation point** | M6.9 (current) vs right-after-M5 | M6+M7 window (5.1 ms cover) vs tax double | M5 costs ~2.5× the tax; only try if A1 says C=8 hides < 500 µs |
+| A10 | **enqueue release class** | per-(b,nc) fence vs per-task amortized fence (one for all G=3 sub-events) | 66 vs 22 fences/CTA | −2–5 µs; cheap to try after A1 |
+| A11 | **owner reduce target** | slots→local reduce (current) vs direct remote bf16 atomic accumulation into `out` | the whole M8 reduce pass | the dream end-state, but makes slice completion detection a remote-atomic ordering problem — needs protocol-review signoff BEFORE build |
+| A12 | **owner flag epilogue-directness** | flag-at-16-slices (current) vs flag-at-row-coverage | last contributing BLOCK (not last slice) publishes first | smaller tail, correctness equal — try if A2 g<16 stagnates |
+| A13 | timestamps-on attribution | off/on | the queue-lag/service curve itself | always first at any new config |
+
+Kill rules: an axis that loses its control arm twice (two configs) is closed —
+log it in LESSONS.md with the numbers and move on. Never re-litigate the k0
+measured kills (release count, publication granularity, acquire-fence,
+grid-barrier, G3/chunk/K-split, broad MLP) unless a scope column says
+re-testable.
+
 ## Working maps (read before editing anything)
 
 - Design contract, buffer/edge/count tables, rejected alternatives:
