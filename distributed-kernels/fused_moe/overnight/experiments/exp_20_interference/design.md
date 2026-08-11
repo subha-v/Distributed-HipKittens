@@ -165,3 +165,35 @@ moves.
 - **Reinterpreting `flush_rows` as pacing without pinning the real depth.**
   That would move two variables at once; `effective_flush_rows` pins the real
   depth at 16 so mode 4 pacing 0 is a true replica of the ratchet point.
+
+## 9. Modes 7 and 8 — added mid-experiment, and why
+
+The mode-5 matrix answers "what does traffic class X cost when driven flat out",
+but it cannot answer "what does the real pusher's traffic cost" — each variant
+runs at its own natural rate, and the rates differ by ~6× (§5's read-only and
+write-only twins are not rate-matched, and cannot be without a calibration
+constant nobody has measured). Two modes were added to close that gap, both
+using the real event-driven rate so no matching is needed.
+
+**Mode 7 — payload-free stream.** Mode 2 with `push_slice_group` and
+`push_slice_group_batch` skipped, everything else byte-for-byte: same events,
+same arrival atomics, same queue spin, same flags, same fences. It stays correct
+because `pull_fallback` makes M8 read the producer's remote `part` row instead
+of the slot the pool would have filled, and its matched reference is
+**mode 2 + `pull_fallback`**, which performs identical work *plus* the copy. One
+subtraction, one variable, no model.
+
+**Mode 8 — event-queue poll backoff.** Mode 4's fit showed the pool is
+event-starved: only ~240 of ~1,363 pushes per wave sit on the drain's critical
+path, so for most of M7 the 256 draining waves are in `wait_event_nonempty`,
+each issuing a relaxed load on its queue slot and one on the single shared
+`pperr` word every ~0.12 µs. Consecutive tickets are consecutive 32-bit slots,
+so ~16 waves share a cache line that compute CTAs are concurrently writing.
+Mode 8 adds `pace_delay(backoff)` to that loop and nothing else; unlike push
+pacing it costs nothing when events are available, so it is a candidate
+optimization as well as a diagnostic.
+
+Both reuse `pace_delay`, which is why it was hoisted above
+`wait_event_nonempty`. A mode 9 (weaken `flush_pending`'s
+`thread_release<system>` to agent scope, the last untested protocol term) was
+written but not run — see the ownership-collision note in `result.md`.
