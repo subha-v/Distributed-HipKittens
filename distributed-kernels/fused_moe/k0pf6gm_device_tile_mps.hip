@@ -101,7 +101,7 @@
 // .cuh-only change, then confirm a new hsaco mtime under
 // ~/.cache/k0-mok-synthetic-prefill/mori/jit/gfx950_mlx5/*/ before believing
 // any number. The value is never read; only its presence in the hash matters.
-#define K0P6_MPS_SRC_REV 16
+#define K0P6_MPS_SRC_REV 17
 
 // exp_56 (Option C): per-source SEGMENTED receive layout + chunk-counted release.
 //  * Row index = source*MAXTOK + fetch_add(dest_counter[source] on dest, 1)  (waitless).
@@ -294,12 +294,14 @@ __device__ __forceinline__ int k0p6_mps_task_start(const long long* desc) {
 __device__ __forceinline__ void k0p6_mps_task_done(int b, int nc, int tid,
                                                    const long long* k0p6_desc) {
   if (tid != 0) return;
-  // Stream modes ONLY: 2 (tail pool), 3 (whole-die pool), 4 (exp_20 paced
-  // tail pool). exp_20's modes 5/6 reserve a pool but keep mode 0's parity
-  // publication, so they must keep the parity part_done bump in the else arm --
-  // an open-ended `>= 2` would have silently enqueued events nobody consumes.
-  if (((unsigned long long)k0p6_dread(k0p6_desc, K0P6_D_MPS_CFG) >> 16 &
-       0xFFull) - 2ull <= 2ull) {
+  // Stream modes ONLY: 2 (tail pool), 3 (whole-die pool), 4 (exp_20 paced tail
+  // pool), 7 (exp_20 payload-free tail pool). exp_20's modes 5/6 reserve a pool
+  // but keep mode 0's parity publication, so they must keep the parity
+  // part_done bump in the else arm -- an open-ended `>= 2` would have silently
+  // enqueued events nobody consumes.
+  const unsigned long long k0p6_m =
+      (unsigned long long)k0p6_dread(k0p6_desc, K0P6_D_MPS_CFG) >> 16 & 0xFFull;
+  if (k0p6_m - 2ull <= 2ull || k0p6_m == 7ull) {
     std::uint32_t* mps_q = (std::uint32_t*)k0p6_dread(k0p6_desc, K0P6_D_MPS_Q);
     std::uint32_t* mps_state =
         (std::uint32_t*)k0p6_dread(k0p6_desc, K0P6_D_MPS_STATE);
@@ -1307,6 +1309,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
         // variable between mode 4 and the mode-2 ratchet.
         env.flush_rows = hk_moe::mps::effective_flush_rows(scfg);
         env.pace = hk_moe::mps::pace_units(scfg);
+        env.no_payload = (scfg.mode == 7u);
         env.spin_limit = (std::uint64_t)spin_limit;
         env.events_total = events_total;
         env.queue_capacity = queue_capacity;

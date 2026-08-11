@@ -138,8 +138,15 @@ inline constexpr std::uint32_t kDiagVariantCopy = 1u;
 inline constexpr std::uint32_t kDiagVariantRead = 2u;
 inline constexpr std::uint32_t kDiagVariantWrite = 4u;
 
+// Mode 7 is the sharpest of the set: mode 2 with the 896 B payload copy
+// DELETED and nothing else touched -- same events, same arrival atomics, same
+// event-queue spin, same flags, same fences, and above all the same
+// event-driven rate, so there is no rate-matching problem to argue about. It
+// stays correct because `pull_fallback` makes M8 read the producer's remote
+// `part` row instead of the slot the pool would have filled; its matched
+// reference is mode 2 + pull_fallback, which does identical work PLUS the copy.
 __host__ __device__ __forceinline__ bool mode_is_stream(config c) {
-    return c.mode == 2u || c.mode == 3u || c.mode == 4u;
+    return c.mode == 2u || c.mode == 3u || c.mode == 4u || c.mode == 7u;
 }
 
 // Modes that reserve a pool but keep mode 0's publication and combine paths.
@@ -176,7 +183,9 @@ __host__ __device__ __forceinline__ bool config_is_valid(config c) {
     if (c.reserved_comm_ctas >= 256u) return false;
     if (c.group_slices != 1u && c.group_slices != 2u && c.group_slices != 4u &&
         c.group_slices != 16u) return false;
-    if (c.mode > 6u) return false;
+    if (c.mode > 7u) return false;
+    // Mode 7 moves no payload into the slots, so M8 must take the pull path.
+    if (c.mode == 7u && !c.pull_fallback) return false;
     if (mode_is_stream(c) && c.reserved_comm_ctas == 0u) return false;
     // exp_20 diagnostics: a pool of zero has nothing to run.
     if (mode_is_diag_pool(c) && c.reserved_comm_ctas == 0u) return false;
@@ -313,6 +322,7 @@ struct service_env {
     std::uint32_t group_slices;              // g in {1,2,4,16}
     std::uint32_t flush_rows;                // flags per system release
     std::uint32_t pace;                      // exp_20 mode 4: s_sleep units/push
+    bool no_payload;                         // exp_20 mode 7: skip the copy
     std::uint64_t spin_limit;
     std::uint32_t events_total;              // E = (nvi[0] >> 5) * 16
     std::uint32_t queue_capacity;            // (PADMAX/32)*16
@@ -652,7 +662,7 @@ __device__ __forceinline__ void run_service(
         std::uint32_t i = 0;
         for (; i + kPushBatch <= npush; i += kPushBatch) {
             pace_delay(env.pace * kPushBatch);
-            push_slice_group_batch(env, s, i, lane);
+            if (!env.no_payload) push_slice_group_batch(env, s, i, lane);
 #pragma unroll
             for (unsigned int b = 0; b < kPushBatch; ++b) {
                 retire_pushed_row(env, s, s.rows[i + b], g, lane);
@@ -660,7 +670,7 @@ __device__ __forceinline__ void run_service(
         }
         for (; i < npush; ++i) {
             pace_delay(env.pace);
-            push_slice_group(env, s.rows[i], s.group_base[i], lane);
+            if (!env.no_payload) push_slice_group(env, s.rows[i], s.group_base[i], lane);
             retire_pushed_row(env, s, s.rows[i], g, lane);
         }
     }
