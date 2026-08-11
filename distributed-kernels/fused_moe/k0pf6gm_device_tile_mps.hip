@@ -348,8 +348,8 @@ __device__ __forceinline__ void k0p6_mps_m8_batch(
     int tok0, int T, unsigned int epoch32, long long spin_limit,
     const int* __restrict__ pull_ptr, const int* __restrict__ pull_src,
     const unsigned int* __restrict__ row_ready, int T_loc_max,
-    int* __restrict__ pperr, int lane, unsigned short* __restrict__ out,
-    BaseFor&& base_for) {
+    int* __restrict__ pperr, int lane, int cur,
+    unsigned short* __restrict__ out, BaseFor&& base_for) {
   bool batch_ready = true;
   int lo2[NT], fanout[NT];
   bool live[NT];
@@ -366,9 +366,15 @@ __device__ __forceinline__ void k0p6_mps_m8_batch(
     pbase[t] = 0ull;
     if ((lane >> 3) == t) {
       const int j2 = lane & 7;
+      // The consumer below shuffles all 8 lanes of the group unconditionally
+      // and only the accumulate is fanout-guarded, so an out-of-fanout lane
+      // must still hold a dereferenceable base. `(cur, 0)` names this rank's
+      // own row 0 under either address form; the bytes it loads are discarded.
+      int p = cur;
+      int row = 0;
       if (j2 < fanout[t]) {
-        const int p = pull_src[(size_t)(lo2[t] + j2) * 2 + 0];
-        const int row = pull_src[(size_t)(lo2[t] + j2) * 2 + 1];
+        p = pull_src[(size_t)(lo2[t] + j2) * 2 + 0];
+        row = pull_src[(size_t)(lo2[t] + j2) * 2 + 1];
         // exp_56 fix (8, site 1/4 — the combine poll = 33554432 bit): CROSS-GPU
         // poll of row_ready (relaxed SYSTEM store). nt-only load never
         // invalidates => spins on a stale row_ready line forever. System-scope
@@ -377,8 +383,8 @@ __device__ __forceinline__ void k0p6_mps_m8_batch(
             row_ready + (size_t)p * T_loc_max + row, epoch32,
             (std::uint64_t)spin_limit,
             hk_moe::set_error_bit{pperr, 33554432});
-        pbase[t] = base_for(p, row);
       }
+      pbase[t] = base_for(p, row);
     }
   }
   // A timeout must not mint a usable peer payload. Skip this token batch
@@ -1448,13 +1454,13 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
         for (int tok0 = gw * NT; tok0 < T; tok0 += nw * NT) {
           k0p6_mps_m8_batch<NT>(tok0, T, epoch32, spin_limit, pull_ptr,
                                 pull_src, row_ready, T_loc_max, pperr, lane,
-                                out, base_pull);
+                                cur, out, base_pull);
         }
       } else {
         for (int tok0 = gw * NT; tok0 < T; tok0 += nw * NT) {
           k0p6_mps_m8_batch<NT>(tok0, T, epoch32, spin_limit, pull_ptr,
                                 pull_src, row_ready, T_loc_max, pperr, lane,
-                                out, base_slot);
+                                cur, out, base_slot);
         }
       }
     } else {
@@ -1475,7 +1481,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
           if (batch >= nbatches) break;
           k0p6_mps_m8_batch<NT>(batch * NT, T, epoch32, spin_limit, pull_ptr,
                                 pull_src, row_ready, T_loc_max, pperr, lane,
-                                out, base_pull);
+                                cur, out, base_pull);
         }
       } else {
         while (true) {
@@ -1489,7 +1495,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
           if (batch >= nbatches) break;
           k0p6_mps_m8_batch<NT>(batch * NT, T, epoch32, spin_limit, pull_ptr,
                                 pull_src, row_ready, T_loc_max, pperr, lane,
-                                out, base_slot);
+                                cur, out, base_slot);
         }
       }
     }
