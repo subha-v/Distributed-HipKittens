@@ -40,6 +40,13 @@
 #define HK_GEMM_RS_MI300X_NEGATIVE_CONTROLS 0
 #endif
 
+// Restores the donors' WGM = 4 grouped tile order. Exists as exp_08's control
+// arm; see the tile-order comment in the producer role for why 4 costs the two
+// large shapes most of their xGMI egress bandwidth.
+#ifndef HK_GEMM_RS_MI300X_WGM4
+#define HK_GEMM_RS_MI300X_WGM4 0
+#endif
+
 using namespace kittens;
 namespace m3 = hk_gemm_rs_mi300x;
 using G = kittens::group<m3::NUM_WARPS>;
@@ -204,14 +211,39 @@ void gemm_rs_mi300x_kernel(const mi300x_globals g) {
         const int tiles = num_pid_m * num_pid_n;
         const int k_iters = (K + BK - 1) / BK;
         const int tail_k = K_TAIL ? (K - (k_iters - 1) * BK) : BK;
-        constexpr int WGM = 4;
-        // XCD remap is a pure scheduling transform; the initial design keeps
-        // the natural loop stride and leaves XCD-tuned orders to the retune
-        // table (MI300X_DESIGN.md section 8). Coverage below is exact: each
-        // tile index is visited by exactly one producer CTA per launch.
+        // WGM is the xGMI egress-link-concurrency knob, not the L2-locality one
+        // it looks like. A producer CTA's whole tile lands on ONE peer --
+        // dest = (tm*BM)/(M/8) -- so the set of `tm` values live across the
+        // concurrently resident CTAs IS the set of egress links this rank is
+        // using at that instant.
+        //
+        // When the tile loop runs more than one round, the donors' WGM = 4
+        // makes in_group = 4*num_pid_n SMALLER than a round (128 vs 272 tiles
+        // on 8192x8192x29568), so a round spans ~2 M-groups and therefore only
+        // 2-3 of the 8 destinations: measured 117.44 MB of egress at 102 GB/s
+        // against 2.02 effective links x ~47 GB/s = 95 GB/s, i.e. the links in
+        // use were already saturated while five sat idle. WGM = num_pid_m makes
+        // the decode column-major (group and first collapse to 0, gsize to
+        // num_pid_m, so tm varies fastest), which puts all 8 destinations in
+        // every round -- 7.53 effective links.
+        //
+        // When `tiles <= num_gemm_ctas` every tile is resident at once, so the
+        // order cannot change egress concurrency at all and only its operand
+        // locality is left. There WGM = 4 is better and column-major is a
+        // measured regression, because column-major gives each XCD one A tile
+        // per 8 pids and every B tile (2 + 16 distinct operand tiles per XCD on
+        // 4096x4096x4096) where WGM = 4 gives it 4 + 8.
+#if HK_GEMM_RS_MI300X_WGM4
+        const int WGM = 4;
+#else
+        const int WGM = (tiles <= g.num_gemm_ctas) ? 4 : num_pid_m;
+#endif
+        // Coverage is unchanged and exact for either value: each tile index is
+        // visited by exactly one producer CTA per launch, so every ready cell
+        // is still published exactly once per rank per epoch.
 
         for (int t = pid; t < tiles; t += g.num_gemm_ctas) {
-            // grouped L2-friendly tile order (same family as both donors).
+            // grouped tile order (same family as both donors), WGM as above.
             const int in_group = WGM * num_pid_n;
             const int group = t / in_group;
             const int first = group * WGM;

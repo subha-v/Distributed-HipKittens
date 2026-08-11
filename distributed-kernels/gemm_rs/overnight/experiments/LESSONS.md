@@ -2,6 +2,115 @@
 
 ## Session 2 — 2026-08-11 overnight (optimization session)
 
+- **WIN, exp_08/E2: the XGMI deficit was never bandwidth efficiency, it was
+  egress-link CONCURRENCY, and the fix is the tile order. Geomean 255.98 →
+  230.84 µs (−9.8%).** Per-shape `77.88 / 91.18 / 90.25 / 200.33 / 644.39 /
+  1828.89`, i.e. `+1.3% / −12.9% / −1.3% / −0.4% / −14.0% / −27.9%`. Full ladder
+  passed (17/17 at both 1e-2 and 2e-3, worst `max|diff|` 4.883e-04 on the scored
+  set — *identical* to the previous best, as it must be since arithmetic is
+  untouched; all three controls; 600-epoch soak; M2 resources unchanged at
+  246/248 VGPR, zero scratch, zero spills). Full record in
+  `exp_08_egress/result.md`.
+  *The mechanism.* A producer CTA's whole tile lands on **one** peer
+  (`dest = (tm·BM)/(M/8)`), so the set of `tm` values across the 272
+  concurrently-resident CTAs **is** the set of xGMI links the rank is using at
+  that instant. The donors' `WGM = 4` makes `in_group = 4·num_pid_n = 128` tiles
+  on shape 6 — *smaller than a 272-CTA round* — so a round spans ~2 M-groups and
+  only **2–3 of the 8 destinations**, with one link carrying 47–62% of the round.
+  `WGM = num_pid_m` collapses the decode to column-major (`group`/`first` → 0,
+  `gsize` → `num_pid_m`), putting all 8 destinations in every round.
+  *The arithmetic closes with zero free parameters, on two shapes:* shape 6
+  moved 117.44 MB in 1149.9 µs = 102 GB/s against `2.02 effective links ×
+  47 GB/s = 95`; shape 5, 58.74 MB in 295.0 µs = 199 GB/s against
+  `4.02 × 47 = 189`. **We were within 7% of the ceiling of the links we were
+  using.** It also predicts the shape-dependence of the whole deficit: the only
+  two shapes we lose to the reference are the only two with degraded link
+  concurrency (2.02 and 4.02); every shape we win runs at 8.00.
+
+- **exp_08: BOTH pre-registered E2 hypotheses are FALSIFIED by measurement, and
+  the top-ranked intervention in `e2_research.md` was worth exactly zero.**
+  rocprofv3 TCC/EA counters, shape 6, per rank per launch: fabric bytes
+  **117.48 MB against 117.44 MB of useful payload = 1.0003×**, with **99.9% of
+  EA write transactions at the full 64 B** and `TCC_NC_REQ` exactly equal to the
+  fabric request count (`TCC_UC_REQ` = 0), i.e. peer payload is cached-NC and
+  coalesced into whole-line writebacks. Zero remote reads
+  (`RDREQ_DRAM` == `RDREQ`), so no read-for-ownership over the fabric either.
+  **There is no write amplification, so I1 (LDS-stage the packets for
+  wave-contiguity) buys nothing** — and reading `emit_band_packets` shows why:
+  at `cols = BN = 256` there are 32 packets per row and `tid` strides by 1, so
+  lanes 0–31 of every wave already write one 512 B-aligned contiguous run. The
+  addresses were always right. I2 (`sc0 sc1` on payload) and I3 (`nt`) can only
+  *break* a path already at 100% transaction efficiency; `TCC_STREAMING_REQ` = 0
+  confirms nothing is non-temporal and it should stay that way.
+  Egress was also **not bunched at the release**: 67.3% of lines left L2 via
+  `TCC_NORMAL_WRITEBACK` (capacity eviction, spread through the tile loop) vs
+  32.2% via `TCC_ALL_TC_OP_WB_WRITEBACK` (`buffer_wbl2`), matching the
+  independent 219/1150 µs release/egress ablation split. **Generalisable: three
+  plausible mechanism stories, two of them ISA-motivated, all wrong — and one
+  profiling matrix plus one page of arithmetic on the tile map settled it. The
+  free CPU-only `destmap.py` was worth more than any of them.**
+
+- **exp_08, and the sharpest methodology trap of the session: the three
+  `TCC_EA0_WRREQ_*_CREDIT_STALL` counters are UNUSABLE on gfx942 and reading
+  them at face value inverts the conclusion.** `TCC_EA0_WRREQ_STALL` is
+  81,159,385 cycles per rank per launch on shape 6 (16% of `TCC_CYCLE`, and
+  **264×** the `emit_local` arm's 305 K, so unambiguously a property of *remote*
+  writes) — while `GMI_CREDIT_STALL` = 0.8, `IO_CREDIT_STALL` = 0.0,
+  `DRAM_CREDIT_STALL` = 0.0 and `TCC_TOO_MANY_EA_WRREQS_STALL` = 0. Taken
+  literally that says "xGMI is never backpressured, the fabric has spare
+  capacity at every instant", which is the exact opposite of the truth: the 2–3
+  links in use were saturated. The usable signals are
+  **`TCC_EA0_WRREQ_LEVEL / TCC_EA0_WRREQ`** (average EA write latency, per the
+  counter's own documented purpose) and `TCC_EA0_WRREQ_STALL`. On the winner the
+  latency reads **4,705 → 2,887 cycles (−38.6%)** for byte-identical traffic,
+  which is the direct queueing signature of spreading a fixed request count over
+  7 links instead of 2.
+
+- **exp_08 method notes worth reusing.** (1) **rocprofv3 counter collection does
+  NOT break this 8-rank single-process protocol** — every profiled run returns
+  `correct=1 tight=1 errors=none` with unchanged `max|diff|`. That had to be
+  checked first: if instrumentation serialized the agents, the bounded ready
+  waits would time out, the sticky bit would be set, producers would return
+  **without emitting**, and every traffic counter would deflate toward zero and
+  look like a triumph. (2) **Validate counter labels against a known answer
+  before interpreting them.** The `emit_local` ablation arm writes identical
+  bytes through identical instructions to the local slot, so its off-die request
+  count *must* collapse: 1,836,800 → 1,792, and the residual 1,792 is exactly
+  the flag traffic. (3) `emit_local` is a good *label* control but a poor *byte*
+  control — it aims all 8 bands at one slot, so it writes 8× fewer distinct
+  lines (89 vs 151 MB out of L2) and therefore **overstates** the XGMI pool.
+
+- **exp_08: an unconditional "improvement" regressed the two shapes my own
+  pre-registration had named as controls, and the guard that fixes it is
+  derivable rather than tuned.** Column-major everywhere gated clean at
+  239.54 µs (−6.4%) but cost shape 3 +5.2% and shape 4 **+17.5%** — precisely
+  the shapes `destmap.py` says already run at 8.00 of 8 links and whose egress
+  therefore *cannot* improve. The separator is not a fitted table entry:
+  **when `tiles <= num_gemm_ctas` every tile is resident at once, so the tile
+  order cannot affect egress concurrency at all and only its operand locality is
+  left** — and there `WGM = 4` wins, countably: with CTAs on XCDs as
+  `pid mod 8`, column-major gives each XCD 2 A-tiles + 16 B-tiles (18 operand
+  tiles) on 4096×4096×4096 where `WGM = 4` gives 4 + 8 (12). The one-line guard
+  `(tiles <= g.num_gemm_ctas) ? 4 : num_pid_m` reproduces the per-shape best on
+  all six scored shapes and also fixes the generic correctness row, where
+  `WGM = 4` is worse than on any scored shape (`8192×8192×28672`:
+  `in_group = 512`, a 280-CTA round spans `tm ∈ [0,8)`, i.e. **one**
+  destination). **Lesson: when a candidate wins the geomean but moves a shape
+  your pre-registration called a control, the control is the finding — do not
+  bank the geomean and move on.**
+
+- **exp_08 aftermath, two side effects that re-rank the next axis.** (1)
+  `TCC_EA0_RDREQ` fell **29.7%** on shape 6, so column-major improved *operand*
+  locality too and part of the 708 µs is a read-side win — **re-run
+  `exp_ablation.py` on this winner before ranking anything else, and delete the
+  cached `gemm_rs_abl_*.so` first, they are built from the pre-exp_08 source.**
+  (2) The bunched share of egress rose **32% → 53%**: with the fabric no longer
+  backed up, payload lines now survive in L2 until `buffer_wbl2` pushes them.
+  **E3 (release granularity) therefore got BIGGER relative to this binary, not
+  smaller** — the opposite of what the old attribution implied. Also still open:
+  7.53 of 8 links is not 8.00, the residual being the ±4-CTA imbalance from
+  `272 mod 32 = 16`, worth ~6% of the egress pool at most.
+
 - **WIN, exp_03/E1(b): the mainloop now overlaps its global loads with its
   MFMAs. Geomean 269.96 → 256.09 µs (−5.14%), confirmed at 255.59 µs on an
   independent repeat.** Per-shape `77.31 / 104.93 / 91.68 / 200.49 / 750.55 /
