@@ -124,16 +124,32 @@ a local `part` buffer (~312 MB of writes), the service pool reads `part`
 
 ### B. Reducing the traffic (the 3× prize)
 
-5. **Is remote `global_atomic_pk_add_bf16` over xGMI to a peer's symmetric-heap
-   VA supported and performant on gfx950?** If the M7 epilogue accumulated
-   directly into the *owner's* buffer, the local write, the pool's read, and the
-   pool's peer write all collapse: **936 MB → 312 MB**. This is the single
-   largest lever we've identified.
-6. **If yes — what orders it?** A row's contributions come from several CTAs;
-   the owner must know when all have landed. `s_waitcnt vmcnt` is per-wavefront,
-   so a producer's drain doesn't cover other producers. What is the idiomatic
-   CDNA4 pattern for "remote accumulate, then signal, with a consumer that can
-   trust the payload"?
+5. **~~Is remote `global_atomic_pk_add_bf16` over xGMI supported?~~ ANSWERED —
+   YES, we measured it.** On coarse-grained memory, a peer `unsafeAtomicAdd` of
+   packed bf16 is exact with one remote writer (256/256 cells) **and stays exact
+   under two devices contending on the same cells** (256/256), with the ISA
+   confirming the real `global_atomic_pk_add_bf16` instruction and no CAS
+   fallback. It works despite the builtin carrying no memory-scope argument.
+   **The residual question is much narrower: does it hold on mori's symmetric
+   heap, which is HIP-VMM allocated with `HeapType::Uncached`?** HIP documents
+   fine-grained global memory as UB for `unsafeAtomicAdd`, and `Uncached` is not
+   `coarse grain`. *How do we determine the grain of a HIP-VMM allocation, and
+   is there a supported way to force coarse-grain for a symmetric heap?* (We do
+   already perform remote **integer** system-scope RMWs on that heap in
+   production, so it supports remote atomics as a class.)
+6. **What orders it?** A row's contributions come from several CTAs; the owner
+   must know when all have landed. `s_waitcnt vmcnt` is per-wavefront, so a
+   producer's drain doesn't cover other producers. What is the idiomatic CDNA4
+   pattern for "remote accumulate, then signal, with a consumer that can trust
+   the payload"?
+6b. **The zeroing problem, which is now our hardest one.** Accumulation requires
+   the destination to be zero on the *owner* before any peer's first accumulate,
+   and our kernel has **no cross-rank ordering point between the epoch start and
+   the GEMM**. An owner zeroing its own buffer can silently erase a fast peer's
+   already-landed contribution — wrong results, no error flag, visible only
+   under rank skew. Our plan is epoch-parity double-buffering. **Is there a
+   cheaper idiom for "remote accumulate into a buffer that must be zeroed each
+   epoch" that doesn't cost a full extra buffer or a rack-wide barrier?**
 7. **Is in-kernel SDMA a genuinely separate path** that would move these bytes
    without contending for the CU memory pipelines? At what transfer size does it
    beat vector stores on Infinity Fabric, and can it be driven from inside a
@@ -173,7 +189,13 @@ a local `part` buffer (~312 MB of writes), the service pool reads `part`
 
 ## What we'd most like to leave the meeting with
 
-A concrete answer to **A1/A2** (what the shared resource is and how to measure
-it) and a yes/no on **B5** (remote bf16 atomics over xGMI). Those two determine
-whether the remaining 815 µs is addressable at all, and everything else is
-downstream of them.
+A concrete answer to **A1/A2** — what the shared resource is that serializes,
+and which counters expose it for a sub-phase of one persistent kernel. That is
+the only question where we have no data at all, and it decides whether the
+remaining 815 µs is addressable.
+
+Second priority is **B5's residual** (does the packed-bf16 remote atomic survive
+on a HIP-VMM `Uncached` heap) and **B6b** (the zeroing idiom). Those two gate
+the 936 MB → 312 MB traffic cut, which is the largest lever we have identified
+and the only one still standing after we eliminated cache hints, atomic-count
+reduction, transfer coarsening, and XCD placement by measurement.

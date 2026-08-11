@@ -825,3 +825,41 @@
   not overlap (mps 6,860.3-6,867.5 vs pf6gm 6,896.9-6,925.7).
   **Ratchet: mps_mega ~0.889x production against pf6gm's ~0.893x, a confirmed
   ~0.5% win, all gates green in both campaigns.**
+
+- 2026-08-11 exp_18 **A11 blocker 1 is CLEARED: remote `global_atomic_pk_add_bf16`
+  works over xGMI and is atomic across devices.** Standalone 2-phase HIP test,
+  coarse-grained hipMalloc: **Phase A** (one remote thread per cell, 128
+  sequential RMWs) 256/256 cells exact; **Phase B** (dev1 AND dev2 contending on
+  the same cells, 64 each) **256/256 exact**. ISA confirms the real instruction
+  `global_atomic_pk_add_bf16 v[0:1], v2, off`, zero `atomic_cmpswap` -- no CAS
+  emulation. Notably it works despite the builtin carrying **no memory-scope
+  argument**, so the review's concern that agent scope on a peer address is "the
+  wrong cache domain by construction" is not borne out on this part.
+- 2026-08-11 exp_18 **two test-design traps worth remembering.**
+  (1) The review's suggested K=1024 increments of 1.0 read back 256.0 and looked
+  exactly like 75% lost updates. It was not -- **bf16 has 8 significant bits so
+  256 + 1 rounds back to 256** and the accumulator saturates regardless of
+  atomicity. The FINAL value being representable is not enough; every PARTIAL sum
+  must be. K=128 fixes it. **A saturating accumulator and a lossy atomic produce
+  the same symptom.**
+  (2) `llvm-objdump` on the host executable disassembles HOST code and reported
+  zero atomics of any kind; the device object must be built with `--genco` and
+  unbundled first.
+- 2026-08-11 exp_18 **remaining A11 status.** 1a mechanism CLEARED. 1b OPEN but
+  narrow -- does it hold on mori's HIP-VMM `HeapType::Uncached` heap, given HIP
+  documents fine-grained global memory as UB for `unsafeAtomicAdd` and
+  `Uncached` is not `coarse grain`? Mitigating: the kernel already does remote
+  INTEGER system-scope RMWs on that heap in production, and per the review each
+  `slots[p][pos]` plane has exactly ONE producer rank, so cross-rank atomicity
+  is not even required -- only the weaker property Phase B just demonstrated.
+  **Blocker 2 (`slots` is never zeroed per epoch, and there is NO cross-rank
+  ordering point between M0 and M7, so an owner zeroing its own plane can
+  silently erase a fast peer's landed contribution) is now the critical path.**
+  Fix per review: epoch-parity double-buffering via the in-tree exp_56
+  `dest_counter` idiom, NOT end-of-epoch zeroing (which moves 448 MiB into the
+  combine tail and eats the prize).
+  **NOT blockers, both cleared by the review:** the harness `combine_bit_exact`
+  gate compares two standalone host-launched combine kernels before any region
+  arm launches and never touches the megakernel; and bf16 non-associativity is
+  not new, since the epilogue already performs an unordered multi-CTA bf16 atomic
+  fan-in of the same degree into `part`.
