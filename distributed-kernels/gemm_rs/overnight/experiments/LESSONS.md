@@ -203,7 +203,66 @@
     where the fused helper drained after every two. **Two exposed global round
     trips per k-iteration became one covered one.**
 
-- **THE DENOMINATOR LANDED, AND IT IS BAD NEWS: under the graded protocol we
+- **CORRECTION to the entry below: the real same-run denominator is 1.06×, not
+  1.37×, and shape 4 is a tie.** The 1.37× came from two *separately staged*
+  evaluator runs, which is not a same-run paired comparison — the very thing
+  `CLAUDE.md` says is the only valid denominator. Running both arms through the
+  identical protocol in **one interleaved process pool** gives, `best` µs:
+
+  | # | shape | ours | reference | ratio | the 2-run number had said |
+  |---|---|---|---|---|---|
+  | 1 | 64×7168×18432 | 220.1 | 226.3 | 0.97 win | 0.85 win |
+  | 2 | 512×4096×12288 | 235.1 | 277.8 | **0.85 win** | 0.74 win |
+  | 3 | 2048×2880×2880 | 236.2 | 297.8 | **0.79 win** | 0.75 win |
+  | 4 | 4096×4096×4096 | 330.8 | 337.0 | **0.98 tie** | 2.72 lose |
+  | 5 | 8192×4096×14336 | 860.2 | 667.1 | 1.29 lose | 1.23 lose |
+  | 6 | 8192×8192×29568 | 2682.6 | 1568.1 | **1.71 lose** | 4.16 lose |
+  | | **geomean** | **458.8** | **433.1** | **1.06 lose** | 1.37 lose |
+
+  We win three shapes, tie one, and lose two. **The real, reproducible deficit
+  is shapes 5 and 6 — both large-egress — which points at E2, not E1.**
+
+- **ALL FIVE hypotheses for the shape-4/6 evaluator anomaly are FALSIFIED, and
+  the graded protocol is exonerated.** A multi-process harness running the
+  graded structure verbatim against the same `submission.custom_kernel` the
+  evaluator imports reproduces the evaluator within 3-11% on four of six shapes
+  and **fails to reproduce exactly the two in dispute** (shape 4: 332 µs vs the
+  evaluator's 1116; shape 6: 2687 vs 7156).
+  - **H1, `clear_l2_cache()`, dead.** The flush is a 256 MiB write per rank
+    (`torch.empty((32,1024,1024), int64).fill_(42)`) — big enough to evict
+    MI300X's entire 256 MB Infinity Cache — and it sits at `eval.py:349`
+    *before* the barrier, so its effect is genuinely paid inside the call.
+    Replicated byte-exactly on all 8 devices before every timed iteration it
+    costs **1-2%, uniformly**. Shape 4 needed 323 → 1116; it moved to 330.
+    A good hypothesis, cheap to test, and completely wrong — which is why it
+    was worth testing first rather than reasoning about.
+  - **H2, the timed `_clone_data`, dead**: worth 28 µs on shape 4, 45 µs on
+    shape 6.
+  - **H4, epoch/credit waits assuming a warm steady state, dead**: correctness
+    stayed clean on every shape and rank with barriers *and* a flush between
+    every call.
+  - **H5, wave-quantization geometry, dead**: the same geometry under the same
+    protocol runs at 332 µs.
+  - **H3, launch skew, confirmed at ~100 µs but size-independent** and already
+    accounted for.
+- **New leading hypothesis: a bistable slow mode in our arm.** Our shape-4 tail
+  reaches **1102.6 µs with sd 30.5%** against the reference's tight 5.2%, and
+  that maximum is **within 1.2% of the evaluator's shape-4 `best` of 1115.8** —
+  i.e. the evaluator run looks like our slow mode entered and never left, which
+  also explains its 12% and 43% relative stdevs. The tails concentrate in the
+  arm where the 256 MiB alloc/free and the clone churn the caching allocator in
+  the same iteration, a plausible trigger for knocking the eight ranks out of
+  phase. RCCL resynchronizes every call; our spin-and-credit design may not.
+  Note the diagnostic asymmetry that supports this: the **reference** arm
+  reproduces with a uniform 13-19% offset on every shape, while **our** arm
+  matches on four and misses on two — different error shapes, different causes.
+  Next decisive test, and it is cheap: re-run shape 4's `full` arm for 500+
+  iterations and plot the **raw per-iteration series** rather than summary
+  statistics. Every sample is already written to per-rank JSON; only the
+  analysis is missing. If it is bimodal with a ~1.1 ms mode, the evaluator
+  number is fully explained.
+
+- **SUPERSEDED (see the correction above): under the graded protocol we
   are ~1.37× SLOWER than the naive GEMM+RCCL reference on this node.** Both
   arms ran through the identical `eval.py`, same container, same shapes, back
   to back, clean node, `HK_DEBUG=0`. Full write-up in
