@@ -221,7 +221,7 @@ N2_P2_QUAL void N2_P2_NAME(
   const int r = lane & 15;
   const int T = nvi[1];
 
-  // MPS-DELTA (3) — exp_21 mode 8 target construction. Runs ONCE per body.
+  // MPS-DELTA (3) — exp_21 mode 12 target construction. Runs ONCE per body.
   // The live footprint across the task loop is three scalars + 64 B of LDS:
   // the descriptor's ten-pointer carriage never enters a register live range
   // near the MFMA peak, which is the resource discipline the donor demands.
@@ -235,7 +235,7 @@ N2_P2_QUAL void N2_P2_NAME(
   {
     const unsigned long long m7cfg =
         (unsigned long long)k0p6_dread(k0p6_desc, K0P6_D_MPS_CFG);
-    if (((m7cfg >> 16) & 0xFFull) == 8ull) {
+    if (((m7cfg >> 16) & 0xFFull) == 12ull) {
       const auto* m7sym = k0p6_symmetric(k0p6_desc);
       const unsigned long long m7_slots =
           (unsigned long long)k0p6_dread(k0p6_desc, K0P6_D_MPS_SLOTS);

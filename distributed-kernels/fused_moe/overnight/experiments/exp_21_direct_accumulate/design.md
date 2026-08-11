@@ -1,4 +1,4 @@
-# exp_21 design — mode 8 (A11/M11): direct remote bf16 atomic accumulation
+# exp_21 design — mode 12 (A11/M11): direct remote bf16 atomic accumulation
 
 A CTA role-split megakernel change confined to four sites: the M7 epilogue
 write path, the task-done event scope, the service loop body, and the M8
@@ -16,7 +16,7 @@ combine. Everything else is byte-identical.
   of LDS, filled once per body by threads 0..7 from the desc-resident IRIS
   descriptor (the exact `translate_peer` arithmetic, pre-tabulated); `slot_off`
   is one SGPR pair. This is the review's step 4, with `MAXTOK = 4096 = 2^12`
-  making div/mod a shift/mask (kernel entry guard rejects mode 8 otherwise).
+  making div/mod a shift/mask (kernel entry guard rejects mode 12 otherwise).
 - **Service CTAs (C, small now):** `run_service` with `mode == 7` consumes the
   same event queue and does the same `(r,nc)` arrival RMW with the same
   `row_rem` target, but the completing lane bumps the repurposed `pushed[r]`
@@ -37,7 +37,7 @@ combine. Everything else is byte-identical.
    `__syncthreads()` → tid0 `thread_release<system>` → event store
    (`enqueue_tile_release<system>`: the release's *scope* is the only change;
    the queue/ticket are agent-local and stay so).
-2. service wave: event load + `thread_acquire<system>` (mode 8 only) →
+2. service wave: event load + `thread_acquire<system>` (mode 12 only) →
    agent-scope nc_arr RMW → last chunk of row ⇒ `flush_pending`: wave drain +
    `release_signal_batch_system()` + system/agent `row_ready = epoch32` to the
    owner (unchanged code).
@@ -72,13 +72,13 @@ timing. Cost: ~2× M8 traffic — diagnostic only.
 ## Buffers / ABI
 
 Unchanged: 63-word ABI, `slots` 448 MiB, all MPS buffers. `pushed` keeps its
-M0 zeroing and gains the "chunks done" meaning in mode 8. `part` is dead in
-mode 8 (its M3 zeroing stays for v1 — fused with the scale transpose M6
+M0 zeroing and gains the "chunks done" meaning in mode 12. `part` is dead in
+mode 12 (its M3 zeroing stays for v1 — fused with the scale transpose M6
 needs; a later ablation can strip it).
 
 ## Config space
 
-- mode 8: `C ∈ {4,8,16,32}` expected optimal (bookkeeping-only pool;
+- mode 12: `C ∈ {4,8,16,32}` expected optimal (bookkeeping-only pool;
   fall-through drains the tail); `g = 1`, `flush_rows = 16`, `pull_fallback = 0`.
 - bit 33 timestamps as usual; bit 34 detect for the certification run.
 
@@ -92,7 +92,7 @@ needs; a later ablation can strip it).
   CTA-abundant).
 - **`onesided: pool pushes reduced rows as remote atomics`**: needs the same
   4-B atomic op count with an extra hop and a still-live `part`; dominated by
-  both mode 2 and mode 8.
+  both mode 2 and mode 12.
 - **No service pool (compute-side flags):** per-row completion needs a
   cross-CTA count no single CTA holds; moving the RMWs into the M7 epilogue
   lengthens the critical epilogue. The C CTAs are nearly free (C ~ 8-16).
