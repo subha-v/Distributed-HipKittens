@@ -203,6 +203,43 @@
     where the fused helper drained after every two. **Two exposed global round
     trips per k-iteration became one covered one.**
 
+- **THE DENOMINATOR LANDED, AND IT IS BAD NEWS: under the graded protocol we
+  are ~1.37× SLOWER than the naive GEMM+RCCL reference on this node.** Both
+  arms ran through the identical `eval.py`, same container, same shapes, back
+  to back, clean node, `HK_DEBUG=0`. Full write-up in
+  `exp_01_evaluator_integration/graded_protocol_result.md`.
+  Using `best` (minimum of 100 runs; relative stdevs run 12–93%, so means are
+  unreliable), µs: ours `251.4 / 246.1 / 262.2 / 1115.8 / 913.6 / 7155.5`
+  (geomean **700.0**) against reference `295.2 / 334.7 / 347.4 / 410.8 / 740.0
+  / 1718.6` (geomean **511.6**).
+  **We beat the naive baseline on all three small shapes (0.74–0.85×) and lose
+  badly on the large ones (2.72× on shape 4, 4.16× on shape 6).**
+  Two things make this credible rather than a broken run:
+  - **Test mode fails identically for BOTH arms** — the reference times out at
+    `test.0` too, on `rets = [el.get(60)]`. So the 60 s per-case limit is an
+    environment property of this staging, **not a defect in our submission**,
+    and the two arms were measured under identical conditions.
+  - Our own `check: pass` came back on the benchmark arm.
+  **The inflation is not a constant per-call overhead.** Comparing our harness
+  to the evaluator: shape 1 inflates 3.3×, shape 4 **5.5×**, shape 6 **2.8×**,
+  but shape 5 only 1.2×. A fixed additive cost would hurt the *small* shapes
+  most; instead the damage scales with payload, which rules that out.
+  Leading hypothesis, and the one to test first because it is the only one that
+  explains the payload-size scaling: **the evaluator calls `clear_l2_cache()`
+  before every timed iteration.** We established from the ISA that our payload
+  peer stores carry **no cache-scope bits**, so they land in local L2 and egress
+  only when `buffer_wbl2 sc0 sc1` flushes them — this kernel is unusually
+  L2-dependent by construction, and a cold L2 every call may cost us far more
+  than it costs NCCL. Other candidates: ~100 µs launch skew paid per call with
+  no pipelining to hide it (explains the small shapes, not shape 6), the
+  ~121 MB `_clone_data` inside the timed region on shape 6, and epoch/credit
+  waits that assume a warm steady state.
+  **Consequence for planning: the pipelined geomean is not the graded score,
+  and the gap is not a constant factor.** Tonight's −10.2% is real device time
+  and the kernel is genuinely faster, but further mainloop work has low
+  marginal value for the graded statistic. The next experiment should be in the
+  egress/L2 path, not the GEMM.
+
 - **BLOCKER A IS ROOT-CAUSED AND FIXED. The evaluator hang was ours, and it was
   one line — a strong reference.** `hk_submission.py` cached the current
   `ProcessGroup` in a module global `_LAST_PG` as a **strong** reference, to
