@@ -549,3 +549,32 @@
   GroupGEMM) so a receive row is not split across blocks -- but `row_rem`
   averages only ~1.5 on this workload (padded 33,440 over ~21,816 distinct rows),
   so even a perfect plan-side fix removes only about a third of the arrivals.
+
+- 2026-08-11 **correctness envelope of the shipped kernel: 10/10 green across a
+  deliberately awkward config sweep** -- C=4/g=1/fr=1, C=8/g=4/fr=64,
+  C=16/g=16/fr=4, C=32/g=2/fr=32, C=48/g=4/fr=8, C=64/g=16/fr=1,
+  C=32/g=1/mode=3/fr=64, C=64/g=2/mode=3/fr=4, C=0/g=4/mode=1/fr=32, and
+  **C=63** (a non-multiple-of-8 tail) /g=1/mode=0. Every one: MOK GATE pass=True,
+  control_fails=True, MPS SOAK 600/600 pperr=0, zero faults. Covers both
+  placement modes, every legal g, and both flush_rows extremes.
+- 2026-08-11 exp_09 **no cheap M4 exists, and the one tempting idea is predicted
+  to FAIL -- recorded so nobody spends a build cycle on it.** The arrival count
+  is structurally fixed: one increment per (block, row, chunk) triple,
+  ~535,040 per rank per epoch, and you cannot aggregate across an event's 32
+  lanes (32 different rows) or across events for a row (that IS the thing being
+  counted). A per-XCD scheme needs each XCD's data-dependent expected share, so
+  it needs a second per-(row, XCD) counter -- it MOVES traffic, which exp_07 and
+  exp_08 both show does not help. **Fleet's setting is easier than ours in
+  exactly this respect** (single-GPU multi-die, statically known partition, so
+  "last worker per XCD" is well defined without a data-dependent count) -- attach
+  that caveat to M4's REPORTED transfer.
+  The tempting cheap idea -- one counter per ROW instead of per (row, chunk),
+  deleting the probe loop -- **does not reduce the increment count, it collapses
+  16x more increments onto 16x fewer cache lines, which is exactly the exp_07
+  pessimization.** At g=1 (the best point) there is no probe loop to delete so it
+  is purely the pessimization; at g=16 it is unclear but g=16 is already the
+  worst point. **Do not build it.**
+  What WOULD reduce the count is a plan-side change (COMET layer-1, nc-major
+  GroupGEMM) so a receive row is not split across blocks -- but `row_rem`
+  averages only ~1.5 on this workload (padded 33,440 over ~21,816 distinct rows),
+  so even a perfect plan-side fix removes only about a third of the arrivals.
