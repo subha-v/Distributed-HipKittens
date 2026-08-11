@@ -199,8 +199,8 @@
   `pf6gm_mega` at 0.894x production remains the best candidate.
 - 2026-08-11 `literature:` **CLAUDE.md's M3 row and A2 note cited the wrong
   paper and the wrong hardware; both corrected in place.** The "32-64 KiB far
-  from saturation / 87 GB/s / ~1 MiB knee" numbers are **arXiv 2607.19539 §3.3.2
-  Fig 3(a) on 4x A100 over NVLink**, not COMET -- COMET (2502.19811) has no §3.3
+  from saturation / 87 GB/s / ~1 MiB knee" numbers are **arXiv 2607.19539 ï¿½3.3.2
+  Fig 3(a) on 4x A100 over NVLink**, not COMET -- COMET (2502.19811) has no ï¿½3.3
   and **no bandwidth-vs-transfer-size measurement anywhere**. The "70x below the
   knee" arithmetic is right (73.1x) but the conclusion never divided by `C`: at
   C=32 the model needs only **4.63 GB/s per service CTA**, and 148 GB/s is 27.5%
@@ -578,3 +578,50 @@
   GroupGEMM) so a receive row is not split across blocks -- but `row_rem`
   averages only ~1.5 on this workload (padded 33,440 over ~21,816 distinct rows),
   so even a perfect plan-side fix removes only about a third of the arrivals.
+
+- 2026-08-11 exp_10 **THE DISPATCH BOUNDARY HAS NO PEER WAIT TO HIDE -- axis
+  closed, zero device code.** `chunk_poll success_max = 0` (mode 2, C=64) and
+  `1` (mode 0 control) against a **2,000,000 spin limit**, `fail_max = 0`.
+  M2's per-(source,chunk) poll essentially never spins: the peer's data has
+  already arrived by the time this rank looks. The counter is a running max that
+  is NOT reset between launches, so those are maxima over warmup + timed + all
+  600 soak epochs.
+  **So the 0.7-1.25 ms pre-M6 region is essentially ALL OWN-WORK** -- quantize,
+  pack, push, unpack, histogram -- not waiting. In hindsight the reason is
+  symmetry: all 8 ranks run the identical kernel on identically-shaped work and
+  enter M1 within microseconds of each other, so by the time a rank finishes its
+  own send and turns around to poll, the peer chunk landed long ago. **The
+  all-to-all is latency-hidden by SYMMETRY, not by any mechanism we could add.**
+  **A role split can only hide WAITING; it cannot hide work that still has to
+  happen** -- it can only move that work to other CTAs, which is what the combine
+  modes do, and they pay the interference tax for it.
+  **This kills exp_05 stage 2 (the multi-hour M3-M5 rewrite) before it started.**
+- 2026-08-11 **both candidate boundaries are now closed ON MEASUREMENT, which is
+  the cleanest form of the night's thesis.** Combine: the peeled-out pull is
+  worth ~300 us, the ceiling is a tie, and there is a 37-57% interference tax on
+  the concurrent GEMM. Dispatch: no wait exists at all. **CTA-level comm/compute
+  overlap needs communication LATENCY to consume, and this layer on this workload
+  has almost none** -- its cross-rank traffic is either already hidden by symmetry
+  (dispatch) or is bandwidth-bound work someone must do (combine). **The
+  technique is not refuted; this workload simply does not contain the thing the
+  technique feeds on.** Re-open the axis on a workload with routing skew,
+  stragglers, heterogeneous ranks or multi-node latency -- `spin_dbg` is the
+  right first instrument there and is now wired up.
+- 2026-08-11 exp_10 `scope.md` corrections worth keeping: (a) **~557 of the
+  757 us is own quantize+push work**, so CLAUDE.md's 757 us should never be
+  planned against as a hideable prize; (b) **COMET layer-0 is not a cheap
+  reorder here** -- M6's input array does not exist until the destination-counting
+  sort completes, and a LOCAL token's sorted row depends on ALL REMOTE counts via
+  the global scan, so "local-first" is a rewrite of M3-M5's layout contract;
+  (c) M6's tile CONTENT is data-driven from `tile_desc[]` built on device in M4
+  by one thread, so permuting traversal order is ~10 lines and provably safe
+  (every consumer is keyed by absolute 32-block or receive-row, never tile
+  ordinal) -- but it buys zero overlap; (d) **`K0_MPS_DEBUG_STOP` pins the
+  epoch**, so pperr bit 65536 trips from the second launch on -- it is a bisect
+  tool, never a timing tool, which explains the exitcode-2 aborts.
+- 2026-08-11 `method:` **a free diagnostic was sitting behind an arm gate all
+  along.** `spin_dbg` was recorded on device and computed by the harness, but
+  its print lived inside the `pf6c` structural-control block that our arms never
+  run. Surfacing it took 4 print-only lines and closed an axis that would
+  otherwise have cost a multi-hour rewrite. **Diagnostics that cost nothing to
+  compute should not be gated to the arm that introduced them.**

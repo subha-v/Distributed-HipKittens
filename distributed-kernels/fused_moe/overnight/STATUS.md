@@ -133,7 +133,9 @@ It has two clearly identified escapes, and they are the work worth doing next:
 2. **Pick a boundary where the hidden communication is much larger than the
    compute phase it runs under.** Neither of ours is. That is a property of this
    MoE layer's shape, and it should be checked before designing the next split
-   rather than after.
+   rather than after. The dispatch boundary looked like the exception until the
+   scope showed ~73% of its 757 µs is own-work rather than peer wait; the
+   `[MPS SPIN]` measurement now settles what is left.
 
 ## The research question, so far
 
@@ -159,15 +161,22 @@ Partial answer, from measurement rather than opinion:
 
 ## What to do next, in order
 
-1. **`exp_05` stage 0 — measure the dispatch exposure.** `exp_05/design.md`
-   verifies the premise from source: there are **four grid barriers between M2
-   and M6** (`:937`, `:1059`, `:1114`, `:1124`), so the dispatch is strictly
-   serialized before the first GEMM. The pre-M6 region is ~960 µs and CLAUDE.md
-   attributes 757 µs of it to M1+M2 — **this is the only remaining boundary
-   whose prize can move the 0.80x objective.** The kernel already writes a
-   timestamp block the host allocates and never reads
-   (`e004pf_k0pf_ab.py:1504-1505`); wiring it up converts 757 µs from `INFERRED`
-   to measured. Do this before writing any device code.
+1. **Measure the dispatch WAIT — not the dispatch time.** Both `exp_05/design.md`
+   and the independent scope in `exp_05/scope.md` confirm the exposure: **four
+   grid barriers between M2 and M6** (`:937`, `:1059`, `:1114`, `:1124`), and M6
+   has no readiness poll of any kind, so there is provably zero dispatch/compute
+   overlap today. **But exposed is not the same as hideable.** The scope finds
+   that **~557 of the 757 µs is this rank's own quantize + push work**, not
+   waiting on peers — a service pool cannot hide work that still has to happen.
+   The hideable fraction is the *peer-wait* part and it is unmeasured.
+
+   The measurement is free: **M2's chunk poll already records max-spins-to-
+   success into `spin_dbg[0]`** (`e004pf_k0pf_ab.py:1475-1476`), and the harness
+   already prints it — but only inside the `pf6c` structural-control block,
+   which our arms never run. The same M2 runs in `pf6gm_mega`, so this measures
+   the **ratchet kernel's** dispatch wait. Now wired into the `[MPS SPIN]` line.
+   Near-zero spins closes the axis with a measured negative; large spins means
+   the boundary has a real prize.
 2. **Add the missing primitive.** Two independent findings converged on it:
    `counter.cuh` can express "arrive and release" for one counter but has
    nothing for "all members of this group have arrived AND every writer's
@@ -212,7 +221,12 @@ after the exp_01 fix landed, in any run.
   mode-0 control (7,387 vs 7,421) shows it is free to the compute path, but it
   is a real deviation from the stated 36 B target.
 - **`K0_MPS_DEBUG_STOP` aborts the ranks** (exitcode 2) and cannot be used as a
-  phase-attribution ladder on this build.
+  phase-attribution ladder. Cause identified in `exp_05/scope.md`: it **pins the
+  epoch**, so `pperr` bit 65536 trips from the second launch onward. It is a
+  bisect tool, not a timing tool.
+- **The dispatch prize is smaller than CLAUDE.md's 757 µs implies** — most of
+  that is own-work, not peer wait (see item 1 above). Do not plan a dispatch
+  role split against the 757 µs figure.
 
 ## Two method traps that cost real time — now guarded
 
