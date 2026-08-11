@@ -268,13 +268,14 @@ def check_moe_mps() -> None:
     m76 = source.index("// ================= M7.6", m7)
     m7_span = source[m7:m76]
     require("n2p6gm_mps_phase2_body" in m7_span and
-            "if (!mps_service_cta)" in m7_span,
+            "if (bid < nct - (int)mps_C)" in m7_span,
             "service (tail) CTAs must skip the M7 GEMM body")
     require("#define N2GM_TASK_START blockIdx.x" in source and
             "k0p6_mps_stride(k0p6_desc, (int)gridDim.x)" in source,
             "M7 loop latch must be donor start + descriptor-derived stride")
     require("k0p6_role" not in source and "phase2_payload_valid" not in source
-            and "s_batch_no" not in source and "mps_m7_start" not in source,
+            and "s_batch_no" not in source and "mps_m7_start" not in source
+            and "mps_service_cta" not in source,
             "cross-phase MPS state must not live across the MFMA bodies "
             "(resource gate)")
 

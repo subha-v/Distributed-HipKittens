@@ -1138,36 +1138,37 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
   // M6 completion order has no bid-correlated bias, so the tail reservation's
   // service-start statistics match a random C-subset; the queue absorbs the
   // skew that finish-order tickets would have covered. No grid barrier added.
-  const std::uint32_t mps_C =
-      (std::uint32_t)((unsigned long long)k0p6_dread(desc, K0P6_D_MPS_CFG) &
-                      0xFFull);
-  const hk_moe::mps::config mps_cfg = hk_moe::mps::decode_config(
-      (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
-  const bool mps_service_cta = bid >= nct - (int)mps_C;   // C==0 in mode 1
-
+  //
+  // Absolutely NO MPS value is allowed to live across the M7 MFMA body: the
+  // service predicate below and the M7-tail timestamp decode are the ONLY
+  // sites needing C/mode here, and each reloads the config word locally (the
+  // donor's per-phase descriptor discipline, verbatim).
   // ================= M7: N2 phase2 over the logical compute pool ================
-  // Service (tail) CTAs skip the GEMM body entirely; compute CTAs cover every
-  // task once at stride (256-C) with the donor's free blockIdx.x start. The
-  // per-(b, nc) completion hook is semantics-only: stream mode publishes tile
-  // events; modes 0/1 bump part_done as in parity.
-  if (!mps_service_cta) {
-    production_fused_moe::n2::n2p6gm_mps_phase2_body(
-        (const std::uint8_t*)k0p6_dread(desc, K0P6_D_A2Q),
-        (const float*)k0p6_dread(desc, K0P6_D_DQ2),
-        (const std::uint8_t*)k0p6_dread(desc, K0P6_D_W2),
-        (const float*)k0p6_dread(desc, K0P6_D_S2),
-        (const int*)k0p6_dread(desc, K0P6_D_STI),
-        (const float*)k0p6_dread(desc, K0P6_D_SWT),
-        (const int*)k0p6_dread(desc, K0P6_D_SEI),
-        (const int*)k0p6_dread(desc, K0P6_D_NVI),
-        (__hip_bfloat16*)k0p6_dread(desc, K0P6_D_PART),
-        (const int*)k0p6_dread(desc, K0P6_D_TILE_DESC),
-        (int)((const int*)k0p6_dread(desc, K0P6_D_NUM_TILES))[0], desc);
-    if (tid == 0) {
-      std::uint32_t* mps_state =
-          (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_STATE);
-      std::uint64_t* mps_ts = (std::uint64_t*)(mps_state + K0P6_MPS_ST_WORDS);
-      hk_moe::mps::ts_last(mps_ts + K0P6_MPS_TS_M7_DONE, mps_cfg.timestamps);
+  {
+    const std::uint32_t mps_C =
+        (std::uint32_t)((unsigned long long)k0p6_dread(desc, K0P6_D_MPS_CFG) &
+                        0xFFull);
+    if (bid < nct - (int)mps_C) {
+      production_fused_moe::n2::n2p6gm_mps_phase2_body(
+          (const std::uint8_t*)k0p6_dread(desc, K0P6_D_A2Q),
+          (const float*)k0p6_dread(desc, K0P6_D_DQ2),
+          (const std::uint8_t*)k0p6_dread(desc, K0P6_D_W2),
+          (const float*)k0p6_dread(desc, K0P6_D_S2),
+          (const int*)k0p6_dread(desc, K0P6_D_STI),
+          (const float*)k0p6_dread(desc, K0P6_D_SWT),
+          (const int*)k0p6_dread(desc, K0P6_D_SEI),
+          (const int*)k0p6_dread(desc, K0P6_D_NVI),
+          (__hip_bfloat16*)k0p6_dread(desc, K0P6_D_PART),
+          (const int*)k0p6_dread(desc, K0P6_D_TILE_DESC),
+          (int)((const int*)k0p6_dread(desc, K0P6_D_NUM_TILES))[0], desc);
+      if (tid == 0) {
+        std::uint32_t* mps_state =
+            (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_STATE);
+        std::uint64_t* mps_ts = (std::uint64_t*)(mps_state + K0P6_MPS_ST_WORDS);
+        const hk_moe::mps::config m7cfg = hk_moe::mps::decode_config(
+            (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
+        hk_moe::mps::ts_last(mps_ts + K0P6_MPS_TS_M7_DONE, m7cfg.timestamps);
+      }
     }
   }
   if (debug_stop == 6) return;
@@ -1180,9 +1181,12 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
   // a failure exits the loop and the launch fails closed through the usual
   // paths.
   {
+    // Phase-local service predicate (same formula as the M7 guard above).
     const hk_moe::mps::config scfg = hk_moe::mps::decode_config(
         (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
-    if (scfg.mode == 2u && mps_service_cta) {
+    const bool service_cta_here =
+        scfg.mode == 2u && bid >= nct - (int)scfg.reserved_comm_ctas;
+    if (service_cta_here) {
       const auto* symmetric = k0p6_symmetric(desc);
       const int* nvi = (const int*)k0p6_dread(desc, K0P6_D_NVI);
       const std::uint32_t events_total = ((std::uint32_t)nvi[0] >> 5) * 16u;
