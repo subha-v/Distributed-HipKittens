@@ -145,8 +145,19 @@ inline constexpr std::uint32_t kDiagVariantWrite = 4u;
 // stays correct because `pull_fallback` makes M8 read the producer's remote
 // `part` row instead of the slot the pool would have filled; its matched
 // reference is mode 2 + pull_fallback, which does identical work PLUS the copy.
+// Mode 8 is mode 2 with a tunable BACKOFF added to the event-queue poll, and
+// nothing else. It is the follow-on the exp_20 measurements pointed at: with
+// the payload proven free (mode 7) and the pool proven event-starved for most
+// of M7 (the pacing fit puts only ~240 paced pushes on the drain's critical
+// path), what the pool actually does next to M7 is SPIN -- 256 waves each
+// issuing a relaxed load on its queue slot plus a relaxed load on the single
+// shared `pperr` word every ~0.12 us. Consecutive tickets are consecutive
+// 32-bit slots, so ~16 waves share each queue cache line while compute CTAs
+// are concurrently writing those same lines. Unlike push pacing, backing the
+// poll off costs nothing when events ARE available.
 __host__ __device__ __forceinline__ bool mode_is_stream(config c) {
-    return c.mode == 2u || c.mode == 3u || c.mode == 4u || c.mode == 7u;
+    return c.mode == 2u || c.mode == 3u || c.mode == 4u || c.mode == 7u ||
+           c.mode == 8u;
 }
 
 // Modes that reserve a pool but keep mode 0's publication and combine paths.
@@ -160,11 +171,15 @@ __host__ __device__ __forceinline__ bool mode_is_parity_publish(config c) {
 }
 
 __host__ __device__ __forceinline__ std::uint32_t effective_flush_rows(config c) {
-    return (c.mode == 4u) ? 16u : c.flush_rows;
+    return (c.mode == 4u || c.mode == 8u) ? 16u : c.flush_rows;
 }
 
 __host__ __device__ __forceinline__ std::uint32_t pace_units(config c) {
     return (c.mode == 4u) ? (c.flush_rows - 1u) : 0u;
+}
+
+__host__ __device__ __forceinline__ std::uint32_t poll_backoff_units(config c) {
+    return (c.mode == 8u) ? (c.flush_rows - 1u) : 0u;
 }
 
 __host__ __device__ __forceinline__ std::uint64_t diag_window_ticks(config c) {
@@ -183,7 +198,7 @@ __host__ __device__ __forceinline__ bool config_is_valid(config c) {
     if (c.reserved_comm_ctas >= 256u) return false;
     if (c.group_slices != 1u && c.group_slices != 2u && c.group_slices != 4u &&
         c.group_slices != 16u) return false;
-    if (c.mode > 7u) return false;
+    if (c.mode > 8u) return false;
     // Mode 7 moves no payload into the slots, so M8 must take the pull path.
     if (c.mode == 7u && !c.pull_fallback) return false;
     if (mode_is_stream(c) && c.reserved_comm_ctas == 0u) return false;
@@ -322,6 +337,7 @@ struct service_env {
     std::uint32_t group_slices;              // g in {1,2,4,16}
     std::uint32_t flush_rows;                // flags per system release
     std::uint32_t pace;                      // exp_20 mode 4: s_sleep units/push
+    std::uint32_t poll_backoff;              // exp_20 mode 8: s_sleep units/spin
     bool no_payload;                         // exp_20 mode 7: skip the copy
     std::uint64_t spin_limit;
     std::uint32_t events_total;              // E = (nvi[0] >> 5) * 16
@@ -329,11 +345,33 @@ struct service_env {
     bool ts_enable;
 };
 
+// exp_20 -- a delay that issues NO memory request. `s_sleep N` idles the wave
+// for ~64*N core clocks, so a loop of these lowers a wave's request RATE while
+// leaving its total request VOLUME untouched. Two callers, both diagnostic
+// knobs on a single mode: mode 4 paces the payload push (E1: is the
+// interference rate-driven or volume-driven?), mode 8 backs off the
+// event-queue poll. One unit is `s_sleep 4` = 256 clocks ~= 0.12 us at 2.1 GHz.
+__device__ __forceinline__ void pace_delay(std::uint32_t units) {
+#if defined(__HIP_DEVICE_COMPILE__)
+    for (std::uint32_t i = 0; i < units; ++i) {
+        asm volatile("s_sleep 4");
+    }
+#else
+    (void)units;
+#endif
+}
+
 // Leader-polled, pperr-watching bounded wait on one queue slot. Returns the
 // decoded event word, or 0 on failure (pperr bit already recorded). Word 0 is
 // never a real event because of the MARK bit.
+//
+// `backoff` (mode 8 only, 0 everywhere else) adds idle time between spins. Each
+// spin costs two relaxed global loads -- the queue slot, and the single shared
+// `pperr` word that all 256 draining waves poll -- so the spin's aggregate
+// request rate is set here and nowhere else.
 __device__ __forceinline__ std::uint32_t wait_event_nonempty(
-        const std::uint32_t* slot, int* pperr, std::uint64_t spin_limit) {
+        const std::uint32_t* slot, int* pperr, std::uint64_t spin_limit,
+        std::uint32_t backoff) {
     std::uint64_t spins = 0;
     while (true) {
         const std::uint32_t v = load_relaxed<scope::agent>(slot);
@@ -345,6 +383,7 @@ __device__ __forceinline__ std::uint32_t wait_event_nonempty(
             return 0u;
         }
         kittens::distributed::detail::pause();
+        pace_delay(backoff);
     }
 }
 
@@ -408,24 +447,6 @@ __device__ __forceinline__ void push_slice_group(const service_env& env,
         slice_group_dst(env, r, group_base),
         slice_group_src(env, r, group_base),
         kSliceBytes * env.group_slices, (unsigned int)lane, 64u);
-}
-
-// exp_20 E1 -- throttle the service pool WITHOUT changing a byte of its
-// traffic. `s_sleep N` idles the wave for ~64*N core clocks and issues no
-// memory request, so a delay loop here lowers the pool's request RATE at
-// constant total VOLUME. That is the only way to tell a queueing/contention
-// mechanism (which should relax when the pool is slowed) from a per-byte tax
-// (which should not). One unit is `s_sleep 4` = 256 clocks ~= 0.12 us at
-// 2.1 GHz; the sweep runs 0..63 units per push against a measured ~2.1 us of
-// service time per push.
-__device__ __forceinline__ void pace_delay(std::uint32_t units) {
-#if defined(__HIP_DEVICE_COMPILE__)
-    for (std::uint32_t i = 0; i < units; ++i) {
-        asm volatile("s_sleep 4");
-    }
-#else
-    (void)units;
-#endif
 }
 
 // Push the kPushBatch claimed groups starting at `first` together: every
@@ -549,7 +570,8 @@ __device__ __forceinline__ void run_service(
         const std::uint32_t k = s.ticket;
         if (k >= env.events_total) break;
         if (lane == 0) {
-            s.event = wait_event_nonempty(env.q + k, env.pperr, env.spin_limit);
+            s.event = wait_event_nonempty(env.q + k, env.pperr, env.spin_limit,
+                                          env.poll_backoff);
         }
         __syncwarp();
         const std::uint32_t ev = s.event;
