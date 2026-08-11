@@ -1,8 +1,8 @@
 // exp_21 preamble — fabric RATE microbenchmark for the mode-7 design crux.
 //
-// Question: can xGMI sustain the remote packed-bf16 atomic OP RATE mode 7
+// Question: can xGMI sustain the remote packed-bf16 atomic OP RATE mode 8
 // needs, or is the RMW path flit/op-limited far below the byte path? Mode 2
-// moves ~312 MB/rank as ~19.5M 16-B vector stores; mode 7 moves the same
+// moves ~312 MB/rank as ~19.5M 16-B vector stores; mode 8 moves the same
 // bytes as ~78M 4-B atomic RMWs (4x ops), CONTIGUOUS 128 B per half-wave
 // (the epilogue's exact pattern). Whether that is feasible depends entirely
 // on whether the memory pipeline coalesces same-line atomics.

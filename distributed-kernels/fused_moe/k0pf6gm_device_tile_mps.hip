@@ -101,7 +101,7 @@
 // .cuh-only change, then confirm a new hsaco mtime under
 // ~/.cache/k0-mok-synthetic-prefill/mori/jit/gfx950_mlx5/*/ before believing
 // any number. The value is never read; only its presence in the hash matters.
-#define K0P6_MPS_SRC_REV 17
+#define K0P6_MPS_SRC_REV 18
 
 // exp_56 (Option C): per-source SEGMENTED receive layout + chunk-counted release.
 //  * Row index = source*MAXTOK + fetch_add(dest_counter[source] on dest, 1)  (waitless).
@@ -294,19 +294,18 @@ __device__ __forceinline__ int k0p6_mps_task_start(const long long* desc) {
 __device__ __forceinline__ void k0p6_mps_task_done(int b, int nc, int tid,
                                                    const long long* k0p6_desc) {
   if (tid != 0) return;
-  // Stream modes ONLY: 2 (tail pool), 3 (whole-die pool), 4 (exp_20 paced
-  // tail pool), 7 (exp_21 remote accumulate). exp_20's modes 5/6 reserve a
-  // pool but keep mode 0's parity publication, so they must keep the parity
-  // part_done bump in the else arm -- an open-ended `>= 2` would have
-  // silently enqueued events nobody consumes.
-  const unsigned long long m7mode =
-      ((unsigned long long)k0p6_dread(k0p6_desc, K0P6_D_MPS_CFG) >> 16 &
-       0xFFull);
-  if (m7mode - 2ull <= 2ull || m7mode == 7ull) {
+  // Stream modes ONLY: 2 (tail pool), 3 (whole-die pool), 4 (exp_20 paced tail
+  // pool), 7 (exp_20 payload-free tail pool), 8 (exp_21 remote accumulate).
+  // exp_20's modes 5/6 reserve a pool but keep mode 0's parity publication, so
+  // they must keep the parity part_done bump in the else arm -- an open-ended
+  // `>= 2` would have silently enqueued events nobody consumes.
+  const unsigned long long k0p6_m =
+      (unsigned long long)k0p6_dread(k0p6_desc, K0P6_D_MPS_CFG) >> 16 & 0xFFull;
+  if (k0p6_m - 2ull <= 2ull || k0p6_m == 7ull || k0p6_m == 8ull) {
     std::uint32_t* mps_q = (std::uint32_t*)k0p6_dread(k0p6_desc, K0P6_D_MPS_Q);
     std::uint32_t* mps_state =
         (std::uint32_t*)k0p6_dread(k0p6_desc, K0P6_D_MPS_STATE);
-    if (m7mode == 7ull) {
+    if (k0p6_m == 8ull) {
       // exp_21: the payload now lives in the OWNER's memory, so the release
       // chain that publishes it (event store -> service acquire -> flush's
       // system release -> owner acquire) starts HERE, at system scope. The
@@ -610,7 +609,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
         (k0p6_dread(desc, K0P6_D_MPS_STATE) & 7) != 0 ||
         k0p6_dread(desc, K0P6_D_MPS_SLOTS) == 0 ||
         (k0p6_dread(desc, K0P6_D_MPS_SLOTS) & 15) != 0 ||
-        // exp_21 mode 7: owner/pos are recovered from the row index by
+        // exp_21 mode 8: owner/pos are recovered from the row index by
         // shift/mask inside the epilogue's unrolled loop, so a power-of-two
         // MAXTOK is a hard requirement there (the donor's division would be a
         // spill machine at the pointer peak).
@@ -1384,6 +1383,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
         // variable between mode 4 and the mode-2 ratchet.
         env.flush_rows = hk_moe::mps::effective_flush_rows(scfg);
         env.pace = hk_moe::mps::pace_units(scfg);
+        env.no_payload = (scfg.mode == 7u);
         env.spin_limit = (std::uint64_t)spin_limit;
         env.events_total = events_total;
         env.queue_capacity = queue_capacity;
@@ -1615,7 +1615,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
     const bool m8_dynamic = hk_moe::mps::mode_is_stream(m8cfg);
     std::uint32_t* mps_state = (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_STATE);
     std::uint64_t* mps_ts = (std::uint64_t*)(mps_state + K0P6_MPS_ST_WORDS);
-    // exp_21 mode 7: detect (the dual-write detector) also pulls the
+    // exp_21 mode 8: detect (the dual-write detector) also pulls the
     // producer's part row, so slot-mode M8 must materialize the IRIS
     // descriptor + part for exactly that config as well.
     const bool m7_detect = hk_moe::mps::detect_dual(m8cfg);
@@ -1713,7 +1713,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
               row_ready, T_loc_max, pperr, lane, cur, out, base_slot, base_pull);
         }
       } else if (hk_moe::mps::mode_is_remote_accum(m8cfg)) {
-        // exp_21 mode 7: the owner CONSUMES-AND-ZEROES each accumulated slot
+        // exp_21 mode 8: the owner CONSUMES-AND-ZEROES each accumulated slot
         // row (the retirement gate orders this zeroing before any peer's
         // next-epoch accumulate could need the cell zero).
         while (true) {
