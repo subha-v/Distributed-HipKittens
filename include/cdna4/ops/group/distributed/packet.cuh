@@ -61,6 +61,40 @@ KITTENS_DISTRIBUTED_DEVICE_INLINE void store_peer_packets(
 }
 
 /**
+ * Streaming (non-temporal) peer copy.
+ *
+ * Byte-for-byte the same traffic as `store_peer_packets`, with `nt` requested
+ * on BOTH the source load and the peer store.
+ *
+ * Rationale, from measurement rather than taste. The payload is read exactly
+ * once and written exactly once and is never reused by either side, yet the
+ * default lowering caches it fully — the ISA read in
+ * `overnight/experiments/exp_03_push_throughput/isa_push_loop.md` confirmed the
+ * emitted `flat_store_dwordx4` carries no `sc0`, no `sc1` and no `nt` at all.
+ * A service pool streaming hundreds of MB through the caches therefore evicts
+ * the concurrent GEMM's weights from the per-XCD L2 and the 256 MB LLC.
+ * `exp_16` bounded that payload contention at roughly 1,000 us of the
+ * concurrent phase, which is the largest single cost left in the kernel.
+ *
+ * `nt` is a replacement-policy hint (ISA 9.1.10.2, LLC Hit Evict), not a
+ * coherence bit, so it does not alter the release/acquire discipline the caller
+ * wraps around this copy.
+ */
+KITTENS_DISTRIBUTED_DEVICE_INLINE void store_peer_packets_streaming(
+        void* __restrict__ destination, const void* __restrict__ source,
+        std::size_t bytes, unsigned int tid, unsigned int threads) {
+    using vector4 = unsigned int __attribute__((ext_vector_type(4)));
+    auto* const out = reinterpret_cast<vector4*>(destination);
+    const auto* const in = reinterpret_cast<const vector4*>(source);
+    const std::size_t count = bytes >> 4;
+#pragma unroll 1
+    for (std::size_t packet = tid; packet < count; packet += threads) {
+        __builtin_nontemporal_store(__builtin_nontemporal_load(in + packet),
+                                    out + packet);
+    }
+}
+
+/**
  * Batched multi-region variant of `store_peer_packets`.
  *
  * The single-region form is a dependent load-then-store chain, so each lane

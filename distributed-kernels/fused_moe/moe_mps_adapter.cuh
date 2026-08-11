@@ -332,7 +332,13 @@ __device__ __forceinline__ void* slice_group_dst(
 // no fence, no completion work here (flush_pending owns both).
 __device__ __forceinline__ void push_slice_group(const service_env& env,
         std::uint32_t r, std::uint32_t group_base, int lane) {
-    kittens::distributed::store_peer_packets(
+    // exp_17: STREAMING copy. This payload is read once and written once and is
+    // reused by nobody, but it was being fully cached (exp_03's ISA read found
+    // no sc0/sc1/nt on the emitted store), so the pool's hundreds of MB were
+    // evicting the concurrent GEMM's weights from the per-XCD L2 and the 256 MB
+    // LLC. exp_16 bounded that payload contention at ~1,000 us of M7 -- the
+    // largest single cost left in the kernel.
+    kittens::distributed::store_peer_packets_streaming(
         slice_group_dst(env, r, group_base),
         slice_group_src(env, r, group_base),
         kSliceBytes * env.group_slices, (unsigned int)lane, 64u);
