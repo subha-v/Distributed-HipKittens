@@ -203,6 +203,41 @@
     where the fused helper drained after every two. **Two exposed global round
     trips per k-iteration became one covered one.**
 
+- **The bistable-slow-mode hypothesis is FALSIFIED for our arm, and the raw
+  per-iteration series settles the whole evaluator puzzle.** Scanning every
+  captured sample rather than the summary statistics: our shape-4 series is
+  min 331.3, p50 338.7, p95 378.6, **max 456.3**, sd 5.5% — tight, unimodal,
+  and it never approaches 1100 µs. The earlier "our tail reaches 1102.6 µs"
+  came from a summary statistic that did not survive contact with the raw data.
+  The single `BIMODAL` flag in the entire scan landed on the **reference** arm
+  (shape 2, a 1590 µs mode in 4% of iterations), not ours.
+  **Conclusion: the evaluator's shape-4 and shape-6 numbers are simply not
+  reproducible, and chasing them is closed.** Methodology note worth keeping:
+  summary statistics manufactured a hypothesis that the raw series destroyed in
+  one pass. Plot the series before theorising about a tail.
+
+- **The remaining deficit is entirely shapes 5 and 6, and the mechanism is
+  clean: fusion wins when communication is latency-bound, bulk collectives win
+  when it is bandwidth-bound.** Same-run medians, µs:
+
+  | shape | ours | reference | verdict |
+  |---|---|---|---|
+  | 64×7168×18432 | 226.0 | 230.9 | win |
+  | 512×4096×12288 | 244.4 | 290.3 | **win** |
+  | 2048×2880×2880 | 244.8 | 307.9 | **win** |
+  | 4096×4096×4096 | 338.7 | 342.8 | tie |
+  | 8192×4096×14336 | 872.4 | 698.4 | **lose 1.25×** |
+  | 8192×8192×29568 | 2785.7 | 1596.7 | **lose 1.74×** |
+  | geomean | 472.7 | 446.4 | 1.06× |
+
+  Our fused epilogue avoids RCCL's launch and synchronization overhead on the
+  small shapes; RCCL's bulk transfers beat our 16-byte packet stream on the
+  large ones. **E2 is therefore the only remaining target**, and it has a
+  concrete number attached: each rank ships ~117 MB off-node on shape 6 against
+  an exposed egress cost of 1149.9 µs ≈ **102 GB/s**, against **315-336 GB/s**
+  achievable. At 316 GB/s that traffic would take ~370 µs, which would put
+  shape 6 near the reference's 1597 µs and flip the geomean.
+
 - **CORRECTION to the entry below: the real same-run denominator is 1.06×, not
   1.37×, and shape 4 is a tie.** The 1.37× came from two *separately staged*
   evaluator runs, which is not a same-run paired comparison — the very thing
