@@ -100,6 +100,15 @@ Added 2026-08-10, additive; the parity port above is byte-untouched.
   VGPR), so the 256-ArchVGPR budget is structurally untouched, but the
   resource/ISA A/B against the parity port must confirm no ArchVGPR/AGPR/LDS
   movement before any parity claim.
-- The MPS source is host/static only: not built, not ISA-gated, not corrected
-  or timed on 8x gfx950. Its `C=0`, mode-0 configuration is intended to be a
-  same-ABI parity control, not a claim of donor equivalence.
+- The MPS source is host/static + resource-gated only: not timed on 8x gfx950.
+  Its `C=0`, mode-0 configuration is intended to be a same-ABI parity control,
+  not a claim of donor equivalence.
+- **2026-08-11 gfx950 build gate (ROCm 7.2.4/LLVM 22):** the MPS sibling
+  compiles to `VGPR 256 / AGPR 256 / SGPR 104 / LDS 155,428 B (byte-exact with
+  the parity port) / scratch 60 B/lane (+24 B/lane vs parity, all ≥511
+  instructions from any MFMA span; zero scratch ops inside either K-loop) /
+  static v_mfma census 96+84 = 180 identical to parity`. First-launch world-8
+  test under `C=8,g=2,mode=2` hits a deterministic `address (nil)` GPU fault
+  AFTER `debug_stop=6` passes cleanly (M0–M7+hooks proven); the fault domain is
+  `{M7.6 service, M8 dynamic combine, M9}`. Current handoff:
+  `MPS_OVERNIGHT_HANDOFF.md`.
