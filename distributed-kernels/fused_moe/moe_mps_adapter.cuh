@@ -111,8 +111,57 @@ __host__ __device__ __forceinline__ std::uint32_t service_dies(config c) {
     return c.reserved_comm_ctas / kCtasPerXcd;
 }
 
+// exp_20 diagnostic modes 4/5/6 -- Tier 1 of the ablation queue.
+//
+// Mode 4 IS mode 2 with a tunable pacing delay inserted in the push path (E1:
+// rate vs volume). Modes 5 and 6 ARE mode 0 -- the reserve-only control, with
+// the parity M7.5 publication and the parity M8 remote-`part` pull -- but the
+// reserved pool, instead of idling into the rendezvous, runs a synthetic
+// traffic generator (E2: read/write/fabric attribution) or an LDS-only spin
+// (E3: occupancy without traffic) for a bounded window that covers M7.
+//
+// All three are CORRECTNESS-PRESERVING and run the full gate ladder. Mode 0's
+// M8 pulls the producer's remote `part` row and never reads K0P6_D_MPS_SLOTS,
+// so the slots buffer is DEAD in modes 5/6 and a generator may write it
+// freely; the generator only ever READS `part`, which it does not own.
+//
+// Config-field reinterpretation, so no descriptor, host-ABI or harness change
+// is needed (exactly how mode 3 was added):
+//   mode 4: flush_rows -> 1 + pacing units; the real flag-batch depth is
+//           pinned at 16 so pacing is the ONLY variable against mode 2.
+//   mode 5: g -> traffic variant (1 read+write | 2 read-only | 4 write-only);
+//           pull_fallback -> write this rank's own slots instead of a peer's;
+//           flush_rows -> active window in units of 100 us.
+//   mode 6: flush_rows -> active window in units of 100 us.
+inline constexpr std::uint32_t kDiagTicksPer100us = 10000u;  // 100 MHz realtime
+inline constexpr std::uint32_t kDiagVariantCopy = 1u;
+inline constexpr std::uint32_t kDiagVariantRead = 2u;
+inline constexpr std::uint32_t kDiagVariantWrite = 4u;
+
 __host__ __device__ __forceinline__ bool mode_is_stream(config c) {
-    return c.mode == 2u || c.mode == 3u;
+    return c.mode == 2u || c.mode == 3u || c.mode == 4u;
+}
+
+// Modes that reserve a pool but keep mode 0's publication and combine paths.
+__host__ __device__ __forceinline__ bool mode_is_diag_pool(config c) {
+    return c.mode == 5u || c.mode == 6u;
+}
+
+// Who runs the parity M7.5 bulk publication and the parity M8 remote pull.
+__host__ __device__ __forceinline__ bool mode_is_parity_publish(config c) {
+    return c.mode == 0u || mode_is_diag_pool(c);
+}
+
+__host__ __device__ __forceinline__ std::uint32_t effective_flush_rows(config c) {
+    return (c.mode == 4u) ? 16u : c.flush_rows;
+}
+
+__host__ __device__ __forceinline__ std::uint32_t pace_units(config c) {
+    return (c.mode == 4u) ? (c.flush_rows - 1u) : 0u;
+}
+
+__host__ __device__ __forceinline__ std::uint64_t diag_window_ticks(config c) {
+    return (std::uint64_t)c.flush_rows * (std::uint64_t)kDiagTicksPer100us;
 }
 
 __host__ __device__ __forceinline__ bool config_is_valid(config c) {
@@ -127,8 +176,12 @@ __host__ __device__ __forceinline__ bool config_is_valid(config c) {
     if (c.reserved_comm_ctas >= 256u) return false;
     if (c.group_slices != 1u && c.group_slices != 2u && c.group_slices != 4u &&
         c.group_slices != 16u) return false;
-    if (c.mode > 3u) return false;
+    if (c.mode > 6u) return false;
     if (mode_is_stream(c) && c.reserved_comm_ctas == 0u) return false;
+    // exp_20 diagnostics: a pool of zero has nothing to run.
+    if (mode_is_diag_pool(c) && c.reserved_comm_ctas == 0u) return false;
+    // Mode 5 reads `g` as the traffic-variant selector, and 16 is not one.
+    if (c.mode == 5u && c.group_slices == 16u) return false;
     // Mode 3 hands out whole dies, so the pool must be a whole number of them.
     if (c.mode == 3u && (c.reserved_comm_ctas % kCtasPerXcd) != 0u) return false;
     // Mode 1 (bulk, no overlap) strides the full grid: the M7 stride derives
@@ -259,6 +312,7 @@ struct service_env {
     std::uint32_t epoch32;
     std::uint32_t group_slices;              // g in {1,2,4,16}
     std::uint32_t flush_rows;                // flags per system release
+    std::uint32_t pace;                      // exp_20 mode 4: s_sleep units/push
     std::uint64_t spin_limit;
     std::uint32_t events_total;              // E = (nvi[0] >> 5) * 16
     std::uint32_t queue_capacity;            // (PADMAX/32)*16
@@ -344,6 +398,24 @@ __device__ __forceinline__ void push_slice_group(const service_env& env,
         slice_group_dst(env, r, group_base),
         slice_group_src(env, r, group_base),
         kSliceBytes * env.group_slices, (unsigned int)lane, 64u);
+}
+
+// exp_20 E1 -- throttle the service pool WITHOUT changing a byte of its
+// traffic. `s_sleep N` idles the wave for ~64*N core clocks and issues no
+// memory request, so a delay loop here lowers the pool's request RATE at
+// constant total VOLUME. That is the only way to tell a queueing/contention
+// mechanism (which should relax when the pool is slowed) from a per-byte tax
+// (which should not). One unit is `s_sleep 4` = 256 clocks ~= 0.12 us at
+// 2.1 GHz; the sweep runs 0..63 units per push against a measured ~2.1 us of
+// service time per push.
+__device__ __forceinline__ void pace_delay(std::uint32_t units) {
+#if defined(__HIP_DEVICE_COMPILE__)
+    for (std::uint32_t i = 0; i < units; ++i) {
+        asm volatile("s_sleep 4");
+    }
+#else
+    (void)units;
+#endif
 }
 
 // Push the kPushBatch claimed groups starting at `first` together: every
@@ -579,6 +651,7 @@ __device__ __forceinline__ void run_service(
         // the flag/flush discipline above is unchanged.
         std::uint32_t i = 0;
         for (; i + kPushBatch <= npush; i += kPushBatch) {
+            pace_delay(env.pace * kPushBatch);
             push_slice_group_batch(env, s, i, lane);
 #pragma unroll
             for (unsigned int b = 0; b < kPushBatch; ++b) {
@@ -586,6 +659,7 @@ __device__ __forceinline__ void run_service(
             }
         }
         for (; i < npush; ++i) {
+            pace_delay(env.pace);
             push_slice_group(env, s.rows[i], s.group_base[i], lane);
             retire_pushed_row(env, s, s.rows[i], g, lane);
         }
@@ -593,6 +667,131 @@ __device__ __forceinline__ void run_service(
     flush_pending(env, s, lane);
     if (lane == 0 && env.ts != nullptr) {
         ts_last(env.ts + K0P6_MPS_TS_DRAIN, env.ts_enable);
+    }
+}
+
+// ---- exp_20 E2/E3: diagnostic pool bodies (modes 5 and 6) --------------------
+// These run on the SAME reserved CTAs as the real pool, in a mode whose
+// publication and combine are mode 0's, so every one of them is compared
+// against mode 0 at the SAME C and the only difference is the traffic.
+
+struct diag_env {
+    const unsigned short* __restrict__ part;    // [T_ext, 7168] bf16 (local)
+    unsigned short* __restrict__ slots;         // [world, MAXTOK, 7168] bf16
+    const std::uint32_t* __restrict__ row_rem;  // [T_ext] M2 popcount liveness
+    const symmetric_heap_descriptor* symmetric;
+    int cur;
+    int maxtok;
+    int t_ext;
+    std::uint32_t variant;      // kDiagVariant{Copy,Read,Write}
+    bool local_dst;             // write this rank's own slots, never a peer's
+    std::uint64_t window_ticks;
+};
+
+// Read-side twin of store_peer_packets: identical loads, identical
+// `#pragma unroll 1` MLP-1 shape, no store. The XOR chain is what keeps the
+// loads alive AND what reproduces the copy's one-outstanding-load-per-lane
+// dependency; the caller sinks the accumulator into a no-op asm so nothing is
+// written to memory.
+__device__ __forceinline__ unsigned int touch_packets(
+        const void* __restrict__ source, std::size_t bytes, unsigned int tid,
+        unsigned int threads) {
+    const auto* const in =
+        reinterpret_cast<const kittens::distributed::packet16*>(source);
+    const std::size_t count = bytes >> 4;
+    unsigned int acc = 0u;
+#pragma unroll 1
+    for (std::size_t packet = tid; packet < count; packet += threads) {
+        const kittens::distributed::packet16 v = in[packet];
+        acc ^= v.x ^ v.y ^ v.z ^ v.w;
+    }
+    return acc;
+}
+
+// Write-side twin: identical stores, no load.
+__device__ __forceinline__ void fill_packets(
+        void* __restrict__ destination, std::size_t bytes, unsigned int tid,
+        unsigned int threads) {
+    auto* const out = reinterpret_cast<kittens::distributed::packet16*>(destination);
+    const std::size_t count = bytes >> 4;
+    kittens::distributed::packet16 zero;
+    zero.x = 0u; zero.y = 0u; zero.z = 0u; zero.w = 0u;
+#pragma unroll 1
+    for (std::size_t packet = tid; packet < count; packet += threads) {
+        out[packet] = zero;
+    }
+}
+
+// Mode 5. One wave sweeps a stride of receive rows, moving the real pusher's
+// unit of work (16 slices of kSliceBytes) between the real pusher's buffers,
+// with the read half, the write half, or both. Row liveness comes from the M2
+// popcount, so the swept set and the byte count match the real pool's exactly.
+// The sweep wraps until the window expires, so every variant occupies the same
+// wall-clock window regardless of how fast it runs -- ratewise this is "run
+// this traffic class flat out for the duration of M7", which is precisely what
+// the real pool does.
+__device__ __forceinline__ void run_diag_traffic(const diag_env& d, int wave_id,
+                                                 int wave_count, int lane) {
+    const std::uint64_t t0 = realtime_now();
+    unsigned int acc = 0u;
+    bool expired = false;
+    while (!expired) {
+        for (int r = wave_id; r < d.t_ext; r += wave_count) {
+            if (realtime_now() - t0 >= d.window_ticks) { expired = true; break; }
+            if (kittens::distributed::load_relaxed<scope::agent>(d.row_rem + r)
+                    == 0u) continue;
+            const std::uint32_t owner = (std::uint32_t)r / (std::uint32_t)d.maxtok;
+            const std::uint32_t pos = (std::uint32_t)r % (std::uint32_t)d.maxtok;
+            std::byte* dst_local = reinterpret_cast<std::byte*>(
+                d.slots + ((std::size_t)d.cur * (std::size_t)d.maxtok +
+                           (std::size_t)pos) * 7168u);
+            std::byte* dst = (d.local_dst || owner == (std::uint32_t)d.cur)
+                ? dst_local
+                : reinterpret_cast<std::byte*>(
+                      hk_moe::peer_ptr(dst_local, (int)owner, d.symmetric));
+            const std::byte* src = reinterpret_cast<const std::byte*>(d.part) +
+                (std::size_t)r * 7168u * 2u;
+            for (std::uint32_t nc = 0; nc < 16u; ++nc) {
+                const std::size_t off = (std::size_t)nc * kSliceBytes;
+                if (d.variant == kDiagVariantCopy) {
+                    kittens::distributed::store_peer_packets(
+                        dst + off, src + off, kSliceBytes, (unsigned int)lane,
+                        64u);
+                } else if (d.variant == kDiagVariantRead) {
+                    acc ^= touch_packets(src + off, kSliceBytes,
+                                         (unsigned int)lane, 64u);
+                } else {
+                    fill_packets(dst + off, kSliceBytes, (unsigned int)lane, 64u);
+                }
+            }
+        }
+    }
+#if defined(__HIP_DEVICE_COMPILE__)
+    // Sink the read-only accumulator without issuing a store.
+    asm volatile("" :: "v"(acc));
+#else
+    (void)acc;
+#endif
+}
+
+// Mode 6. Occupied-but-silent: a dependent LDS read/write chain per lane, no
+// global memory request at all except the realtime read that bounds the
+// window. 17 words per lane is coprime with the 32 LDS banks, so lanes do not
+// conflict. `volatile` is what guarantees the ds_read/ds_write pair survives.
+inline constexpr std::uint32_t kDiagSpinWords = 17u;
+
+__device__ __forceinline__ void run_diag_spin(std::uint32_t* lds_words,
+                                              std::uint64_t window_ticks,
+                                              int lane) {
+    volatile std::uint32_t* mine =
+        lds_words + (std::uint32_t)lane * kDiagSpinWords;
+    std::uint32_t x = (std::uint32_t)lane + 1u;
+    const std::uint64_t t0 = realtime_now();
+    while (realtime_now() - t0 < window_ticks) {
+        for (int i = 0; i < 512; ++i) {
+            mine[x % kDiagSpinWords] = x;
+            x = mine[(x + 7u) % kDiagSpinWords] + 1u;
+        }
     }
 }
 

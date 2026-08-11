@@ -101,7 +101,7 @@
 // .cuh-only change, then confirm a new hsaco mtime under
 // ~/.cache/k0-mok-synthetic-prefill/mori/jit/gfx950_mlx5/*/ before believing
 // any number. The value is never read; only its presence in the hash matters.
-#define K0P6_MPS_SRC_REV 15
+#define K0P6_MPS_SRC_REV 16
 
 // exp_56 (Option C): per-source SEGMENTED receive layout + chunk-counted release.
 //  * Row index = source*MAXTOK + fetch_add(dest_counter[source] on dest, 1)  (waitless).
@@ -294,8 +294,12 @@ __device__ __forceinline__ int k0p6_mps_task_start(const long long* desc) {
 __device__ __forceinline__ void k0p6_mps_task_done(int b, int nc, int tid,
                                                    const long long* k0p6_desc) {
   if (tid != 0) return;
+  // Stream modes ONLY: 2 (tail pool), 3 (whole-die pool), 4 (exp_20 paced
+  // tail pool). exp_20's modes 5/6 reserve a pool but keep mode 0's parity
+  // publication, so they must keep the parity part_done bump in the else arm --
+  // an open-ended `>= 2` would have silently enqueued events nobody consumes.
   if (((unsigned long long)k0p6_dread(k0p6_desc, K0P6_D_MPS_CFG) >> 16 &
-       0xFFull) >= 2ull) {   // mode 2 (tail pool) and mode 3 (whole-die pool)
+       0xFFull) - 2ull <= 2ull) {
     std::uint32_t* mps_q = (std::uint32_t*)k0p6_dread(k0p6_desc, K0P6_D_MPS_Q);
     std::uint32_t* mps_state =
         (std::uint32_t*)k0p6_dread(k0p6_desc, K0P6_D_MPS_STATE);
@@ -1298,7 +1302,11 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
         env.t_loc_max = T_loc_max;
         env.epoch32 = (std::uint32_t)k0p6_epoch(desc);
         env.group_slices = scfg.group_slices;
-        env.flush_rows = scfg.flush_rows;
+        // exp_20 mode 4 pins the flag-batch depth at 16 and reinterprets the
+        // flush_rows field as the pacing magnitude, so pacing is the single
+        // variable between mode 4 and the mode-2 ratchet.
+        env.flush_rows = hk_moe::mps::effective_flush_rows(scfg);
+        env.pace = hk_moe::mps::pace_units(scfg);
         env.spin_limit = (std::uint64_t)spin_limit;
         env.events_total = events_total;
         env.queue_capacity = queue_capacity;
@@ -1310,6 +1318,48 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
         hk_moe::mps::wave_scratch* mps_scratch =
             reinterpret_cast<hk_moe::mps::wave_scratch*>(&s_row[wid][0]);
         hk_moe::mps::run_service(env, *mps_scratch, wid, lane);
+      }
+    }
+  }
+
+  // ================= M7.6c (exp_20): DIAGNOSTIC pool bodies (modes 5/6) ========
+  // Tier 1 E2/E3. These modes are mode 0 in every respect that touches the
+  // result -- the reserved pool skips M7, the parity M7.5 publication runs, M8
+  // pulls the producer's remote `part` row -- so a mode-0 run at the SAME C is
+  // an exactly matched control and the only difference is what the pool does
+  // while M7's MFMA runs on the remaining 256-C CTAs.
+  //
+  // Mode 5 replays the real pusher's traffic with the read half, the write
+  // half, or both, into the SLOTS buffer that mode 0's combine never reads.
+  // Mode 6 spins on LDS alone. Both are bounded by a wall-clock window so the
+  // pool covers M7 whatever its throughput; a window that outlasts M7 simply
+  // delays the M7.5 rendezvous, which inflates the combine and leaves the M7
+  // stamp (taken before the rendezvous, on compute CTAs only) clean.
+  {
+    const hk_moe::mps::config dcfg = hk_moe::mps::decode_config(
+        (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
+    if (hk_moe::mps::mode_is_diag_pool(dcfg) &&
+        hk_moe::mps::is_service_cta(dcfg, bid, nct)) {
+      const int service_id =
+          (int)hk_moe::mps::service_id_of(dcfg, bid, nct);
+      if (dcfg.mode == 5u) {
+        hk_moe::mps::diag_env d;
+        d.part = (const unsigned short*)k0p6_dread(desc, K0P6_D_PART);
+        d.slots = (unsigned short*)k0p6_dread(desc, K0P6_D_MPS_SLOTS);
+        d.row_rem = (const std::uint32_t*)k0p6_dread(desc, K0P6_D_ROW_REM);
+        d.symmetric = k0p6_symmetric(desc);
+        d.cur = cur;
+        d.maxtok = MAXTOK;
+        d.t_ext = T_ext;
+        d.variant = dcfg.group_slices;
+        d.local_dst = dcfg.pull_fallback;
+        d.window_ticks = hk_moe::mps::diag_window_ticks(dcfg);
+        hk_moe::mps::run_diag_traffic(
+            d, service_id * 4 + wid, (int)dcfg.reserved_comm_ctas * 4, lane);
+      } else {
+        hk_moe::mps::run_diag_spin(
+            reinterpret_cast<std::uint32_t*>(&s_row[wid][0]),
+            hk_moe::mps::diag_window_ticks(dcfg), lane);
       }
     }
   }
@@ -1340,8 +1390,10 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
   //      live row it owns, so no consumer can hang. Each relaxed row_ready store is release-ordered
   //      by its publishing leader's preceding fence, and the M8 poll SYSTEM-acquires. The second
   //      leader release is necessary to carry the grid-acquired payload ordering to remote flags.
-  if (hk_moe::mps::decode_config(
-          (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG)).mode == 0u) {
+  // exp_20: modes 5/6 reserve a diagnostic pool but are otherwise mode 0, so
+  // they publish here too. Every CTA (service included) enters the rendezvous.
+  if (hk_moe::mps::mode_is_parity_publish(hk_moe::mps::decode_config(
+          (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG)))) {
     unsigned int* row_remaining = (unsigned int*)k0p6_dread(desc, K0P6_D_ROW_REM);
     unsigned int* row_ready = (unsigned int*)k0p6_dread(desc, K0P6_D_ROW_READY);
     const unsigned int epoch32 = (unsigned int)k0p6_epoch(desc);
@@ -1479,7 +1531,10 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
   {
     const hk_moe::mps::config m8cfg = hk_moe::mps::decode_config(
         (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
-    const bool m8_pull = (m8cfg.mode == 0u) || m8cfg.pull_fallback;
+    // exp_20: modes 5/6 keep mode 0's remote-`part` pull, which is what makes
+    // K0P6_D_MPS_SLOTS dead memory their traffic generator can write into.
+    const bool m8_pull =
+        hk_moe::mps::mode_is_parity_publish(m8cfg) || m8cfg.pull_fallback;
     const bool m8_dynamic = hk_moe::mps::mode_is_stream(m8cfg);
     std::uint32_t* mps_state = (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_STATE);
     std::uint64_t* mps_ts = (std::uint64_t*)(mps_state + K0P6_MPS_ST_WORDS);
