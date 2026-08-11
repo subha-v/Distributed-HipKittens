@@ -70,14 +70,22 @@ remaining ~350,000 atomics per rank per epoch are irreducible given that every
 
 ## Therefore, the honest options for the next session
 
-1. **Change what is counted, not how.** Push at row granularity only
-   (`g=16` semantics) *and* detect completion with one counter per row rather
-   than per `(row, chunk)` — 16x fewer counters and 16x fewer increments, at the
-   cost of coarser readiness. exp_03 measured `g=16` as the *worst* point, but
-   that was with the per-`(row,nc)` probe loop intact; this variant deletes the
-   probe loop entirely rather than making it longer. **This is the one cheap,
-   untested idea left on this path, and it inverts an earlier result, so it
-   deserves a careful re-read of exp_03 before building.**
+1. ~~**Change what is counted, not how.**~~ **Examined and predicted to fail —
+   do not build it.** The idea was: one counter per row instead of per
+   `(row, chunk)`, target `row_rem[r]·16`, pushing the whole row when it fires,
+   which deletes the `g`-wide probe loop entirely. It is tempting because it is
+   cheap. It does **not** reduce the arrival count — increments are still one
+   per `(block, row, chunk)` triple — it only collapses **16x more increments
+   onto 16x fewer cache lines.** That is precisely the change exp_07 measured as
+   ≥10x slower. Resolving it by `g`:
+   - at `g=1` (the best point) there is no probe loop to delete, so the variant
+     is *purely* the exp_07 pessimization → predicted worse;
+   - at `g=16` it does remove the probe loop, trading fewer operations against
+     more per-line contention → genuinely unclear, but `g=16` is already the
+     worst point by a wide margin, so winning there does not help.
+
+   **Conclusion: no cheap experiment remains on the combine path.** Recorded so
+   the next session does not spend a build cycle discovering this.
 2. **Accept the combine boundary is closed** (it is, on every measurement) and
    spend the effort at the dispatch boundary — where `exp_05/design.md` shows
    the premise verified but the same interference tax applies.
