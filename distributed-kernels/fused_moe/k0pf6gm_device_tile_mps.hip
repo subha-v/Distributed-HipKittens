@@ -101,7 +101,7 @@
 // .cuh-only change, then confirm a new hsaco mtime under
 // ~/.cache/k0-mok-synthetic-prefill/mori/jit/gfx950_mlx5/*/ before believing
 // any number. The value is never read; only its presence in the hash matters.
-#define K0P6_MPS_SRC_REV 2
+#define K0P6_MPS_SRC_REV 3
 
 // exp_56 (Option C): per-source SEGMENTED receive layout + chunk-counted release.
 //  * Row index = source*MAXTOK + fetch_add(dest_counter[source] on dest, 1)  (waitless).
@@ -470,6 +470,18 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
   const int MAXTOK = (int)k0p6_dread(desc, K0P6_D_MAXTOK);   // exp_56: per-source segment stride
   const int input_tokens = (int)k0p6_dread(desc, K0P6_D_T);
   const long long symmetric_address = k0p6_dread(desc, K0P6_D_SYMMETRIC);
+  // exp_05 stage 0: epoch origin for the phase attribution. Scoped to this
+  // block so nothing crosses into a later phase; the cell is min-valued
+  // (ts_first stores ~t) so the earliest CTA entry wins.
+  if (threadIdx.x == 0) {
+    std::uint32_t* mps_state0 =
+        (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_STATE);
+    const hk_moe::mps::config cfg0 = hk_moe::mps::decode_config(
+        (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
+    hk_moe::mps::ts_first(
+        (std::uint64_t*)(mps_state0 + K0P6_MPS_ST_WORDS) + K0P6_MPS_TS_KSTART,
+        cfg0.timestamps);
+  }
   __shared__ __align__(16) unsigned char s_row[4][7488];
   __shared__ int s_cnt[K0P6_MAXE];
   __shared__ unsigned int s_total;
@@ -945,6 +957,19 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
     hk_moe::acquire_payload_agent();
     if (hk_moe::error_bit_set_agent(
             pperr, 16777216 | 8388608 | 2097152)) return;
+    // exp_05 stage 0: the dispatch is complete grid-wide at this point (M1 send
+    // + M2 per-(source,chunk) acquire, closed by the barrier above). This is the
+    // measurement that turns the 757 us M1+M2 figure from INFERRED to measured.
+    if (tid == 0) {
+      std::uint32_t* mps_state2 =
+          (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_STATE);
+      const hk_moe::mps::config cfg2 = hk_moe::mps::decode_config(
+          (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
+      hk_moe::mps::ts_last(
+          (std::uint64_t*)(mps_state2 + K0P6_MPS_ST_WORDS) +
+              K0P6_MPS_TS_M2_DONE,
+          cfg2.timestamps);
+    }
     // ---- Per-CTA fill/ns table from the (now settled, current-epoch) chunk words. Every CTA needs
     // ALL 64 fills because Pass B waves unpack rows from any source. SYSTEM atomic load invalidates
     // and re-fetches; the barrier guarantees the word carries this epoch. s_ns[s] = sum of source s's
@@ -1140,6 +1165,18 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
       (const int*)k0p6_dread(desc, K0P6_D_TILE_DESC),
       (int)((const int*)k0p6_dread(desc, K0P6_D_NUM_TILES))[0], desc);
   if (debug_stop == 5) return;
+  // exp_05 stage 0: M6 (N2 phase 1) is done for this CTA. With KSTART and
+  // M2_DONE this closes the pre-M7 decomposition: dispatch = M2_DONE - KSTART,
+  // plan+M6 = M6_DONE - M2_DONE.
+  if (tid == 0) {
+    std::uint32_t* mps_state6 =
+        (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_STATE);
+    const hk_moe::mps::config cfg6 = hk_moe::mps::decode_config(
+        (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
+    hk_moe::mps::ts_last(
+        (std::uint64_t*)(mps_state6 + K0P6_MPS_ST_WORDS) + K0P6_MPS_TS_M6_DONE,
+        cfg6.timestamps);
+  }
 
   // ================= M6.9: minimum-progress role selection (static tail) =======
   // The C TAIL CTAs of this grid become the minimum-progress service pool; all
