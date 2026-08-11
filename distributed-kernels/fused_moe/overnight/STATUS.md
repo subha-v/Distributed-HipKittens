@@ -175,7 +175,24 @@ Partial answer, from measurement rather than opinion:
    the dominant driver of the `g` axis) and the per-wave publish that carries
    the ordering hole below. Highest-value library change on tonight's evidence.
 3. Only then consider `exp_05` stages 1–2 (local-tokens-first, then the
-   two-pass split).
+   two-pass split) — reading `exp_09/design.md` first, because the same
+   interference tax applies there and `exp_09` shows the arrival count is fixed
+   by the *plan*, not the protocol.
+
+**Do not** spend a build cycle on: raising the `C ≤ 64` cap (the 1/C law
+extrapolates it), relocating arrival counters (exp_07, exp_08), per-row counters
+replacing per-slice ones (exp_09 predicts the exp_07 pessimization), or SDMA for
+the payload (the payload is not the problem).
+
+## Correctness posture of the shipped tree
+
+Every configuration run tonight passed the full ladder — `[MOK GATE]`,
+`control_fails=True`, and a 600-epoch soak with `pperr=0`. That includes four
+5-rotation decision campaigns, ~50 screening configurations, a 12-trial
+seed-varying ordering-hole probe, and a deliberately awkward 10-point envelope
+sweep (both placement modes, every legal `g`, `flush_rows` at 1 and 64, and a
+non-multiple-of-8 `C=63`). No memory fault and no nonzero `pperr` was observed
+after the exp_01 fix landed, in any run.
 
 ## Open items a reader should know about
 
@@ -219,6 +236,8 @@ Partial answer, from measurement rather than opinion:
 | `exp_05` | phase attribution (stage 0) | instrument fixed and working; **the interference finding** |
 | `exp_06` | atomic ordering scope | scope ≈ 30% of the interference floor (diagnostic, reverted) |
 | `exp_07` | chunk-major counter layout | **≥10x slower, reverted** — coalescing atomics is a trap |
+| `exp_08` | A8, XCD placement (new mode 3) | **A8 closed** — die-level pool cuts M7 interference 36% but starves the pool 54% |
+| `exp_09` | reducing the arrival count (M4) | analysis only — **no cheap M4 exists**, and the tempting idea is predicted to fail |
 
 ## Method note worth keeping
 
