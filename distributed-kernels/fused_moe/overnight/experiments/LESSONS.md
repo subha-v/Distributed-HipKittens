@@ -625,3 +625,43 @@
   run. Surfacing it took 4 print-only lines and closed an axis that would
   otherwise have cost a multi-hour rewrite. **Diagnostics that cost nothing to
   compute should not be gated to the arm that introduced them.**
+
+- 2026-08-11 exp_12 **BREAKTHROUGH: dynamic event ticket + compute-CTA
+  fall-through cuts the MPS arm from 1.46x pf6gm to 1.060x.** Two changes, both
+  small: (a) `run_service`'s event loop claims a TICKET
+  (`fetch_add_relaxed` on a new `K0P6_MPS_ST_EVNEXT` word) instead of walking
+  a static (service_id, service_count) stripe; (b) the M7.6 guard drops
+  `is_service_cta`, so **every** CTA in a stream mode enters the drain --
+  service CTAs immediately, compute CTAs as they finish M7.
+  Screened, g=1 mode 2, all gate-green: **C=16 22,068 -> 7,617 (2.90x faster),
+  C=32 14,775 -> 7,504 (1.97x), C=64 9,976 -> 7,432 (1.34x)**. Best point C=64 =
+  **1.060x pf6gm and 0.951x production** -- the MPS arm now BEATS production for
+  the first time. Resource tuple unchanged.
+  **Why it works, and it is exactly what the phase profile predicted:** the
+  entire capacity tax is M7's (plan+M6 is flat in C to 0.5%; M7 rises 27% from
+  C=2 to C=64), so returning M7's CTAs to the drain at the tail refunds the only
+  tax the reservation costs. The ticket is also strictly better than the stripe
+  for a second reason -- producers enqueue with a monotonic tail ticket so the
+  queue fills densely in COMPLETION order, and claiming the next unclaimed slot
+  takes the next event that will be ready, where the stripe forced each wave to
+  wait for ITS events in index order (head-of-line blocking behind a producer
+  that had not run). Cost: one relaxed atomic per event (~16,720/rank/epoch)
+  against the 535,040 the arrival counters already spend -- free at our
+  resolution.
+  Mechanism credit: COMET's released code does compute-CTA fall-through into the
+  comm routine; it is NOT in the paper.
+- 2026-08-11 **the phase profile of the best homogeneous megakernel** (mode 0,
+  C=2, 6,989 us vs paired pf6gm 7,051 -- statistically the same kernel):
+  dispatch (M0-M2) **1,193 us (17%)** | plan (M3-M5) **415 us (6%)** |
+  **M6 (GEMM1) 2,539 us (36%)** | M7 (GEMM2) **1,586 us (23%)** | combine
+  **1,255 us (18%)**. GEMM is 59% of the kernel.
+  **The CTA-sensitivity column is the finding:** removing 62 of 256 CTAs moves
+  plan+M6 by **0.5%** (2,954 -> 2,970, flat across every C) but moves M7 by
+  **+27%** (1,586 -> 2,020, linear). **The entire capacity tax is M7's; M6 has
+  idle CTA capacity.** The old design reserved at M6.9 -- exactly the boundary
+  where the free phase ends and the starved phase begins -- paying the tax in
+  the one phase that cannot afford it. This measurement is what motivated
+  exp_12 and it should gate every future placement decision.
+  Corollary: **the plan is only 415 us (6%)**, so every plan-side idea
+  (COMET layer-0, packed schedules, gather-index) is capped at 6% before it
+  starts.
