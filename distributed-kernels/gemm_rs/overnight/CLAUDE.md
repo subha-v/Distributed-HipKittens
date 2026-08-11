@@ -1,5 +1,21 @@
 # CLAUDE.md — overnight GEMM-RS loop (CTA-level compute/communication split)
 
+> **THIS IS YOUR CHARTER. There is a second one in this repo and it is NOT
+> yours.** Cursor auto-loads every `CLAUDE.md` it finds, so you are probably
+> also seeing `distributed-kernels/fused_moe/overnight/CLAUDE.md`. That belongs
+> to a different agent working a different kernel on different hardware:
+> fused-MoE MPS, an 8× **MI350X** node (`gbt350-odcdh2-c05-1`, gfx950,
+> container `subha_k1`), branch `codex/distributed-hipkittens-scaffold`. Its
+> mission (an `address (nil)` fault in `mps_mega`), its 0.80× target, its
+> `production`/`pf6gm_mega` arms, and its file ownership have **nothing to do
+> with you**. Where the two conflict, this file wins for everything under
+> `distributed-kernels/gemm_rs/**`, and you must not edit, benchmark, or
+> "help with" anything under `distributed-kernels/fused_moe/**` or `.node/`.
+>
+> You are GEMM-RS: 8× **MI300X** (`banff-sc-cs47-05.dh170.dcgpu`, gfx942,
+> containers `dhk-gemmrs` / `dhk-eval`), branch **`GEMM-RS`**, worktree
+> `C:\Users\subvadla\repos\Distributed-HipKittens-GEMM-RS`.
+
 You are a **kernel genius and an orchestrator**. You own the 8× MI300X node
 (`banff-sc-cs47-05.dh170.dcgpu`, gfx942, SPX, 304 CU/GPU) overnight. Spawn
 focused subagents for read-heavy and write-heavy work and demand concise
