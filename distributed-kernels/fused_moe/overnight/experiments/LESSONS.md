@@ -252,3 +252,33 @@
   the dominant cost driver of the g axis, exp_03) and the per-wave
   `s_waitcnt`-plus-bare-flag publish that carries the ordering hole. **This is
   the single highest-value primitive to add**, on the evidence of the night.
+
+- 2026-08-11 exp_04b **dec03: campaign-quality confirmation of the kept MLP
+  change.** Same config as dec02 (C=64,g=1,mode=2,flush_rows=16), 5 rotations, 3
+  paired arms, all gates green: `production 7,702.1` / `pf6gm_mega 6,905.8`
+  (0.89660) / `mps_mega 10,107.0`. Against dec02's 10,643.3 that is **-5.0% at
+  the best point**, and mps/pf6gm improves 1.544x -> **1.464x**. Screening had
+  predicted 9,976 (1.3% off). Third independent check that the cheap instrument
+  tracks a real campaign (0.1%, 2.6%, 1.3%).
+- 2026-08-11 exp_03b **the capacity-tax curve at fine granularity** (mode 0,
+  g=1, vs paired pf6gm, screened): C=2 **0.995**, C=4 1.006, C=8 1.017, C=24
+  1.023, C=32 1.035, C=48 1.043, C=64 **1.080**. Monotonic and strongly
+  sublinear -- a naive `256/(256-C)` model predicts +33% at C=64 and the truth
+  is +8.0%. Reserving CTAs is close to free at small C (indistinguishable from
+  pf6gm at C=2). **This curve is what makes the combine-boundary ceiling
+  airtight**: ideal mode 2 = mode0(C) - 300 us, and with the post-MLP service law
+  (~166,000 us x CTA) the service only fits the 3,153 us M7+M8 window at C >= 53,
+  where the tax has already eaten the prize. Best case is a TIE with pf6gm.
+- 2026-08-11 exp_05 **the dispatch->M6 premise is VERIFIED from source, not
+  inferred.** There are **four grid barriers between M2 and M6** --
+  `k0pf6gm_device_tile_mps.hip:937` (M2 end), `:1059` (M3), `:1114` (M4
+  publishes nvi/sei/pull_ptr), `:1124` (M5 publishes sti/swt/pull_src/part) --
+  so the pre-M6 region is a SUM OF MAXIMA with zero dispatch/GEMM overlap. Note
+  what is already good and must not be undone: **M2's chunk acquire is already
+  per-(source,chunk)** (`:923`), so M2 overlaps peers' M1 sends; the exposed
+  cost is the TAIL of the all-to-all plus three more barriers, not the bulk.
+  Design and staged build plan in `exp_05_dispatch_overlap/design.md`.
+  **Stage 0 (measure the exposure with the already-written-but-never-read
+  timestamp block) is the correct next action** -- deliberately not started as
+  device work tonight because stage 2 is multi-hour surgery on the inlined
+  `k0pf4_dsort` under byte-exact LDS and ArchVGPR/AGPR gates.
