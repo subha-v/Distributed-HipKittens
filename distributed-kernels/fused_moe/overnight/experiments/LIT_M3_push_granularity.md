@@ -60,30 +60,15 @@ choice, the segment policy and the stream-priority argument are **design reasoni
 
 ## Corrections to our internal note
 
-1. **Wrong paper and wrong hardware.** "COMET §3.3.2" does not exist. §3.3.2, Fig 3(a), 87 GB/s, 32–64 KiB
-   tiles, the ~1 MiB knee and the row-band idea are all **arXiv 2607.19539**, measured on **4× A100 / NVLink /
-   108 SMs / ~100 GB/s per peer** — not H800, not H100. Our note attributes the curve to COMET's H800 system.
-2. **Wrong kind of number.** 87 GB/s is 87% of **one** peer link; our 148 GB/s is 27.5% of **aggregate egress
-   across 7**. Distance from a plateau says nothing about clearing 27.5% of peak.
-3. **The conclusion is inference, not measurement, and it is contradicted.** "No amount of tuning `g` can reach
-   ~148 GB/s" is refuted in strong form by mori-EP's published MI355X EP8 combine at the same 14,336 B payload.
-4. **The note never divides by C — that is what makes 73× look fatal.** If Fig 3(a)'s x-axis is an 8-CTA
-   consumer's aggregate payload, the **per-CTA** payload at the knee is 128 KiB and our 14 KiB is **9.1× low, not
-   73×**; a C=32 pool holds 448 KiB in flight, within 2.3× of the knee. If the x-axis is per-CTA the gap is 18×.
-   Neither reading gives 73× (`INFERRED`; the paper is `UNCERTAIN` on which).
-5. **M3's stated purpose overstates it.** It is a bandwidth-efficiency optimization, and in our design it costs
-   something real: a ≥256 KiB band delays first publish and couples to M8 slice completion.
-6. **M7 and M8 confidence is too high.** Both say "mechanism measured." COMET reports **no separately measured
-   speedup for layer-0 or layer-1 rescheduling** — no ablation section exists; both live inside the same 1.96× /
-   86.5%-hidden aggregate. Downgrade to *mechanism described, speedup not separately measured*.
+1. **Wrong paper and wrong hardware.** "COMET §3.3.2" does not exist. §3.3.2, Fig 3(a), 87 GB/s, 32–64 KiB tiles, the ~1 MiB knee and the row-band idea are all **arXiv 2607.19539**, measured on **4× A100 / NVLink / 108 SMs / ~100 GB/s per peer** — not H800, not H100. Our note attributes the curve to COMET's H800 system.
+2. **Wrong kind of number.** 87 GB/s is 87% of **one** peer link; our 148 GB/s is 27.5% of **aggregate egress across 7**. Distance from a plateau says nothing about clearing 27.5% of peak.
+3. **The conclusion is inference, not measurement, and it is contradicted.** "No amount of tuning `g` can reach ~148 GB/s" is refuted in strong form by mori-EP's published MI355X EP8 combine at the same 14,336 B payload.
+4. **The note never divides by C — that is what makes 73× look fatal.** If Fig 3(a)'s x-axis is an 8-CTA consumer's aggregate payload, the **per-CTA** payload at the knee is 128 KiB and our 14 KiB is **9.1× low, not 73×**; a C=32 pool holds 448 KiB in flight, within 2.3× of the knee. If the x-axis is per-CTA the gap is 18×. Neither reading gives 73× (`INFERRED`; the paper is `UNCERTAIN` on which).
+5. **M3's stated purpose overstates it.** It is a bandwidth-efficiency optimization, and in our design it costs something real: a ≥256 KiB band delays first publish and couples to M8 slice completion.
+6. **M7 and M8 confidence is too high.** Both say "mechanism measured." COMET reports **no separately measured speedup for layer-0 or layer-1 rescheduling** — no ablation section exists; both live inside the same 1.96× / 86.5%-hidden aggregate. Downgrade to *mechanism described, speedup not separately measured*.
 7. **Minor slip.** Fig 5 is in **§3.1.2**, not §3.1.1 (§3.1.1 is the axis argument; Figs 5 and 6 are in §3.1.2).
-8. **Fleet is not bandwidth evidence.** arXiv 2604.15379 is a **single-GPU** multi-die megakernel (XCD L2
-   locality, Qwen3-8B decode vs vLLM). It supports M4's atomic-scope and `buffer_wbl2` claims but has **no xGMI
-   peer-write bandwidth data**. Its 8/256 CUs (3.1%) is a *scheduler* role, not comm — no evidence for sizing C.
-9. **What the note got right** (so we stop re-deriving it): the 73× arithmetic; COMET's 14–35% `n_c`
-   (§3.2.2/Fig 8); the M/N axes (§3.1.1); the `cCTA=2` → 1.91× collapse (2607.19539 §4.3.4/Fig 9 — though its
-   optimum band is **9–19%** of 108, tighter and lower than 14–35%); and MI350X 76.8 GB/s per direction per link,
-   confirmed independently by ROCm's "1,075.2 GB/s P2P ring aggregate" ⇒ 153.6 bidirectional ÷ 2.
+8. **Fleet is not bandwidth evidence.** arXiv 2604.15379 is a **single-GPU** multi-die megakernel (XCD L2 locality, Qwen3-8B decode vs vLLM). It supports M4's atomic-scope and `buffer_wbl2` claims but has **no xGMI peer-write bandwidth data**. Its 8/256 CUs (3.1%) is a *scheduler* role, not comm — no evidence for sizing C.
+9. **What the note got right** (so we stop re-deriving it): the 73× arithmetic; COMET's 14–35% `n_c` (§3.2.2/Fig 8); the M/N axes (§3.1.1); the `cCTA=2` → 1.91× collapse (2607.19539 §4.3.4/Fig 9 — though its optimum band is **9–19%** of 108, tighter and lower than 14–35%); and MI350X 76.8 GB/s per direction per link, confirmed independently by ROCm's "1,075.2 GB/s P2P ring aggregate" ⇒ 153.6 bidirectional ÷ 2.
 
 ## COMET layer-0 and layer-1
 

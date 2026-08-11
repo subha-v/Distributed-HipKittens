@@ -60,6 +60,51 @@ KITTENS_DISTRIBUTED_DEVICE_INLINE void store_peer_packets(
                        detail::thread_count());
 }
 
+/**
+ * Batched multi-region variant of `store_peer_packets`.
+ *
+ * The single-region form is a dependent load-then-store chain, so each lane
+ * keeps exactly ONE memory operation in flight and the copy runs at one round
+ * trip per 16 bytes per lane. That is the right shape when one region refills
+ * the lanes many times over. It is the wrong shape for a caller holding MANY
+ * SMALL regions: a region narrower than `threads * 16` bytes cannot even give
+ * every lane one packet, so there is nothing to pipeline within it.
+ *
+ * This overload copies `Regions` equally-sized regions together, issuing every
+ * load before any store, so each lane keeps `Regions` loads in flight while
+ * each individual region keeps the identical fully-coalesced access pattern.
+ * The pointer arrays and the staging buffer are indexed only under
+ * `#pragma unroll`, so they stay register-resident (see the note on
+ * `store_peer_packets` about dynamic indexing demoting a packet array to
+ * scratch).
+ *
+ * Every region must have the same `bytes`. Regions may alias only if the
+ * caller would also accept `Regions` independent copies in an unspecified
+ * order.
+ */
+template<unsigned int Regions>
+KITTENS_DISTRIBUTED_DEVICE_INLINE void store_peer_packets_multi(
+        void* const (&destinations)[Regions],
+        const void* const (&sources)[Regions],
+        std::size_t bytes, unsigned int tid, unsigned int threads) {
+    static_assert(Regions > 0, "a multi-region copy needs at least one region");
+    const std::size_t count = bytes >> 4;
+#pragma unroll 1
+    for (std::size_t packet = tid; packet < count; packet += threads) {
+        packet16 staged[Regions];
+#pragma unroll
+        for (unsigned int region = 0; region < Regions; ++region) {
+            staged[region] =
+                reinterpret_cast<const packet16*>(sources[region])[packet];
+        }
+#pragma unroll
+        for (unsigned int region = 0; region < Regions; ++region) {
+            reinterpret_cast<packet16*>(destinations[region])[packet] =
+                staged[region];
+        }
+    }
+}
+
 [[nodiscard]] KITTENS_DISTRIBUTED_DEVICE_INLINE bool store_peer_packets_checked(
         void* __restrict__ destination, const void* __restrict__ source,
         std::size_t bytes, unsigned int tid, unsigned int threads) {
