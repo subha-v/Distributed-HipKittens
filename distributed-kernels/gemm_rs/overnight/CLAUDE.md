@@ -131,6 +131,22 @@ tight `2e-3`; a candidate that only passes the graded one is a regression.
   completed or failed experiment, including negatives, and verify
   `git ls-remote origin GEMM-RS` head == local HEAD before starting the next.
 
+  **One shared path to watch.** Their commit `52c79701` independently relocated
+  this GEMM-RS harness out of the repo-root scratch directory into
+  `distributed-kernels/gemm_rs/overnight/`, so that path is tracked on *both*
+  branches. `GEMM-RS` is a strict superset (48 files vs their 26) and is
+  authoritative for it. If a future merge ever puts the two versions in
+  conflict, take the `GEMM-RS` side for anything under
+  `distributed-kernels/gemm_rs/**` and theirs for everything else.
+
+  **One shared path to watch.** Their commit `52c79701` independently relocated
+  this GEMM-RS harness out of the repo-root scratch directory into
+  `distributed-kernels/gemm_rs/overnight/`, so that path is tracked on *both*
+  branches. `GEMM-RS` is a strict superset (48 files vs their 26) and is
+  authoritative for it. If a future merge ever puts the two in conflict, take
+  the `GEMM-RS` side for anything under `distributed-kernels/gemm_rs/**` and
+  theirs for everything else.
+
   Node-side there is no conflict either: they hold an MI350X box
   (`gbt350-odcdh2-c05-1`, container `subha_k1`); you hold the MI300X box
   (`banff-sc-cs47-05.dh170.dcgpu`, containers `dhk-gemmrs` and `dhk-eval`), and
