@@ -90,6 +90,19 @@
 #include "moe_hk_adapter.cuh"
 #include "moe_mps_adapter.cuh"       // MPS: roles, event queue, slice push/flags
 
+// ---- JIT CACHE INVALIDATION GUARD -- read this before editing any .cuh -------
+// The mori JIT cache key is a content hash over its own _jit-sources tree,
+// restricted to .hpp/.h/.cpp/.hip. Our .cuh headers arrive through -I from the
+// read-only Distributed-HipKittens mount and are NOT hashed, so an edit
+// confined to moe_mps_adapter.cuh / moe_hk_adapter.cuh / include/cdna4/**
+// leaves the key unchanged and the campaign SILENTLY REUSES THE PREVIOUS
+// k0pf6gm_mps_mega.hsaco. exp_04 lost a measurement to exactly this.
+// This .hip IS hashed. Bump K0P6_MPS_SRC_REV in the same commit as any
+// .cuh-only change, then confirm a new hsaco mtime under
+// ~/.cache/k0-mok-synthetic-prefill/mori/jit/gfx950_mlx5/*/ before believing
+// any number. The value is never read; only its presence in the hash matters.
+#define K0P6_MPS_SRC_REV 2
+
 // exp_56 (Option C): per-source SEGMENTED receive layout + chunk-counted release.
 //  * Row index = source*MAXTOK + fetch_add(dest_counter[source] on dest, 1)  (waitless).
 //  * Publication: ONE per-CTA system release fence at M1-end + ONE system store per (source,chunk)
