@@ -90,6 +90,47 @@
   `RESULTS.md` must be taken with `HK_DEBUG=0`. Debug output is for localizing
   the hang, never for a number.
 
+- **E2: the XGMI ceiling is 315-336 GB/s per GPU, not 448, and our 127 GB/s is
+  ~39% of achievable — but the "16-byte scattered stores" diagnosis is
+  probably WRONG.** Two separate findings, and the second one matters more.
+  *The ceiling.* MI300X gives each GPU **seven independent point-to-point
+  links**, one per peer — no aggregation, no 2-hop peers. Per link 64 GB/s
+  theoretical but **45-48 GB/s achievable** (~25% protocol/CRC haircut that is
+  not recoverable in software), so ~**315-336 GB/s** aggregate.
+  [AMD, Understanding xGMI and RCCL bandwidth on MI300X](https://rocm.blogs.amd.com/software-tools-optimization/mi300x-rccl-xgmi/README.html).
+  Crucially AMD's own 47 GB/s figure is **kernel-issued sender-side push
+  stores** (TransferBench `USE_DMA_EXEC=0`, GFX executor) — the same pattern we
+  use — so our approach is architecturally sound and there is no higher
+  SDMA-only tier to chase. Real headroom is ~2.5×, i.e. ~450-520 µs of the
+  920 µs pool, ~16-18% end-to-end. Damning comparison: TransferBench reaches
+  329 GB/s using **8 CUs per link (56 total)**; we use ~272 producer CTAs to
+  reach 127. **We are not short of parallelism**, and `vmcnt` is 6 bits (63
+  outstanding per wave), so "more packets in flight" is not the lever either.
+  Also settled: `global_store_dwordx4` **is** the widest store on gfx942 —
+  there is no `dwordx8`. Width was never available as a knob.
+  *The diagnosis correction.* The premise was that scattered 16 B packets waste
+  50-75% of every 32/64 B Infinity Fabric transaction. **But the built ISA
+  shows the payload stores carry NO cache-scope bits at all** —
+  `global_store_dwordx4 v[56:57], v[24:27], off` and
+  `flat_store_dwordx4 v[44:45], v[86:89]`, bare, while `buffer_wbl2 sc0 sc1`
+  and `buffer_inv sc0 sc1` do carry them. Bare stores are not system-scope, so
+  they land in the **local L2** and only reach the fabric when the release
+  flushes it. L2 therefore coalesces the 16 B packets into full lines *before*
+  egress, and the write-amplification story largely dissolves.
+  The likelier cause of 127 GB/s is that **egress is bursty and serialized at
+  the release points** rather than streamed under compute — which is consistent
+  with the ablation having measured it as one lump.
+  **Consequence: E2 and E3 are the same mechanism seen from two sides.** The
+  `buffer_wbl2 sc0 sc1` at the release *is* the egress trigger, so release
+  grouping changes burst size and frequency, not just fence count — E3 may be
+  worth more than the ~3% its tile-count arithmetic suggests. It also means
+  adding `sc0 sc1` to payload stores would likely make things **worse** by
+  bypassing the L2 coalescing that is currently helping us.
+  **This is a hypothesis from static ISA evidence and is NOT yet confirmed.**
+  The decisive measurement is a profiler run counting 32 B/64 B write requests
+  and fabric bytes against useful bytes. Do that before implementing either
+  LDS-staging or any cache-bit change.
+
 - **TRAP: Gate M2 could not fail. It was a silent false pass all session.**
   `tools/m2_report.sh` reads `overnight/build/m1a.log` and
   `overnight/build/isa/*.s`, which only `tools/m1_build.sh` and
