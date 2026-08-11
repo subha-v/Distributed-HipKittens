@@ -237,12 +237,12 @@ def check_moe_mps() -> None:
         "k0pf6gm_mps_mega",
         '#include "n2_phase1_gm.cpp"',
         '#include "n2_phase2_gm_mps.cpp"',
-        "finish_order_partition(",
         "hk_moe::mps::run_service(",
         "hk_moe::mps::enqueue_tile_release(",
         "K0P6_D_MPS_CFG",
         "N2GM_TASK_DONE_DRAIN_HOOK asm volatile(\"s_waitcnt vmcnt(0)\"",
         "PADMAX / 32 > 16383",
+        "k0p6_mps_stride(",
         "K0P6_MPS_ERR_CONFIG",
         "K0P6_MPS_ERR_SERVICE",
     ):
@@ -261,18 +261,21 @@ def check_moe_mps() -> None:
     require("symmetric" not in mfma_span and
             "K0P6_D_SYMMETRIC" not in mfma_span,
             "IRIS peer-descriptor state leaked into the M6/M7 MFMA span")
-    # M7's task loop must stride by the logical pool as plain uniform ints —
-    # the resource-gate contract (no packed role / gridDim.x in the latch).
+    # M7's task loop must keep the donor's free blockIdx.x start; the stride
+    # is re-derived from the descriptor inside the body. No role word may
+    # cross the M6->M7 boundary as a live register (resource gate).
     m7 = source.index("// ================= M7:")
     m76 = source.index("// ================= M7.6", m7)
     m7_span = source[m7:m76]
     require("n2p6gm_mps_phase2_body" in m7_span and
-            "mps_m7_start, mps_m7_stride" in m7_span,
-            "M7 must run the vendored body with plain task start/stride")
-    require("if (mps_m7_stride != 0)" in m7_span,
-            "service CTAs must skip the M7 GEMM body (stride 0)")
-    require("k0p6_role" not in source and "phase2_payload_valid" not in source,
-            "packed role and the cross-phase payload bool must stay removed "
+            "if (!mps_service_cta)" in m7_span,
+            "service (tail) CTAs must skip the M7 GEMM body")
+    require("#define N2GM_TASK_START blockIdx.x" in source and
+            "k0p6_mps_stride(k0p6_desc, (int)gridDim.x)" in source,
+            "M7 loop latch must be donor start + descriptor-derived stride")
+    require("k0p6_role" not in source and "phase2_payload_valid" not in source
+            and "s_batch_no" not in source and "mps_m7_start" not in source,
+            "cross-phase MPS state must not live across the MFMA bodies "
             "(resource gate)")
 
     for token in (

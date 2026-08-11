@@ -252,6 +252,16 @@ __device__ __forceinline__ void k0p6_part_arrive(int b, int tid, const long long
   }
 }
 
+// M7 task stride for the density-preserving role split. The phase-2 body
+// re-derives it from the descriptor config word at body entry, the same
+// volatile channel its own hooks already use; nothing tuneable stays live
+// across the MFMA mainloop. Mode 1 must carry C=0 (validation enforces it),
+// so this is the donor's full-grid stride exactly.
+__device__ __forceinline__ int k0p6_mps_stride(const long long* desc, int nct) {
+  return nct - (int)((unsigned long long)k0p6_dread(desc, K0P6_D_MPS_CFG) &
+                     0xFFull);
+}
+
 // ---- MPS phase-2 done hook -----------------------------------------------------
 // Stream mode (2): publish the (b, nc) tile event off the GEMM wave — one
 // agent release + one relaxed 32-bit store by tid0, after the vendored body
@@ -268,11 +278,8 @@ __device__ __forceinline__ void k0p6_mps_task_done(int b, int nc, int tid,
     std::uint32_t* mps_q = (std::uint32_t*)k0p6_dread(k0p6_desc, K0P6_D_MPS_Q);
     std::uint32_t* mps_state =
         (std::uint32_t*)k0p6_dread(k0p6_desc, K0P6_D_MPS_STATE);
-    std::uint64_t* mps_ts = (std::uint64_t*)(mps_state + K0P6_MPS_ST_WORDS);
     hk_moe::mps::enqueue_tile_release(
-        mps_q, mps_state + K0P6_MPS_ST_TAIL,
-        mps_ts + K0P6_MPS_TS_FIRST_READY, mps_ts + K0P6_MPS_TS_LAST_READY,
-        mps_cfg.timestamps, b, nc);
+        mps_q, mps_state + K0P6_MPS_ST_TAIL, b, nc);
   } else {
     hk_moe::arrive_local_count(
         ((unsigned int*)k0p6_dread(k0p6_desc, K0P6_D_PART_DONE)) + b);
@@ -299,14 +306,15 @@ __device__ __forceinline__ void k0p6_mps_task_done(int b, int nc, int tid,
 #define N2_P2_QUAL __device__ __forceinline__
 #define N2_P2_NAME n2p6gm_mps_phase2_body
 #define N2_KERNELS_ONLY
-#define N2_HOOK_CTX_ARG , const long long* __restrict__ k0p6_desc, const int k0p6_task_start, const int k0p6_task_stride
+#define N2_HOOK_CTX_ARG , const long long* __restrict__ k0p6_desc
 #define N2GM_TASK_WAIT_HOOK \
   if (!k0p6_a2_wait(b, tid, k0p6_desc)) return;
 #define N2GM_TASK_DONE_HOOK k0p6_mps_task_done(b, nc, tid, k0p6_desc);
 #define N2GM_TASK_DONE_DRAIN_HOOK asm volatile("s_waitcnt vmcnt(0)" ::: "memory");
-// Plain uniform ints, exactly the donor's loop-latch register class.
-#define N2GM_TASK_START k0p6_task_start
-#define N2GM_TASK_STRIDE k0p6_task_stride
+// Donor-identical start (free hardware uniform); the stride is re-derived
+// from the descriptor inside the body — the only value the role split costs.
+#define N2GM_TASK_START blockIdx.x
+#define N2GM_TASK_STRIDE k0p6_mps_stride(k0p6_desc, (int)gridDim.x)
 #include "n2_phase2_gm_mps.cpp"
 #undef N2GM_TASK_STRIDE
 #undef N2GM_TASK_START
@@ -1115,43 +1123,34 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
       (int)((const int*)k0p6_dread(desc, K0P6_D_NUM_TILES))[0], desc);
   if (debug_stop == 5) return;
 
-  // ================= M6.9: minimum-progress role partition (finish order) =======
-  // The first C finishers of M6 become minimum-progress service CTAs; everyone
-  // else receives a dense logical compute id, and M7 below strides the pool of
-  // (256-C) so every (tile, nc) task still executes exactly once. Mode 1 keeps
-  // the identity partition (no reservation, no overlap). No grid barrier is
-  // added: the partition rides M6's own completion order.
+  // ================= M6.9: minimum-progress role selection (static tail) =======
+  // The C TAIL CTAs of this grid become the minimum-progress service pool; all
+  // other CTAs stride the M7 task space by (256-C), so every (tile, nc) task
+  // still executes exactly once. Mode 1 has C=0 by validation: no reservation,
+  // no overlap, full-grid stride exactly like the donor.
   //
-  // Plain-int task bounds, not an opaque packed role: the phase-2 loop latch
-  // must look exactly like the donor's (uniform start + uniform stride, no
-  // bitfield extraction, no gridDim.x read). Compute CTAs get
-  // (compute_id, 256-C); service CTAs get (service_id, 0) and skip M7.
-  // These two ints are the ONLY MPS values allowed to live across the M7 MFMA
-  // body; the config word is re-decoded phase-locally everywhere else.
-  int mps_m7_start = bid;
-  int mps_m7_stride = nct;
-  {
-    const hk_moe::mps::config pcfg = hk_moe::mps::decode_config(
-        (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
-    if (pcfg.mode != 1u) {
-      std::uint32_t* mps_state =
-          (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_STATE);
-      const kittens::distributed::role_partition mps_part =
-          kittens::distributed::finish_order_partition(
-              mps_state + K0P6_MPS_ST_TICKET, pcfg.reserved_comm_ctas,
-              (std::uint32_t)nct, (std::uint32_t*)&s_ns[4]);
-      mps_m7_start = mps_part.service ? (int)mps_part.service_id
-                                      : (int)mps_part.compute_id;
-      mps_m7_stride = mps_part.service ? 0 : (int)mps_part.compute_count;
-    }
-  }
+  // Why static-tail, not finish-order tickets: the resource gate showed that
+  // ANY value crossing the M6→M7 boundary costs VGPR-pair spill slots at the
+  // phase-2 pointer peak (measured +24 B/lane and the SGPR spill blowup).
+  // Physical tail CTAs are a *free* role test — blockIdx.x is a hardware
+  // uniform, and stride (256-C) is re-derived inside the body from the
+  // descriptor. On this kernel's uniform-cost bid-interleaved task stripes,
+  // M6 completion order has no bid-correlated bias, so the tail reservation's
+  // service-start statistics match a random C-subset; the queue absorbs the
+  // skew that finish-order tickets would have covered. No grid barrier added.
+  const std::uint32_t mps_C =
+      (std::uint32_t)((unsigned long long)k0p6_dread(desc, K0P6_D_MPS_CFG) &
+                      0xFFull);
+  const hk_moe::mps::config mps_cfg = hk_moe::mps::decode_config(
+      (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
+  const bool mps_service_cta = bid >= nct - (int)mps_C;   // C==0 in mode 1
 
   // ================= M7: N2 phase2 over the logical compute pool ================
-  // Service CTAs skip the GEMM body entirely (stride 0); compute CTAs stride
-  // num_tasks by the dense pool count. The per-(b, nc) completion hook is
-  // semantics-only: stream mode publishes tile events; modes 0/1 bump
-  // part_done as in parity.
-  if (mps_m7_stride != 0) {
+  // Service (tail) CTAs skip the GEMM body entirely; compute CTAs cover every
+  // task once at stride (256-C) with the donor's free blockIdx.x start. The
+  // per-(b, nc) completion hook is semantics-only: stream mode publishes tile
+  // events; modes 0/1 bump part_done as in parity.
+  if (!mps_service_cta) {
     production_fused_moe::n2::n2p6gm_mps_phase2_body(
         (const std::uint8_t*)k0p6_dread(desc, K0P6_D_A2Q),
         (const float*)k0p6_dread(desc, K0P6_D_DQ2),
@@ -1163,15 +1162,12 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
         (const int*)k0p6_dread(desc, K0P6_D_NVI),
         (__hip_bfloat16*)k0p6_dread(desc, K0P6_D_PART),
         (const int*)k0p6_dread(desc, K0P6_D_TILE_DESC),
-        (int)((const int*)k0p6_dread(desc, K0P6_D_NUM_TILES))[0], desc,
-        mps_m7_start, mps_m7_stride);
+        (int)((const int*)k0p6_dread(desc, K0P6_D_NUM_TILES))[0], desc);
     if (tid == 0) {
       std::uint32_t* mps_state =
           (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_STATE);
       std::uint64_t* mps_ts = (std::uint64_t*)(mps_state + K0P6_MPS_ST_WORDS);
-      const hk_moe::mps::config m7cfg = hk_moe::mps::decode_config(
-          (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
-      hk_moe::mps::ts_last(mps_ts + K0P6_MPS_TS_M7_DONE, m7cfg.timestamps);
+      hk_moe::mps::ts_last(mps_ts + K0P6_MPS_TS_M7_DONE, mps_cfg.timestamps);
     }
   }
   if (debug_stop == 6) return;
@@ -1186,7 +1182,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
   {
     const hk_moe::mps::config scfg = hk_moe::mps::decode_config(
         (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
-    if (scfg.mode == 2u && mps_m7_stride == 0) {
+    if (scfg.mode == 2u && mps_service_cta) {
       const auto* symmetric = k0p6_symmetric(desc);
       const int* nvi = (const int*)k0p6_dread(desc, K0P6_D_NVI);
       const std::uint32_t events_total = ((std::uint32_t)nvi[0] >> 5) * 16u;
@@ -1227,9 +1223,10 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
                       "MPS wave scratch must fit the reused M1 staging slice");
         hk_moe::mps::wave_scratch* mps_scratch =
             reinterpret_cast<hk_moe::mps::wave_scratch*>(&s_row[wid][0]);
-        hk_moe::mps::run_service(env, *mps_scratch,
-                                 (std::uint32_t)mps_m7_start,   // service_id
-                                 scfg.reserved_comm_ctas, wid, lane);
+        hk_moe::mps::run_service(
+            env, *mps_scratch,
+            (std::uint32_t)(bid - (nct - (int)scfg.reserved_comm_ctas)),
+            scfg.reserved_comm_ctas, wid, lane);
       }
     }
   }

@@ -88,6 +88,9 @@ __host__ __device__ __forceinline__ bool config_is_valid(config c) {
         c.group_slices != 16u) return false;
     if (c.mode > 2u) return false;
     if (c.mode == 2u && c.reserved_comm_ctas == 0u) return false;
+    // Mode 1 (bulk, no overlap) strides the full grid: the M7 stride derives
+    // from C everywhere, so mode 1 must carry C == 0.
+    if (c.mode == 1u && c.reserved_comm_ctas != 0u) return false;
     if (c.flush_rows == 0u || c.flush_rows > 64u) return false;
     return true;
 }
@@ -139,15 +142,14 @@ __device__ __forceinline__ void ts_last(std::uint64_t* cell, bool enable) {
 // barrier runs in the phase-2 body's N2GM_TASK_DONE_DRAIN_HOOK immediately
 // before this hook, so tid0's agent release carries the whole CTA's part
 // atomics. No system fence and no row loop ever execute on the GEMM CTA.
+// Readiness timestamps (first/last-ready) are captured by the SERVICE waves
+// consuming these events, keeping the memory-clobbering s_memrealtime asm
+// entirely off the MFMA wave (resource gate).
 __device__ __forceinline__ void enqueue_tile_release(
         std::uint32_t* __restrict__ q, std::uint32_t* __restrict__ tail,
-        std::uint64_t* __restrict__ ts_first_cell,
-        std::uint64_t* __restrict__ ts_last_cell, bool ts_enable, int b,
-        int nc) {
+        int b, int nc) {
     const std::uint32_t ticket =
         kittens::distributed::fetch_add_relaxed<scope::agent>(tail, 1u);
-    ts_first(ts_first_cell, ts_enable);
-    ts_last(ts_last_cell, ts_enable);
     kittens::distributed::publish_tile_release<scope::agent>(
         q + ticket, encode_event(b, nc));
 }
@@ -298,6 +300,14 @@ __device__ __forceinline__ void run_service(
         // Wave-local payload acquire (a CTA-scope cta_acquire would deadlock:
         // the waves of one CTA iterate different stripe lengths).
         kittens::distributed::thread_acquire<scope::agent>();
+        // Readiness timestamps live on the SERVICE wave (off the MFMA wave):
+        // first/last tile-event observed. Service waves already poll at the
+        // queue tail, so this is the earliest observable readiness point
+        // without instrumenting producer CTAs.
+        if (lane == 0 && env.ts != nullptr) {
+            ts_first(env.ts + K0P6_MPS_TS_FIRST_READY, env.ts_enable);
+            ts_last(env.ts + K0P6_MPS_TS_LAST_READY, env.ts_enable);
+        }
         const int b = event_block(ev);
         const int nc = event_chunk(ev);
         const int group_base = nc & ~(int)(g - 1u);

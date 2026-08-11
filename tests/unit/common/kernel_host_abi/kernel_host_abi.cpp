@@ -198,6 +198,16 @@ int main() {
                 hk_moe::mps::encode_config(0, 2, 2, 16, false, false))));
         assert(!hk_moe::mps::config_is_valid(
             hk_moe::mps::decode_config(3)));
+        // Mode 1 (bulk, full-grid stride) must carry C == 0.
+        assert(!hk_moe::mps::config_is_valid(
+            hk_moe::mps::decode_config(
+                hk_moe::mps::encode_config(8, 4, 1, 16, false, false))));
+        assert(hk_moe::mps::config_is_valid(
+            hk_moe::mps::decode_config(
+                hk_moe::mps::encode_config(0, 4, 1, 16, false, false))));
+        // Event wire format: max block id fits the 14-bit field.
+        assert(hk_moe::mps::event_block(hk_moe::mps::encode_event(8223, 15)) ==
+               8223);
 
         hk_moe::host_abi::mps_buffer_binding binding;
         binding.queue = 0x10000;
