@@ -488,3 +488,35 @@
   Campaign ledger: dec01 C=8 -> 57,347.4 | dec02 C=64 pre-MLP -> 10,643.3 |
   dec03 C=64 post-MLP -> 10,107.0 | **dec04 DISCARDED** (node resynced
   mid-campaign, two kernels mixed into one summary) | dec05 final -> 10,075.8.
+
+- 2026-08-11 exp_08 (axis A8) **die-level vs CTA-level service pool: the
+  interference mechanism is CONFIRMED and the cure is worse than the disease.**
+  Mode 3 = mode 2 with the pool on WHOLE XCDs (residue classes [0, C/32)) instead
+  of the spread static tail; `mode` is already an int-parsed 8-bit field so this
+  needed **no ABI change and no harness edit**, and the vendored phase-2 body
+  already exposed `N2GM_TASK_START` for the dense compute-id remap. Resource
+  tuple byte-identical to mode 2; all gates green (a wrong remap would skip or
+  duplicate M7 tasks, so the gates really check it).
+  **C=64, same 192 compute + 64 service CTAs, ONLY placement differs:** M7
+  interference **+1,105.6 -> +703.7 us (-36%)**, but service drain **5,914 ->
+  9,128 (+54%)** and total **10,091 -> 12,711 (+26% WORSE)**. C=32 (one die)
+  agrees: interference -30%, total +49% worse.
+  **Reading: the interference and the service throughput are the SAME RESOURCE
+  seen from two sides -- you cannot isolate the communication engine from the
+  compute without also starving it.** Moving service CTAs to different physical
+  dies and changing nothing else removes a third of the M7 inflation, which can
+  only be a per-XCD locality effect; but 64 service CTAs on 2 dies self-contend
+  for those dies' L2, bandwidth and fabric ports. **A8 is CLOSED**: both arms
+  measured, concentration loses at every C, and mode 2's eight-way spread is the
+  best point of the family. Mode 3 KEPT in source as a validated mechanism probe,
+  NOT a candidate.
+- 2026-08-11 `primitives:` **`roles.cuh` is the right surface and is missing
+  one axis.** The whole placement change reduced to swapping one predicate and
+  two dense-id functions with the vendored GEMM body untouched -- strong evidence
+  FOR `role_partition`'s shape. What is missing is any notion of PHYSICAL
+  placement: the caller must know `xcd = bid % 8` on this part, hard-code 32
+  CTAs per die, and derive its own residue arithmetic. A `role_partition`
+  parameterised by HARDWARE DOMAIN (per-XCD, per-SE) rather than CTA index would
+  have made mode 3 a parameter instead of a mode, and would hold the `bid % 8`
+  fact in one place. Placement is now measured to move M7 by 36%, so this is
+  worth having.
