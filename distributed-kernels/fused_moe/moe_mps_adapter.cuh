@@ -45,7 +45,7 @@ namespace hk_moe::mps {
 // on this build): dispatch = M2_DONE - KSTART, plan+M6 = M6_DONE - M2_DONE,
 // M7 = M7_DONE - M6_DONE, combine = REDUCE_DONE - M7_DONE. Diagnostic only:
 // every write is behind cfg.timestamps and off by default.
-#define K0P6_MPS_TS_KSTART 5        // min(t)   over CTA entry (stored inverted)
+#define K0P6_MPS_TS_M5_DONE 5       // max(t)   over CTAs leaving the M5 barrier
 #define K0P6_MPS_TS_M2_DONE 6       // max(t)   over CTAs leaving the M2 barrier
 #define K0P6_MPS_TS_M6_DONE 7       // max(t)   over CTAs leaving M6
 #define K0P6_MPS_TS_COUNT 8

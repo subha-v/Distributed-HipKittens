@@ -101,7 +101,7 @@
 // .cuh-only change, then confirm a new hsaco mtime under
 // ~/.cache/k0-mok-synthetic-prefill/mori/jit/gfx950_mlx5/*/ before believing
 // any number. The value is never read; only its presence in the hash matters.
-#define K0P6_MPS_SRC_REV 8
+#define K0P6_MPS_SRC_REV 9
 
 // exp_56 (Option C): per-source SEGMENTED receive layout + chunk-counted release.
 //  * Row index = source*MAXTOK + fetch_add(dest_counter[source] on dest, 1)  (waitless).
@@ -1155,6 +1155,18 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
 
     hkp::grid_barrier(bar, tid, bar_err);   // M5 publishes sti/swt/pull_src/part/sc_dst
     if (hk_moe::error_bit_set_agent(pperr, 2097152)) return;
+    // exp_11: split the 43% "plan + M6" pool. M5_DONE is the plan/GEMM boundary,
+    // so plan (M3-M5) = M5_DONE - M2_DONE and M6 = M6_DONE - M5_DONE. This is
+    // the one big pool no role-split experiment has touched.
+    if (tid == 0) {
+      std::uint32_t* mps_state5 =
+          (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_STATE);
+      const hk_moe::mps::config cfg5 = hk_moe::mps::decode_config(
+          (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
+      hk_moe::mps::ts_last(
+          (std::uint64_t*)(mps_state5 + K0P6_MPS_ST_WORDS) + K0P6_MPS_TS_M5_DONE,
+          cfg5.timestamps);
+    }
   }
   if (debug_stop == 4) return;
 
@@ -1172,9 +1184,10 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
       (const int*)k0p6_dread(desc, K0P6_D_TILE_DESC),
       (int)((const int*)k0p6_dread(desc, K0P6_D_NUM_TILES))[0], desc);
   if (debug_stop == 5) return;
-  // exp_05 stage 0: M6 (N2 phase 1) is done for this CTA. With KSTART and
-  // M2_DONE this closes the pre-M7 decomposition: dispatch = M2_DONE - KSTART,
-  // plan+M6 = M6_DONE - M2_DONE.
+  // exp_05 stage 0: M6 (N2 phase 1) is done for this CTA. With M2_DONE and
+  // M5_DONE this closes the pre-M7 decomposition: plan = M5_DONE - M2_DONE,
+  // M6 = M6_DONE - M5_DONE. The dispatch is derived host-side as
+  // epoch_total - (REDUCE_DONE - M2_DONE).
   if (tid == 0) {
     std::uint32_t* mps_state6 =
         (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_STATE);
