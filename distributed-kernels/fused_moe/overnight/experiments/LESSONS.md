@@ -341,3 +341,28 @@
   (`s_waitcnt lgkmcnt(0)`) lived outside the signature. Same class of defect as
   `translate_peer`'s unchecked fail-closed null: a contract the caller cannot
   see and is not obliged to honour.
+
+- 2026-08-11 exp_05 stage 0 **the interference CURVE, matched mode-0/mode-2
+  pairs at identical compute-CTA counts** (M7, us): C=16 1,659.3 -> 2,277.6
+  (**+618.3, +37.3%**); C=32 1,784.1 -> 2,479.1 (**+695.0, +39.0%**); C=48
+  1,819.5 -> 2,788.8 (**+969.3, +53.3%**); C=64 2,019.7 -> 3,179.0 (**+1,159.3,
+  +57.4%**). Capacity-only across C=2..64 grows just 410 us total, so **at C=16
+  the interference (618 us) is 12x the capacity cost (50 us)**.
+  **Marginal interference is WORST for the first service CTAs** -- 38.6 us per
+  CTA at C=16 falling to 18.1 at C=64, the signature of a shared resource being
+  DISTURBED rather than divided. **You cannot buy a little bit of overlap
+  cheaply**: a 16-CTA pool (6% of the grid) already costs M7 37%. Mode-0 combine
+  stays flat across the same sweep (1,288/1,416/1,341/1,272/1,482), so the effect
+  is specific to M7 running concurrently with fabric traffic.
+- 2026-08-11 **synthesis for the next session -- the M-series should be
+  reordered by the interference finding, not by transfer size.** If comm CTAs and
+  GEMM CTAs contend for the same memory system, the mechanisms worth trying are
+  the ones that move bytes WITHOUT a CU memory pipeline. **M10 (mori CCO
+  device-side `ccoSdma`) was ranked LAST and should now be ranked FIRST**: it
+  was dismissed because SDMA reportedly loses to vector stores at 4-64 KB, but
+  the cost that actually decides the experiment is the interference it would
+  avoid entirely, and nobody had measured that. Corollary for exp_05: a dispatch
+  service pool would inflate M6 (2,976 us) the same way this one inflates M7, so
+  the 0.7-1.25 ms dispatch prize could be entirely eaten. **Any dispatch overlap
+  should be attempted with SDMA or with a plan-side restructuring that adds no
+  concurrent CU-issued fabric traffic.**

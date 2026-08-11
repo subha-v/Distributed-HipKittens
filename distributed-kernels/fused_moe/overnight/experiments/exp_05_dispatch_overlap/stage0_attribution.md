@@ -71,6 +71,33 @@ combine payloads. So the two effects separate cleanly:
 
 **The interference costs 2.8x more than the capacity tax it hides behind.**
 
+### The interference curve — and its shape is the real news
+
+Matched pairs at every `C`, mode 0 vs mode 2, identical compute-CTA counts:
+
+| C | mode 0 M7 (capacity only) | mode 2 M7 (capacity + interference) | interference | per service CTA |
+|---:|---:|---:|---:|---:|
+| 2 | 1,609.7 | — | — | — |
+| 16 | 1,659.3 | 2,277.6 | **+618.3 µs (+37.3%)** | 38.6 µs |
+| 32 | 1,784.1 | 2,479.1 | **+695.0 µs (+39.0%)** | 21.7 µs |
+| 48 | 1,819.5 | 2,788.8 | **+969.3 µs (+53.3%)** | 20.2 µs |
+| 64 | 2,019.7 | 3,179.0 | **+1,159.3 µs (+57.4%)** | 18.1 µs |
+
+Two things to read off it.
+
+1. **The capacity tax is tiny and the interference is not.** Across C = 2 → 64
+   the capacity cost of M7 grows by 410 µs total. At `C = 16` the capacity cost
+   is **50 µs** while the interference is **618 µs** — a factor of **12**.
+2. **Marginal interference is worst for the FIRST service CTAs** (38.6 µs each
+   at C=16, falling to 18.1 µs at C=64). The curve saturates, which is the
+   signature of a shared resource being disturbed rather than divided.
+   **You cannot buy a little bit of overlap cheaply** — even a 16-CTA service
+   pool, 6% of the grid, already costs M7 37%.
+
+The combine phase in mode 0 stays flat across the same sweep
+(1,288 / 1,416 / 1,341 / 1,272 / 1,482 µs), so this is specific to M7 running
+concurrently with fabric traffic, not a general drift.
+
 This does not contradict the A7 strike — it completes it. A7 was struck because
 occupancy is one block per CU, so a service CTA is never co-resident with an
 MFMA CTA and cannot steal issue slots. That is correct and remains correct.

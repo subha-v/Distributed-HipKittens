@@ -44,6 +44,37 @@ Three full decision campaigns, 15 correctness gates each, every one green.
    M-series away from the byte-moving ablations (M3, M1, M2) toward the
    atomic/fence ones (M4, A10).
 
+## The mechanism finding that matters most
+
+**A service CTA never steals an MFMA issue slot, and slows M7 by 57% anyway.**
+Two configurations run M7 on *exactly the same 192 compute CTAs*; the only
+difference is whether 64 service CTAs are concurrently moving payload:
+
+| | M7 | delta |
+|---|---:|---:|
+| 254 compute CTAs, no service | 1,609.7 µs | — |
+| **capacity**: 192 CTAs, no service traffic | 2,019.7 µs | +410 µs (+25.5%) |
+| **interference**: same 192 CTAs, service pool running | 3,179.0 µs | **+1,159 µs (+57.4%)** |
+
+The interference costs **2.8x the capacity tax**. This completes rather than
+contradicts the A7 strike: occupancy is one block per CU so a service CTA truly
+cannot steal issue slots — but CTAs that never share a SIMD still share the L2,
+the Infinity Cache and the fabric. **CTA role specialization removes issue-slot
+contention and leaves memory-system contention untouched.**
+
+Two consequences:
+
+- **Mode 0 is retired as the control for role specialization.** It measures the
+  capacity tax and is structurally blind to the dominant cost of the mechanism
+  it is the control for. Every future role-split experiment needs a
+  matched-CTA-count comparison.
+- **It reorders the M-series again.** If comm CTAs and GEMM CTAs contend for the
+  same memory system, the attractive mechanisms are the ones that move bytes
+  *without* a CU memory pipeline. **M10 (mori CCO device-side `ccoSdma`) was
+  ranked last; it should now be ranked first** — it was dismissed for not
+  beating vector stores at 4–64 KB, but the cost that actually matters is the
+  interference it would avoid entirely, which nobody had measured.
+
 ## The research question, so far
 
 > *Can CTA-level communication/computation overlap be made extremely performant
