@@ -150,13 +150,22 @@ re-testable.
 - Design contract, buffer/edge/count tables, rejected alternatives:
   `../DESIGN_MPS.md`; sweep protocol: `../BENCHMARKING.md`; build roots:
   `../BUILDING.md`; provenance + measured tuple: `../PROVENANCE.md`.
-- **The authoritative evidence ledger and agent prompt for the CURRENT fault:**
-  `../MPS_OVERNIGHT_HANDOFF.md`. Its suspect ranking #1 is the slot-61
-  pointer-flavor/heap-relative offset (verify range membership FIRST, before
-  believing anything else), #2 the M8 dynamic-claim/slot path, #3
-  `run_service` internals. debug_stop=1..6 runs are CLEAN; the fault is in
-  that tail. Redo any probe marked "invalid/annotated" there before trusting
-  its old result.
+- **THE `(nil)` FAULT IS ROOT-CAUSED — the handoff's suspect ranking is DEAD.**
+  Read `overnight/experiments/exp_01_nil_fault/root_cause.md`, NOT the ranking
+  in `../MPS_OVERNIGHT_HANDOFF.md`, which is superseded and will send you down
+  three dead paths. The defect: in the MPS M8 body `pbase[t]` is assigned only
+  inside the `j2 < fanout[t]` guard, while the reference assigns it
+  unconditionally with safe defaults `p = cur; row = 0;`. The consumer at
+  `..._mps.hip:408-410` is NOT fanout-guarded, so out-of-fanout lanes shuffle a
+  `pb == 0` and load from `0 + off`; at `c==0, lane==0` that is exactly address
+  0. Fix = hoist the assignment out of the guard, restoring reference parity.
+  All three old suspects are falsified by measurement: **`mode=1` at `C=0` still
+  faults** (no service CTA exists, so #3 `run_service` is impossible); `desc[61]`
+  is a valid mori pointer 1.71 GiB into a 32 GiB heap and `base_slot` never
+  calls `peer_ptr` (#1 dead); `pull_fallback=1` did not save it (#2 unsupported).
+  debug_stop=1..6 CLEAN still holds — but note `K0_MPS_DEBUG_STOP` rides
+  descriptor slot 49, the donor's `K0_PF6_DEBUG_PHASE` word, so confirm the
+  kernel's reading of that slot before quoting the bisect as settled.
 - Kernel sources: `../k0pf6gm_device_tile_mps.hip` (entry `k0pf6gm_mps_mega`),
   `../moe_mps_adapter.cuh`, `../n2_phase2_gm_mps.cpp`, `../moe_host_abi.hpp`.
 - The clean reference: `../k0pf6gm_device_tile.hip` (parity port, entry

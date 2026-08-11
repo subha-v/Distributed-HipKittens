@@ -1,5 +1,21 @@
 # exp_01 — descriptor dump analysis (first hard evidence)
 
+> **CORRECTION (2026-08-11, after measurement — read this before Result 2).**
+> Result 2 below infers the heap window from *alignment families*. That
+> inference is **WRONG, and backwards.** The measured heap base is
+> `local_heap_base = 136992140558336 = 0x7C97F7E00000` (rank-1 JSON) with
+> `MORI_SHMEM_HEAP_SIZE = 34359738368` (32 GiB, set at `run_campaign.sh:117`),
+> so the symmetric heap is `[0x7C97F7E00000, 0x7C9FF7E00000)`.
+> Therefore **`desc[61] = 0x7C9865820900` IS inside the heap**, at
+> heap_base + 1,839,335,680 (1.71 GiB) of 32 GiB. The 448 MiB request had 73×
+> headroom and never came close to failing. The 2 MiB-aligned "family S" at
+> `0x7C5C…` that I read as the heap is in fact ordinary torch allocation;
+> large torch tensors are 2 MiB-aligned too, so alignment does not discriminate
+> allocators. Words 55–60 genuinely do sit **above** the heap window, but they
+> are plain torch buffers that are never peer-translated, so that is by design.
+> **Word 61 is fine. The real defect is a device-side one (`root_cause.md`).**
+> Result 1 (the config word) stands unaffected.
+
 Source: `K0_MPS_DESC_DUMP=1 K0_MPS_TRACE=1 K0_MPS_DEBUG_STOP=6`, run at
 2026-08-11T07:02Z, output `$HOME/k0-mok-mps-descdump/run1/mps_desc_rankx.txt`.
 Raw words preserved in `../../tools/map_desc.ps1` (the analysis script itself
