@@ -88,6 +88,42 @@ finish_order_partition(std::uint32_t* ticket_cell, std::uint32_t service_ctas,
 }
 
 /**
+ * Slot-supplied form: the CTA broadcast rides a caller-owned shared word
+ * instead of a function-local allocation. Megakernels reuse an already-dead
+ * phase scratch word (proven lifetime at the call site) so the partition adds
+ * no LDS to the launch's static frame. Semantics are identical to the primary
+ * overload.
+ */
+[[nodiscard]] KITTENS_DISTRIBUTED_DEVICE_INLINE role_partition
+finish_order_partition(std::uint32_t* ticket_cell, std::uint32_t service_ctas,
+                       std::uint32_t total_ctas,
+                       std::uint32_t* broadcast_slot) {
+#if defined(__HIP_DEVICE_COMPILE__)
+    if (detail::is_leader()) {
+        *broadcast_slot =
+            fetch_add_relaxed<memory_scope::agent>(ticket_cell, 1u);
+    }
+    detail::cta_barrier();
+    const std::uint32_t ordinal = *broadcast_slot;
+    detail::cta_barrier();  // allow broadcast_slot reuse by a later call
+#else
+    (void)ticket_cell;
+    const std::uint32_t ordinal = 0u;
+    (void)total_ctas;
+    (void)broadcast_slot;
+#endif
+    role_partition role;
+    role.ordinal = ordinal;
+    role.service_count = static_cast<std::uint16_t>(service_ctas);
+    role.compute_count =
+        static_cast<std::uint16_t>(total_ctas - service_ctas);
+    role.service = ordinal < service_ctas;
+    role.service_id = role.service ? ordinal : 0u;
+    role.compute_id = role.service ? 0u : ordinal - service_ctas;
+    return role;
+}
+
+/**
  * Publish a completed independent output tile after a caller-established
  * payload release... or establish it here: this is the convenience form that
  * performs the release fence itself. Use when the publishing thread's prior

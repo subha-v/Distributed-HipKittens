@@ -237,12 +237,12 @@ def check_moe_mps() -> None:
         "k0pf6gm_mps_mega",
         '#include "n2_phase1_gm.cpp"',
         '#include "n2_phase2_gm_mps.cpp"',
-        "finish_order_partition(",
         "hk_moe::mps::run_service(",
         "hk_moe::mps::enqueue_tile_release(",
         "K0P6_D_MPS_CFG",
         "N2GM_TASK_DONE_DRAIN_HOOK asm volatile(\"s_waitcnt vmcnt(0)\"",
-        "bcap > 16383",
+        "PADMAX / 32 > 16383",
+        "k0p6_mps_stride(",
         "K0P6_MPS_ERR_CONFIG",
         "K0P6_MPS_ERR_SERVICE",
     ):
@@ -261,15 +261,23 @@ def check_moe_mps() -> None:
     require("symmetric" not in mfma_span and
             "K0P6_D_SYMMETRIC" not in mfma_span,
             "IRIS peer-descriptor state leaked into the M6/M7 MFMA span")
-    # M7's task loop must stride by the logical pool, not the physical grid
+    # M7's task loop must keep the donor's free blockIdx.x start; the stride
+    # is re-derived from the descriptor inside the body. No role word may
+    # cross the M6->M7 boundary as a live register (resource gate).
     m7 = source.index("// ================= M7:")
     m76 = source.index("// ================= M7.6", m7)
     m7_span = source[m7:m76]
-    require("k0p6_role" in m7_span and
-            "n2p6gm_mps_phase2_body" in m7_span,
-            "M7 must run the vendored body under the packed role")
-    require("if (!mps_service)" in m7_span,
-            "service CTAs must skip the M7 GEMM body")
+    require("n2p6gm_mps_phase2_body" in m7_span and
+            "if (bid < nct - (int)mps_C)" in m7_span,
+            "service (tail) CTAs must skip the M7 GEMM body")
+    require("#define N2GM_TASK_START blockIdx.x" in source and
+            "k0p6_mps_stride(k0p6_desc, (int)gridDim.x)" in source,
+            "M7 loop latch must be donor start + descriptor-derived stride")
+    require("k0p6_role" not in source and "phase2_payload_valid" not in source
+            and "s_batch_no" not in source and "mps_m7_start" not in source
+            and "mps_service_cta" not in source,
+            "cross-phase MPS state must not live across the MFMA bodies "
+            "(resource gate)")
 
     for token in (
         "#define K0P6_D_MPS_Q 56",
