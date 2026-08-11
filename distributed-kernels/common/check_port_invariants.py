@@ -12,6 +12,7 @@ import hashlib
 import json
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -241,6 +242,14 @@ def check_upstream(repo: Path) -> None:
     verify_manifest(repo, MOE / "dependencies.lock.json", "source_commit", "files")
 
 
+def check_gemm_mi300x(amd_master: Path | None) -> None:
+    """Run the MI300X/gfx942 port's own static gate suite (additive layer)."""
+    cmd = [sys.executable, str(GEMM / "gemm_rs_mi300x_static_checks.py")]
+    if amd_master is not None:
+        cmd += ["--amd-master", str(amd_master)]
+    subprocess.run(cmd, check=True)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--amd-master", type=Path,
@@ -250,6 +259,7 @@ def main() -> None:
     check_no_legacy_code()
     check_gemm()
     check_moe()
+    check_gemm_mi300x(args.amd_master.resolve() if args.amd_master else None)
     if args.amd_master is not None:
         check_upstream(args.amd_master.resolve())
     print("distributed kernel port invariants: PASS")

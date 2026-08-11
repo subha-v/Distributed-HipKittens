@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "upstream_repository": "amd-master",
+  "donor_commit": "182f3e269068d3809ebf9074395217351837aec5",
+  "audit_checkout_commit": "e0b1a315b304649a4502afa7c14cf443ef4fc225",
+  "donors": [
+    {
+      "path": "auto-gpu-kernel/k2_mi300x_megakernel/references/submissions/gemm_rs_rank1_58abcf.py",
+      "sha256": "7940fcb81df06c1d8b1e1a77051f23c934149a688441ef48b2751b3f336f0dc5",
+      "verify_commit": "e0b1a315b304649a4502afa7c14cf443ef4fc225",
+      "role": "frozen gfx942 rank-1: tile table, 512-thread geometry, tail policy, evaluator ABI"
+    },
+    {
+      "path": "auto-gpu-kernel/k1_comm_overlap/experiments/exp_13_sota_baseline/src/perf_gemm_upstream.cc",
+      "sha256": "5723311fda91c00063a8ff783bca8366f3ccc30c1ea1594f73e7e856063d9607",
+      "verify_commit": "946ac7f73365b6b7a95cfcf4f5eba5ad5a80ee85",
+      "role": "RadeonFlow submitted 304-CTA persistent split; scored NUM_REDUCER_CTAS 32/48/48/48/32/8"
+    },
+    {
+      "path": "auto-gpu-kernel/k1_comm_overlap/experiments/exp_23_emit_timed/src/ladder_emit.cpp",
+      "sha256": "70ce26dacaa2f97ff57284132e2e2b42ba80bcd7fd1fac20cecb0471de666d82",
+      "role": "EV=1 staging/packet emission, F6 grouped release (mechanisms only)"
+    },
+    {
+      "path": "auto-gpu-kernel/k1_comm_overlap/experiments/exp_24_reduce/src/ladder_reduce.cpp",
+      "sha256": "62d8d61358ea5a6b3d8ea98579f1a16cab8078d2659a5fabe3e573f9fd211eb4",
+      "role": "REDV=1 ordered multi-source load issue + ordered FP32 consumption"
+    }
+  ],
+  "target": {
+    "architecture": "gfx942",
+    "language": "C++20/HIP",
+    "defines": ["KITTENS_CDNA3", "HIP_ENABLE_WARP_SYNC_BUILTINS"],
+    "required_headers": ["kittens.cuh", "pyutils/pyutils.cuh"]
+  },
+  "runtime": {
+    "world_size": 8,
+    "cu_count": 304,
+    "cta_threads": 512,
+    "lds_per_workgroup_bytes": 65536,
+    "symmetric_heap": "IRIS fine-grained IPC heap; host snapshots allocation-adjusted named bases",
+    "symmetric_descriptor_bytes": 72,
+    "symmetric_descriptor_alignment": 8,
+    "signal_words_per_rank": 65600,
+    "epoch_words_per_rank": 608
+  }
+}

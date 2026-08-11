@@ -17,6 +17,35 @@ the port.
 - `BUILDING.md` — validation-target setup, descriptor construction, and gates.
 - `../common/check_port_invariants.py` — source and optional donor-hash gates.
 
+## MI300X/gfx942 port (additive)
+
+The gfx942 single-launch megakernel port lives beside the gfx950 sources
+without touching them:
+
+- `MI300X_DESIGN.md` — dataflow, CTA roles, progress and lifetime proofs,
+  config table, COMET-informed schedule limits on AMD.
+- `MI300X_PROVENANCE.md` / `dependencies.mi300x.lock.json` — gfx942 donor
+  identity (frozen rank-1 source, RadeonFlow submitted kernel) and hashes.
+- `MI300X_VALIDATION.md` — local gates already passed and the
+  `PENDING_GFX942_VALIDATION` gate list with exact later-node commands.
+- `gemm_rs_mi300x.cpp` — persistent 304-CTA producer/reducer megakernel,
+  one launch per call after setup.
+- `gemm_rs_mi300x_constants.cuh` — pure shared geometry (compilable as host
+  C++20), so layout formulas have one definition.
+- `gemm_rs_mi300x_hk_adapter.cuh` — MI300X emit/reduction tile helpers and
+  protocol spellings over the unchanged gfx950 adapter and primitives.
+- `gemm_rs_mi300x_host_abi.hpp` — scored-shape table (frozen rank-1 tiles),
+  launch-config resolution, sizing, cache key; host-only.
+- `gemm_rs_mi300x_static_checks.py` — the 20 required static gates plus
+  donor-hash verification.
+- `gemm_rs_mi300x_simulation.py` — address/dependency, epoch/credit lifetime,
+  negative-control, and numerical offline simulations.
+- `tests/unit/common/kernel_host_abi_mi300x/` — strict-C++20 host ABI test.
+
+Run the local battery with
+`python3 distributed-kernels/gemm_rs/gemm_rs_mi300x_static_checks.py --amd-master /path/to/amd-master`
+and `make -C tests/unit/common/kernel_host_abi_mi300x clean all run`.
+
 Within `gemm_rs_device_tile.cpp`, read in this order: fixed configuration,
 signal/credit layout, REDV=1 reduction, preserved GEMM schedule, egress emit,
 then launch bindings. Historical A/B branches are quarantined and cannot be
