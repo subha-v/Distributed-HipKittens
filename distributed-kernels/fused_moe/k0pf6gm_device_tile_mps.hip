@@ -470,18 +470,12 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
   const int MAXTOK = (int)k0p6_dread(desc, K0P6_D_MAXTOK);   // exp_56: per-source segment stride
   const int input_tokens = (int)k0p6_dread(desc, K0P6_D_T);
   const long long symmetric_address = k0p6_dread(desc, K0P6_D_SYMMETRIC);
-  // exp_05 stage 0: epoch origin for the phase attribution. Scoped to this
-  // block so nothing crosses into a later phase; the cell is min-valued
-  // (ts_first stores ~t) so the earliest CTA entry wins.
-  if (threadIdx.x == 0) {
-    std::uint32_t* mps_state0 =
-        (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_STATE);
-    const hk_moe::mps::config cfg0 = hk_moe::mps::decode_config(
-        (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
-    hk_moe::mps::ts_first(
-        (std::uint64_t*)(mps_state0 + K0P6_MPS_ST_WORDS) + K0P6_MPS_TS_KSTART,
-        cfg0.timestamps);
-  }
+  // exp_05 stage 0: a KSTART stamp was tried here and REMOVED as provably dead.
+  // M0 zeroes the whole state block including all 8 timestamp cells
+  // (`for i < K0P6_MPS_ST_WORDS + 2*K0P6_MPS_TS_COUNT: mps_state[i] = 0u`), so
+  // anything written before M0 is wiped by design. An epoch origin has to be
+  // taken AFTER the M0 reset barrier, or derived as
+  // `epoch_total - (REDUCE_DONE - M2_DONE)` from the host.
   __shared__ __align__(16) unsigned char s_row[4][7488];
   __shared__ int s_cnt[K0P6_MAXE];
   __shared__ unsigned int s_total;

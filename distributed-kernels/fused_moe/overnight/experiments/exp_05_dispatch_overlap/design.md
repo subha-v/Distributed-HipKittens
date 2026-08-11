@@ -90,15 +90,62 @@ boundary, satisfying the mandate.
 ## Staged build plan — cheapest informative stage first
 
 **Stage 0 (no device code, highest information per unit risk): measure the
-exposure.** Nothing in the current harness reports it, and
-`K0_MPS_DEBUG_STOP` aborts the ranks (exitcode 2, verified tonight) so the
-bisect ladder is unavailable. Cheapest replacement: reuse the existing MPS
-timestamp block, which the kernel already writes (`K0P6_MPS_TS_*`) and the host
-already allocates but **never reads** (`e004pf_k0pf_ab.py:1504-1505`). Add two
-timestamps — one at M2's barrier, one at M6's entry — and a host-side print.
-That is a small, additive harness edit of the kind CLAUDE.md permits with a
-logged note, and it converts the 757 µs from `INFERRED` to measured. **Do this
-before writing any of stage 1.**
+exposure. ATTEMPTED — instrument built, 2 of 8 cells working. Finish this
+first; it is ~15 minutes from a working attribution.**
+
+`K0_MPS_DEBUG_STOP` aborts the ranks (exitcode 2, verified) so the bisect
+ladder is unavailable. The replacement is the MPS timestamp block, which the
+kernel already writes (`K0P6_MPS_TS_*`) and the host allocated but never read
+(`e004pf_k0pf_ab.py:1504-1505`).
+
+Built and committed:
+- `K0P6_MPS_TS_M2_DONE` (slot 6) at the end of M2, after the barrier and the
+  error check, and `K0P6_MPS_TS_M6_DONE` (slot 7) at the end of M6. Both
+  `tid == 0`, both behind `cfg.timestamps`, both **resource-free** — the tuple
+  is unchanged at SGPR 104 / VGPR 256 / AGPR 256 / LDS 155,428 B.
+- An additive, print-only, exception-guarded `[MPS TS]` / `[MPS TS DELTA]` dump
+  in the harness (mirrored into `MPS_OVERNIGHT_HARNESS_NOTE.md`).
+- The wall-clock rate is **100 MHz, so 1 tick = 0.01 µs** (measured with
+  `hipDeviceAttributeWallClockRate`; shader clock is 2.2 GHz — do not confuse
+  them).
+
+**What it reports today**, identically across three configs
+(`C=2/mode 0`, `C=64/g=1/mode 2`, `C=8/g=2/mode 2`):
+
+```
+[MPS TS] FIRST_READY_inv=18446744073709551614 LAST_READY=109094119756570
+         DRAIN=1 M7_DONE=109094119498059 REDUCE_DONE=1
+         KSTART_inv=0 M2_DONE=1 M6_DONE=1
+```
+
+`LAST_READY` and `M7_DONE` carry real absolute clocks. `DRAIN`,
+`REDUCE_DONE`, `M2_DONE`, `M6_DONE` all read exactly **1**, and
+`FIRST_READY_inv` is `~1` — i.e. every one of those `atomicMax` sites saw
+`realtime_now()` return **1** rather than a clock.
+
+**Two findings that hand the next session the answer:**
+
+1. **The decisive clue: `LAST_READY` and `DRAIN` live in the SAME function
+   (`run_service`) under the IDENTICAL guard** (`lane == 0 && env.ts !=
+   nullptr`, same `env.ts_enable`, same `env.ts` base). One records a real
+   clock, the other records 1. So this is **not** an enablement problem, not a
+   null-pointer problem, and not a layout problem — it is specific to the call
+   sites that run *after* their phase's main loop. Two of the four failing cells
+   (`DRAIN`, `REDUCE_DONE`) are **pre-existing** and were never touched tonight,
+   so the defect predates this work.
+2. **A KSTART stamp at kernel entry is provably dead and was removed.** M0
+   zeroes the entire state block including all 8 timestamp cells
+   (`k0pf6gm_device_tile_mps.hip:593-596`), so any pre-M0 write is wiped by
+   design. That also means the block is **per-epoch, not accumulated** — after
+   a 600-epoch soak the max-stamps are all from the final epoch and are mutually
+   consistent, which is exactly what makes this instrument usable once fixed.
+   The epoch origin should be derived host-side as
+   `epoch_total − (REDUCE_DONE − M2_DONE)` rather than stamped.
+
+Suggested first move next session: check `realtime_now()`'s lowering at the
+failing sites (`moe_mps_adapter.cuh:115-124`) — a `1` from every post-loop site
+smells like the `#else return 0` branch plus an off-by-one, or an `s_memrealtime`
+that the compiler hoisted/folded where the surrounding code is uniform.
 
 **Stage 1 (device, contained): local-tokens-first ordering only, no role
 split.** Keep all four barriers. Only change the order in which M6 walks its
