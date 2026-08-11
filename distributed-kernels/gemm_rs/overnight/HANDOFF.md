@@ -172,6 +172,15 @@ processes (`CREATE_SHEMEM_CODE`) that allocate an 8 GiB heap, write
 coordination protocol that also has to work here. Repair 5 addresses the most
 likely reason those helpers were dying. **Test repair 5 first.**
 
+Cheap progress probe, no log reading required: `heap_bases_*.pkl` in the arm
+directory. Those files exist **only** if a helper got past
+`iris.hip.hipIpcMemHandle_t()` and `get_ipc_handle()`. Zero of them means the
+helpers are still dying at the iris call and repair 5 did not take; eight of
+them means the iris side is solved and the remaining hang is in the file-based
+rendezvous or further downstream. `tools/check_rank1d.sh` prints this plus how
+far each pass got. As of handoff: **zero**, from a run that was killed during
+the warm pass, so it is not yet evidence either way.
+
 ### Cheaper calibration available right now
 
 `exp026` ran the official evaluator to **11/11 passes in 93 s** on this node,
