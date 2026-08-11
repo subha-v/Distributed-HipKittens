@@ -68,12 +68,21 @@ Two consequences:
   capacity tax and is structurally blind to the dominant cost of the mechanism
   it is the control for. Every future role-split experiment needs a
   matched-CTA-count comparison.
-- **It reorders the M-series again.** If comm CTAs and GEMM CTAs contend for the
-  same memory system, the attractive mechanisms are the ones that move bytes
-  *without* a CU memory pipeline. **M10 (mori CCO device-side `ccoSdma`) was
-  ranked last; it should now be ranked first** — it was dismissed for not
-  beating vector stores at 4–64 KB, but the cost that actually matters is the
-  interference it would avoid entirely, which nobody had measured.
+- **The interference is atomic traffic, not payload traffic** — and this was
+  tested rather than assumed. The `g` axis separates them, because payload bytes
+  are identical at every `g` while probe atomics scale with `g`. At C=64 the M7
+  interference rises monotonically: **+1,159 µs (g=1), +1,646 (g=2), +2,059
+  (g=4), +2,694 (g=16)**. Payload cannot explain a curve that rises as the
+  transfers get *coarser*; the probe loop can.
+  *(This retracts an earlier inference in this file that M10/SDMA should be
+  promoted to first. SDMA offloads the bytes, which are not the problem. M10
+  goes back down.)*
+- **So M4 is the top experiment for this path, on measured grounds.** At g=1 the
+  probe loop is degenerate yet +1,159 µs of interference remains, pointing at
+  the `g`-independent per-lane arrival counter — `fetch_add_acq_rel` across 32
+  scattered cache lines per event (`moe_mps_adapter.cuh:329-330`). AMD Research's
+  *Fleet* mechanism (per-XCD device-scope atomics resolving in the local L2, no
+  fence required) targets the floor and the `g`-term at once.
 
 ## The research question, so far
 

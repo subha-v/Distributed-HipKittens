@@ -366,3 +366,26 @@
   the 0.7-1.25 ms dispatch prize could be entirely eaten. **Any dispatch overlap
   should be attempted with SDMA or with a plan-side restructuring that adds no
   concurrent CU-issued fabric traffic.**
+
+- 2026-08-11 exp_05 stage 0 **the interference is ATOMIC traffic, not payload --
+  and this RETRACTS the SDMA synthesis I wrote an hour earlier.** The `g` axis
+  separates the two candidates cleanly, because **payload bytes are identical at
+  every g** (~312 MB) while push CALLS fall as 1/g and probe atomics rise as g.
+  M7 interference at C=64 vs the matched 2,019.7 us mode-0 control:
+  **+1,159.3 us (g=1) / +1,645.6 (g=2) / +2,058.8 (g=4) / +2,693.8 (g=16)** --
+  monotonically RISING with g. Payload traffic is constant and gets COARSER as g
+  grows, so it cannot produce that curve; the probe loop is the only term that
+  grows with g. **Earlier inference that M10/SDMA should be promoted to first is
+  WRONG and withdrawn** -- SDMA offloads the bytes, which are not the problem.
+- 2026-08-11 **M4 is now the top experiment for the combine path, on measured
+  grounds.** At g=1 the probe loop is degenerate yet **+1,159 us of interference
+  remains**, so there is a g-independent floor. Prime suspect: the per-lane
+  arrival counter `fetch_add_acq_rel(nc_arr + r*16 + nc)` across 32 live lanes
+  per event = **32 scattered cache lines**, count independent of g
+  (`moe_mps_adapter.cuh:329-330`). Fleet's per-XCD device-scope atomics
+  (resolve in local L2, no fence required) attack the floor and the g-term at
+  once; A10 (amortized release) is the cheap cousin. Both are atomic-traffic
+  reductions, which is the measured lever. NOTE this also predicts the g axis
+  would look completely different after M4 -- the exp_03 finding that "g is an
+  atomics knob" and this interference curve are the same phenomenon seen from
+  two sides.

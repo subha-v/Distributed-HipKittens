@@ -96,7 +96,46 @@ Two things to read off it.
 
 The combine phase in mode 0 stays flat across the same sweep
 (1,288 / 1,416 / 1,341 / 1,272 / 1,482 µs), so this is specific to M7 running
-concurrently with fabric traffic, not a general drift.
+concurrently with service activity, not a general drift.
+
+### What the interference actually is — atomics, not payload
+
+The `g` axis separates the two candidate sources, because **the payload bytes
+are identical at every `g`** (the same ~312 MB either way) while the number of
+push *calls* falls as `1/g` and the number of group-completion probe atomics
+rises as `g`. At `C = 64`:
+
+| g | M7 | interference vs the 2,019.7 µs matched control | service drain |
+|---:|---:|---:|---:|
+| 1 | 3,179.0 | **+1,159.3 µs (+57.4%)** | 5,952.4 |
+| 2 | 3,665.3 | **+1,645.6 µs (+81.5%)** | 7,033.1 |
+| 4 | 4,078.5 | **+2,058.8 µs (+101.9%)** | 9,633.5 |
+| 16 | 4,713.5 | **+2,693.8 µs (+133.4%)** | 15,202.9 |
+
+Interference rises **monotonically with `g`**. Payload traffic is constant
+across that sweep and coarsens (fewer, larger transfers) as `g` grows, so it
+cannot be the cause; the probe loop is the only term that grows with `g`.
+
+> **The service pool disturbs M7 through its scattered `acq_rel` atomic traffic,
+> not through its payload movement.**
+
+This **retracts** the synthesis written earlier tonight, which reasoned that if
+comm and compute contend for the memory system then M10 (SDMA offload of the
+payload) should be promoted to first. That inference was wrong: SDMA would
+offload the bytes, which are not the problem. **M10 goes back down the list.**
+
+Decomposing further: at `g = 1` the probe loop is degenerate (a single probe
+proves completion), yet **+1,159 µs of interference remains**. So there is a
+`g`-independent floor. The prime suspect is the per-lane arrival counter —
+`fetch_add_acq_rel` on `nc_arr + r*16 + nc` across 32 live lanes per event,
+hitting **32 scattered cache lines**, with a count independent of `g`
+(`moe_mps_adapter.cuh:329-330`).
+
+**That makes M4 the top experiment for this path, on measured grounds.** AMD
+Research's *Fleet* result — per-XCD device-scope atomics resolving in the local
+L2, with no fence required — targets exactly the floor and the `g`-term at once.
+A10 (amortized release) is the cheaper cousin. Both are atomic-traffic
+reductions, which is now the measured lever.
 
 This does not contradict the A7 strike — it completes it. A7 was struck because
 occupancy is one block per CU, so a service CTA is never co-resident with an
