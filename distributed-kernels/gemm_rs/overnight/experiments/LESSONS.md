@@ -312,6 +312,87 @@
     where the fused helper drained after every two. **Two exposed global round
     trips per k-iteration became one covered one.**
 
+- **WE NOW BEAT THE REFERENCE GEMM+RCCL BASELINE ON THIS NODE.** Same-run
+  interleaved, both arms in one process pool under the graded protocol, 50
+  iterations × 2 reps, `allclose=True` on all six shapes:
+
+  | # | shape | ours best | ref best | verdict |
+  |---|---|---|---|---|
+  | 1 | 64×7168×18432 | 218.55 | 228.33 | win |
+  | 2 | 512×4096×12288 | 233.04 | 280.99 | **win 1.21×** |
+  | 3 | 2048×2880×2880 | 236.24 | 301.21 | **win 1.28×** |
+  | 4 | 4096×4096×4096 | 325.61 | 329.81 | win |
+  | 5 | 8192×4096×14336 | 788.78 | 698.41 | lose 1.13× |
+  | 6 | 8192×8192×29568 | 1972.23 | 1589.40 | lose 1.24× |
+  | | **geomean best** | **427.39** | **438.15** | **0.975 win** |
+  | | **geomean mean** | **462.86** | **497.53** | **0.930 win** |
+
+  From 1.06× behind to **2.5% ahead on best and 7.0% ahead on mean**, entirely
+  from the WGM egress-concurrency fix. The evaluator scores on **mean**, which
+  is the more favourable column for us.
+  **One robustness caveat that matters under a mean-based score:** our arm has
+  occasional large outliers the reference does not — shape 4 best 325.6 /
+  median 337.6 but max 3392 (sd 80.4%) against the reference's tight sd 3.4%.
+  We still win on mean only because the reference has its own outliers
+  elsewhere (shape 3 sd 139.6%). **Killing our tail is now worth more than
+  shaving our median.**
+
+- **WIN, exp_08: `WGM` is an xGMI egress-link-concurrency knob, not the
+  L2-locality knob it looks like. Geomean 255.98 → 230.84 µs (−9.8%), shape 6
+  −27.9%, while moving exactly zero bytes differently.**
+  A producer CTA's whole tile lands on **one** peer (`dest = (tm·BM)/(M/8)`), so
+  the set of `tm` values live across the resident CTAs **is** the set of egress
+  links in use at that instant. The donors' `WGM = 4` makes
+  `in_group = 4·num_pid_n` **smaller than a 272-CTA round** (128 vs 272 tiles on
+  shape 6), so a round reached only 2–3 of 8 destinations with one link
+  carrying up to 62%. **Effective links: 2.02 of 8.** The arithmetic closes with
+  no free parameters on both affected shapes — shape 6 achieved 102 GB/s
+  against 2.02 × 47 = 95, shape 5 199 GB/s against 4.02 × 47 = 189 — so **we
+  were within 7% of the ceiling of the links we were using while five sat
+  idle**, and it predicts exactly which two shapes lost to the reference.
+  Fix: `WGM = (tiles <= num_gemm_ctas) ? 4 : num_pid_m`. The guard is derived,
+  not tuned: when every tile is resident the order cannot affect egress, and
+  there `WGM = 4` has better operand locality. An unconditional
+  `WGM = num_pid_m` won the geomean outright (239.54 µs) but regressed the two
+  shapes the pre-registration had named as controls — treated as a finding
+  rather than banked.
+  **This is the third donor constant to be wrong** (after `NUM_REDUCER_CTAS` and
+  `BM/BN/BK`). Together they were worth ~19%.
+
+- **NEGATIVE, and the profiler is what killed it: there is no write
+  amplification in the egress path, and there never was.** On shape 6 the
+  fabric carries **117.48 MB against 117.44 MB of useful payload — 1.0003× —
+  with 99.9% of EA write transactions at the full 64 B.** `TCC_WRITEBACK × 2 =
+  TCC_EA0_WRREQ`, so essentially every fabric write is a whole 128 B line
+  writeback; `TCC_NC_REQ` equals the fabric request count with `TCC_UC_REQ = 0`,
+  so peer payload is cached and coalesced rather than uncached; reads are 100%
+  DRAM-destined, so there is no read-for-ownership over the fabric either.
+  Egress was also already **mostly spread, not bunched**: 67.3% of payload lines
+  left L2 by ordinary capacity eviction during the tile loop and only 32.2%
+  waited for the release, which independently matches the 219/1150 µs ablation
+  split.
+  Therefore the research report's **top-ranked** intervention — LDS-staging
+  packets for wave contiguity — was worth **exactly zero**, and
+  `emit_band_packets` shows why: at `BN = 256` there are 32 packets per row and
+  `tid` strides by 1, so lanes 0–31 of every wave were already writing one
+  512 B-aligned contiguous run. **The addresses were always right.** A
+  well-argued, well-cited hypothesis that a single profiler run destroyed —
+  measure the mechanism before building the fix.
+
+- **TRAP: `TCC_EA0_WRREQ_STALL` is unusable on this ASIC.** It reads 81 M cycles
+  (264× the local-write control) while all three `*_CREDIT_STALL` sub-counters
+  read ~0 — which taken literally says xGMI is never backpressured, the exact
+  opposite of the truth. Do not build an argument on those three counters.
+
+- **Two consequences of the WGM win for what comes next.** Re-profiling the
+  winner shows byte-identical traffic (same `WRREQ`, same 64 B share, same
+  117.48 MB) with **average EA write latency down 38.6%** — the queueing
+  signature of spreading a fixed request count over seven links instead of two.
+  But: **operand reads fell 29.7%**, so part of shape 6's win is read-side and
+  **the attribution must be re-run before ranking anything else**; and the
+  bunched share of egress rose from 32% to **53%**, so **E3 got bigger relative
+  to this binary, not smaller.**
+
 - **The bistable-slow-mode hypothesis is FALSIFIED for our arm, and the raw
   per-iteration series settles the whole evaluator puzzle.** Scanning every
   captured sample rather than the summary statistics: our shape-4 series is
