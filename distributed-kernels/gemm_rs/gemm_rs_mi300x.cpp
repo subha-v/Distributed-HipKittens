@@ -33,6 +33,9 @@
 
 #include "gemm_rs_mi300x_hk_adapter.cuh"
 
+#include <stdexcept>
+#include <string>
+
 #ifndef HK_GEMM_RS_MI300X_NEGATIVE_CONTROLS
 #define HK_GEMM_RS_MI300X_NEGATIVE_CONTROLS 0
 #endif
@@ -76,9 +79,9 @@ struct mi300x_globals {
     int ctrl_rank, ctrl_arg0;
     int config_row;              // 0 = generic; [1..6] = scored table rows
     int even_k;                  // K_local % BK == 0 for the resolved config
-    dim3 grid()  { return dim3(m3::CU_COUNT); }
-    dim3 block() { return dim3(m3::CTA_THREADS); }
-    size_t dynamic_shared_memory() { return kittens::MAX_SHARED_MEMORY; }
+    dim3 grid() const  { return dim3(m3::CU_COUNT); }
+    dim3 block() const { return dim3(m3::CTA_THREADS); }
+    size_t dynamic_shared_memory() const { return kittens::MAX_SHARED_MEMORY; }
 };
 
 // ================================================================================================
@@ -402,8 +405,19 @@ template<int BM, int BN, int BK, bool K_TAIL>
 static void launch_fixed(const mi300x_globals& g_plan) {
     constexpr int LDS_BYTES = 2 * (BM + BN) * BK * (int)sizeof(bf16);
     static_assert(LDS_BYTES <= 65536);
-    hipFuncSetAttribute((void*)gemm_rs_mi300x_kernel<BM, BN, BK, K_TAIL>,
-                        hipFuncAttributeMaxDynamicSharedMemorySize, LDS_BYTES);
+    // The dynamic-LDS attribute is a property of the instantiation, not of the
+    // call, so it is set once per process. Setting it per launch put a host
+    // API round trip on the critical path of every call; measured on gfx942
+    // that dominated the smallest shapes, whose entire SOL budget is 6.46 us.
+    static const hipError_t attribute_status = hipFuncSetAttribute(
+        (void*)gemm_rs_mi300x_kernel<BM, BN, BK, K_TAIL>,
+        hipFuncAttributeMaxDynamicSharedMemorySize, LDS_BYTES);
+    if (attribute_status != hipSuccess) {
+        throw std::runtime_error(
+            std::string("GEMM-RS mi300x: cannot reserve ") +
+            std::to_string(LDS_BYTES) + " B of dynamic LDS: " +
+            hipGetErrorString(attribute_status));
+    }
     hipStream_t s = reinterpret_cast<hipStream_t>(g_plan.stream_ptr);
     gemm_rs_mi300x_kernel<BM, BN, BK, K_TAIL>
         <<<g_plan.grid(), g_plan.block(), (std::size_t)LDS_BYTES, s>>>(g_plan);

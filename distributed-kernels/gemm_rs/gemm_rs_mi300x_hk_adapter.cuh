@@ -21,6 +21,8 @@
 
 namespace hk_gemm_rs_mi300x {
 
+using bf16 = kittens::bf16;
+
 // ---------------------------------------------------------------------------
 // Protocol helpers: thin spellings of the gfx950-validated adapter so the
 // MI300X operator never touches raw peer-pointer arrays.
