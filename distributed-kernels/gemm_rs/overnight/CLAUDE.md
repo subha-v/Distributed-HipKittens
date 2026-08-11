@@ -115,12 +115,26 @@ tight `2e-3`; a candidate that only passes the graded one is a regression.
   `~/amd-master/.../submissions/gemm_rs_rank1_58abcf.py` (sha256
   `7940fcb8…f0dc5`). Patch a *copy* via `tools/patch_rank1.py`, which refuses to
   run if the source hash does not match, and disclose every repair.
-- **Git: work on branch `GEMM-RS`** in this repo
-  (`~/Distributed-HipKittens`, remote `subha-v/Distributed-HipKittens`).
-  Another agent is active on other branches — do not merge or rebase onto their
-  work, and never commit outside your owned trees. Commit and push after every
-  completed or failed experiment, including negatives. Verify
+- **Git: you work in a dedicated worktree, on branch `GEMM-RS`.**
+
+  | | path | branch | owner |
+  |---|---|---|---|
+  | **yours** | `C:\Users\subvadla\repos\Distributed-HipKittens-GEMM-RS` | `GEMM-RS` | you |
+  | theirs | `C:\Users\subvadla\repos\Distributed-HipKittens` | `codex/distributed-hipkittens-scaffold` | the fused-MoE MPS agent |
+
+  Both are worktrees of the same clone (remote
+  `subha-v/Distributed-HipKittens`), so they share one object store and one set
+  of branch refs but have **separate working directories**. Never `cd` into the
+  other worktree, never check out `GEMM-RS` there, and never touch their branch.
+  Do not merge or rebase their work into yours; `GEMM-RS` already contains their
+  history up to the branch point and that is enough. Commit and push after every
+  completed or failed experiment, including negatives, and verify
   `git ls-remote origin GEMM-RS` head == local HEAD before starting the next.
+
+  Node-side there is no conflict either: they hold an MI350X box
+  (`gbt350-odcdh2-c05-1`, container `subha_k1`); you hold the MI300X box
+  (`banff-sc-cs47-05.dh170.dcgpu`, containers `dhk-gemmrs` and `dhk-eval`), and
+  your synced copy lives at `/home/subvadla/dhk`.
 
 ## Environment
 
