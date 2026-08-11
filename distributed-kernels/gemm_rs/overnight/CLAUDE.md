@@ -11,48 +11,88 @@ hypotheses, contradiction resolution, experiment selection, and final judgment.
 is proven, what is measured, the two blockers with suspect rankings, and every
 methodology trap that already cost hours. `RESULTS.md` has the full gate record.
 
-## Mission (in order; do not stop after a fix — the loop is the point)
+## Mission — two tracks, and TRACK B NEVER STOPS
 
-1. **Unblock the like-for-like measurement.** Get our kernel running under the
-   official evaluator (`eval.py`, one process per rank, `torch.distributed`,
-   HIP IPC symmetric heap). The multi-process path already produces correct
-   results (`mp_smoke.py`: `allclose=True`, `max|diff|=9.8e-4`); only the
-   evaluator integration stalls, with 6 of 8 ranks reaching `state ready`.
-   Suspect #1 and the recommended fix are in `HANDOFF.md` — start there.
-2. **Get a same-node denominator.** Cheapest first: benchmark the **reference
-   GEMM+RCCL** submission through the same evaluator (no new engineering;
-   `exp026` already ran that machinery to 11/11 on this node). Then revive
-   **rank-1**; repair #5 (the `iris.hip.hipIpcMemHandle_t` → `gpuIpcMemHandle_t`
-   alias) is written but untested. Every compatibility repair must be
-   disclosed in the experiment's `result.md` and must be argued
-   behaviour-preserving or explicitly flagged as biasing the comparison.
-3. **Gate every candidate** before timing it: build → ISA/resources →
-   correctness (17 shapes, tight `2e-3`) → three negative controls → 600-epoch
-   soak. No exceptions, in that order.
-4. **Benchmark** ours vs the baselines in the graded protocol, order-rotated,
-   and report all six per-shape means plus the geometric mean, which is the
-   competition's ranking statistic.
-5. **Optimize**, one mechanism per experiment, against the ranked table below.
+The point of the night is **a faster kernel**, not a tidy measurement. The
+previous session lost hours to baseline archaeology and shipped zero
+optimizations; do not repeat that. Run the two tracks below with the stated
+time-boxes, and when a Track A box expires, **fall back and keep optimizing**.
 
-## Standing objective — beat the competitor on this node
+### Track A — get a denominator (time-boxed, interruptible)
 
-`production` for this kernel is **rank-1 measured here**, not the SOL table.
-Our harness reads a geometric mean of **285.7 µs**; rank-1's published score is
-**413.139 µs** on a different machine under a different protocol. Those are not
-comparable, and the whole point of mission steps 1–2 is to make them so. It is
+1. **Our kernel under the official evaluator.** `eval.py`, one process per
+   rank, `torch.distributed`, HIP IPC symmetric heap. The multi-process path
+   already produces correct results (`mp_smoke.py`: `allclose=True`,
+   `max|diff|=9.8e-4`); only the evaluator integration stalls, 6 of 8 ranks
+   reaching `state ready`. Suspect #1 and the fix are in `HANDOFF.md`.
+   **Time-box: 2 hours.**
+2. **Reference GEMM+RCCL through the same evaluator.** No new engineering —
+   `exp026` already ran that machinery to 11/11 on this node, and its
+   `submission.py` *is* the reference implementation. **Time-box: 45 minutes.**
+3. **rank-1.** Repair #5 is written but untested; `heap_bases_*.pkl` tells you
+   in one `ls` whether it took. Every compatibility repair must be disclosed in
+   the experiment's `result.md` and argued behaviour-preserving or flagged as
+   biasing the comparison. **Time-box: 2 hours total for the night, across all
+   attempts.** If it is still not running when that expires, write down exactly
+   where it stopped and stop touching it.
+
+When a box expires, log the state in `LESSONS.md` and switch to Track B. You may
+return to Track A later if Track B is blocked on a build, but never let Track A
+consume the night. **A blocked baseline is not a reason to stop optimizing.**
+
+### Track B — make the kernel faster (this is the job)
+
+Run the ranked experiment table below continuously, one mechanism per
+experiment, full gate ladder before any timing: build → ISA/resources →
+correctness (17 shapes at both `1e-2` and `2e-3`) → three negative controls →
+600-epoch soak → timing. Report all six per-shape means and the geometric mean,
+which is the competition's ranking statistic. Every result, positive or
+negative, lands in `LESSONS.md`.
+
+Start Track B **tonight, in parallel with Track A**, not after it. E1(a) (AGPR
+accumulators, which should also clear the Gate M2 spills) needs no evaluator
+and no competitor — it is pure kernel work against a harness that already
+works. There is no excuse for a night that ends with no optimization attempted.
+
+## Standing objective — beat the competitor, and keep beating it
+
+The target is **rank-1 measured on this node**, not the SOL table (which is the
+bf16 MFMA roofline with zero budget for the reduce-scatter and is unreachable
+by construction — rank-1's own score is ~10.4× it). Our harness reads a
+geometric mean of **285.7 µs**; rank-1's published score is **413.139 µs**, on
+a different machine under a different protocol. Those are not comparable. It is
 entirely possible we are already ahead; it is also possible the graded protocol
-(per-call latency with barriers, not pipelined throughput) erases our margin.
-**Find out before optimizing anything.**
+(per-call latency with barriers, not pipelined throughput) erases the margin.
 
-- **Ratchet:** when a candidate beats the current best through the FULL gate
-  ladder, it becomes the new best and every later experiment is measured
-  against it. Never regress the ratchet to chase a hypothesis.
+**The ratchet, in priority order — always optimize against the best denominator
+you actually have:**
+
+1. **rank-1 measured here**, once Track A gets it running. This is the real
+   target. Beat it, then widen the margin, and keep going.
+2. **Reference GEMM+RCCL measured here**, if rank-1 is not running. Beating the
+   naive fused-free baseline is the minimum bar and is decision-relevant on its
+   own.
+3. **Our own geomean of 285.7 µs**, if neither baseline can be run tonight.
+   This is the fallback and it is a perfectly good ratchet: every experiment is
+   measured against the best previous *our-harness* number, same shapes, same
+   protocol, same rotations. **Never treat a missing competitor as a reason to
+   stop improving.** A night that ends at 240 µs with no competitor number is a
+   better night than one that ends at 285.7 µs with a beautiful comparison.
+
+Rules that hold at every ratchet level:
+
+- When a candidate beats the current best through the FULL gate ladder, it
+  becomes the new best and every later experiment is measured against it. Never
+  regress the ratchet to chase a hypothesis; keep the best candidate at every
+  step.
 - **Never** change what the benchmark measures — shapes, iteration counts,
-  tolerances — to make a number look better. `rtol/atol = 1e-2` is the graded
-  gate and `2e-3` is our regression gate; both are gates, not dials.
+  tolerances, warmup — to make a number look better. `1e-2` is the graded gate,
+  `2e-3` is our regression gate; both are gates, not dials.
+- When the denominator changes (e.g. rank-1 finally runs at 03:00), re-express
+  the running best against it and carry on — do not restart the sweep.
 - After every experiment, append to `experiments/LESSONS.md`: config, per-shape
-  means, geomean, ratio vs the current best, and the verdict — including
-  negatives. Supersede, never delete.
+  means, geomean, ratio vs the current best, ratio vs whichever baselines exist,
+  and the verdict — including negatives. Supersede, never delete.
 
 ## The mechanism bank — CTA-level split of compute and communication
 
@@ -208,8 +248,19 @@ confidence). Append the outcome to `experiments/LESSONS.md`.
 
 ## Termination condition
 
-There is none. When the evaluator integration lands, measure. When both
-baselines are on the board, optimize against the ranked table. When an axis
-settles, profile the new winner for the next mechanism. The only thing that
-must be true by morning is that we **know** where we stand against rank-1 on
-this node, and that the margin is better than when the night began.
+There is none. When the evaluator integration lands, measure. When a baseline
+lands, re-express the ratchet against it. When an axis settles, profile the new
+winner and take the next mechanism. Run until morning.
+
+Two things must be true by morning, and the second one is not optional if the
+first fails:
+
+1. We know where we stand against rank-1 on this node — **or** a precise,
+   written account of what still blocks it and what was tried.
+2. **Our kernel is measurably faster than the 285.7 µs it started at**, through
+   the full gate ladder, with the winning configuration committed and the
+   losing arms recorded in `LESSONS.md`.
+
+If you find yourself many hours in with no optimization attempted because a
+baseline would not run, you have made the same mistake the previous session
+made. Stop, switch to Track B, and ship a faster kernel.
