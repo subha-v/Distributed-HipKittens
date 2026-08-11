@@ -111,6 +111,30 @@ a valid epoch.
 an agent- or system-visible monotonic counter. They reserve storage only; they
 do not imply payload publication.
 
+## Role partitions
+
+`finish_order_partition(ticket_cell, service_ctas, total_ctas)` splits a
+persistent grid once per phase boundary by *arrival order*: one elected thread
+per CTA reserves a monotonic agent ticket, the first `service_ctas` finishers
+become minimum-progress service CTAs, and every other CTA receives a dense
+compute id in `[0, total_ctas - service_ctas)`. The partition adds no grid
+barrier — it rides the completion order of the phase that just ended. The
+contract:
+
+- The ticket cell is caller-owned, agent-local, and re-zeroed by the caller
+  once per epoch/phase.
+- The split is fixed for the phase. There is no in-phase resizing; this is
+  deliberately the COMET/MoK profile-then-fix model, with the AMD-specific
+  refinement that service CTAs exist from the first finisher and compute CTAs
+  join service/reduction work the moment their own queue drains.
+- Downstream task loops stride by the *dense* pool count so reserving CTAs
+  never silently drops tasks.
+
+`publish_tile_release` (release + relaxed store of a tile key) and
+`wait_tile_acquire_into` (bounded poll + success-only acquire) are the tile
+granularity aliases of the ordering spine above; `retire_epoch` names the
+monotonic epoch-cell store. They exist so operator code reads as its dataflow.
+
 ## Reused storage
 
 Readiness does not protect storage lifetime. If epoch N and epoch N+1 reuse the

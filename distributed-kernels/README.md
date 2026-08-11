@@ -9,7 +9,7 @@ HipKittens owns peer-aware layouts and explicit device memory ordering.
 | `common/` | Host-side IRIS-to-PGL bridge | Scaffolded and host-reviewable |
 | `bf16_gemm/` | Original minimal IRIS/HipKittens example | Existing example; not the GEMM-RS performance donor |
 | `gemm_rs/` | Best measured GEMM-RS donor plus HipKittens communication adapter | Port candidate; GPU parity and timing still required |
-| `fused_moe/` | Best measured PF6 fused-MoE donor expressed through the common primitives | CDNA4 port candidate; GPU parity and timing still required |
+| `fused_moe/` | Best measured PF6 fused-MoE donor expressed through the common primitives, plus the additive COMET/MoK-style minimum-progress specialization sibling (`DESIGN_MPS.md`) | CDNA4 port candidate; GPU parity and timing still required |
 
 Start with the repository-level
 [distributed architecture](../docs/distributed/ARCHITECTURE.md) and

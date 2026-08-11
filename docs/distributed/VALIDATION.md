@@ -87,6 +87,17 @@ Follow `distributed-kernels/fused_moe/BUILDING.md` on world-eight gfx950.
 This is a CDNA4 parity target. A gfx942 version requires a different LDS and
 schedule design and must be treated as a new kernel rather than a rebuild.
 
+## GPU gate D: fused-MoE MPS sibling
+
+The minimum-progress specialization (`k0pf6gm_device_tile_mps.hip`) is a
+separate experiment target with its own descriptor ABI (63 words). Follow
+`distributed-kernels/fused_moe/BUILDING.md` ("MPS sibling") and
+`DESIGN_MPS.md`; order: parity-port gates first, then the MPS mode ladder
+(mode 0 C-sweep → mode 1 → mode 2 `C × g`) with the full correctness,
+negative-control, and 600-epoch soak gates per arm before any paired timing.
+The ISA A/B must confirm no ArchVGPR/AGPR/LDS movement versus the parity port
+and no spill or fence migration into either MFMA K-loop.
+
 ## Current status
 
 | layer | host semantics | donor/hash gate | device build/ISA | world-8 runtime | timing |
@@ -97,6 +108,7 @@ schedule design and must be treated as a new kernel rather than a rebuild.
 | kernel host ABI | pass, CDNA3/CDNA4 stubs | exact 72-byte PODs | pending upload path | pending | n/a |
 | GEMM-RS port | static checker | recorded | pending | pending | pending |
 | fused-MoE port | static checker | recorded | pending | pending | pending |
+| fused-MoE MPS sibling | static checker + config/event unit logic | recorded | pending | pending | pending |
 
 The local machine used for this scaffold has no CMake, HIP/ROCm toolchain, MPI
 compiler, or AMD GPU. Do not convert any pending cell into a pass without

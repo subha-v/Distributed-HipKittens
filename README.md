@@ -24,11 +24,11 @@ We support CDNA3 and CDNA 4.
 ## Distributed HipKittens
 
 This fork is incubating a device-side multi-GPU layer built around parallel
-global layouts (`pgl`) and explicit peer-memory, publication, acquire, and
-replay-lifetime primitives. Kernels remain ordinary HIP C++: HipKittens does
-not hide routing, scheduling, dependency keys, or progress behind a collective
-or graph API. IRIS provides the fine-grained symmetric-memory runtime and peer
-mappings.
+global layouts (`pgl`) and explicit peer-memory, publication, acquire,
+replay-lifetime, and role-partition primitives. Kernels remain ordinary HIP
+C++: HipKittens does not hide routing, scheduling, dependency keys, or progress
+behind a collective or graph API. IRIS provides the fine-grained
+symmetric-memory runtime and peer mappings.
 
 Start with [the distributed architecture](docs/distributed/ARCHITECTURE.md),
 [source audit](docs/distributed/SOURCE_AUDIT.md), and
@@ -37,6 +37,27 @@ The `distributed-kernels/` tree contains the IRIS integration and the GEMM to
 ReduceScatter and fused-MoE porting work. Donor measurements and new
 abstraction rewrites are kept separate; a port does not inherit a donor's
 performance result until its architecture-specific GPU parity gates pass.
+
+Latest additions to the device primitive layer and the fused-MoE port
+(`distributed-kernels/fused_moe/`):
+
+- `include/cdna4/ops/group/distributed/roles.cuh` — minimum-progress role
+  specialization primitives: a finish-order compute/service partition
+  (`finish_order_partition`), tile-key release/acquire
+  (`publish_tile_release` / `wait_tile_acquire_into`), and epoch retirement.
+  The model: reserve the *minimum* CTAs needed to guarantee communication
+  progress at a phase boundary, never resize inside the phase, and let drained
+  compute CTAs flow into service/reduction queues.
+- `k0pf6gm_device_tile_mps.hip` (+ `moe_mps_adapter.cuh`,
+  `n2_phase2_gm_mps.cpp`, host ABI slots 56–62) — a COMET/MoK-style additive
+  sibling of the fused-MoE parity port. Mode 0 measures the pure reserved-CTA
+  capacity tax, mode 1 the owner-slot push transport without overlap, mode 2
+  the full stream: per-`(b, nc)` tile events off the GEMM wave, service-wave
+  row bookkeeping, 16-byte controlled slice pushes into owner-resident slots,
+  batched owner-only readiness, and a dynamic-ticket combine. `C × g` is a
+  descriptor-selected runtime sweep in one binary. Host/static validated only;
+  see `distributed-kernels/fused_moe/DESIGN_MPS.md` for the design record and
+  the required GPU gates.
 
 **News**
 - [January 2026] HipKittens is accepted to [MLSys 2026 in Seattle]()!

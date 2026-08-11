@@ -44,6 +44,32 @@ inline std::uint32_t atomicMax(std::uint32_t* value, std::uint32_t next) {
     if (next > *value) *value = next;
     return prior;
 }
+inline unsigned long long atomicMax(unsigned long long* value,
+                                    unsigned long long next) {
+    const auto prior = *value;
+    if (next > *value) *value = next;
+    return prior;
+}
+inline std::uint32_t atomicAdd(std::uint32_t* value, std::uint32_t next) {
+    const auto prior = *value;
+    *value += next;
+    return prior;
+}
+inline unsigned long long __ballot(bool value) { return value ? ~0ull : 0ull; }
+inline void __syncwarp() {}
+inline int __ffsll(long long value) {
+    for (int bit = 0; bit < 64; ++bit) {
+        if ((value >> bit) & 1ll) return bit + 1;
+    }
+    return 0;
+}
+#define __ATOMIC_RELAXED 0
+#define __HIP_MEMORY_SCOPE_AGENT 2
+inline std::uint32_t atomicOr(std::uint32_t* target, std::uint32_t value) {
+    const std::uint32_t prior = *target;
+    *target |= value;
+    return prior;
+}
 
 inline void k0p6_put_row_payload(unsigned char*, const std::uint64_t*,
                                  std::size_t, int, int) {}
@@ -101,6 +127,19 @@ inline void thread_acquire() {}
 template<memory_scope Scope>
 inline void thread_release() {}
 
+namespace detail {
+
+inline void pause() {}
+
+template<memory_scope Scope, typename T>
+inline T fetch_add_acq_rel(T* target, T value) {
+    const T prior = *target;
+    *target += value;
+    return prior;
+}
+
+} // namespace detail
+
 template<memory_scope Scope = memory_scope::system>
 inline void publish_epoch_relaxed(std::uint32_t*, std::uint32_t) {}
 
@@ -139,6 +178,11 @@ inline std::uint32_t reserve_rows_relaxed(std::uint32_t* target,
 template<memory_scope Scope>
 inline void publish_epoch_word_relaxed(std::uint64_t*, std::uint32_t,
                                        std::uint32_t) {}
+
+template<memory_scope Scope = memory_scope::agent>
+inline void publish_tile_release(std::uint32_t* target, std::uint32_t value) {
+    *target = value;
+}
 
 template<memory_scope Scope>
 inline void bounded_poll_epoch_word_relaxed_into(const std::uint64_t*,

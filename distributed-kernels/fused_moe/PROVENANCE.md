@@ -68,3 +68,38 @@ validation here. It has not been built,
 ISA-gated, or timed on gfx950. The 6,919.8 µs result belongs only to the exact
 donor source and measured G=3 environment; it is a target, not an inherited
 result. No MI300X/gfx942 or production-vLLM end-to-end claim exists.
+
+## MPS (minimum-progress specialization) sibling
+
+Added 2026-08-10, additive; the parity port above is byte-untouched.
+
+- `k0pf6gm_device_tile_mps.hip` derives textually from
+  `k0pf6gm_device_tile.hip`. Byte-identical preserved regions (verified by
+  scripted span diff at authoring time): M1 qpush, M2 unpack/histogram, M3–M5
+  plan/scatter, M6 phase-1 call, M9 counted arrival/retirement. Replaced
+  regions: phase-2 body include (vendored copy), the M6.9/M7 role partition,
+  M7.6 service phase, M7.5/M8 mode dispatch. Descriptor ABI extended from 56 to
+  63 words (slots 56..62 appended; slot 55 and words 0..54 untouched).
+- `n2_phase2_gm_mps.cpp` is byte-derived from donor
+  `n2_phase2_gm.cpp` sha256
+  `7d8beb039b8224e614eacdbe9b34b21837095ffa6ec4842f08d72358b7b8e025` (the same
+  hash the winner port consumes), with exactly two code deltas:
+  `N2GM_TASK_START`/`N2GM_TASK_STRIDE` loop bounds and the
+  `N2GM_TASK_DONE_DRAIN_HOOK` per-thread `s_waitcnt vmcnt(0)` before the
+  task-end `__syncthreads()`. Both MFMA K-loops, all LDS layouts, the
+  sched_group_barrier schedule, and the epilogue arithmetic are donor-verbatim
+  (verified by diff at authoring time).
+- `moe_mps_adapter.cuh`, `moe_host_abi.hpp` (additive MPS section), and
+  `include/cdna4/ops/group/distributed/roles.cuh` are new, not ports.
+- Review status: one adversarial read-only review was run at authoring
+  time; its one CRITICAL finding (LDS flag-buffer overflow for
+  `flush_rows > 32`) and one acquire-edge hardening (acq_rel RMW probes in the
+  slice-group check) are fixed in the shipped text.
+- Known watch item for the ISA gate: the packed role word (task start/stride)
+  is loop-carried across the phase-2 mainloop. It is CT-uniform (SGPR, not
+  VGPR), so the 256-ArchVGPR budget is structurally untouched, but the
+  resource/ISA A/B against the parity port must confirm no ArchVGPR/AGPR/LDS
+  movement before any parity claim.
+- The MPS source is host/static only: not built, not ISA-gated, not corrected
+  or timed on 8x gfx950. Its `C=0`, mode-0 configuration is intended to be a
+  same-ABI parity control, not a claim of donor equivalence.

@@ -8,6 +8,7 @@ KERNEL_HEADERS := \
 	../../../../distributed-kernels/gemm_rs/gemm_rs_hk_adapter.cuh \
 	../../../../distributed-kernels/gemm_rs/gemm_rs_host_abi.hpp \
 	../../../../distributed-kernels/fused_moe/moe_hk_adapter.cuh \
+	../../../../distributed-kernels/fused_moe/moe_mps_adapter.cuh \
 	../../../../distributed-kernels/fused_moe/moe_host_abi.hpp
 INCLUDE_ROOT := ../../../../include
 CDNA3_HEADER := $(INCLUDE_ROOT)/cdna3/types/global/pgl.cuh

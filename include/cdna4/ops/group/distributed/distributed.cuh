@@ -11,6 +11,7 @@
 #include "completion.cuh"
 #include "counter.cuh"
 #include "lifetime.cuh"
+#include "roles.cuh"
 
 #undef KITTENS_DISTRIBUTED_DEVICE_INLINE
 #undef KITTENS_DISTRIBUTED_HOST_DEVICE_INLINE

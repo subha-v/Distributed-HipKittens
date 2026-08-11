@@ -19,6 +19,39 @@
     "language": "C++20/HIP",
     "flags": ["-O3", "-DKITTENS_CDNA4", "-ffast-math", "-mllvm", "-amdgpu-mfma-vgpr-form=1", "-DK0P6GM_G=3", "-DN2GM_G=3"]
   },
+  "derived_files": [
+    {
+      "path": "distributed-kernels/fused_moe/n2_phase2_gm_mps.cpp",
+      "role": "MPS-vendored phase-2 body",
+      "derived_from": "auto-gpu-kernel/k0_fused_moe/solution/hip/n2_phase2_gm.cpp",
+      "donor_sha256": "7d8beb039b8224e614eacdbe9b34b21837095ffa6ec4842f08d72358b7b8e025",
+      "deltas": ["N2GM_TASK_START/N2GM_TASK_STRIDE task-loop bounds macros (donor-compatible defaults)", "N2GM_TASK_DONE_DRAIN_HOOK before the post-epilogue __syncthreads", "done-hook contract gains nc: k0p6_mps_task_done(b, nc, tid, desc)"]
+    },
+    {
+      "path": "distributed-kernels/fused_moe/k0pf6gm_device_tile_mps.hip",
+      "role": "MPS sibling megakernel (additive to the parity port)",
+      "derived_from": "distributed-kernels/fused_moe/k0pf6gm_device_tile.hip",
+      "note": "Adds descriptor slots 56..62, finish-order role partition, event queue, service waves, owner-slot push, dynamic combine claiming. Entry symbol k0pf6gm_mps_mega; descriptor length 63. UNMEASURED until the local gates pass on 8x gfx950."
+    }
+  ],
+  "runtime_abi_mps": {
+    "descriptor_length": 63,
+    "appended_slots": {
+      "56": "K0P6_D_MPS_Q: uint32[(PADMAX/32)*16] (b, nc) tile-event slots",
+      "57": "K0P6_D_MPS_NCARR: uint32[T_ext*16] per-(row,chunk) arrival counters",
+      "58": "K0P6_D_MPS_PUSHED: uint32[T_ext] per-row pushed-slice counts",
+      "59": "K0P6_D_MPS_CLAIM: uint32[T_ext] per-row push-group claim bits",
+      "60": "K0P6_D_MPS_STATE: 96 B scalars + diagnostic timestamps",
+      "61": "K0P6_D_MPS_SLOTS: bf16[8][MAXTOK][7168] owner-resident slice slots (16B aligned, symmetric)",
+      "62": "K0P6_D_MPS_CFG: packed uint64 {C[0:8), g[8:16), mode[16:24), flush_rows[24:32), pull_fallback[32], timestamps[33]}"
+    },
+    "modes": {
+      "0": "reserve-only control: tickets + strided M7, parity publication/protocol",
+      "1": "bulk push after the parity barrier; local-slot combine",
+      "2": "full stream: service CTAs overlap push with M7; dynamic combine claiming"
+    },
+    "status": "host/static only; not built, ISA-gated, or timed"
+  },
   "measured_environment": {
     "container_tag": "rocm/atom-dev:vllm-latest",
     "container_digest_captured": false,

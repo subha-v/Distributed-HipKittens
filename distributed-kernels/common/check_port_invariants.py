@@ -215,6 +215,126 @@ def check_moe() -> None:
             "M7.5 publication must not escape the CTA-leader stripe")
 
 
+def check_moe_mps() -> None:
+    """Additive static gates for the minimum-progress specialization sibling.
+
+    These checks never touch the parity-port assertions above; the MPS kernel,
+    vendored phase-2 body, adapter, and host ABI are separate artifacts.
+    """
+    source = read(MOE / "k0pf6gm_device_tile_mps.hip")
+    adapter = read(MOE / "moe_mps_adapter.cuh")
+    vendored = read(MOE / "n2_phase2_gm_mps.cpp")
+    host_abi = read(MOE / "moe_host_abi.hpp")
+    roles = (DK.parent / "include" / "cdna4" / "ops" / "group" /
+             "distributed" / "roles.cuh")
+    roles_src = read(roles)
+    aggregate = read(roles.parent / "distributed.cuh")
+
+    require("ShmemPtrP2p" not in source + adapter,
+            "MPS peer translation must use the explicit IRIS heap descriptor")
+    for token in (
+        "#define K0P6GM_G 3",
+        "k0pf6gm_mps_mega",
+        '#include "n2_phase1_gm.cpp"',
+        '#include "n2_phase2_gm_mps.cpp"',
+        "finish_order_partition(",
+        "hk_moe::mps::run_service(",
+        "hk_moe::mps::enqueue_tile_release(",
+        "K0P6_D_MPS_CFG",
+        "N2GM_TASK_DONE_DRAIN_HOOK asm volatile(\"s_waitcnt vmcnt(0)\"",
+        "bcap > 16383",
+        "K0P6_MPS_ERR_CONFIG",
+        "K0P6_MPS_ERR_SERVICE",
+    ):
+        require(token in source, f"MPS kernel invariant missing: {token}")
+    require('#include "n2_phase2_gm.cpp"' not in source,
+            "MPS kernel must use the vendored phase-2 body, not the donor")
+    require(source.count("k0p6_symmetric(desc)") == 6,
+            "MPS must reload the IRIS descriptor exactly once in M1, M7.6, "
+            "M7.5(mode 0), M7.6b(mode 1), M8, and M9")
+    # No descriptor value may be materialized across either MFMA body. The MPS
+    # span ends at the M7.6 service phase: that phase legitimately reloads the
+    # IRIS descriptor AFTER the phase-2 MFMA body has completed on this CTA.
+    m6 = source.index("// ================= M6:")
+    m76 = source.index("// ================= M7.6", m6)
+    mfma_span = source[m6:m76]
+    require("symmetric" not in mfma_span and
+            "K0P6_D_SYMMETRIC" not in mfma_span,
+            "IRIS peer-descriptor state leaked into the M6/M7 MFMA span")
+    # M7's task loop must stride by the logical pool, not the physical grid
+    m7 = source.index("// ================= M7:")
+    m76 = source.index("// ================= M7.6", m7)
+    m7_span = source[m7:m76]
+    require("k0p6_role" in m7_span and
+            "n2p6gm_mps_phase2_body" in m7_span,
+            "M7 must run the vendored body under the packed role")
+    require("if (!mps_service)" in m7_span,
+            "service CTAs must skip the M7 GEMM body")
+
+    for token in (
+        "#define K0P6_D_MPS_Q 56",
+        "#define K0P6_D_MPS_NCARR 57",
+        "#define K0P6_D_MPS_PUSHED 58",
+        "#define K0P6_D_MPS_CLAIM 59",
+        "#define K0P6_D_MPS_STATE 60",
+        "#define K0P6_D_MPS_SLOTS 61",
+        "#define K0P6_D_MPS_CFG 62",
+        "#define K0P6_MPS_D_LEN 63",
+        "encode_config(",
+        "decode_config(",
+        "config_is_valid(",
+        "wait_event_nonempty(",
+        "push_slice_group(",
+        "flush_pending(",
+        "kittens::distributed::store_peer_packets(",
+        "kittens::distributed::publish_tile_release<",
+    ):
+        require(token in adapter, f"MPS adapter primitive missing: {token}")
+    # The group-completeness probe must be an RMW (fetch_add +0), so the last
+    # completing bumper provably observes every group member at target.
+    require("env.nc_arr + (std::size_t)r * 16u + n2, 0u)" in adapter,
+            "MPS group probe must use an RMW, not a relaxed load")
+
+    # Vendored body: donor lineage + the two behavioral deltas, in order.
+    require(
+        "7d8beb039b8224e614eacdbe9b34b21837095ffa6ec4842f08d72358b7b8e025"
+        in vendored, "vendored phase-2 must record the pinned donor sha256")
+    start_macro = vendored.index("#ifndef N2GM_TASK_START")
+    drain_hook = vendored.index("#ifdef N2GM_TASK_DONE_DRAIN_HOOK")
+    refill_note = vendored.index(
+        "// The next task refills every LDS buffer this one just read.")
+    done_hook = vendored.index("#ifdef N2GM_TASK_DONE_HOOK", drain_hook)
+    require(start_macro < drain_hook < refill_note < done_hook,
+            "vendored phase-2 deltas out of order: start/stride, drain, "
+            "syncthreads, done hook")
+    loop_line = vendored.index(
+        "for (int task = (int)(N2GM_TASK_START); task < num_tasks;")
+    require(loop_line > start_macro,
+            "vendored phase-2 task loop must consume the start/stride macros")
+
+    for token in (
+        "struct role_partition",
+        "finish_order_partition(",
+        "publish_tile_release(",
+        "wait_tile_acquire_into(",
+        "retire_epoch(",
+    ):
+        require(token in roles_src, f"roles.cuh primitive missing: {token}")
+    require('#include "roles.cuh"' in aggregate,
+            "distributed.cuh must export roles.cuh")
+
+    for token in (
+        "mps_descriptor_words = 63",
+        "struct mps_buffer_binding",
+        "validate_mps_binding(",
+        "patch_mps_slots(",
+        "append_mps_descriptor(",
+        "validate_mps_descriptor(",
+        "mps_slots_bytes(",
+    ):
+        require(token in host_abi, f"MPS host ABI helper missing: {token}")
+
+
 def git_blob(repo: Path, commit: str, path: str) -> bytes:
     result = subprocess.run(
         ["git", "show", f"{commit}:{path}"],
@@ -259,6 +379,7 @@ def main() -> None:
     check_no_legacy_code()
     check_gemm()
     check_moe()
+    check_moe_mps()
     check_gemm_mi300x(args.amd_master.resolve() if args.amd_master else None)
     if args.amd_master is not None:
         check_upstream(args.amd_master.resolve())
