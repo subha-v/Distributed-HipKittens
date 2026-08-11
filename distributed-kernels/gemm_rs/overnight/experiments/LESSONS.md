@@ -312,6 +312,36 @@
     where the fused helper drained after every two. **Two exposed global round
     trips per k-iteration became one covered one.**
 
+- **Attribution re-measured on the exp_08 winner, and the ranking FLIPPED BACK
+  to the GEMM mainloop.** Fresh table (µs), verified fresh by asserting `full`
+  against the independently known total (1777.9 against 1829, within 8%):
+
+  | shape | full | **GEMM** | XGMI | reduce | sync | release |
+  |---|---|---|---|---|---|---|
+  | 64×7168×18432 | 82.0 | 16.9 | 5.7 | 6.0 | 16.4 | 5.1 |
+  | 512×4096×12288 | 91.8 | 25.7 | 13.3 | 3.5 | 17.1 | 13.8 |
+  | 2048×2880×2880 | 91.3 | 17.8 | 25.2 | 5.5 | 18.1 | 5.3 |
+  | 4096×4096×4096 | 203.1 | 40.8 | **85.3** | 19.2 | 31.3 | 18.4 |
+  | 8192×4096×14336 | 656.5 | **309.7** | 195.4 | 51.5 | 86.7 | 46.4 |
+  | 8192×8192×29568 | 1777.9 | **1142.8 (64%)** | 412.4 | 86.5 | 191.0 | 134.9 |
+
+  exp_08 cut the shape-6 XGMI pool **1149.9 → 412.4 µs**, a 737 µs reduction
+  that accounts for essentially the whole 708 µs win. **GEMM is now 64% of
+  shape 6 and 47% of shape 5 — the only two shapes we still lose.** The pool
+  ranking has now inverted twice in one session (GEMM → egress → GEMM), which
+  is why re-attributing after every accepted win is not bookkeeping.
+
+- **TRAP, paid twice: `exp_ablation.py` SKIPS compilation when an arm `.so`
+  already exists**, printing "already built". After a kernel change it then
+  silently re-reports the **previous** kernel's attribution. Caught only
+  because `full` for shape 6 read 2527 µs when the real kernel was 1829 —
+  i.e. by cross-checking against a number obtained another way, not by anything
+  in the tool. `tools/reattribute.sh` now force-removes the arm binaries and
+  **asserts `full` matches an expected total within a tolerance**, refusing to
+  print a table it cannot show is fresh. Generalizable: any cache keyed on
+  existence rather than on content will eventually hand you a stale answer that
+  looks exactly like a fresh one.
+
 - **WE NOW BEAT THE REFERENCE GEMM+RCCL BASELINE ON THIS NODE.** Same-run
   interleaved, both arms in one process pool under the graded protocol, 50
   iterations × 2 reps, `allclose=True` on all six shapes:
