@@ -72,6 +72,26 @@ Latest additions to the device primitive layer and the fused-MoE port
   G=3 candidate against a G=2 reference. The decision number is
   `mps_mega / pf6gm_mega`.
 
+- [`docs/distributed/competition-analysis/`](docs/distributed/competition-analysis/) — an
+  analysis of the 17 fastest hand-written submissions to the AMD MI300X×8
+  `amd-all2all`, `amd-gemm-rs`, and `amd-ag-gemm` leaderboards
+  ([GPUMODE/kernelbot-data](https://huggingface.co/datasets/GPUMODE/kernelbot-data)),
+  read against the CTA-level overlap taxonomy above. Archives every submission
+  analysed plus per-shape timings. Principal findings: no top-10 kernel on any
+  of the three boards wins via CTA-level comm/compute specialization, and three
+  competitors independently built and then abandoned it; where static
+  specialization *is* used, the comm pool is sized to the interconnect (one CTA
+  per XCD per peer link, 2.6–10% of the grid) rather than to a compute/comm time
+  balance; the submission implementing our per-tile CAS publication scheme is
+  23% slower than one that publishes readiness exactly once. The report also
+  documents that the `amd-all2all` benchmark is degenerate — its "expert" is a
+  scalar gain, so its rankings cannot be used to compare communication
+  strategies. Includes a synchronization cookbook (uncached symmetric heaps that
+  delete fences, monotone epoch counters that delete flag resets, wave-execmask
+  counted fan-in, NOOP padding for static fan-in) and a prioritized
+  do / reconsider / do-not-build list against `sync.cuh`, `completion.cuh`,
+  `counter.cuh`, `pgl.cuh`, and `roles.cuh`.
+
 **News**
 - [January 2026] HipKittens is accepted to [MLSys 2026 in Seattle]()!
 - [February 2026] Will presented HipKittens as a GPU Mode lecture, [check it out](https://www.youtube.com/watch?v=jsYyF03Fs3o)!
