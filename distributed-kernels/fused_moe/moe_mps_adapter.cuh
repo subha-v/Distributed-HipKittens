@@ -34,6 +34,7 @@ namespace hk_moe::mps {
 #define K0P6_MPS_ST_TICKET 0   // finish-order role tickets (agent monotonic)
 #define K0P6_MPS_ST_TAIL 1     // event tail ticket (monotonic, capacity-bound)
 #define K0P6_MPS_ST_M8NEXT 2   // dynamic reduction batch ticket
+#define K0P6_MPS_ST_EVNEXT 3   // exp_12: dynamic tile-event consumption ticket
 #define K0P6_MPS_ST_WORDS 8    // scalar words precede the uint64 diag block
 #define K0P6_MPS_TS_FIRST_READY 0   // max(~t) over event enqueues (invert: min)
 #define K0P6_MPS_TS_LAST_READY 1    // max(t)   over event enqueues
@@ -234,6 +235,7 @@ struct service_env {
     std::uint32_t* __restrict__ nc_arr;      // [T_ext*16]
     std::uint32_t* __restrict__ pushed;      // [T_ext]
     std::uint32_t* __restrict__ claim;       // [T_ext]
+    std::uint32_t* __restrict__ ev_next;     // exp_12: event consumption ticket
     std::uint32_t* __restrict__ row_rem;     // [T_ext] (M2 popcount; self-clean)
     const int* __restrict__ sti;             // sorted token ids
     const unsigned short* __restrict__ part; // [T_ext, 7168] bf16 (local)
@@ -282,9 +284,10 @@ struct wave_scratch {
     std::uint32_t flag_rows[64];   // completed rows pending publication
     std::uint32_t flag_count;
     std::uint32_t event;           // leader-polled event word (0 = failed)
+    std::uint32_t ticket;          // exp_12: claimed event index
 };
 
-static_assert(sizeof(wave_scratch) == 524,
+static_assert(sizeof(wave_scratch) == 528,
               "wave_scratch must stay inside the reused M1 staging slice");
 
 inline constexpr std::size_t kSliceBytes = 448u * 2u;   // 896
@@ -413,22 +416,41 @@ __device__ __forceinline__ void retire_pushed_row(const service_env& env,
 // event queue on reserved CTAs. Failure exits the loop; the bounded waits
 // elsewhere (owner polls, M9 arrival) make the overall failure terminal.
 // `s` is this wave's private scratch slice (LDS), carved by the caller.
+// exp_12: the event loop claims a TICKET instead of walking a static
+// (service_id, service_count) stripe. Three things follow, and all three are
+// motivated by measurement:
+//
+//  * **Any CTA can join.** A static stripe fixes the pool at launch and makes
+//    exactly-once consumption depend on the pool size, so a late joiner would
+//    double-count arrivals. A ticket makes the pool size irrelevant, which is
+//    what lets compute CTAs fall through into the drain after M7 — and the
+//    profile says the ENTIRE capacity tax is M7's (+27% at C=64), so refunding
+//    M7's CTAs at the tail is the single largest tax we can give back.
+//  * **It consumes in readiness order.** Producers enqueue with a monotonic
+//    tail ticket, so the queue fills densely in completion order. Claiming the
+//    next unclaimed slot therefore takes the next event that will be ready,
+//    where the stripe forced each wave to wait for ITS events in index order —
+//    head-of-line blocking behind a slot whose producer had not run yet.
+//  * **It costs one relaxed atomic per event** (~16,720 per rank per epoch)
+//    against the 535,040 the arrival counters already spend, so it is free at
+//    the resolution we can measure.
 __device__ __forceinline__ void run_service(
-        const service_env& env, wave_scratch& s,
-        std::uint32_t service_id, std::uint32_t service_count, int wid,
-        int lane) {
-    constexpr int kWaves = 4;
-    const std::uint32_t waves_total = service_count * (std::uint32_t)kWaves;
-    const std::uint32_t wave_global =
-        service_id * (std::uint32_t)kWaves + (std::uint32_t)wid;
+        const service_env& env, wave_scratch& s, int wid, int lane) {
+    (void)wid;
     const std::uint32_t g = env.group_slices;
     if (lane == 0) {
         s.push_count = 0u;
         s.flag_count = 0u;
     }
     __syncwarp();
-    for (std::uint32_t k = wave_global; k < env.events_total;
-         k += waves_total) {
+    while (true) {
+        if (lane == 0) {
+            s.ticket = kittens::distributed::fetch_add_relaxed<scope::agent>(
+                env.ev_next, 1u);
+        }
+        __syncwarp();
+        const std::uint32_t k = s.ticket;
+        if (k >= env.events_total) break;
         if (lane == 0) {
             s.event = wait_event_nonempty(env.q + k, env.pperr, env.spin_limit);
         }

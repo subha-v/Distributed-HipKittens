@@ -101,7 +101,7 @@
 // .cuh-only change, then confirm a new hsaco mtime under
 // ~/.cache/k0-mok-synthetic-prefill/mori/jit/gfx950_mlx5/*/ before believing
 // any number. The value is never read; only its presence in the hash matters.
-#define K0P6_MPS_SRC_REV 9
+#define K0P6_MPS_SRC_REV 10
 
 // exp_56 (Option C): per-source SEGMENTED receive layout + chunk-counted release.
 //  * Row index = source*MAXTOK + fetch_add(dest_counter[source] on dest, 1)  (waitless).
@@ -1258,9 +1258,15 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
     // Phase-local service predicate (same formula as the M7 guard above).
     const hk_moe::mps::config scfg = hk_moe::mps::decode_config(
         (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
-    const bool service_cta_here =
-        hk_moe::mps::mode_is_stream(scfg) &&
-        hk_moe::mps::is_service_cta(scfg, bid, nct);
+    // exp_12: EVERY CTA in a stream mode enters the drain, not just the
+    // reserved pool. Service CTAs arrive here immediately (they skipped M7);
+    // compute CTAs fall through as they finish M7 and help drain whatever is
+    // left. This is legal only because the event loop now claims a ticket
+    // rather than walking a pool-size-dependent stride. It refunds M7's
+    // capacity tax at the tail, which the phase profile identifies as the only
+    // tax the reservation actually costs (plan+M6 is flat in C to 0.5%, M7
+    // rises 27% from C=2 to C=64).
+    const bool service_cta_here = hk_moe::mps::mode_is_stream(scfg);
     if (service_cta_here) {
       const auto* symmetric = k0p6_symmetric(desc);
       const int* nvi = (const int*)k0p6_dread(desc, K0P6_D_NVI);
@@ -1276,6 +1282,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
         env.nc_arr = (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_NCARR);
         env.pushed = (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_PUSHED);
         env.claim = (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_CLAIM);
+        env.ev_next = mps_state + K0P6_MPS_ST_EVNEXT;
         env.row_rem = (std::uint32_t*)k0p6_dread(desc, K0P6_D_ROW_REM);
         env.sti = (const int*)k0p6_dread(desc, K0P6_D_STI);
         env.part = (const unsigned short*)k0p6_dread(desc, K0P6_D_PART);
@@ -1302,10 +1309,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
                       "MPS wave scratch must fit the reused M1 staging slice");
         hk_moe::mps::wave_scratch* mps_scratch =
             reinterpret_cast<hk_moe::mps::wave_scratch*>(&s_row[wid][0]);
-        hk_moe::mps::run_service(
-            env, *mps_scratch,
-            hk_moe::mps::service_id_of(scfg, bid, nct),
-            scfg.reserved_comm_ctas, wid, lane);
+        hk_moe::mps::run_service(env, *mps_scratch, wid, lane);
       }
     }
   }
