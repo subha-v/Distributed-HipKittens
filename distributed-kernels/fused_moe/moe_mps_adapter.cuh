@@ -511,23 +511,43 @@ __device__ __forceinline__ void run_service(
                 // an acquire edge per chunk of the group before it reads that
                 // chunk's part payload — including chunks whose events were
                 // consumed by OTHER service waves.
-                bool all = true;
-                for (std::uint32_t n2 = (std::uint32_t)group_base;
-                     n2 < (std::uint32_t)group_base + g; ++n2) {
-                    const std::uint32_t cur_count =
-                        kittens::distributed::detail::fetch_add_acq_rel<scope::agent>(
-                            env.nc_arr + (std::size_t)r * 16u + n2, 0u);
-                    if (cur_count != target) { all = false; break; }
-                }
-                if (all) {
-                    const std::uint32_t claim_bit =
-                        1u << ((std::uint32_t)group_base / g);
-                    // Plain atomicOr dedupes the claimant (same idiom as the
-                    // kernel's pperr stores): agent-domain RMW, no ordering
-                    // role — the acquire edge is carried by the probes above.
-                    const std::uint32_t old_claim =
-                        atomicOr(env.claim + r, claim_bit);
-                    push_lead = (old_claim & claim_bit) == 0u;
+                if (g == 1u) {
+                    // exp_14: at g == 1 the group IS this single chunk, so the
+                    // probe and the claim are PROVABLY redundant and skipped.
+                    // (a) The probe would re-read the very counter whose
+                    // fetch_add just returned `target - 1`, so it can only
+                    // return `target`; and this wave already holds the acquire
+                    // edge for that chunk from its own acq_rel above, with no
+                    // other chunk in the group left to acquire. (b) The claim
+                    // dedupes the pusher, but RMW order makes `old + 1 ==
+                    // target` true for exactly ONE lane grid-wide, so the
+                    // claimant is already unique.
+                    //
+                    // Deletes 2 of the 4 atomics per completing slice
+                    // (~698,112 of ~1.58M per rank per epoch), aimed straight
+                    // at the measured cause of M7's interference. g > 1 keeps
+                    // the original path byte-for-byte.
+                    push_lead = true;
+                } else {
+                    bool all = true;
+                    for (std::uint32_t n2 = (std::uint32_t)group_base;
+                         n2 < (std::uint32_t)group_base + g; ++n2) {
+                        const std::uint32_t cur_count =
+                            kittens::distributed::detail::fetch_add_acq_rel<scope::agent>(
+                                env.nc_arr + (std::size_t)r * 16u + n2, 0u);
+                        if (cur_count != target) { all = false; break; }
+                    }
+                    if (all) {
+                        const std::uint32_t claim_bit =
+                            1u << ((std::uint32_t)group_base / g);
+                        // Plain atomicOr dedupes the claimant (same idiom as
+                        // the kernel's pperr stores): agent-domain RMW, no
+                        // ordering role — the acquire edge is carried by the
+                        // probes above.
+                        const std::uint32_t old_claim =
+                            atomicOr(env.claim + r, claim_bit);
+                        push_lead = (old_claim & claim_bit) == 0u;
+                    }
                 }
             }
         }
