@@ -89,18 +89,75 @@ __host__ __device__ __forceinline__ config decode_config(std::uint64_t word) {
     return c;
 }
 
+// exp_08 / axis A8 — XCD placement of the service pool.
+//
+// Workgroups go round-robin to XCDs with chunk size one (`xcd = bid % 8`), so
+// the mode-2 static TAIL reservation spreads the pool one-eighth per die and
+// touches all eight 4 MB L2s. exp_05 measured that a running service pool
+// inflates M7 by 37-57% purely through memory-system interference, and exp_07
+// showed the mechanism is atomic contention rather than cache-line footprint.
+// If that contention is resolved in the per-XCD L2s, then giving the pool WHOLE
+// DIES should leave the compute dies' L2s clean.
+//
+// Mode 3 is mode 2 with exactly that placement change and nothing else:
+// residue classes [0, C/32) are service, [C/32, 8) are compute. One XCD is
+// 256/8 = 32 CTAs, so C must be a multiple of 32; with the existing C <= 64 cap
+// the legal points are C = 32 (one die) and C = 64 (two dies).
+inline constexpr std::uint32_t kCtasPerXcd = 32u;
+inline constexpr std::uint32_t kXcds = 8u;
+
+__host__ __device__ __forceinline__ std::uint32_t service_dies(config c) {
+    return c.reserved_comm_ctas / kCtasPerXcd;
+}
+
+__host__ __device__ __forceinline__ bool mode_is_stream(config c) {
+    return c.mode == 2u || c.mode == 3u;
+}
+
 __host__ __device__ __forceinline__ bool config_is_valid(config c) {
     if (c.reserved_comm_ctas > 64u) return false;
     if (c.reserved_comm_ctas >= 256u) return false;
     if (c.group_slices != 1u && c.group_slices != 2u && c.group_slices != 4u &&
         c.group_slices != 16u) return false;
-    if (c.mode > 2u) return false;
-    if (c.mode == 2u && c.reserved_comm_ctas == 0u) return false;
+    if (c.mode > 3u) return false;
+    if (mode_is_stream(c) && c.reserved_comm_ctas == 0u) return false;
+    // Mode 3 hands out whole dies, so the pool must be a whole number of them.
+    if (c.mode == 3u && (c.reserved_comm_ctas % kCtasPerXcd) != 0u) return false;
     // Mode 1 (bulk, no overlap) strides the full grid: the M7 stride derives
     // from C everywhere, so mode 1 must carry C == 0.
     if (c.mode == 1u && c.reserved_comm_ctas != 0u) return false;
     if (c.flush_rows == 0u || c.flush_rows > 64u) return false;
     return true;
+}
+
+// Role predicate and dense role ids. Modes 0-2 keep the static-tail formula
+// byte-for-byte; mode 3 selects by XCD residue class. The dense compute id is
+// what the M7 task loop strides with, so both branches must produce a dense
+// [0, nct - C) numbering or tasks would be skipped or run twice.
+__device__ __forceinline__ bool is_service_cta(config c, int bid, int nct) {
+    if (c.mode == 3u) {
+        return ((std::uint32_t)bid & (kXcds - 1u)) < service_dies(c);
+    }
+    return bid >= nct - (int)c.reserved_comm_ctas;
+}
+
+__device__ __forceinline__ int compute_id_of(config c, int bid) {
+    if (c.mode == 3u) {
+        const std::uint32_t d = service_dies(c);
+        return (int)(((std::uint32_t)bid >> 3) * (kXcds - d) +
+                     (((std::uint32_t)bid & (kXcds - 1u)) - d));
+    }
+    return bid;
+}
+
+__device__ __forceinline__ std::uint32_t service_id_of(config c, int bid,
+                                                       int nct) {
+    if (c.mode == 3u) {
+        const std::uint32_t d = service_dies(c);
+        return ((std::uint32_t)bid >> 3) * d +
+               ((std::uint32_t)bid & (kXcds - 1u));
+    }
+    return (std::uint32_t)(bid - (nct - (int)c.reserved_comm_ctas));
 }
 
 // ---- tile-event wire format ---------------------------------------------------

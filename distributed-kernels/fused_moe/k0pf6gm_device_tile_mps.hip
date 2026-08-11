@@ -101,7 +101,7 @@
 // .cuh-only change, then confirm a new hsaco mtime under
 // ~/.cache/k0-mok-synthetic-prefill/mori/jit/gfx950_mlx5/*/ before believing
 // any number. The value is never read; only its presence in the hash matters.
-#define K0P6_MPS_SRC_REV 6
+#define K0P6_MPS_SRC_REV 8
 
 // exp_56 (Option C): per-source SEGMENTED receive layout + chunk-counted release.
 //  * Row index = source*MAXTOK + fetch_add(dest_counter[source] on dest, 1)  (waitless).
@@ -275,6 +275,15 @@ __device__ __forceinline__ int k0p6_mps_stride(const long long* desc, int nct) {
                      0xFFull);
 }
 
+// Dense compute id for the M7 task loop. Identity (blockIdx.x) in modes 0-2;
+// the XCD-residue remap in mode 3. Same descriptor channel as the stride.
+__device__ __forceinline__ int k0p6_mps_task_start(const long long* desc) {
+  return hk_moe::mps::compute_id_of(
+      hk_moe::mps::decode_config(
+          (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG)),
+      (int)blockIdx.x);
+}
+
 // ---- MPS phase-2 done hook -----------------------------------------------------
 // Stream mode (2): publish the (b, nc) tile event off the GEMM wave — one
 // agent release + one relaxed 32-bit store by tid0, after the vendored body
@@ -286,7 +295,7 @@ __device__ __forceinline__ void k0p6_mps_task_done(int b, int nc, int tid,
                                                    const long long* k0p6_desc) {
   if (tid != 0) return;
   if (((unsigned long long)k0p6_dread(k0p6_desc, K0P6_D_MPS_CFG) >> 16 &
-       0xFFull) == 2ull) {
+       0xFFull) >= 2ull) {   // mode 2 (tail pool) and mode 3 (whole-die pool)
     std::uint32_t* mps_q = (std::uint32_t*)k0p6_dread(k0p6_desc, K0P6_D_MPS_Q);
     std::uint32_t* mps_state =
         (std::uint32_t*)k0p6_dread(k0p6_desc, K0P6_D_MPS_STATE);
@@ -323,9 +332,13 @@ __device__ __forceinline__ void k0p6_mps_task_done(int b, int nc, int tid,
   if (!k0p6_a2_wait(b, tid, k0p6_desc)) return;
 #define N2GM_TASK_DONE_HOOK k0p6_mps_task_done(b, nc, tid, k0p6_desc);
 #define N2GM_TASK_DONE_DRAIN_HOOK asm volatile("s_waitcnt vmcnt(0)" ::: "memory");
-// Donor-identical start (free hardware uniform); the stride is re-derived
-// from the descriptor inside the body — the only value the role split costs.
-#define N2GM_TASK_START blockIdx.x
+// Modes 0-2 keep the donor-identical start (blockIdx.x, a free hardware
+// uniform) because their compute set is the dense prefix [0, nct-C). Mode 3's
+// compute set is the XCD residue classes [C/32, 8), so it needs the dense
+// compute id — re-derived from the descriptor at body entry, the same volatile
+// channel the stride already uses. Nothing tuneable stays live across the MFMA
+// mainloop either way.
+#define N2GM_TASK_START k0p6_mps_task_start(k0p6_desc)
 #define N2GM_TASK_STRIDE k0p6_mps_stride(k0p6_desc, (int)gridDim.x)
 #include "n2_phase2_gm_mps.cpp"
 #undef N2GM_TASK_STRIDE
@@ -1194,10 +1207,9 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
   // donor's per-phase descriptor discipline, verbatim).
   // ================= M7: N2 phase2 over the logical compute pool ================
   {
-    const std::uint32_t mps_C =
-        (std::uint32_t)((unsigned long long)k0p6_dread(desc, K0P6_D_MPS_CFG) &
-                        0xFFull);
-    if (bid < nct - (int)mps_C) {
+    const hk_moe::mps::config m7role = hk_moe::mps::decode_config(
+        (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
+    if (!hk_moe::mps::is_service_cta(m7role, bid, nct)) {
       production_fused_moe::n2::n2p6gm_mps_phase2_body(
           (const std::uint8_t*)k0p6_dread(desc, K0P6_D_A2Q),
           (const float*)k0p6_dread(desc, K0P6_D_DQ2),
@@ -1234,7 +1246,8 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
     const hk_moe::mps::config scfg = hk_moe::mps::decode_config(
         (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
     const bool service_cta_here =
-        scfg.mode == 2u && bid >= nct - (int)scfg.reserved_comm_ctas;
+        hk_moe::mps::mode_is_stream(scfg) &&
+        hk_moe::mps::is_service_cta(scfg, bid, nct);
     if (service_cta_here) {
       const auto* symmetric = k0p6_symmetric(desc);
       const int* nvi = (const int*)k0p6_dread(desc, K0P6_D_NVI);
@@ -1278,7 +1291,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
             reinterpret_cast<hk_moe::mps::wave_scratch*>(&s_row[wid][0]);
         hk_moe::mps::run_service(
             env, *mps_scratch,
-            (std::uint32_t)(bid - (nct - (int)scfg.reserved_comm_ctas)),
+            hk_moe::mps::service_id_of(scfg, bid, nct),
             scfg.reserved_comm_ctas, wid, lane);
       }
     }
@@ -1450,7 +1463,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
     const hk_moe::mps::config m8cfg = hk_moe::mps::decode_config(
         (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
     const bool m8_pull = (m8cfg.mode == 0u) || m8cfg.pull_fallback;
-    const bool m8_dynamic = (m8cfg.mode == 2u);
+    const bool m8_dynamic = hk_moe::mps::mode_is_stream(m8cfg);
     std::uint32_t* mps_state = (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_STATE);
     std::uint64_t* mps_ts = (std::uint64_t*)(mps_state + K0P6_MPS_ST_WORDS);
     // Keep every M8 descriptor-derived value inside this phase scope. M9
