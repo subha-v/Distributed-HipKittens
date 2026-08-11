@@ -202,9 +202,19 @@ timing, one campaign per point, arms `production,pf6gm_mega,mps_mega`.
    pre-registered expectation. Relabel the arms: contiguous = spread pollution
    across eight 4 MB L2s; strided = sacrifice one die, keep seven clean. Confirm
    placement in-kernel with `s_getreg_b32 hwreg(HW_REG_XCC_ID, 0, 4)`.
-4. Related, on A2: the push unit is `896·g` B = **14 KiB even at g=16**, roughly
-   **70× below the ~1 MiB knee** where COMET measured bandwidth saturating. `g`
-   alone cannot reach the knee — that needs M3.
+4. **RETRACTED (exp_04).** The old text here claimed the `896·g` = 14 KiB push
+ unit sits "**70× below the ~1 MiB knee** where COMET measured bandwidth
+ saturating", and that `g` alone cannot reach it. Three things were wrong.
+ (a) **Wrong source and wrong hardware**: the knee is arXiv 2607.19539 on 4×
+ A100/NVLink; COMET measured no such curve. (b) **The arithmetic never divided
+ by `C`**: at C=32 the cost model needs only **4.63 GB/s per service CTA**, and
+ 148 GB/s is 27.5% of aggregate egress, not a saturation target — "far from the
+ knee" and "cannot reach 148 GB/s" are different claims and only the first was
+ ever supported. (c) **Measured here, `g` is an atomics knob, not a
+ transfer-size knob** (exp_03): service cost rises monotonically with `g`
+ (2,953 → 20,171 µs at C=64 for g = 1 → 16) because the group-completion probe
+ loop runs `g` acq_rel RMWs per completing slice. `g=1` wins. The real limiter
+ is the MLP=1 copy loop (exp_03 ISA read), not the push size.
 
 ### The M-series
 
@@ -212,7 +222,7 @@ timing, one campaign per point, arms `production,pf6gm_mega,mps_mega`.
 |---|---|---|---|---|
 | M1 | `sc0 sc1` payloads + bare `s_waitcnt vmcnt` + scoped flag store **vs** `__threadfence_system()` release | CDNA4 ISA Table 50: an `sc0 sc1` store already takes **Coherent Cache Bypass**, so it leaves nothing dirty in the local L2 and the `buffer_wbl2` is provably redundant | deletes an L2-writeback ACK from every publish in the 1,309 µs tail | `DOCUMENTED` |
 | M2 | `nt=1` **vs** `nt=0` on combine payload stores | ISA §9.1.10.2: `nt=1` gives LLC **Hit Evict** | stops combine traffic evicting M7's weights from the 256 MB Infinity Cache — aims at the **1,844 µs**, not the tail | bit `DOCUMENTED`, effect `UNCERTAIN` |
-| M3 | **≥256 KiB contiguous multi-row bands** vs the `896·g` slice | COMET §3.3.2 measured: per-tile 32–64 KiB transfers sit far from saturation, 87 GB/s at 8 SMs only near 1 MiB; they ship full-width row bands. FlashOverlap coarsens tile→wave-group for the same reason | gates whether the assumed ~148 GB/s is reachable **at all** | measured (COMET) |
+| M3 | **≥256 KiB contiguous multi-row bands** vs the `896·g` slice | **CITATION CORRECTED (exp_04).** The 32–64 KiB / 87 GB/s / ~1 MiB-knee numbers are **arXiv 2607.19539 §3.3.2 Fig 3(a), measured on 4× A100 over NVLink** — NOT COMET. COMET (2502.19811) has no §3.3 and contains **no bandwidth-vs-transfer-size measurement at all**. On that A100 curve 87 GB/s is 87% of a *single* NVLink, and its own consumer sustained 10.9 GB/s per SM at plateau | **DEMOTED.** Our requirement is 4.63 GB/s per service CTA at C=32, well under that plateau, and AMD's own mori-EP reports **234–420 GB/s xGMI combine on MI355X at hidden=7168 BF16 — a 14,336 B per-token payload, exactly our `g=16` unit** — which refutes the strong "our push is too small" form. Run **after** the fence class | `REPORTED` (wrong-hardware analogue) |
 | M4 | per-XCD L2 arrival counter, one cross-XCD release per XCD **vs** per-`(b,nc)` global fence | AMD Research **Fleet**, a persistent megakernel measured **on MI350X in our exact shape**: per-XCD device-scope atomics resolve in local L2, "**no fence is required**"; only the last worker per XCD issues a threadfence | cuts fences to **8 per epoch**; generalizes A10 | `REPORTED`, measured |
 | M5 | `s_waitcnt vmcnt(N)` overlapping slice *k*/*k+1* **vs** `vmcnt(0)` drain | ISA §4.4: "Memory reads and writes return in the order they were issued" — so a partial count is legal | removes a full drain per slice from service-pool queue lag | `DOCUMENTED` |
 | M6 | `MORI_SHMEM_HEAP_TYPE=uncached` **vs** `normal` | mori SHMEM guide: `uncached` is the default | decides whether M1 is load-bearing or already a no-op — **run before M1** | default `DOCUMENTED`, effect `UNCERTAIN` |
@@ -306,6 +316,40 @@ Our CTA-level split sidesteps that; any intra-CTA variant inherits it.
   (`~/Distributed-HipKittens`, remote github `subha-v/Distributed-HipKittens`).
   Commit + push after EVERY completed or failed experiment including negatives.
   Verify `git ls-remote` head == local HEAD before starting the next one.
+
+## Traps that silently invalidate a measurement (learned the hard way)
+
+- **`.cuh` edits do not invalidate the JIT cache.** The mori cache key is a
+ content hash over its own `_jit-sources` tree, restricted to
+ `.hpp/.h/.cpp/.hip`. Our headers (`moe_mps_adapter.cuh`, `moe_hk_adapter.cuh`,
+ `include/cdna4/**`) arrive through `-I` from the read-only DHK mount and are
+ **not hashed**, so a `.cuh`-only change silently reuses the previous
+ `k0pf6gm_mps_mega.hsaco`. **exp_04 lost a whole measurement to this.** Bump
+ `K0P6_MPS_SRC_REV` in `k0pf6gm_device_tile_mps.hip` (which IS hashed) in the
+ same commit, and confirm a new hsaco mtime under
+ `~/.cache/k0-mok-synthetic-prefill/mori/jit/gfx950_mlx5/*/` before believing a
+ number. Directory mtimes get touched on a cache HIT — only the `.hsaco` mtime
+ counts.
+- **The node checkout is the source of truth for every arm**; the campaign
+ containers bind-mount `~/Distributed-HipKittens` read-only. Always
+ `git fetch && git reset --hard origin/<branch>` on the node before a run.
+- **A partial `K0_MPS_CFG` is rejected at module import and LOOKS like a pass**
+ (empty run dir, no `[MARK]` line, no `[MOK GATE]` line — just eight
+ `ValueError`s). Discriminator: does `runN.log` contain at least one `[MARK]`
+ line, and does `runN/` hold eight rank JSONs? Always pass all four of
+ `C,g,mode,flush_rows`.
+- **`[MARK] eager … pass=False` is not a gate.** It reads `False` even for
+ `production` at its known-good `rel_L2`. The real gates are `[MOK GATE]`
+ (`max_abs`, `relative`), `pperr`, `[MARK] control_fails=True`, `[MPS SOAK]`.
+- **The 600-epoch soak cannot be shortened** — `K0_MPS_SOAK_ITERS != 600`
+ raises. A soak failure makes `summarize.py` throw rather than write a blocked
+ summary (`blocked_pre_timing_mps_soak` is missing from its `BLOCKED_STATUSES`).
+- **`K0_MPS_DEBUG_STOP` aborts the ranks (exitcode 2) and yields no timings** on
+ this build, so it cannot be used as a phase-attribution ladder as-is.
+- **`K0_MPS_SKIP_LAUNCH` is not forwarded into the campaign containers**; it
+ only takes effect on a direct torchrun. Never run the kernel outside
+ `run_campaign.sh` — launched directly, the absolute tolerance defaults to a
+ looser 1.0 and `K0_PF6GM_G` defaults to 2, which makes `mps_mega` raise.
 
 ## Environment + reproduction
 

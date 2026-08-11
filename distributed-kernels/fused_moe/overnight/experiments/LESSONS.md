@@ -145,3 +145,87 @@
   counters of this group reached target", so the adapter open-codes it with
   `fetch_add_acq_rel(p, 0u)` as an acquire-carrying read. That idiom is both
   obscure and the direct cause of the g-scaling above.
+
+- 2026-08-11 **TRAP that voided a whole experiment: `.cuh` edits do not
+  invalidate the mori JIT cache.** The cache key is a content hash over mori's
+  own `_jit-sources` tree restricted to `.hpp/.h/.cpp/.hip`; our headers
+  (`moe_mps_adapter.cuh`, `moe_hk_adapter.cuh`, `include/cdna4/**`) arrive via
+  `-I` from the read-only DHK mount and are NOT hashed, so a `.cuh`-only change
+  silently reuses the previous `k0pf6gm_mps_mega.hsaco`. **My first staleness
+  check was itself wrong**: I looked at JIT cache DIRECTORY mtimes, which are
+  touched on a cache HIT. Only the `.hsaco` mtime counts -- the newest object
+  was 08:40:42 while the screen ran 08:52-08:55. Guard now in place:
+  `K0P6_MPS_SRC_REV` in the (hashed) `.hip`, bumped with any `.cuh` change, plus
+  the screening driver `git reset --hard`s the node checkout and prints the
+  newest hsaco mtime before and after every ladder.
+- 2026-08-11 **method: the node checkout IS the arm.** Campaign containers
+  bind-mount `~/Distributed-HipKittens` read-only. A ladder launched without
+  syncing the node measures the wrong kernel and looks completely normal. Now
+  done automatically by the driver.
+- 2026-08-11 exp_04 **SUPERSEDES the earlier "MLP fan-out is a null" entry --
+  that was the stale measurement.** With a verified-fresh build (JIT
+  `66040eba7d06`), batching 4 independent (dst,src) regions so every load
+  issues before any store cuts SERVICE cost by **14-29%** and end-to-end MPS time
+  by 3.8-25%: C=8/g=2 57,292 -> 42,923 (-25.1%), C=64/g=2 13,263 -> 11,611
+  (-12.5%), C=64/g=16 27,592 -> 22,182 (-19.6%), C=64/g=1 10,374 -> 9,976
+  (-3.8%). Gain is larger at bigger `g` because more packets per region means
+  more loads in flight. KEPT.
+- 2026-08-11 exp_04 **the number that redirects the M-series: 4x MLP bought only
+  ~20% of service cost, so the COPY IS A MINORITY of what the service pool
+  does.** At most ~19% is byte movement; **~81% is bookkeeping** -- the per-slot
+  event poll, the `fetch_add_acq_rel` arrival, the `g`-wide group-completion
+  probe loop, the `atomicOr` claim, the `flush_pending` release. **Prefer the
+  atomic/fence-removing ablations (M4 per-XCD arrival counters, A10 amortized
+  release) over the byte-moving ones (M3 bands, M1/M2 cache bits) on this path.**
+- 2026-08-11 exp_04 **the register tax of CTA role specialization, measured.**
+  `packet16 staged[4]` is 64 B/lane and scratch went 60 -> 128 B: the staging
+  array spilled to scratch, not registers, because the kernel is pinned at
+  VGPR 256 / AGPR 256 by the MFMA path. That is why the gain is 14-29% and not
+  ~75%. `kPushBatch=2` is the control (+16 B) and exposes a second failure --
+  the compiler promotes the smaller alloca to **LDS**, taking LDS to 163,632 B
+  and breaking the byte-exact 155,428 B gate, so Batch=2 is inadmissible.
+  **A service CTA gets the same 256 ArchVGPR + 256 AGPR as a compute CTA because
+  allocation is static and per-kernel; it never issues MFMA, cannot use what the
+  MFMA path reserved, and cannot obtain one extra register.** CTA-level role
+  specialization does NOT sidestep the HipKittens wave-specialization register
+  problem -- **it relocates it.** Treat as a standing constraint on every future
+  role-split candidate. The mode-0 control (7,387 vs 7,421) proves the reserved
+  scratch is free to the compute path.
+- 2026-08-11 exp_02b **dec02, decision campaign at the BEST mode-2 point**
+  (C=64,g=1,flush_rows=16), 5 rotations, 3 paired arms, all gates green:
+  `production 7,706.9` / `pf6gm_mega 6,891.7` (**0.89421**) / `mps_mega
+  10,643.3` = **1.544x pf6gm**. Screening had predicted 10,374, so the 40x
+  cheaper instrument tracks a real campaign to **2.6%**. Ratchet unchanged:
+  `pf6gm_mega` at 0.894x production remains the best candidate.
+- 2026-08-11 `literature:` **CLAUDE.md's M3 row and A2 note cited the wrong
+  paper and the wrong hardware; both corrected in place.** The "32-64 KiB far
+  from saturation / 87 GB/s / ~1 MiB knee" numbers are **arXiv 2607.19539 §3.3.2
+  Fig 3(a) on 4x A100 over NVLink**, not COMET -- COMET (2502.19811) has no §3.3
+  and **no bandwidth-vs-transfer-size measurement anywhere**. The "70x below the
+  knee" arithmetic is right (73.1x) but the conclusion never divided by `C`: at
+  C=32 the model needs only **4.63 GB/s per service CTA**, and 148 GB/s is 27.5%
+  of aggregate egress, not a saturation target. AMD's own **mori-EP reports
+  234-420 GB/s xGMI combine on MI355X at hidden=7168 BF16 -- a 14,336 B
+  per-token payload, exactly our g=16 unit** -- refuting the strong form. **M3
+  demoted below the fence class.** Also: COMET reports no separately measured
+  layer-0 vs layer-1 speedup, so the M-series' "mechanism measured" tag on
+  M7/M8 is unsupported; and Fleet is a single-GPU multi-die megakernel with no
+  peer-bandwidth data, so it backs M4's fence claims only.
+- 2026-08-11 `protocol:` **an unproven ordering hole makes every mode-2 g<16
+  number provisional.** In mode 2 the row-completion flag is released by the
+  wave that pushed the LAST slice group, but the other `16/g - 1` groups of that
+  row were pushed by different waves on different CTAs, and `s_waitcnt vmcnt` is
+  per-wavefront -- so the publisher's release covers only its own packets. At
+  g=16 there is one claimant per row and the hole closes; at g in {1,2,4} it is
+  open. It would present as intermittent wrong numbers with `pperr == 0`.
+  Mitigating evidence: 15/15 correctness gates and 5/5 600-epoch soaks passed at
+  C=8/g=2 and again at C=64/g=1, and mps_mega's `max_abs`/`relative` are
+  identical to pf6gm's every run. Not yet discriminated. Cheapest test: same-run
+  g=16 vs g=4. `counter.cuh`'s `counted_arrive_release_into` docstring warns
+  about exactly this and the kernel open-codes past it.
+- 2026-08-11 `protocol:` **A4 `pull_fallback=1` is not a valid CORRECTNESS arm
+  as written** -- it reads remote `part` over xGMI, but mode 2 never executes a
+  per-CTA system release of `part` (the mode-0/1 blocks that do are skipped and
+  the reference's M7.5 grid barrier is deliberately gone). Its measured 10,576 us
+  stands as a performance datum only. That datum is still decisive for its
+  purpose: push and pull land within 2%, so **transport is not the lever.**
