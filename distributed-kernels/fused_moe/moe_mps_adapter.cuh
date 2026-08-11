@@ -124,7 +124,16 @@ __host__ __device__ __forceinline__ int event_chunk(std::uint32_t word) {
 __device__ __forceinline__ std::uint64_t realtime_now() {
 #if defined(__HIP_DEVICE_COMPILE__)
     std::uint64_t t;
-    asm volatile("s_memrealtime %0" : "=r"(t) :: "memory");
+    // `s_memrealtime` is an SMEM instruction: its destination SGPR pair is NOT
+    // valid until `s_waitcnt lgkmcnt(0)`. Without the wait the caller reads
+    // whatever the register happened to hold, so sites that follow LDS traffic
+    // (which carries its own lgkmcnt wait) read a real clock while sites that
+    // do not read garbage. That is exactly the observed failure: LAST_READY and
+    // M7_DONE carried real clocks while DRAIN, REDUCE_DONE, M2_DONE and
+    // M6_DONE all read 1. Destination is a scalar pair, so the constraint is
+    // "s", not "r".
+    asm volatile("s_memrealtime %0\n\ts_waitcnt lgkmcnt(0)"
+                 : "=s"(t) :: "memory");
     return t;
 #else
     return 0;
