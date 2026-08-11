@@ -61,16 +61,38 @@ all CTAs:  M2 chunk-acquire unpack + row_remaining (unchanged)
 all CTAs:  M3–M5 barriers, plan, scatter, part zero               (unchanged)
 all CTAs:  M6 phase-1 GEMM, 256-CTA stride                        (UNCHANGED:
            specialization never taxes M6 — it is the G=3 win)
-M6.9:      role ticket: first C finishers become service CTAs;
-           others get dense compute ids 0 .. 255-C-1
+M6.9:      static-tail reservation: the C highest-bid CTAs become the
+           service pool; compute CTAs keep the donor's blockIdx.x start with
+           stride (256-C) re-derived from the descriptor inside the body
 compute:   M7 tasks strided by (256-C), hook per (b, nc):
              per-thread s_waitcnt vmcnt(0) → __syncthreads →
-             tid0: agent release → event store (b<<4|nc|MARK) → [diag: ts]
+             tid0: agent release → event store (b<<4|nc|MARK)
 service:   consume event stripes → arrivals/claims → push slices →
-             batch flags to owner → join reduction
+             batched flags to owner → join reduction
 compute:   after task drain → dynamic-ticket M8-slot reduction
 all CTAs:  M9 combine_done arrival, resets, retired pokes         (unchanged)
 ```
+
+### Performance model (pre-registration for interpreting the sweep)
+
+Measured attribution at G=3 (exp_35): `M6 2,773 / M7 1,844 / M8M9 1,309 / M1
+557 / M3M4M5 291 / M2 200 µs`. The mechanism targets the ~273 MB of remote
+`part` rows pulled after M7 (transport floor est. 620–769 µs); the required
+sustained push rate to hide ALL of it under M7 is only ~148 GB/s. Cost model:
+
+```
+T_new ≈ 6,919.8 + tax(C) − hidden
+tax(C)   = 1844.5·256/(256−C) − 1844.5          (C=4:29µs, 8:60µs, 16:123µs)
+hidden   ∈ [0, ~700 µs]                          (full: M8M9 → local-reduce floor)
+```
+
+So the pre-registered expectation for mode 2: `6,919.8 − 700 − 60 < T < 6,919.8`
+at C=8 if the service curve can hold ~148 GB/s (≈34 % of the measured
+posted-write floor) under M7's own traffic. A result > 6,919.8 (a loss) is a
+falsifier of the whole mechanism; between 6,650–6,850 is partial hiding; below
+~6,300 means the pipeline model is confirmed. This mechanism ALONE cannot reach
+the region-class ≥1.5× wins — those need the large-M expert-tile axis composed
+with it.
 
 Expected counts (all provable from device-published state):
 
@@ -83,23 +105,33 @@ Expected counts (all provable from device-published state):
 - M8 batches: `ceil(T/4)` claimed monotonically by ticket; each batch processed
   by exactly one wave.
 
-## 3. Producer/consumer roles and finish-order partition
+## 3. Producer/consumer roles and the reservation mechanism
 
-`finish_order_partition` (new `kittens::distributed` primitive): each CTA leader
-`fetch_add`s a monotonic agent counter when its M6 stripe completes. Ticket `< C`
-→ service; else compute with dense id `ticket - C`. Properties:
+The shipped mechanism is **static tail reservation**: the `C` highest-`bid`
+CTAs of the grid are the service pool; compute CTAs run M7 with the donor's
+free `blockIdx.x` start and a descriptor-derived stride of `(256-C)`.
 
-- no extra grid barrier (the partition precedes M7, and M6's own completion
-  ordering is the ticket order);
-- service CTAs exist from as early as the first M6 finisher → earliest possible
-  communication progress;
-- dense compute ids keep the M7 task loop exact: `for (task = id; task <
-  num_tasks; task += 256-C)` covers every task exactly once;
-- the role is per-epoch (cell zeroed at M0); rank-local (no cross-rank state);
-- compute CTAs that drain the task queue fall into the dynamic reduction queue;
-  service CTAs join it after their event stripes drain — COMET's fixed pools,
-  but with elastic late joining because CTAs are not reserved for an entire
-  operator.
+- Role test is FREE: `blockIdx.x` is a hardware uniform; no tickets, no
+  barrier, no cross-phase state.
+- On this kernel's uniform-cost, bid-interleaved task stripes, M6 completion
+  order has no bid-correlated bias, so tail reservation matches a random
+  `C`-subset for service availability; the event queue absorbs M6 skew.
+- **Rolled back (recorded):** finish-order tickets (`finish_order_partition` in
+  `roles.cuh`, retained for the library) were measured to cost +24 B/lane of
+  VGPR-pair spill slots at the phase-2 pointer peak — the two ticket words were
+  the only values allowed to cross the M6→M7 boundary, and that was still too
+  much. The reservation moved to static-tail. If a future campaign ends up
+  queue-starved in the M6-skew window, the finish-order variant may be
+  re-measured with the slot-overflow fixed.
+
+Properties kept from the original design:
+
+- no grid barrier anywhere between M6 and combine;
+- M7's task space remains exact over the compute pool;
+- compute CTAs that drain the task queue fall into the dynamic reduction
+  queue; service CTAs join it after their event stripes drain — COMET's fixed
+  pools, but with elastic late joining because CTAs are not reserved for an
+  entire operator.
 
 Register/occupancy note (AMD-specific): gfx950 has no `setmaxnreg`; service CTAs
 pay the union kernel footprint. The benefit is therefore *not* occupancy — it is
