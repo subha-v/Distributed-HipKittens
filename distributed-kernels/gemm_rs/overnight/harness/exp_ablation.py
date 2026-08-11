@@ -31,7 +31,7 @@ from harness_lib import rt, WORLD, GemmRS
 
 REPO = "/home/subvadla/dhk"
 SRC = f"{REPO}/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp"
-HARNESS = f"{REPO}/.node/harness"
+HARNESS = f"{REPO}/distributed-kernels/gemm_rs/overnight/harness"
 SCRATCH = f"{HARNESS}/ablate"
 BUILD = f"{HARNESS}/build"
 

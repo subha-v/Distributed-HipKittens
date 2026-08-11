@@ -266,20 +266,26 @@ largest remaining engineering item.
 
 ## Reproducing
 
-From `.node/`, on the node, inside container `dhk-gemmrs`:
+`ON=/home/subvadla/dhk/distributed-kernels/gemm_rs/overnight` on the node;
+kernel work runs inside container `dhk-gemmrs`.
 
 ```bash
-bash setup_container.sh              # host: create the container
-bash set_clocks.sh pin 1900          # host: pin clocks before any timing
-bash harness/build.sh                # three modules
-python3 harness/smoke.py             # peer access, shapes, descriptors
-python3 harness/m3_correctness.py all
-python3 harness/m4_controls.py
-python3 harness/m5_soak.py 600 512 4096 12288 1 1
-python3 harness/m7_bench.py 3 50
-python3 harness/m8_graph.py
-python3 harness/exp_ablation.py 40
-python3 harness/exp_reducer_sweep.py 40
-python3 harness/exp_granularity.py 30
-bash run_competition_bench.sh        # official evaluator, rank-1 + reference
+bash $ON/tools/setup_container.sh          # host: create the container
+bash $ON/tools/set_clocks.sh pin 1900      # host: pin clocks before any timing
+docker exec dhk-gemmrs bash $ON/harness/build.sh
+docker exec -w $ON/harness dhk-gemmrs python3 smoke.py
+docker exec -w $ON/harness dhk-gemmrs python3 m3_correctness.py all
+docker exec -w $ON/harness dhk-gemmrs python3 m4_controls.py
+docker exec -w $ON/harness dhk-gemmrs python3 m5_soak.py 600 512 4096 12288 1 1
+docker exec -w $ON/harness dhk-gemmrs python3 m7_bench.py 3 50
+docker exec -w $ON/harness dhk-gemmrs python3 m8_graph.py
+docker exec -w $ON/harness dhk-gemmrs python3 exp_ablation.py 40
+docker exec -w $ON/harness dhk-gemmrs python3 exp_reducer_sweep.py 40
+docker exec -w $ON/harness dhk-gemmrs python3 exp_granularity.py 30
+
+bash $ON/tools/run_ours_evaluator.sh       # official evaluator, our kernel
+bash $ON/tools/run_rank1_bench3.sh         # official evaluator, rank-1
 ```
+
+From Windows: `tools/push.ps1` to sync, `tools/nsh.ps1 -Script <file>` to run a
+script remotely (never inline `ssh host "..."` — see HANDOFF.md).

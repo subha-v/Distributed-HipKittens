@@ -4,7 +4,7 @@
 # device-cell epoch RMW).
 set -uo pipefail
 
-OUT=/home/subvadla/dhk/.node/build
+OUT=/home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/build
 S=$OUT/isa/gemm_rs_mi300x-hip-amdgcn-amd-amdhsa-gfx942.s
 
 echo "################ raw resource remarks ################"

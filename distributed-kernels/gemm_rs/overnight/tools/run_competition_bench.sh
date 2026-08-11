@@ -14,7 +14,7 @@ set -uo pipefail
 
 SRC=/home/subvadla/ddt-exp026-o1-stock-gemm-rs-test-de730f29/runtime/exp026-stock-gemm-rs-test-de730f29/stock_gemm_rs__test/cwd
 RANK1=/home/subvadla/amd-master/auto-gpu-kernel/k2_mi300x_megakernel/references/submissions/gemm_rs_rank1_58abcf.py
-ROOT=/home/subvadla/dhk/.node/compbench
+ROOT=/home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/compbench
 mkdir -p "$ROOT"
 
 # The six graded benchmark shapes, verbatim from task.yml `benchmarks:`.

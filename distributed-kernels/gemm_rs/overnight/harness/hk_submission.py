@@ -1,0 +1,246 @@
+"""Our MI300X GEMM-RS megakernel, packaged for the OFFICIAL evaluator.
+
+The evaluator runs one process per rank under torch.distributed, so the
+symmetric heap that the single-process harness got for free has to be built
+with HIP IPC here: each rank allocates its own payload and signal regions,
+publishes an IPC handle, and opens the other seven. The resulting eight base
+addresses are handed to the unmodified production host ABI
+(snapshot_allocation_descriptors) exactly as before.
+
+Why the epoch protocol is safe under this harness: eval.py's distributed
+benchmark loop barriers the ranks and has rank 0 broadcast the stop decision,
+so every rank calls custom_kernel the same number of times. The device-derived
+per-CTA epochs therefore stay in lockstep across ranks, which is the one thing
+this protocol requires of its caller.
+
+State is cached per shape. Allocation, IPC exchange and descriptor construction
+happen once per shape on every rank, never inside the timed region.
+"""
+
+import importlib.util
+import os
+
+import torch
+import torch.distributed as dist
+
+BUILD_DIR = os.environ.get(
+    "HK_BUILD_DIR", "/home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/harness/build")
+
+
+def _load(name):
+    path = os.path.join(BUILD_DIR, f"{name}.so")
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+rt = _load("dhk_rt")
+_kernel = _load("gemm_rs_mi300x")
+_entry = _kernel.gemm_rs_mi300x
+
+WORLD = 8
+SPIN_LIMIT = int(os.environ.get("HK_SPIN_LIMIT", 20_000_000))
+DEBUG = bool(int(os.environ.get("HK_DEBUG", "0")))
+
+
+def _log(message):
+    if DEBUG:
+        import sys
+        rank = dist.get_rank() if dist.is_initialized() else -1
+        print(f"[hk rank {rank}] {message}", file=sys.stderr, flush=True)
+
+
+class _Device:
+    def __init__(self, kind):
+        self.type = kind
+
+
+class Tensor:
+    """Duck-typed view for pyutils' gl<> arguments.
+
+    pyutils checks __class__.__name__ == "Tensor" and reads only shape,
+    data_ptr, is_contiguous and device.type. Shapes are always spelled 4-D
+    because pyutils left-pads shorter ones, which would silently move the batch
+    extent into the depth slot.
+    """
+
+    def __init__(self, pointer, shape):
+        self._pointer = int(pointer)
+        self.shape = tuple(int(x) for x in shape)
+        self.device = _Device("cuda")
+
+    def is_contiguous(self):
+        return True
+
+    def data_ptr(self):
+        return self._pointer
+
+
+def _align(value, alignment=4096):
+    return ((value + alignment - 1) // alignment) * alignment
+
+
+# State is bound to the process-group generation, not just to the shape.
+#
+# eval.py drives the ranks with multiprocessing.Pool(8) and calls
+# init_process_group / destroy_process_group once per test case. The pool
+# reuses worker processes, and the worker-to-rank assignment is NOT stable
+# across test cases: a worker that served rank 6 can serve rank 1 next. A cache
+# keyed only by shape therefore hands a later rank an allocation belonging to
+# another device, which the evaluator catches as
+# "Output device mismatch: cuda:6 != cuda:1".
+#
+# Keying by rank alone would not be enough either: the lazy setup performs
+# collectives, so every rank has to enter it on the same call. Detecting the
+# process group's identity gives exactly that -- all ranks see a new group on
+# their first call of a test case, so they initialize together.
+_STATE = None
+_STATE_PG = None
+_RETAINED = []   # keeps every allocation alive; see custom_kernel's docstring
+
+
+def _current_group():
+    try:
+        return dist.distributed_c10d._get_default_group()
+    except Exception:
+        return None
+
+
+class _ShapeState:
+    def __init__(self, m, n, k, has_bias, rank):
+        self.rank = rank
+        torch.cuda.set_device(rank)
+        self.plan = rt.resolve_shape(m, n, k, has_bias)
+        plan = self.plan
+        self.m, self.n = m, n
+        self.k_local = plan["k_local"]
+        self.slice_rows = plan["slice_rows"]
+
+        c_bytes = _align(int(plan["c_heap_bytes"]))
+        sig_bytes = _align(int(plan["signal_words_total"]) * 4)
+
+        # Payload coarse-grained, signals fine-grained. Measured on this node:
+        # granularity is worth <1% either way, but the signals are relaxed
+        # system-scope atomics with no surrounding fence, so they get the
+        # fine-grained allocation.
+        self.c_local = rt.plain_alloc(rank, c_bytes)
+        try:
+            self.sig_local = rt.fine_alloc(rank, sig_bytes)
+            self.sig_fine = True
+        except Exception:
+            self.sig_local = rt.plain_alloc(rank, sig_bytes)
+            self.sig_fine = False
+
+        _log(f"allocated c={hex(self.c_local)} sig={hex(self.sig_local)} "
+             f"fine_sig={self.sig_fine}")
+
+        self.c_bases = self._exchange(self.c_local, rank, "c_heap")
+        self.sig_bases = self._exchange(self.sig_local, rank, "signals")
+
+        self.ep_cell = rt.plain_alloc(rank, rt.EP_U32 * 4)
+        self.err = rt.plain_alloc(rank, 4)
+
+        self.desc_c, self.desc_sig = rt.make_descriptors_split(
+            rank, rank, self.c_bases, self.c_local,
+            self.sig_bases, self.sig_local)
+        _log("descriptors uploaded")
+
+        self.c_view = Tensor(self.c_local, (WORLD, 1, self.slice_rows, n))
+        self.out = torch.zeros((self.slice_rows, n), dtype=torch.bfloat16,
+                               device=f"cuda:{rank}")
+        self.out_view = Tensor(self.out.data_ptr(),
+                               (1, 1, self.slice_rows, n))
+
+        # Every rank must finish setup before any rank launches: a producer
+        # writes into a peer's heap on its very first tile. A NCCL barrier is
+        # only enqueued, so it is followed by a device sync.
+        _log("setup barrier")
+        dist.barrier()
+        torch.cuda.synchronize(rank)
+        _log("setup barrier done")
+
+    def _exchange(self, local_pointer, rank, label):
+        """Publish this rank's allocation and open every peer's."""
+        _log(f"{label}: get_ipc_handle")
+        handle = rt.ipc_get_handle(rank, local_pointer)
+        handles = [None] * WORLD
+        _log(f"{label}: all_gather_object")
+        dist.all_gather_object(handles, handle)
+        _log(f"{label}: gathered {sum(h is not None for h in handles)}/8")
+        bases = []
+        for peer in range(WORLD):
+            if peer == rank:
+                bases.append(local_pointer)
+            else:
+                bases.append(rt.ipc_open_handle(rank, handles[peer]))
+        _log(f"{label}: opened all peers")
+        return bases
+
+    def launch(self, x, w, bias):
+        plan = self.plan
+        rank = self.rank
+        _entry(
+            Tensor(x.data_ptr(), (1, 1, self.m, self.k_local)),
+            Tensor(w.data_ptr(), (1, 1, self.n, self.k_local)),
+            self.c_view, self.out_view,
+            self.desc_c, self.sig_local, self.desc_sig, self.ep_cell,
+            0 if bias is None else bias.data_ptr(),
+            self.err,
+            torch.cuda.current_stream(rank).cuda_stream, SPIN_LIMIT,
+            rank, self.m, self.n, self.k_local,
+            int(plan["lrow_count"]), int(plan["col_count"]), int(plan["eb"]),
+            int(plan["num_gemm_ctas"]), int(plan["ready_words"]),
+            1 if plan["packet_fast_path"] else 0,
+            0, 0, 0,
+            int(plan["config_row"]), 1 if plan["even_k"] else 0,
+        )
+        return self.out
+
+    def error_bits(self):
+        raw = rt.device_to_host(self.rank, self.err, 4)
+        return int.from_bytes(raw, "little", signed=True)
+
+def custom_kernel(data):
+    """Nothing is ever freed, deliberately.
+
+    Releasing the previous shape's heap between test cases means closing peer
+    IPC mappings while other ranks may still hold them, and it makes the setup
+    path asymmetric if the evaluator's process pool respawns a worker (a fresh
+    worker has no state to release and so would skip a collective the others
+    take, deadlocking the group). Retaining every allocation costs at most a
+    few hundred MB per device across the whole case list and removes both
+    hazards.
+    """
+    global _STATE, _STATE_PG
+
+    x, w, bias = data
+    rank = dist.get_rank()
+    torch.cuda.set_device(rank)
+
+    m, k_local = x.shape
+    n = w.shape[0]
+    k_global = k_local * WORLD
+    key = (rank, m, n, k_global, bias is not None)
+
+    group = _current_group()
+    stale = (_STATE is None or _STATE_PG is not group or _STATE.key != key)
+    if stale:
+        reason = ("no state" if _STATE is None else
+                  "new process group" if _STATE_PG is not group else
+                  f"key {_STATE.key} -> {key}")
+        _log(f"building state: {reason}")
+        state = _ShapeState(m, n, k_global, bias is not None, rank)
+        state.key = key
+        _RETAINED.append(state)
+        _STATE = state
+        _STATE_PG = group
+        _log("state ready")
+
+    out = _STATE.launch(x, w, bias)
+    if DEBUG:
+        torch.cuda.synchronize(rank)
+        bits = _STATE.error_bits()
+        if bits:
+            _log(f"ERROR BITS 0x{bits:x}")
+    return out

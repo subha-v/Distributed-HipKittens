@@ -7,7 +7,7 @@ set -uo pipefail
 
 REPO=/home/subvadla/dhk
 SRC=$REPO/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp
-OUT=$REPO/.node/build
+OUT=$REPO/distributed-kernels/gemm_rs/overnight/build
 ISA=$OUT/isa
 mkdir -p "$ISA"
 

@@ -5,7 +5,7 @@ set -uo pipefail
 
 REPO=/home/subvadla/dhk
 SRC=$REPO/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp
-OUT=$REPO/.node/build
+OUT=$REPO/distributed-kernels/gemm_rs/overnight/build
 mkdir -p "$OUT"
 
 PYINC=$(python3 -c 'import sysconfig;print(sysconfig.get_paths()["include"])')

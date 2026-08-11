@@ -244,6 +244,71 @@ py::tuple make_descriptors(int device, int rank,
     return py::make_tuple(base, base + sizeof(descriptor_type));
 }
 
+// ---------------------------------------------------------------------------
+// Cross-process symmetric memory. The single-process harness could hand the
+// kernel peer pointers directly; the official evaluator runs one process per
+// rank, so the heaps have to be shared through HIP IPC and the handles
+// exchanged out of band (torch.distributed on the Python side).
+// ---------------------------------------------------------------------------
+py::bytes ipc_get_handle(int device, std::uintptr_t pointer) {
+    use_device(device);
+    hipIpcMemHandle_t handle{};
+    hip_ok(hipIpcGetMemHandle(&handle, reinterpret_cast<void*>(pointer)),
+           "hipIpcGetMemHandle");
+    return py::bytes(reinterpret_cast<const char*>(&handle),
+                     sizeof(hipIpcMemHandle_t));
+}
+
+std::uintptr_t ipc_open_handle(int device, const py::bytes& blob) {
+    use_device(device);
+    const std::string raw = blob;
+    if (raw.size() != sizeof(hipIpcMemHandle_t)) {
+        throw std::invalid_argument("IPC handle has the wrong size");
+    }
+    hipIpcMemHandle_t handle{};
+    std::memcpy(&handle, raw.data(), sizeof(handle));
+    void* pointer = nullptr;
+    hip_ok(hipIpcOpenMemHandle(&pointer, handle,
+                               hipIpcMemLazyEnablePeerAccess),
+           "hipIpcOpenMemHandle");
+    return reinterpret_cast<std::uintptr_t>(pointer);
+}
+
+void ipc_close_handle(int device, std::uintptr_t pointer) {
+    use_device(device);
+    hip_ok(hipIpcCloseMemHandle(reinterpret_cast<void*>(pointer)),
+           "hipIpcCloseMemHandle");
+}
+
+// Whether a given allocation flavour can even be shared by IPC on this stack.
+// Fine-grained allocations are what the protocol's signal region wants; if IPC
+// rejects them the caller needs to know before it builds a descriptor.
+py::dict ipc_probe(int device) {
+    py::dict out;
+    for (const char* kind : {"coarse", "fine"}) {
+        std::uintptr_t pointer = 0;
+        std::string status = "ok";
+        try {
+            pointer = (std::string(kind) == "fine")
+                          ? fine_alloc(device, 4096)
+                          : plain_alloc(device, 4096);
+            hipIpcMemHandle_t handle{};
+            const hipError_t rc =
+                hipIpcGetMemHandle(&handle, reinterpret_cast<void*>(pointer));
+            if (rc != hipSuccess) status = hipGetErrorString(rc);
+            (void)hipGetLastError();
+        } catch (const std::exception& error) {
+            status = error.what();
+        }
+        if (pointer) {
+            use_device(device);
+            (void)hipFree(reinterpret_cast<void*>(pointer));
+        }
+        out[kind] = status;
+    }
+    return out;
+}
+
 // Two independent symmetric allocations, each anchored at its own heap base.
 //
 // The payload heap and the signal heap have different coherence requirements.
@@ -357,6 +422,13 @@ PYBIND11_MODULE(dhk_rt, module) {
     module.def("make_descriptors", &make_descriptors, py::arg("device"),
                py::arg("rank"), py::arg("heap_bases"), py::arg("c_heap"),
                py::arg("signals"));
+    module.def("ipc_get_handle", &ipc_get_handle, py::arg("device"),
+               py::arg("pointer"));
+    module.def("ipc_open_handle", &ipc_open_handle, py::arg("device"),
+               py::arg("blob"));
+    module.def("ipc_close_handle", &ipc_close_handle, py::arg("device"),
+               py::arg("pointer"));
+    module.def("ipc_probe", &ipc_probe, py::arg("device") = 0);
     module.def("make_descriptors_split", &make_descriptors_split,
                py::arg("device"), py::arg("rank"), py::arg("c_bases"),
                py::arg("c_heap"), py::arg("sig_bases"), py::arg("signals"));

@@ -7,7 +7,7 @@ set -uo pipefail
 
 REPO=/home/subvadla/dhk
 GEMM=$REPO/distributed-kernels/gemm_rs
-HARNESS=$REPO/.node/harness
+HARNESS=$REPO/distributed-kernels/gemm_rs/overnight/harness
 OUT=$HARNESS/build
 mkdir -p "$OUT"
 
