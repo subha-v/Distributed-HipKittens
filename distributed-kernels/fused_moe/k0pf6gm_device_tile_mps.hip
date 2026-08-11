@@ -272,9 +272,8 @@ __device__ __forceinline__ int k0p6_mps_stride(const long long* desc, int nct) {
 __device__ __forceinline__ void k0p6_mps_task_done(int b, int nc, int tid,
                                                    const long long* k0p6_desc) {
   if (tid != 0) return;
-  const hk_moe::mps::config mps_cfg = hk_moe::mps::decode_config(
-      (std::uint64_t)k0p6_dread(k0p6_desc, K0P6_D_MPS_CFG));
-  if (mps_cfg.mode == 2u) {
+  if (((unsigned long long)k0p6_dread(k0p6_desc, K0P6_D_MPS_CFG) >> 16 &
+       0xFFull) == 2ull) {
     std::uint32_t* mps_q = (std::uint32_t*)k0p6_dread(k0p6_desc, K0P6_D_MPS_Q);
     std::uint32_t* mps_state =
         (std::uint32_t*)k0p6_dread(k0p6_desc, K0P6_D_MPS_STATE);
