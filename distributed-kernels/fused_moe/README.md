@@ -97,6 +97,13 @@ correctness + negative control + 600-epoch soak per mode, then same-run
 paired timing versus both the parity port and production, sweeping
 `C × g × flush_rows` with the mode-0 and mode-1 controls measured first.
 
+`BENCHMARKING.md` specifies that timing step end to end: the MoK synthetic
+prefill campaign, the three arms (`production`, `pf6gm_mega` — the past-best
+megakernel this port descends from — and `mps_mega`), the arm registration
+still owed in `amd-master`, the sweep-as-config-word rule, and the exact
+commands. The decision number is `mps_mega / pf6gm_mega`, not the ratio
+against production: beating production is already recorded in `PROVENANCE.md`.
+
 The host bridge returns the 72-byte heap descriptor as an ordinary POD. After
 the runtime uploads that POD, wrap its device-visible address in
 `hk_moe::host_abi::device_visible_descriptor_address` and use

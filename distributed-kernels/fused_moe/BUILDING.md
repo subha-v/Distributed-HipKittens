@@ -123,3 +123,9 @@ MPS-specific gates, in addition to everything above:
 - `pull_fallback` (cfg bit 32) isolates streamed readiness from push
   transport; expect it to bound the owner-poll gain before trusting mode 2's
   full win.
+
+Timing itself — the MoK campaign, the `production` and `pf6gm_mega` reference
+arms, the arm registration this sibling still needs, and the exact commands —
+is specified in `BENCHMARKING.md`. Read it before running anything in the
+"paired timing" step above; in particular the `K0_PF6GM_G` default trap, which
+otherwise measures a G=3 candidate against a G=2 reference.

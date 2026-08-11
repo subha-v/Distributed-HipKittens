@@ -58,6 +58,19 @@ Latest additions to the device primitive layer and the fused-MoE port
   descriptor-selected runtime sweep in one binary. Host/static validated only;
   see `distributed-kernels/fused_moe/DESIGN_MPS.md` for the design record and
   the required GPU gates.
+- `distributed-kernels/fused_moe/BENCHMARKING.md` — the measurement half of that
+  handoff, so "paired timing" resolves to a runnable procedure on the 8× MI350X
+  (`gfx950`) node. Pins the MoK synthetic-prefill campaign in `amd-master`
+  (`benchmarks/mok_synthetic_prefill/run_campaign.sh`: eager, 500 warmup / 100
+  timed, seed `1234+rank`, index-aligned rank-max, median primary, rotated arm
+  order, MoK MXFP8 correctness blocking and the strict k0 gate diagnostic), the
+  three arms — `production`, `pf6gm_mega` (the past-best megakernel this port
+  descends from) and the not-yet-registered `mps_mega` — the cross-repo arm
+  registration checklist in `prefill_opt/host/e004pf_k0pf_ab.py`, the rule that
+  the `C × g × mode` sweep travels in the descriptor config word rather than as
+  arm names, and the `K0_PF6GM_G` default trap that would otherwise compare a
+  G=3 candidate against a G=2 reference. The decision number is
+  `mps_mega / pf6gm_mega`.
 
 **News**
 - [January 2026] HipKittens is accepted to [MLSys 2026 in Seattle]()!
