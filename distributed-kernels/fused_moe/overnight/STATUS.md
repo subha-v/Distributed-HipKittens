@@ -1,26 +1,45 @@
 # Overnight status — the two-minute morning read
 
-Written 2026-08-11 ~09:45 UTC. Full detail in `experiments/LESSONS.md`
-(append-only) and the per-experiment `result.md` files.
+Full detail in `experiments/LESSONS.md` (append-only) and the per-experiment
+`result.md` files.
 
 ## The headline
 
-**The fault is fixed and the mission's question is answered. The margin over
-`production` is NOT yet wider than it was — it is unchanged at 0.895x — and the
-reason is now measured rather than guessed.**
+**The CTA-specialized megakernel now BEATS the homogeneous one, and the margin
+over `production` widened for the first time: 0.894 → 0.888.**
 
 | arm | µs (5-rotation median rank-max p50) | vs `production` |
 |---|---:|---:|
-| `production` | 7,731.2 | 1.000 |
-| **`pf6gm_mega` — still the ratchet** | **6,904.1** | **0.893** |
-| `mps_mega`, best point (C=64, g=1, mode 2) | 10,075.8 | 1.303 |
+| `production` | 7,729.4 | 1.000 |
+| `pf6gm_mega` (previous ratchet, homogeneous) | 6,910.9 | 0.894 |
+| **`mps_mega` — new ratchet, C=64 g=1 mode 2** | **6,866.1** | **0.888** |
 
-Final verification campaign `dec05` on the shipped tree, 15 correctness gates,
-5/5 negative controls, 5/5 600-epoch soaks, zero faults. Four full decision
-campaigns were run tonight (`dec01` C=8 → 57,347; `dec02` C=64 pre-MLP →
-10,643.3; `dec03` C=64 post-MLP → 10,107.0; `dec05` final → 10,075.8). A fifth,
-`dec04`, was **discarded** — a node resync mid-campaign mixed two kernels into
-one summary; the guard for that is now in the driver.
+`mps_mega / pf6gm_mega = 0.9935`. Campaign `dec07`, all 15 correctness gates,
+5/5 negative controls, 5/5 600-epoch soaks, zero faults.
+
+### How it got there — every step driven by the phase profile
+
+| change | vs `pf6gm` |
+|---|---:|
+| start (fault just fixed) | 1.544× |
+| `exp_04` MLP fan-out in the peer copy | 1.464× |
+| `exp_12` dynamic event ticket + compute-CTA fall-through | 1.077× |
+| `exp_14` drop two provably-redundant atomics at `g=1` | **0.9935×** |
+
+> **An earlier version of this file concluded the opposite** — that CTA-level
+> overlap was "close to a wash" and both boundaries were closed. That
+> generalization was wrong, for an instructive reason: every measurement behind
+> it was taken on a service pool whose size was **fixed at launch** and whose
+> readiness protocol spent **~1.58M atomics per rank per epoch**. Both are
+> properties of *our protocol*, not of role specialization. The measurements
+> were sound; only the conclusion drawn from them was not. The superseded
+> reasoning is kept in `LESSONS.md` deliberately.
+
+Decision campaigns run: `dec01` C=8 → 57,347 · `dec02` C=64 pre-MLP → 10,643.3 ·
+`dec03` post-MLP → 10,107.0 · `dec05` verification → 10,075.8 · `dec06`
+fall-through → 7,420.7 · **`dec07` +atomics → 6,866.1**. `dec04` was
+**discarded** (a node resync mid-campaign mixed two kernels into one summary;
+the driver now refuses to sync under a running job).
 
 ## What was established
 
@@ -103,15 +122,47 @@ Two consequences:
   exp_07 and exp_08 are both evidence. **But see the caveat below: a cheap M4
   may not exist.**
 
-## The thesis of the night
+## The phase profile — the instrument that unlocked everything
+
+Splitting the kernel into phases (exp_11) is what turned tuning into
+engineering. Near-parity kernel (mode 0, C=2; 6,989 µs vs a paired `pf6gm_mega`
+of 7,051 — statistically the same kernel):
+
+| phase | µs | share | moves when 62 of 256 CTAs are removed? |
+|---|---:|---:|---|
+| dispatch (M0–M2) | 1,193 | 17% | — |
+| plan (M3–M5) | 415 | 6% | — |
+| **M6 (GEMM 1)** | **2,539** | **36%** | **no — +0.5%** |
+| M7 (GEMM 2) | 1,586 | 23% | **yes — +27%, linear** |
+| combine (M8/M9) | 1,255 | 18% | roughly no |
+
+**The entire capacity tax is M7's.** The old design reserved the pool at M6.9 —
+exactly where the CTA-rich phase ends and the CTA-starved phase begins. That one
+observation produced exp_12.
+
+### Where the remaining headroom is
+
+At the winning point every phase is at or better than the homogeneous baseline
+**except M7**: plan 413 (vs 415) · M6 2,588 (vs 2,539) · **M7 2,835 (vs 1,586,
++1,249)** · combine 446 (vs 1,255, **−809**). The combine is essentially fully
+hidden already (108 µs at C=96), so **the entire remaining prize is M7
+interference — worth ~5,617 µs ≈ 0.727× production if eliminated.**
+
+## Superseded: the thesis this campaign started with
 
 Putting the interference curve next to the prize it was supposed to buy gives a
 single, uncomfortable, *measured* statement:
 
-> **CTA-level comm/compute overlap needs communication *latency* to consume,
+> ~~CTA-level comm/compute overlap needs communication *latency* to consume,
 > and this layer on this workload has almost none. Where latency does not
 > exist, a role split can only move work between CTAs — and it pays a
-> memory-interference tax for doing so that is roughly equal to what it hides.**
+> memory-interference tax for doing so that is roughly equal to what it
+> hides.~~ **RETRACTED by exp_12/exp_14.** The interference was real but it was
+> ~44% removable protocol overhead, and the "wash" arithmetic assumed a pool
+> whose size was fixed at launch. What survives: the *dispatch* boundary
+> genuinely has no wait to hide (exp_10, `success_max = 0` spins), and the
+> interference is genuinely atomic traffic (exp_05/06/07) — which is exactly why
+> deleting atomics won.
 
 Both candidate boundaries are now closed **on measurement**, not on argument:
 
@@ -198,11 +249,31 @@ Partial answer, from measurement rather than opinion:
    the dominant driver of the `g` axis) and the per-wave publish that carries
    the ordering hole below. Highest-value library change on tonight's evidence.
 3. **Re-run the campaign on a workload that has communication latency** —
-   routing skew, a straggler rank, or multi-node. That is the honest way to test
-   the technique, because this workload does not contain what it feeds on.
-   `spin_dbg` (now surfaced as `[MPS SPIN]`) is the one-line check for whether a
-   candidate workload qualifies: large spins ⇒ real prize, near-zero ⇒ don't
-   bother.
+   routing skew, a straggler rank, or multi-node. `spin_dbg` (surfaced as
+   `[MPS SPIN]`) is the one-line check for whether a candidate workload
+   qualifies: large spins ⇒ real prize, near-zero ⇒ don't bother. The
+   `skewed_hot` family exists in `synthetic_routes.py` and `K0_SYNTH_ROUTE` is
+   now forwarded by the campaign driver.
+
+## The live queue — attacking M7 interference, the last +1,249 µs
+
+1. **Per-row arrival counters.** One counter per row, target `16 * row_rem[r]`,
+   push the whole 14,336 B row when it fires. Deletes the `pushed` counter
+   entirely (~349,056 atomics, a further ~39%) and makes the transfer one
+   contiguous row instead of sixteen 896 B slices. **`exp_09` predicted this
+   would fail and that prediction is withdrawn** — it conflated *fewer counters*
+   with *fewer cache lines per event*, but the 32 live lanes of an event address
+   32 *different rows*, so the line spread exp_07 showed is essential is
+   preserved. Trades some push/compute overlap for the atomic cut.
+2. **Stage the copy through the dead MFMA LDS.** exp_04 concluded the comm role
+   is register-starved with "only 8 KB of LDS headroom" — that counted
+   *unallocated* LDS. COMET's released code aliases the GEMM's shared storage
+   with a union, and our ~155 KB MFMA LDS region is dead during the service
+   phase. This is the register-free path to memory-level parallelism in the
+   copy, and it is untried.
+3. **COMET-style coarse readiness** — one flag per source rank plus one counter
+   per N-split, ~1,000× fewer atomics than ours. Requires their column-major
+   GroupGEMM reschedule as a prerequisite, so it is the largest of the three.
 
 **Do not** spend a build cycle on: `exp_05` stage 2, the M3–M5 rewrite for
 COMET layer-0 (exp_10 shows the prize is ~0 and `scope.md` shows it is not a
@@ -271,6 +342,10 @@ after the exp_01 fix landed, in any run.
 | `exp_08` | A8, XCD placement (new mode 3) | **A8 closed** — die-level pool cuts M7 interference 36% but starves the pool 54% |
 | `exp_09` | reducing the arrival count (M4) | analysis only — **no cheap M4 exists**, and the tempting idea is predicted to fail |
 | `exp_10` | dispatch peer wait | **axis closed** — `chunk_poll success_max = 0` of 2,000,000; there is no wait to hide |
+| `exp_11` | phase profile of the best megakernel | **the key instrument** — the entire capacity tax is M7's; M6 has idle CTAs |
+| `exp_12` | dynamic ticket + compute-CTA fall-through | **1.464× → 1.077×**, the largest single win |
+| `exp_13` | C cap raised to 128 | C=64 still optimal; mode 3 still loses even with fall-through |
+| `exp_14` | drop 2 redundant atomics at `g=1` | **RATCHET — 0.9935× pf6gm, 0.888× production** |
 
 ## Method note worth keeping
 
