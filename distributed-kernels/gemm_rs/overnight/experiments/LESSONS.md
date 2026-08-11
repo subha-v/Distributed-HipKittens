@@ -90,6 +90,49 @@
   `RESULTS.md` must be taken with `HK_DEBUG=0`. Debug output is for localizing
   the hang, never for a number.
 
+- **LATENT CORRECTNESS HAZARD found in the shipped mainloop by ISA read
+  (exp_03/P0). Not a measurement artifact — read the ISA before dismissing
+  it.** In `<256,256,32,*>` the k-loop is three blocks: a header issuing 24
+  `ds_read_b64` (inline asm, **no waitcnt**), a *guarded* prefetch block
+  holding the only `s_waitcnt lgkmcnt(0)`, and a latch of 64 MFMAs. The guard
+  `s_cbranch_scc1 .LBB3_86` (L11152) **skips the prefetch block on the last
+  k-iteration of every tile**, so on that path the `ds_read`s that fill
+  `A_frag`/`B_frag` reach the MFMAs with no intervening `lgkmcnt(0)`, and the
+  `s_barrier` at L10966 is bare. Root cause: every LDS op is wrapped in
+  `asm volatile`, so `SIInsertWaitcnts` never sees an LDS event and believes
+  `lgkmcnt` is already 0 — it emits neither the use-wait nor the
+  `__syncthreads()` wait. Identical in `<256,256,32,true>` (guard L16135, bare
+  barrier L16373).
+  On GCN/CDNA there is no hardware interlock on an LDS load's destination
+  register; `s_waitcnt` is mandatory. The gates pass today (17/17 at `2e-3`,
+  600-epoch soak, worst `max|diff| = 4.9e-4`), so the reads evidently land
+  during the branch and MFMA issue overhead — but **this is timing luck, not a
+  guarantee, and any scheduling change can expose it.**
+  Two consequences: (1) the E1(b) restructure adds an explicit `lgkmcnt(0)`
+  before the MFMA block, so it *repairs* this as a side effect; (2) do not
+  "simplify" that wait away later as redundant.
+
+- **The 12 B scratch / 2 spills are NOT in the k-loop (exp_03/P0).** All four
+  scratch instructions in each 256/256/32 symbol are once-per-CTA (L10287,
+  L10514) or once-per-tile (L10622 in the tile-loop header, L11401 in the
+  `error_bit_set` epilogue); **zero** are inside the k-loop, which runs 116×
+  per tile on shape 6. The spill therefore costs ~2 instructions per tile and
+  is worth approximately nothing. This independently confirms that **E1(a) was
+  never worth GPU time** — and it cost only a read of an already-built ISA to
+  establish. Cheap static evidence before an expensive dynamic experiment.
+
+- **The mainloop is worse than the pre-registration assumed, in a useful
+  direction.** Only **2** `global_load_dwordx4` are in flight before each
+  `vmcnt(0)`, so the 32 KB `BK=32` slab is drained in **two serialized halves**
+  — two fully exposed global round trips per k-iteration, not one. Also
+  established: counted `vmcnt(N>0)` waits already exist in this very TU (126 of
+  them, `vmcnt(1..7)`, all in the reducer accumulate path), so counted waits
+  are proven available on gfx942 here and are not a portability question.
+  One correction to the earlier claim: the 24 `ds_read`s *are* issued before
+  the global loads and not drained until after them, so LDS-read latency is
+  already hidden. "No global-load/MFMA overlap" is right; "no overlap at all"
+  was too strong.
+
 - **WIN, exp_02: uniform NR=32 landed. Geomean 285.02 → 280.74 µs (−1.5%).**
   Shape 6 **2865.78 → 2633.04 µs (−8.1%)**; shapes 1/3/4/5 within noise, shape
   2 −1.5%. Full ladder passed (M3 17/17 at both tolerances, M4 all three
