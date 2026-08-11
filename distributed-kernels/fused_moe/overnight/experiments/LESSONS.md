@@ -863,3 +863,49 @@
   arm launches and never touches the megakernel; and bf16 non-associativity is
   not new, since the epilogue already performs an unordered multi-CTA bf16 atomic
   fan-in of the same degree into `part`.
+
+- 2026-08-11 exp_20 **TIER 1 ANSWERED, AND IT RETRACTS exp_17: the 815 us of M7
+  interference is PROTOCOL, NOT PAYLOAD.** Mode 7 (mode 2 with the pool's entire
+  896 B copy deleted, kept correct by pull_fallback, vs mode 2 + pull_fallback)
+  moves M7 by **+5.7 us** against a **+/-40 us** band while **831.5 us of
+  interference remains**. The read side, the peer write and the fabric together
+  contribute **nothing in situ**. The copy costs 480 us of COMBINE only.
+  **exp_17's "the only remaining lever is to move fewer bytes" is RETRACTED.**
+- 2026-08-11 exp_20 **E1 failed its pre-registration: the interference is not
+  usefully rate-driven, and pacing is DEAD.** Pacing the pusher recovers 41% of
+  M7 (dM7 767 -> 450 us) but the combine pays **7:1** (+2,219 vs -316) and
+  `M2->end` rises monotonically 6,229 -> 8,134 us. **No interior minimum, so
+  pacing 0 is already optimal** -- every Tier-3 scheduling idea premised on
+  throttling the pusher is closed. Poll backoff (mode 8, 64x spin-rate cut) is a
+  flat null. E2 also failed its pre-registration (I predicted the local read
+  would dominate; in situ nothing dominates).
+- 2026-08-11 exp_20 **E3 HELD and A7 stays struck**: an LDS-only spinning pool is
+  **+23 us**, indistinguishable from the idle pool. Occupying a CU costs nothing;
+  this is now confirmed from three independent angles.
+- 2026-08-11 exp_20 **the isolation-vs-in-situ gap, and it retro-explains
+  exp_04.** Driven FLAT OUT IN ISOLATION the traffic classes rank read **+38** /
+  local write **+105** / **peer write +624** us -- a **519 us fabric surcharge at
+  5.96x**. The real pusher never reaches that regime because its MLP-1
+  `load -> wait -> store` shape throttles the writer ~5.9x. **The copy's
+  slowness is LOAD-BEARING: making it faster would IMPORT up to 519 us of fabric
+  cost.** That is why exp_04's MLP fan-out was a null, and it is a standing
+  warning against MLP, larger transfer units, and SDMA on this path.
+- 2026-08-11 **consequences for the plan.** (a) **M4 becomes the whole game** --
+  the remaining interference is the readiness protocol's own traffic.
+  (b) **A11/M11 is DEMOTED for M7** but retained for the combine, where the copy
+  genuinely costs 480 us. (c) **Prime remaining suspect, written but UNRUN:**
+  `flush_pending`'s `thread_release<system>` L2 writeback, ~2,400 per rank
+  per epoch, while M7 streams 470 MB through the same eight L2s. A mode-9
+  diagnostic is designed in `exp_20_interference/result.md`; it is NOT in the
+  source tree.
+- 2026-08-11 `ops:` **file collision, recorded so the tuple drift is not
+  mistaken for a regression.** exp_21 began committing to
+  `moe_mps_adapter.cuh` and `k0pf6gm_device_tile_mps.hip` mid-exp_20 and built
+  its mode 12 on exp_20's helpers, so exp_20's diagnostic modes were deliberately
+  NOT reverted (revert steps in `exp_20_interference/result.md` section 7).
+  Current tree therefore carries diagnostic modes 4/5/6/7/8 and exp_21's mode 12
+  together. **ArchVGPR 256 / AGPR 256 / scratch 128 B hold; SGPR is 106 and LDS
+  is 155,496 B (not the byte-exact 155,428) -- both are exp_21's changes, and the
+  LDS parity gate is currently broken.** Ratchet re-confirmed on the exp_20 tree
+  at **6,942 us / 0.888x production**, 37/37 runs green on gates, negative
+  control and 600-epoch soak.

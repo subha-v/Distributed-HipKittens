@@ -101,6 +101,30 @@ Two consequences:
   *(This retracts an earlier inference in this file that M10/SDMA should be
   promoted to first. SDMA offloads the bytes, which are not the problem. M10
   goes back down.)*
+> **SUPERSEDED BY exp_20 — read this first.** The section below concludes the
+> interference is payload/bandwidth. **It is not. It is protocol.** Deleting the
+> service pool's entire 896 B copy at the real event-driven rate moves M7 by
+> **+5.7 µs** (against a ±40 µs band) while **831 µs of interference remains**.
+> The read side, the peer write and the fabric contribute **nothing in situ**.
+> Consequences: exp_17's "the only remaining lever is to move fewer bytes" is
+> **retracted**; A11/M11 is **demoted for M7** (keep it for the combine, where
+> the copy really does cost 480 µs); **M4 becomes the whole game**; and every
+> Tier-3 idea premised on throttling the pusher is **dead** — pacing recovers
+> 41% of M7 but the combine pays 7:1 with no interior minimum, so pacing 0 is
+> already optimal.
+>
+> One measurement in exp_20 is worth carrying separately: driven **flat out in
+> isolation** the traffic classes rank read **+38** / local write **+105** /
+> peer write **+624** µs — a 519 µs fabric surcharge at 5.96×. The real pusher
+> never reaches that regime because its MLP-1 `load → wait → store` shape
+> throttles it ~5.9×. **So the copy's slowness is load-bearing, and speeding it
+> up would import fabric cost** — which retro-explains why exp_04's MLP fan-out
+> was a null.
+>
+> Prime remaining suspect, **written but unrun**: `flush_pending`'s
+> `thread_release<system>` L2 writeback, ~2,400 per rank per epoch, while M7
+> streams 470 MB through the same eight L2s.
+
 - **The floor decomposes: ~30% ordering scope, ~70% operation count.** exp_06
   relaxed the arrival RMW (a labelled, reverted, non-correctness-preserving
   diagnostic) and recovered 354 µs of the 1,159 µs floor at g=1. exp_07 then
@@ -346,6 +370,10 @@ after the exp_01 fix landed, in any run.
 | `exp_12` | dynamic ticket + compute-CTA fall-through | **1.464× → 1.077×**, the largest single win |
 | `exp_13` | C cap raised to 128 | C=64 still optimal; mode 3 still loses even with fall-through |
 | `exp_14` | drop 2 redundant atomics at `g=1` | **RATCHET — 0.9935× pf6gm, 0.888× production** |
+| `exp_16` | single-contributor fast path | null, reverted — but bounds the atomic share at ≤19% |
+| `exp_17` | streaming (`nt`) copy | null with `nt` verified in the ISA; its *conclusion* is retracted by exp_20 |
+| `exp_18` | remote bf16 atomics over xGMI | **PASS** incl. cross-device contention; A11 hardware blocker cleared |
+| `exp_20` | Tier 1 interference characterization | **the interference is PROTOCOL, not payload**; pacing dead; M4 promoted |
 
 ## Method note worth keeping
 
