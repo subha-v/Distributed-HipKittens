@@ -418,3 +418,26 @@
   per-XCD, per-CTA-group, or coalesced to one line per event -- would make M4 a
   configuration rather than a rewrite. **Single most valuable thing the library
   could learn from this campaign.**
+
+- 2026-08-11 **THE THESIS OF THE NIGHT, and it is measured rather than argued.**
+  Putting the interference curve next to the prize it was meant to buy:
+  **the memory-system interference a service pool inflicts on the concurrent
+  compute phase is approximately EQUAL to the communication time it hides, so
+  CTA-level overlap on this kernel is close to a wash.** Arithmetic, all from
+  tonight: a C=16 pool inflates the concurrent GEMM by **+37%**; applied to the
+  dispatch boundary that is 0.37 x 2,976 us (plan+M6) = **+1,100 us** against a
+  dispatch prize measured at **0.7-1.25 ms**. It cancels. The same cancellation
+  measured directly is why the combine boundary tops out at a tie: **even with
+  EVERY atomic and bookkeeping cost removed**, mode 2 at its best C reaches only
+  ~7,300-7,450 us against pf6gm's 6,906, because the capacity tax (M7 1,610 ->
+  2,020, combine 1,288 -> 1,482 at C=64) plus a non-zero service cost exceeds the
+  ~300 us the peeled-out pull was worth. **This closes the combine axis with
+  ATTRIBUTION rather than extrapolation.**
+- 2026-08-11 **the two escapes, and they are the next work.** (1) **Cut the
+  interference at its source** -- it is atomic FOOTPRINT, not payload (g-axis)
+  and not ordering strength (exp_06: scope is only ~30%). M4's per-XCD arrival
+  counters cut footprint and scope together, so **M4 is the ENABLING TECHNOLOGY
+  for CTA role specialization on CDNA4, not an optimization to try afterwards.**
+  (2) **Pick a boundary where the hidden communication is much larger than the
+  compute phase it runs under.** Neither of ours is; that is a property of this
+  MoE layer's shape and should be checked BEFORE designing the next split.

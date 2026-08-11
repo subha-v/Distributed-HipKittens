@@ -84,6 +84,38 @@ Two consequences:
   *Fleet* mechanism (per-XCD device-scope atomics resolving in the local L2, no
   fence required) targets the floor and the `g`-term at once.
 
+## The thesis of the night
+
+Putting the interference curve next to the prize it was supposed to buy gives a
+single, uncomfortable, *measured* statement:
+
+> **On this kernel and this machine, the memory-system interference a service
+> pool inflicts on the concurrent compute phase is approximately equal to the
+> communication time it hides. CTA-level overlap is close to a wash.**
+
+The arithmetic, entirely from tonight's measurements. A `C=16` pool inflates the
+concurrent GEMM phase by **+37%**. Applied to the dispatch boundary — the one
+remaining target — that is `0.37 × 2,976 µs (plan+M6) ≈ +1,100 µs` of
+interference against a dispatch prize measured at **0.7–1.25 ms**. It cancels.
+The same cancellation, measured directly rather than predicted, is why the
+combine boundary tops out at a tie: even with *every* atomic and every
+bookkeeping cost removed, mode 2 at its best `C` reaches ~7,300–7,450 µs against
+`pf6gm_mega`'s 6,906 µs, because the capacity tax plus a non-zero service cost
+exceeds the ~300 µs the peeled-out pull was worth.
+
+This is a verdict on **this boundary and this transport**, not on the technique.
+It has two clearly identified escapes, and they are the work worth doing next:
+
+1. **Cut the interference at its source.** It is atomic *footprint*, not payload
+   and not ordering strength (exp_06: scope is only ~30% of the floor). M4's
+   per-XCD arrival counters cut footprint and scope together. **M4 is the
+   enabling technology for CTA role specialization on CDNA4** — not an
+   optimization to try afterwards.
+2. **Pick a boundary where the hidden communication is much larger than the
+   compute phase it runs under.** Neither of ours is. That is a property of this
+   MoE layer's shape, and it should be checked before designing the next split
+   rather than after.
+
 ## The research question, so far
 
 > *Can CTA-level communication/computation overlap be made extremely performant
