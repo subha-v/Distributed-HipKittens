@@ -406,18 +406,16 @@ __device__ __forceinline__ void run_service(
         }
         bool push_lead = false;
         if (live) {
-            // *** exp_06 DIAGNOSTIC BUILD -- NOT A CANDIDATE, NOT CORRECTNESS-
-            // PRESERVING. *** The arrival RMW is normally acq_rel; exp_05 stage 0
-            // measured a g-INDEPENDENT +1,159 us of M7 interference and named
-            // this site the prime suspect (32 scattered cache lines per event,
-            // count independent of g). Weakening it to relaxed removes the
-            // acquire edge that the probe loop below relies on, so the gates may
-            // legitimately fail; the point is the timing delta, which bounds how
-            // much of the interference floor is attributable to the atomic's
-            // SCOPE rather than to its cache-line footprint. Revert after
-            // measuring. See exp_06_atomic_scope/result.md.
+            // exp_06 measured what this site's SCOPE costs: relaxing it to
+            // fetch_add_relaxed recovered 354 us of the 1,159 us M7 interference
+            // floor at g=1 (157 us at g=16), i.e. ~30%. The other ~70% is the
+            // atomic's 32-scattered-cache-lines-per-event footprint. The relaxed
+            // form is NOT correctness-preserving (it drops the acquire edge the
+            // probe loop below relies on) and was reverted; the measurement is
+            // the justification for M4, whose per-XCD counters cut scope and
+            // footprint together. See exp_06_atomic_scope/result.md.
             const std::uint32_t old =
-                kittens::distributed::fetch_add_relaxed<scope::agent>(
+                kittens::distributed::detail::fetch_add_acq_rel<scope::agent>(
                     env.nc_arr + (std::size_t)r * 16u + (std::size_t)nc, 1u);
             if (old + 1u == target) {
                 // Slice (r,nc) final. Group-check with acq_rel RMW probes so

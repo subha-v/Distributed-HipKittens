@@ -389,3 +389,32 @@
   would look completely different after M4 -- the exp_03 finding that "g is an
   atomics knob" and this interference curve are the same phenomenon seen from
   two sides.
+
+- 2026-08-11 exp_06 **how much of the interference floor is the atomic's SCOPE?
+  ~30%.** One-word DIAGNOSTIC (`acq_rel` -> `relaxed` on the arrival RMW,
+  NOT correctness-preserving, reverted immediately, never a candidate). At C=64:
+  g=1 M7 **3,179.0 -> 2,825.4 (-353.6 us)**, so the 1,159.3 us floor falls to
+  805.7 = **30.5% removed**; g=16 M7 4,713.5 -> 4,556.7 (-156.8, 5.8%). Whole
+  kernel at g=1: 9,976 -> 9,640 (-3.4%); service drain 5,952 -> 5,356.
+  **Reading: scope is real but the FOOTPRINT is the larger half** -- ~806 us of
+  the floor survives with the ordering fully removed, so most of the damage is 32
+  lanes touching **32 scattered cache lines per event**, not how strongly they
+  are ordered. **M4 should beat this bound** because per-XCD counters cut scope
+  AND footprint together; the prize is >354 us and bounded above by ~the full
+  1,159 us floor.
+- 2026-08-11 exp_06 **do not over-read the green gates on a diagnostic build.**
+  The relaxed form reported MOK GATE pass=True, control_fails=True and SOAK
+  600/600 at both g values. It still drops the acquire edge the probe loop
+  depends on -- the same class of defect the ordering-hole probe found to be real
+  in source and timing-protected in practice -- and one screening run per config
+  is far below that probe's sensitivity. Green gates on a knowingly-unsound build
+  are a statement about this workload's timing, not about correctness.
+- 2026-08-11 `primitives:` **third convergent pointer at the same gap, and now
+  the sharpest form of it.** `counter.cuh` gives a PER-COUNTER arrival
+  vocabulary (`counted_arrive_into` / `counted_arrive_release_into`).
+  Everything measured tonight says the expensive part of a role-split protocol is
+  not any individual arrival but the **aggregate cache-line FOOTPRINT of many
+  scattered arrivals**. A primitive owning the PLACEMENT of arrival counters --
+  per-XCD, per-CTA-group, or coalesced to one line per event -- would make M4 a
+  configuration rather than a rewrite. **Single most valuable thing the library
+  could learn from this campaign.**
