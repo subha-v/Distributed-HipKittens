@@ -108,22 +108,36 @@ Two consequences:
 Putting the interference curve next to the prize it was supposed to buy gives a
 single, uncomfortable, *measured* statement:
 
-> **On this kernel and this machine, the memory-system interference a service
-> pool inflicts on the concurrent compute phase is approximately equal to the
-> communication time it hides. CTA-level overlap is close to a wash.**
+> **CTA-level comm/compute overlap needs communication *latency* to consume,
+> and this layer on this workload has almost none. Where latency does not
+> exist, a role split can only move work between CTAs — and it pays a
+> memory-interference tax for doing so that is roughly equal to what it hides.**
 
-The arithmetic, entirely from tonight's measurements. A `C=16` pool inflates the
-concurrent GEMM phase by **+37%**. Applied to the dispatch boundary — the one
-remaining target — that is `0.37 × 2,976 µs (plan+M6) ≈ +1,100 µs` of
-interference against a dispatch prize measured at **0.7–1.25 ms**. It cancels.
-The same cancellation, measured directly rather than predicted, is why the
-combine boundary tops out at a tie: even with *every* atomic and every
-bookkeeping cost removed, mode 2 at its best `C` reaches ~7,300–7,450 µs against
-`pf6gm_mega`'s 6,906 µs, because the capacity tax plus a non-zero service cost
-exceeds the ~300 µs the peeled-out pull was worth.
+Both candidate boundaries are now closed **on measurement**, not on argument:
 
-This is a verdict on **this boundary and this transport**, not on the technique.
-It has two clearly identified escapes, and they are the work worth doing next:
+- **Dispatch** (`exp_10`): M2's chunk poll reports `success_max = 0` spins
+  against a 2,000,000 limit. **The peers are never late.** All eight ranks run
+  the identical kernel on identically-shaped work, so the all-to-all is
+  latency-hidden *by symmetry* before we add anything. The 0.7–1.25 ms pre-M6
+  region is essentially all own-work — quantize, pack, push, unpack, histogram —
+  and a role split cannot hide work that still has to happen.
+- **Combine** (`exp_03`, `exp_05`): the peeled-out pull is worth ~300 µs, the
+  ceiling is a tie, and the service pool taxes the concurrent GEMM 37–57%.
+
+The interference arithmetic, entirely from tonight's measurements: a `C=16` pool
+inflates the concurrent GEMM by **+37%**, which on the dispatch boundary would
+be `0.37 × 2,976 µs ≈ +1,100 µs` — more than the entire pre-M6 region it was
+meant to hide, and that region turned out to contain no wait at all. On the
+combine boundary the same cancellation is measured directly: even with *every*
+atomic and bookkeeping cost removed, mode 2 at its best `C` reaches
+~7,300–7,450 µs against `pf6gm_mega`'s 6,906 µs, because the capacity tax plus a
+non-zero service cost exceeds the ~300 µs the peeled-out pull was worth.
+
+**This is a verdict on this workload, not on the technique.** The right place to
+re-open it is a workload that actually has communication latency: routing skew,
+stragglers, heterogeneous ranks, or multi-node. `spin_dbg` is the correct first
+instrument there and is now wired up — if it reports large spins, the prize is
+real. Two further escapes remain identified but untested:
 
 1. **Cut the interference at its source.** It is atomic *footprint*, not payload
    and not ordering strength (exp_06: scope is only ~30% of the floor). M4's
@@ -183,15 +197,19 @@ Partial answer, from measurement rather than opinion:
    payload is visible". Its absence forced both the `g`-probe loop (measured as
    the dominant driver of the `g` axis) and the per-wave publish that carries
    the ordering hole below. Highest-value library change on tonight's evidence.
-3. Only then consider `exp_05` stages 1–2 (local-tokens-first, then the
-   two-pass split) — reading `exp_09/design.md` first, because the same
-   interference tax applies there and `exp_09` shows the arrival count is fixed
-   by the *plan*, not the protocol.
+3. **Re-run the campaign on a workload that has communication latency** —
+   routing skew, a straggler rank, or multi-node. That is the honest way to test
+   the technique, because this workload does not contain what it feeds on.
+   `spin_dbg` (now surfaced as `[MPS SPIN]`) is the one-line check for whether a
+   candidate workload qualifies: large spins ⇒ real prize, near-zero ⇒ don't
+   bother.
 
-**Do not** spend a build cycle on: raising the `C ≤ 64` cap (the 1/C law
-extrapolates it), relocating arrival counters (exp_07, exp_08), per-row counters
-replacing per-slice ones (exp_09 predicts the exp_07 pessimization), or SDMA for
-the payload (the payload is not the problem).
+**Do not** spend a build cycle on: `exp_05` stage 2, the M3–M5 rewrite for
+COMET layer-0 (exp_10 shows the prize is ~0 and `scope.md` shows it is not a
+cheap reorder); raising the `C ≤ 64` cap (the 1/C law extrapolates it);
+relocating arrival counters (exp_07, exp_08); per-row counters replacing
+per-slice ones (exp_09 predicts the exp_07 pessimization); or SDMA for the
+payload (the payload is not the problem).
 
 ## Correctness posture of the shipped tree
 
@@ -252,6 +270,7 @@ after the exp_01 fix landed, in any run.
 | `exp_07` | chunk-major counter layout | **≥10x slower, reverted** — coalescing atomics is a trap |
 | `exp_08` | A8, XCD placement (new mode 3) | **A8 closed** — die-level pool cuts M7 interference 36% but starves the pool 54% |
 | `exp_09` | reducing the arrival count (M4) | analysis only — **no cheap M4 exists**, and the tempting idea is predicted to fail |
+| `exp_10` | dispatch peer wait | **axis closed** — `chunk_poll success_max = 0` of 2,000,000; there is no wait to hide |
 
 ## Method note worth keeping
 
