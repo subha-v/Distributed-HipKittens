@@ -282,3 +282,62 @@
   timestamp block) is the correct next action** -- deliberately not started as
   device work tonight because stage 2 is multi-hour surgery on the inlined
   `k0pf4_dsort` under byte-exact LDS and ArchVGPR/AGPR gates.
+
+- 2026-08-11 exp_05 stage 0 **the phase-attribution instrument now works, and it
+  was BROKEN for everyone before tonight.** `realtime_now()`
+  (`moe_mps_adapter.cuh:127`) issued `s_memrealtime` with **no
+  `s_waitcnt lgkmcnt(0)`**. That is an SMEM instruction whose destination SGPR
+  pair is invalid until the wait, so callers read a stale register. Diagnostic
+  symptom: `LAST_READY` and `M7_DONE` returned real clocks while `DRAIN`,
+  `REDUCE_DONE`, `M2_DONE`, `M6_DONE` returned exactly **1** -- and
+  `LAST_READY`/`DRAIN` are in the SAME function under the IDENTICAL guard,
+  which ruled out enablement/null/layout. The working sites happened to follow
+  LDS traffic, which carries its own lgkmcnt wait. Fixed (wait + `"=s"`
+  constraint). **Every prior K0P6_MPS_TS_* reading was unreliable.**
+  Units: wall clock is **100 MHz, 1 tick = 0.01 us** (shader clock is 2.2 GHz --
+  using it is a 22x error). Instrument is resource-free.
+  **Validation: independently measured combine = 1,287.9 us vs the inherited
+  exp_35 figure of 1,309 us, 1.6% apart.**
+- 2026-08-11 exp_05 stage 0 **THE INTERFERENCE FINDING -- the most important
+  mechanism result of the night.** `C=64,mode=0` and `C=64,g=1,mode=2` run M7
+  on **exactly the same 192 compute CTAs**; the only difference is whether the
+  service pool is concurrently moving payload. M7: **1,609.7 us** (254 CTAs
+  baseline) -> **2,019.7 us** (+25.5%, pure capacity, 192 CTAs, no service) ->
+  **3,179.0 us** (+57.4% more, same 192 CTAs, service pool running).
+  **The interference costs 2.8x the capacity tax.** This COMPLETES rather than
+  contradicts the A7 strike: occupancy is one block per CU so a service CTA can
+  never steal MFMA issue slots -- but CTAs that never share a SIMD still share
+  the L2, the Infinity Cache and the fabric. **CTA role specialization removes
+  issue-slot contention and leaves memory-system contention untouched.**
+  Corollary: **mode 0 is RETIRED as the control for role specialization** -- it
+  measures the capacity tax and is structurally blind to the dominant cost of
+  the mechanism it is the control for. exp_03's 0.88x ceiling was therefore
+  OPTIMISTIC; the combine boundary is closed more firmly than exp_03 could show.
+  Every future role-split experiment needs a matched-CTA-count comparison.
+- 2026-08-11 exp_05 stage 0 **`plan+M6` is invariant at 2,970-3,048 us across
+  all five configurations** (mode 0 C=2/C=64, mode 1, mode 2 C=32/C=64). The
+  reservation is at M6.9 so nothing before it should move and nothing does --
+  this is the control that validates the whole attribution table.
+- 2026-08-11 exp_05 stage 0 **the dispatch is 0.7-1.25 ms (10-17% of the
+  kernel), fully exposed**, bracketing and if anything exceeding CLAUDE.md's
+  inferred 757 us. Caveat stated honestly: the phase deltas are single-epoch
+  while `total` is a p50 over timed iterations, so the derived subtraction
+  mixes distributions (the C=8/g=2 row even goes slightly negative and is
+  excluded). The phase DELTAS are internally consistent; only the derived
+  dispatch figure carries the uncertainty. Tightening it needs a KSTART stamp
+  taken AFTER M0's reset barrier -- M0 zeroes the whole timestamp block
+  (`:593-596`), which also means the block is per-epoch, not cumulative.
+- 2026-08-11 exp_05 stage 0 **mode 2's service pool IS the post-M6 critical
+  path**: at C=64 the drain runs 5,952 us past M6 while M7+combine occupy
+  6,054 us. The first tile event lands 192 us BEFORE the last CTA leaves M6, so
+  readiness is not the lag -- drain rate is. Mode 1 is the clean counterpoint:
+  the bulk push runs after M7 so **M7 is untouched (1,579.8 us)** and the whole
+  cost lands in combine (1,287.9 -> 2,782.1). Vertical and horizontal fusion move
+  the same bytes and pay in different phases; mode 1's total (8,028) beats every
+  mode 2 point except C=64.
+- 2026-08-11 `primitives:` **an inline-asm helper returning a value from an
+  asynchronous unit must carry its own wait.** `realtime_now()` looked correct
+  at every call site and was wrong at four of six, because the obligation
+  (`s_waitcnt lgkmcnt(0)`) lived outside the signature. Same class of defect as
+  `translate_peer`'s unchecked fail-closed null: a contract the caller cannot
+  see and is not obliged to honour.
