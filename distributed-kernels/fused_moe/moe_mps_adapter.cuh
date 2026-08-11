@@ -219,7 +219,7 @@ inline constexpr std::size_t kSliceBytes = 448u * 2u;   // 896
 // the wave's 64 lanes one packet each and no pipelining is possible WITHIN a
 // group. Batching whole groups is the only way to give a lane more than one
 // load in flight. See exp_03.
-inline constexpr unsigned int kPushBatch = 4u;
+inline constexpr unsigned int kPushBatch = 2u;
 
 // Source (this rank's `part` row slice) and destination (the owner's landing
 // slot, local or peer-translated) of one claimed group. Split out of
