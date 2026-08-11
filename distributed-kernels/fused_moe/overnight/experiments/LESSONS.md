@@ -665,3 +665,45 @@
   Corollary: **the plan is only 415 us (6%)**, so every plan-side idea
   (COMET layer-0, packed schedules, gather-index) is capped at 6% before it
   starts.
+
+- 2026-08-11 exp_14 **RATCHET EVENT -- the CTA-specialized megakernel BEATS the
+  homogeneous one.** dec07, 5 rotations, 3 paired arms, all gates green:
+  `production 7,729.4` / `pf6gm_mega 6,910.9` (0.89411) /
+  **`mps_mega 6,866.1` (0.88831 vs production, 0.99351 vs pf6gm)**.
+  **The margin over production widened for the first time: 0.894 -> 0.888.**
+  New best candidate = `mps_mega` at `C=64,g=1,mode=2,flush_rows=16`.
+  Trajectory, all profile-driven: **1.544x -> 1.464x (MLP fan-out) -> 1.077x
+  (dynamic ticket + fall-through) -> 0.9935x (drop 2 redundant atomics)**.
+- 2026-08-11 exp_14 **the change: at g == 1 the group probe and the claim are
+  PROVABLY redundant.** (a) The probe re-reads the very counter whose fetch_add
+  just returned `target - 1`, so it can only return `target`, and the wave
+  already holds that chunk's acquire edge from its own acq_rel -- there is no
+  other chunk in a 1-chunk group to acquire. (b) RMW order makes
+  `old + 1 == target` true for exactly ONE lane grid-wide, so the atomicOr
+  claim cannot change the outcome. Deletes 2 of 4 atomics per completing slice
+  (~698,112 of ~1.58M per rank per epoch). `g > 1` keeps the original path
+  byte-for-byte. Screened effect: **C=64 7,432 -> 6,949 (0.995x pf6gm)**, with
+  **M7 3,141 -> 2,835** -- the interference fell exactly as the atomic-traffic
+  model predicted.
+- 2026-08-11 exp_13 **C cap raised 64 -> 128; C=64 is still the optimum.**
+  Post-fall-through screen at g=1 mode 2: C=32 7,076 | **C=64 6,949** | C=96
+  7,157 | C=128 7,614. The curve turns over because M7 interference grows faster
+  than the combine saving: at C=96 the combine is already fully hidden (108 us)
+  while M7 is 3,290. **Mode 3 (die-level) still loses with fall-through too**
+  (C=64 7,768, C=96 7,637, C=128 7,827), so A8 stays closed.
+- 2026-08-11 **the remaining headroom is named and quantified: M7 interference.**
+  At the winning point M7 is 2,835 us against a 1,586 us homogeneous baseline =
+  **+1,249 us still on the table**; every other phase is at or better than
+  parity (M6 2,588 vs 2,539; combine 446 vs 1,255). Eliminating the interference
+  entirely would put the kernel near **5,617 us = 0.727x production**. The
+  mechanism is settled (atomic traffic, exp_05/06/07) and the next reduction is
+  identified below.
+- 2026-08-11 **exp_09's prediction against per-row counters DOES NOT APPLY --
+  correcting myself.** I argued a single counter per row would be an exp_07-style
+  pessimization because it collapses increments onto fewer lines. That conflated
+  *fewer counters* with *fewer lines touched per event*. The 32 live lanes of an
+  event address 32 DIFFERENT rows, so per-row counters keep exactly the same
+  32-lines-per-event spread that exp_07 showed is essential; only the TOTAL
+  atomic count falls (no probes, no claims, no `pushed` counter -- roughly
+  535,040 instead of ~1.07M). **Per-row arrival counting is therefore the next
+  experiment, not a predicted failure.**
