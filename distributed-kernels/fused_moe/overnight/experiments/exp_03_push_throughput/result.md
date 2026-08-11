@@ -145,6 +145,17 @@ global load on this fabric.
    another point on `(C, g)`. That is the only term in the model that moves the
    ceiling.
 
+**Follow-up (exp_04), which partly supersedes this section.** The MLP experiment
+was run and is **positive**: 14–29% off the service cost, 3.8–25% end-to-end.
+But 4x memory-level parallelism buying only ~20% means the copy is at most ~19%
+of service time and **~81% is bookkeeping** (event poll, arrival atomic, group
+probes, claim, release). So the sentence above is too narrow — MLP moves the
+ceiling a little, and the atomic/fence class (M4, A10) is where the rest of the
+service cost lives. The `## Primitives` note below about `store_peer_packets`
+stands and now has a measured effect attached to it. The ceiling arithmetic in
+this file is unchanged: even a fully-hidden service pool tops out near 0.882x
+production at this boundary.
+
 ## Primitives
 
 - **`store_peer_packets` is the finding of this experiment.** Its surface
