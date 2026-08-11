@@ -213,67 +213,25 @@ struct wave_scratch {
 static_assert(sizeof(wave_scratch) == 524,
               "wave_scratch must stay inside the reused M1 staging slice");
 
-inline constexpr std::size_t kSliceBytes = 448u * 2u;   // 896
-// How many claimed row groups the service wave copies concurrently. A single
-// group is 896*g bytes = at most 56*g packets, so at g=1 it does not even give
-// the wave's 64 lanes one packet each and no pipelining is possible WITHIN a
-// group. Batching whole groups is the only way to give a lane more than one
-// load in flight. See exp_03.
-inline constexpr unsigned int kPushBatch = 2u;
-
-// Source (this rank's `part` row slice) and destination (the owner's landing
-// slot, local or peer-translated) of one claimed group. Split out of
-// push_slice_group so a wave can compute several groups' addresses before
-// issuing any of their loads.
-__device__ __forceinline__ const void* slice_group_src(
-        const service_env& env, std::uint32_t r, std::uint32_t group_base) {
-    return reinterpret_cast<const std::byte*>(env.part) +
-        ((std::size_t)r * 7168u + (std::size_t)group_base * 448u) * 2u;
-}
-
-__device__ __forceinline__ void* slice_group_dst(
-        const service_env& env, std::uint32_t r, std::uint32_t group_base) {
-    const std::uint32_t owner = r / (std::uint32_t)env.maxtok;
-    const std::uint32_t pos = r % (std::uint32_t)env.maxtok;
-    std::byte* dst_local = reinterpret_cast<std::byte*>(
-        env.slots + ((std::size_t)env.cur * (std::size_t)env.maxtok + pos) *
-                        7168u + (std::size_t)group_base * 448u);
-    return (owner == (std::uint32_t)env.cur)
-        ? dst_local
-        : hk_moe::peer_ptr(dst_local, (int)owner, env.symmetric);
-}
-
 // Push one claimed group of adjacent N-chunk slices for row r to its owner's
 // landing slot. Controlled 16-byte stores, coalesced by the wave's 64 lanes;
 // no fence, no completion work here (flush_pending owns both).
 __device__ __forceinline__ void push_slice_group(const service_env& env,
         std::uint32_t r, std::uint32_t group_base, int lane) {
-    kittens::distributed::store_peer_packets(
-        slice_group_dst(env, r, group_base),
-        slice_group_src(env, r, group_base),
-        kSliceBytes * env.group_slices, (unsigned int)lane, 64u);
-}
-
-// Push the kPushBatch claimed groups starting at `first` together: every
-// group's load is issued before any group's store, so each lane holds
-// kPushBatch loads in flight instead of one. Byte-for-byte the same traffic as
-// kPushBatch calls to push_slice_group, in an unspecified order between groups
-// (they are disjoint rows). The row/base reads come straight from LDS and the
-// pointer arrays are indexed only under `#pragma unroll`, so nothing here is
-// dynamically indexed in registers.
-__device__ __forceinline__ void push_slice_group_batch(const service_env& env,
-        const wave_scratch& s, std::uint32_t first, int lane) {
-    void* dsts[kPushBatch];
-    const void* srcs[kPushBatch];
-#pragma unroll
-    for (unsigned int b = 0; b < kPushBatch; ++b) {
-        const std::uint32_t r = s.rows[first + b];
-        const std::uint32_t gb = s.group_base[first + b];
-        dsts[b] = slice_group_dst(env, r, gb);
-        srcs[b] = slice_group_src(env, r, gb);
-    }
-    kittens::distributed::store_peer_packets_multi<kPushBatch>(
-        dsts, srcs, kSliceBytes * env.group_slices, (unsigned int)lane, 64u);
+    constexpr std::size_t kSliceBytes = 448u * 2u;   // 896
+    const std::size_t bytes = kSliceBytes * env.group_slices;
+    const std::uint32_t owner = r / (std::uint32_t)env.maxtok;
+    const std::uint32_t pos = r % (std::uint32_t)env.maxtok;
+    const std::byte* src = reinterpret_cast<const std::byte*>(env.part) +
+        ((std::size_t)r * 7168u + (std::size_t)group_base * 448u) * 2u;
+    std::byte* dst_local = reinterpret_cast<std::byte*>(
+        env.slots + ((std::size_t)env.cur * (std::size_t)env.maxtok + pos) *
+                        7168u + (std::size_t)group_base * 448u);
+    std::byte* dst = (owner == (std::uint32_t)env.cur)
+        ? dst_local
+        : hk_moe::peer_ptr(dst_local, (int)owner, env.symmetric);
+    kittens::distributed::store_peer_packets(dst, src, bytes,
+                                             (unsigned int)lane, 64u);
 }
 
 // Publish every completed-row flag accumulated by this wave behind ONE system
@@ -311,28 +269,6 @@ __device__ __forceinline__ void flush_pending(const service_env& env,
         s.flag_count = 0u;
     }
     __syncwarp();
-}
-
-// Account one pushed group against its row, and when all 16 of the row's
-// slices have been pushed, queue the row's completed-row flag.
-//
-// The flush test follows EVERY append (not once per event): an event may append
-// up to 32 rows, so a per-event test could let flag_count overshoot
-// flag_rows[64] whenever flush_rows > 32. flag_count stays <= flush_rows <= 64
-// under this discipline. Whole-wave convergent call.
-__device__ __forceinline__ void retire_pushed_row(const service_env& env,
-        wave_scratch& s, std::uint32_t rr, std::uint32_t g, int lane) {
-    if (lane == 0) {
-        const std::uint32_t oldp =
-            kittens::distributed::fetch_add_relaxed<scope::agent>(
-                env.pushed + rr, g);
-        if (oldp + g == 16u) {
-            s.flag_rows[s.flag_count] = rr;
-            ++s.flag_count;
-        }
-    }
-    __syncwarp();
-    if (s.flag_count >= env.flush_rows) flush_pending(env, s, lane);
 }
 
 // The minimum-progress service loop: wave-striped consumption of the tile
@@ -435,20 +371,24 @@ __device__ __forceinline__ void run_service(
         }
         __syncwarp();
         const std::uint32_t npush = s.push_count;
-        // Copy kPushBatch groups per pass so each lane keeps kPushBatch loads
-        // in flight; the per-row accounting stays strictly one row at a time so
-        // the flag/flush discipline above is unchanged.
-        std::uint32_t i = 0;
-        for (; i + kPushBatch <= npush; i += kPushBatch) {
-            push_slice_group_batch(env, s, i, lane);
-#pragma unroll
-            for (unsigned int b = 0; b < kPushBatch; ++b) {
-                retire_pushed_row(env, s, s.rows[i + b], g, lane);
-            }
-        }
-        for (; i < npush; ++i) {
+        for (std::uint32_t i = 0; i < npush; ++i) {
             push_slice_group(env, s.rows[i], s.group_base[i], lane);
-            retire_pushed_row(env, s, s.rows[i], g, lane);
+            if (lane == 0) {
+                const std::uint32_t rr = s.rows[i];
+                const std::uint32_t oldp =
+                    kittens::distributed::fetch_add_relaxed<scope::agent>(
+                        env.pushed + rr, g);
+                if (oldp + g == 16u) {
+                    s.flag_rows[s.flag_count] = rr;
+                    ++s.flag_count;
+                }
+            }
+            // The flush test follows EVERY append (not once per event): an
+            // event may append up to 32 rows, so a per-event test could let
+            // flag_count overshoot flag_rows[64] whenever flush_rows > 32.
+            // flag_count stays <= flush_rows <= 64 under this discipline.
+            __syncwarp();
+            if (s.flag_count >= env.flush_rows) flush_pending(env, s, lane);
         }
     }
     flush_pending(env, s, lane);
