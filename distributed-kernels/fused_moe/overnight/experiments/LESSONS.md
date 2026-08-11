@@ -229,3 +229,26 @@
   the reference's M7.5 grid barrier is deliberately gone). Its measured 10,576 us
   stands as a performance datum only. That datum is still decisive for its
   purpose: push and pull land within 2%, so **transport is not the lever.**
+
+- 2026-08-11 `protocol:` **the mode-2 g<16 ordering hole is real in source and
+  UNOBSERVED in practice -- 12/12 clean.** Direct sensitivity test: within a run
+  `mps_mega` and `pf6gm_mega` see identical input, so their `[MOK GATE]`
+  `max_abs`/`relative` must agree exactly; any within-run divergence is the hole
+  firing. 8 trials at C=64/g=4 (hole open) and 4 at C=64/g=16 (control), each
+  with a DIFFERENT seed so routing skew varies (max_abs moved across 0.035156 /
+  0.035370 / 0.039062 / 0.042969, so the trials really were different problems).
+  **Zero divergences, zero nonzero pperr, 12/12 soaks.** Plus the 15/15 campaign
+  gates and 10 x 600-epoch soaks already banked. Likely (unverified)
+  reconciliation: a row is only claimable once all 16 slices have arrived, so the
+  other waves' packets have retired long before the claiming wave drains -- a
+  TIMING argument, not an ordering guarantee, which would degrade under different
+  skew or a faster fabric. **Not fixed, recorded**: mode 2 is closed for
+  performance and hardening a closed path risks the resource tuple.
+- 2026-08-11 `primitives:` **second independent pointer at the same gap.**
+  `counter.cuh` expresses "arrive and release" for ONE counter but nothing for
+  "all g members of this group have arrived AND every writer's payload is
+  visible". No group-scoped release whose drain covers writers outside the
+  calling wave. That absence forced both the open-coded g-probe loop (measured as
+  the dominant cost driver of the g axis, exp_03) and the per-wave
+  `s_waitcnt`-plus-bare-flag publish that carries the ordering hole. **This is
+  the single highest-value primitive to add**, on the evidence of the night.
