@@ -203,6 +203,54 @@
     where the fused helper drained after every two. **Two exposed global round
     trips per k-iteration became one covered one.**
 
+- **Attribution RE-MEASURED on the post-E1(b) winner, and it reorders
+  everything.** The old table was taken on a binary with neither `NR=32` nor
+  the mainloop overlap, so it described a kernel that no longer exists. Fresh
+  numbers (µs, single-cut deltas, so they overlap and need not sum):
+
+  | shape | full | GEMM | XGMI | reduce | sync | release |
+  |---|---|---|---|---|---|---|
+  | 64×7168×18432 | 78.4 | 12.4 | 2.2 | 1.4 | 9.9 | 1.1 |
+  | 512×4096×12288 | 105.3 | 39.9 | 20.8 | 4.5 | 22.5 | 21.4 |
+  | 2048×2880×2880 | 91.5 | 17.5 | 25.5 | 10.0 | 17.1 | 9.4 |
+  | 4096×4096×4096 | 203.5 | 41.6 | **86.5** | 19.7 | 31.9 | 20.1 |
+  | 8192×4096×14336 | 748.7 | 305.5 | 295.0 | 41.6 | 48.4 | 58.9 |
+  | 8192×8192×29568 | 2500.8 | **1153.3** | **1149.9** | 78.7 | 89.9 | 219.3 |
+
+  - **XGMI egress rose from 919.7 µs (32%) to 1149.9 µs (46%) and is now tied
+    with GEMM as the largest pool on shape 6.** It went *up* in absolute terms
+    even though nothing in the egress path changed: speeding up the mainloop
+    **unhid** communication that used to sit behind it. Expect this whenever a
+    compute pool shrinks — the ablation measures *exposed* cost, not work.
+  - `sync` collapsed 246.9 → 89.9 and `reduce` 219.5 → 78.7, both largely from
+    `NR=32` giving the reduce side four times the CTAs.
+  - On shape 4, XGMI alone is **42.5%** of the total; it is an egress-bound
+    shape and the mainloop work there is only 41.6 µs.
+  - **Re-run the attribution after every accepted win.** Ranking experiments off
+    a stale table is how a night gets spent optimizing the wrong pool.
+
+- **The largest remaining geomean lever is a ~65-74 µs floor on the three small
+  shapes, and no stage cut explains it.** Removing the *entire* GEMM mainloop
+  leaves shape 1 at **66.0 µs** of its 78.4, shape 2 at 65.3 of 105.3, and
+  shape 3 at 74.0 of 91.5 — a nearly shape-independent floor. Summing shape 1's
+  attributed stages gives 12.4+2.2+1.4+9.9+1.1 = 27 µs against a full 78.4, so
+  **~51 µs is unattributed to any stage**.
+  Why this outranks the big pools: the ranking statistic is a **geometric**
+  mean, so a proportional win counts equally on every shape and therefore a
+  microsecond is worth far more on a small shape. Shape 1 is 77.31 µs and shape
+  6 is 2520.29 µs, so **1 µs on shape 1 is worth 33× the geomean of 1 µs on
+  shape 6**. Halving the 66 µs floor would be worth ~7% of geomean — more than
+  any single pool cut currently on the table.
+  Candidate mechanisms, none yet tested: cross-rank protocol round-trip latency
+  (a reducer cannot finish until all eight peers publish); the `s_sleep(4)`
+  poll quantum in `detail::pause()`
+  (`include/cdna3/ops/group/distributed/sync.cuh:81-86`, ~256 clocks ≈ 135 ns
+  per miss, which alone does not explain 66 µs); persistent-grid launch and the
+  per-CTA epoch RMW; and the per-tile epilogue on a shape where every CTA runs
+  exactly one tile so nothing amortizes. **Measure before optimizing** — a
+  combined-cut arm (noMain + noRed + noProto together) would establish the true
+  floor, which single-cut deltas cannot.
+
 - **TRAP, and the sharpest one of the session: `s_waitcnt lgkmcnt(0)` alone
   does NOT protect a register loaded from LDS.** A bare wait has no operands,
   so it creates no data dependence. The `ds_read` is an `asm volatile` whose

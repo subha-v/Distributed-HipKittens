@@ -38,22 +38,23 @@ BUILD = f"{HARNESS}/build"
 # (anchor, replacement) pairs. Each anchor must appear exactly once.
 PATCHES = [
     # 1. mainloop
-    ("""            zero(C_accum);
-            // ---- double-buffered mainloop (correctness-first scheduling) ----
-            G::load(As[0], g.a, {0, 0, tm, 0});""",
-     """            zero(C_accum);
-            // ---- double-buffered mainloop (correctness-first scheduling) ----
-#if !ABL_SKIP_MAINLOOP
-            G::load(As[0], g.a, {0, 0, tm, 0});"""),
-    ("""                mma_ABt(C_accum, A_frag, B_frag, C_accum);
-                __syncthreads();
+    #
+    # Re-anchored after exp_03 (E1b) replaced the fused `G::load` with the
+    # issue/commit split. Anchor on the k=0 prologue issue rather than on the
+    # comment above it: the in-loop issues carry `k + 1`, so this text is
+    # unique, and it does not depend on comment wording that gets edited.
+    ("""            m3::load_issue<ST_A, NT>(abuf, g.a, {0, 0, tm, 0});""",
+     """#if !ABL_SKIP_MAINLOOP
+            m3::load_issue<ST_A, NT>(abuf, g.a, {0, 0, tm, 0});"""),
+    ("""                __syncthreads();
             }
-""",
-     """                mma_ABt(C_accum, A_frag, B_frag, C_accum);
-                __syncthreads();
+
+            // ---- egress: per-band credit wait, emit, one release, publish ---""",
+     """                __syncthreads();
             }
 #endif
-"""),
+
+            // ---- egress: per-band credit wait, emit, one release, publish ---"""),
     # 2. emit destination: same bytes, same path, local slot
     ("""                const int lrow = (row0 - dest * slice) / EB;
                 int dest_eff = dest;""",
