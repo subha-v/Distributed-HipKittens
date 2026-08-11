@@ -441,3 +441,40 @@
   (2) **Pick a boundary where the hidden communication is much larger than the
   compute phase it runs under.** Neither of ours is; that is a property of this
   MoE layer's shape and should be checked BEFORE designing the next split.
+
+- 2026-08-11 exp_07 **coalescing atomics onto few cache lines is a TRAP -- at
+  least 10x slower, reverted.** Hypothesis: `nc_arr[r*16 + nc]` puts
+  consecutive rows exactly 64 B apart, so 32 live lanes touch **32 distinct cache
+  lines** per arrival; chunk-major `nc_arr[nc*T_ext + r]` puts them in 2 lines,
+  semantically identical, same buffer, no ABI change. The first screened config
+  (C=64,g=1) made no measurable progress in **12 minutes** against the usual
+  25-95 s, log frozen after rank connect, container alive, no pperr and no fault.
+  Stopped rather than left to burn the timeout, so **no completed measurement --
+  the magnitude is a lower bound.**
+  **Mechanism, and it inverts the intuition: coalescing is right for loads and
+  wrong for atomics.** 32 lanes loading 32 consecutive addresses is ONE
+  transaction; 32 lanes issuing RMWs to 2 lines must SERIALIZE, because an atomic
+  resolves at the line. The same 32 RMWs over 32 lines proceed in parallel across
+  L2 banks and channels. **Scattering atomics is a FEATURE of the existing
+  layout**, not the defect I read it as.
+- 2026-08-11 **corrected interference model (supersedes the "footprint" reading
+  in exp_05/exp_06).** The unattributed ~70% of the +1,159 us floor is **not**
+  "too many cache lines touched" -- it is the atomic **operation COUNT** and the
+  contention those operations create wherever they land. Relocating them cannot
+  help; only issuing fewer can. **So M4 must reduce the NUMBER of arrivals
+  (per-XCD aggregation, one cross-XCD release per XCD), and any variant that
+  merely relocates counters is predicted to fail** -- exp_07 is the evidence.
+  Line-coalescing should be flagged as a hazard in DESIGN_MPS.md for any future
+  counter/flag redesign. The exp_06 bound is unchanged: scope ~30% of the floor.
+- 2026-08-11 **method trap: never resync the node checkout while a campaign is
+  running.** The containers bind-mount it LIVE, so a `git reset --hard` mid-run
+  changes the source under later rotations and silently mixes two kernels into
+  one summary. Cost the dec04 campaign, which was discarded. `build_only.sh`
+  now refuses to sync when `run_campaign` is alive; the screen and campaign
+  drivers already sync only at launch.
+- 2026-08-11 `primitives:` **fourth independent argument for the same missing
+  primitive, and the sharpest.** `counter.cuh` is address-agnostic: the caller
+  picks the counter's address and gets no signal that **placement changes cost by
+  an order of magnitude, in the OPPOSITE direction from loads**. If the library
+  owns arrival counting it should own counter ALLOCATION too, precisely so a
+  caller cannot make the exp_07 mistake.
