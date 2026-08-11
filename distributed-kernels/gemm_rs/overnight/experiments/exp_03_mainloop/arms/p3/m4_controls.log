@@ -1,0 +1,29 @@
+
+== CTRL_DROP_PUBLICATION (source rank 3 stops publishing to rank 5) ==
+    error bits per rank: ['0x0', '0x0', '0x0', '0x0', '0x0', '0x4000000', '0x0', '0x0']
+    ok   rank5 raised REDUCER_READY timeout (bit 26)
+    rank5 output still sentinel: 100.0%
+    ok   rank5 performed ZERO payload reads/writes (fail-closed before any peer read)
+    ok   rank5 output is (correctly) not valid
+
+== CTRL_DROP_CREDIT (owner rank 2 withholds the retirement credit from source 6) ==
+    epoch 1 error bits: ['0x0', '0x0', '0x0', '0x0', '0x0', '0x0', '0x0', '0x0']
+    ok   epoch 1 is clean (credit fast path, nothing to wait on)
+    ok   epoch 1 output is still correct
+    epoch 2 error bits: ['0x0', '0x0', '0x4000000', '0x0', '0x0', '0x0', '0x6000000', '0x0']
+    ok   rank6 raised PRODUCER_CREDIT timeout (bit 25)
+
+== CTRL_REROUTE_SLOT (rank 4 lands band 1 of 4 on the wrong rank) ==
+    ok   epoch 1 of both runs is correct
+    error bits: ['0x0', '0x0', '0x0', '0x0', '0x0', '0x0', '0x0', '0x0']
+    ok   no timeout fires (readiness is published to the true destination, so this is a silent-corruption control)
+    ranks whose payload changed vs golden: [(1, '57133/57344'), (5, '57144/57344')]
+    ok   rerouting demonstrably corrupts the payload (differs bitwise from the unrerouted run over an identical input sequence)
+    max|diff| golden=6.104e-05 rerouted=1.065e-02
+    ranks failing allclose(1e-2)=[1, 5]  allclose(2e-3)=[1, 5]
+    ok   corruption is detectable numerically at a tolerance the clean run passes with margin
+
+========================================================================
+note: drop_publication: ranks also reporting bit26: []
+note: CTRL_REROUTE_SLOT is only observable across CHANGING inputs: the true destination slot keeps its previous epoch's bytes, which are the correct answer if the inputs did not change.
+GATE M4 PASSED: all three controls failed exactly as designed

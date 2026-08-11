@@ -1,0 +1,44 @@
+
+===== rotation 0 (shape order [0, 1, 2, 3, 4, 5]) =====
+  m=64    n=7168  k=18432  bias=0  pipelined=    77.66 us  device_max=    75.78 us  single_wall=   203.57 us  skew= 103.6 us  ok
+  m=512   n=4096  k=12288  bias=1  pipelined=   104.24 us  device_max=   103.29 us  single_wall=   224.16 us  skew= 104.9 us  ok
+  m=2048  n=2880  k=2880   bias=1  pipelined=    91.44 us  device_max=    89.75 us  single_wall=   219.91 us  skew= 105.5 us  ok
+  m=4096  n=4096  k=4096   bias=0  pipelined=   200.73 us  device_max=   198.68 us  single_wall=   328.85 us  skew= 104.6 us  ok
+  m=8192  n=4096  k=14336  bias=1  pipelined=   740.99 us  device_max=   739.77 us  single_wall=   866.05 us  skew= 100.5 us  ok
+  m=8192  n=8192  k=29568  bias=0  pipelined=  2511.04 us  device_max=  2498.29 us  single_wall=  2697.22 us  skew= 102.1 us  ok
+
+===== rotation 1 (shape order [1, 2, 3, 4, 5, 0]) =====
+  m=512   n=4096  k=12288  bias=1  pipelined=   104.47 us  device_max=   103.67 us  single_wall=   223.73 us  skew= 104.4 us  ok
+  m=2048  n=2880  k=2880   bias=1  pipelined=    91.55 us  device_max=    90.18 us  single_wall=   221.64 us  skew= 105.0 us  ok
+  m=4096  n=4096  k=4096   bias=0  pipelined=   203.05 us  device_max=   200.97 us  single_wall=   326.48 us  skew= 104.2 us  ok
+  m=8192  n=4096  k=14336  bias=1  pipelined=   742.24 us  device_max=   740.89 us  single_wall=   870.80 us  skew= 102.1 us  ok
+  m=8192  n=8192  k=29568  bias=0  pipelined=  2526.26 us  device_max=  2504.33 us  single_wall=  2690.83 us  skew= 102.1 us  ok
+  m=64    n=7168  k=18432  bias=0  pipelined=    77.22 us  device_max=    75.88 us  single_wall=   203.83 us  skew= 102.0 us  ok
+
+===== rotation 2 (shape order [2, 3, 4, 5, 0, 1]) =====
+  m=2048  n=2880  k=2880   bias=1  pipelined=    91.03 us  device_max=    89.17 us  single_wall=   220.92 us  skew= 103.9 us  ok
+  m=4096  n=4096  k=4096   bias=0  pipelined=   200.53 us  device_max=   198.45 us  single_wall=   328.52 us  skew= 103.4 us  ok
+  m=8192  n=4096  k=14336  bias=1  pipelined=   743.77 us  device_max=   742.35 us  single_wall=   870.14 us  skew= 100.7 us  ok
+  m=8192  n=8192  k=29568  bias=0  pipelined=  2520.70 us  device_max=  2519.68 us  single_wall=  2690.22 us  skew= 101.8 us  ok
+  m=64    n=7168  k=18432  bias=0  pipelined=    77.63 us  device_max=    76.26 us  single_wall=   203.98 us  skew= 102.8 us  ok
+  m=512   n=4096  k=12288  bias=1  pipelined=   104.89 us  device_max=   104.09 us  single_wall=   222.55 us  skew= 102.8 us  ok
+
+============================================================================================================
+GATE M7 - this port, six graded shapes, order-rotated (3 rotations x 50 pipelined iters)
+============================================================================================================
+ #     m     n      k bias row  NR   mean us   stdev  dev_max  hostIss   SOL us  x SOL  bound  ok
+-------------------------------------------------------------------------------------------------
+ 1    64  7168  18432    0   1  32     77.50    0.25    75.98    61.67     6.46  12.00 device yes
+ 2   512  4096  12288    1   2  32    104.53    0.33   103.68    62.70     8.19  12.76 device yes
+ 3  2048  2880   2880    1   3  32     91.34    0.27    89.70    62.76    23.04   3.96 device yes
+ 4  4096  4096   4096    0   4  32    201.44    1.40   199.37    62.39    65.54   3.07 device yes
+ 5  8192  4096  14336    1   5  32    742.33    1.39   741.01    61.59   131.07   5.66 device yes
+ 6  8192  8192  29568    0   6  32   2519.33    7.70  2507.44    61.51   379.43   6.64 device yes
+-------------------------------------------------------------------------------------------------
+geometric mean (pipelined wall) :    255.59 us
+geometric mean (device max)     :    252.92 us
+geometric mean (published SOL)  :     39.80 us
+ratio to SOL                    :      6.42x
+all shapes correct              : True
+
+wrote m7_results.json

@@ -169,9 +169,31 @@ void gemm_rs_mi300x_kernel(const mi300x_globals g) {
         st_bf<BN, BK> (&Bs)[2] = al.allocate<st_bf<BN, BK>, 2>();
         bf16* const stage = reinterpret_cast<bf16*>(&__shm[0]);
 
-        rt_bf<WM, BK, ducks::rt_layout::row> A_frag;
-        rt_bf<WN, BK, ducks::rt_layout::row> B_frag;
+        // The k-step is split into KH halves of KS columns each (exp_03/P3).
+        // Only one half's operands are live at a time, which drops fragment
+        // pressure from (WM+WN)*BK/32 to (WM+WN)*KS/32 registers -- 48 -> 24 on
+        // the 256x256x32 rows, which are pinned at the 256 arch-VGPR cap.
+        // Numerics are bit-exact: mma_ABt chains its k tiles ascending into the
+        // same accumulator element, so splitting the k range does not reorder a
+        // single addition.
+        constexpr int KH = 2;
+        constexpr int KS = BK / KH;
+        static_assert(KS % 16 == 0 && KS * KH == BK);
+        rt_bf<WM, KS, ducks::rt_layout::row> A_frag;
+        rt_bf<WN, KS, ducks::rt_layout::row> B_frag;
         rt_fl<WM, WN, ducks::rt_layout::col> C_accum;
+
+        // Register staging for the k+1 global->LDS copy (exp_03/E1(b)). These
+        // live across the MFMA block, which is the whole point: the global
+        // round trip is issued before the MFMAs and landed after them, so the
+        // 64 MFMAs of iteration k cover it. Slot counts come from the same
+        // formula the fused helper uses, so this is 2 float4 = 8 VGPRs per
+        // operand on the 256-row configs and 1 float4 = 4 on the rest.
+        using ST_A = st_bf<BM, BK>;
+        using ST_B = st_bf<BN, BK>;
+        constexpr int NT = G::GROUP_THREADS;
+        float4 abuf[m3::g2s_slots<ST_A, NT>];
+        float4 bbuf[m3::g2s_slots<ST_B, NT>];
 
         const int warp = kittens::warpid() % m3::NUM_WARPS;
         const int warp_row = warp / m3::WARPS_N;   // warps cover (WM x WN)
@@ -199,24 +221,59 @@ void gemm_rs_mi300x_kernel(const mi300x_globals g) {
             const int tn = (t % in_group) / gsize;
 
             zero(C_accum);
-            // ---- double-buffered mainloop (correctness-first scheduling) ----
-            G::load(As[0], g.a, {0, 0, tm, 0});
-            G::load(Bs[0], g.b, {0, 0, tn, 0});
+            // ---- double-buffered mainloop, issue/commit split ----------------
+            // Buffer lifetime, unchanged from the fused version: iteration k
+            // ds_reads As[k&1] and ds_writes As[(k+1)&1]; (k+1)&1 == (k-1)&1, so
+            // the buffer being written is the one iteration k-1 read, and the
+            // __syncthreads() ending iteration k-1 separates them. Both of
+            // iteration k's ds_read halves are drained (acquire_frags) before
+            // that barrier, and iteration k's ds_writes are drained by
+            // load_commit's trailing lgkmcnt(0), also before it.
+            m3::load_issue<ST_A, NT>(abuf, g.a, {0, 0, tm, 0});
+            m3::load_issue<ST_B, NT>(bbuf, g.b, {0, 0, tn, 0});
+            m3::load_commit<NT>(As[0], abuf);
+            m3::load_commit<NT>(Bs[0], bbuf);
             __syncthreads();
             for (int k = 0; k < k_iters; ++k) {
-                load(A_frag, subtile_inplace<WM, BK>(As[k & 1], {warp_row, 0}));
-                load(B_frag, subtile_inplace<WN, BK>(Bs[k & 1], {warp_col, 0}));
-                if (k + 1 < k_iters) {
-                    G::load(As[(k + 1) & 1], g.a, {0, 0, tm, k + 1});
-                    G::load(Bs[(k + 1) & 1], g.b, {0, 0, tn, k + 1});
+                const bool more = (k + 1 < k_iters);
+                // ISSUE only -- no vmcnt here, that is the entire mechanism.
+                if (more) {
+                    m3::load_issue<ST_A, NT>(abuf, g.a, {0, 0, tm, k + 1});
+                    m3::load_issue<ST_B, NT>(bbuf, g.b, {0, 0, tn, k + 1});
                 }
-                // The A operand carries the only mask: whatever lands in the
-                // K-padding columns of A is overwritten with exact zeros
-                // before the MFMA (gates 3, 15).
-                if constexpr (K_TAIL) {
-                    if (k == k_iters - 1) mask_a_k_tail(A_frag, tail_k);
+                #pragma unroll
+                for (int kh = 0; kh < KH; ++kh) {
+                    load(A_frag, subtile_inplace<WM, KS>(As[k & 1],
+                                                         {warp_row, kh}));
+                    load(B_frag, subtile_inplace<WN, KS>(Bs[k & 1],
+                                                         {warp_col, kh}));
+                    // Mandatory: every ds_read in this tree is inside an
+                    // asm volatile, so SIInsertWaitcnts never observes the LDS
+                    // event and emits no use-wait of its own. Nothing else
+                    // between these reads and the MFMAs waits on lgkmcnt. The
+                    // anchor is equally mandatory -- a bare wait is reorderable
+                    // past an MFMA and was, silently, on 14 of 17 shapes.
+                    m3::acquire_frags(A_frag, B_frag);
+                    // The A operand carries the only mask: whatever lands in
+                    // the K-padding columns of A is overwritten with exact
+                    // zeros before the MFMA (gates 3, 15). The threshold is
+                    // rebased into this half's local K coordinates; a half that
+                    // starts at or past the tail gets threshold 0, i.e. is
+                    // zeroed outright.
+                    if constexpr (K_TAIL) {
+                        if (k == k_iters - 1) {
+                            const int th = tail_k - kh * KS;
+                            mask_a_k_tail(A_frag, th > 0 ? th : 0);
+                        }
+                    }
+                    mma_ABt(C_accum, A_frag, B_frag, C_accum);
                 }
-                mma_ABt(C_accum, A_frag, B_frag, C_accum);
+                // COMMIT: vmcnt(0) lands what was issued before the MFMAs, then
+                // the ds_writes publish it and lgkmcnt(0) drains them.
+                if (more) {
+                    m3::load_commit<NT>(As[(k + 1) & 1], abuf);
+                    m3::load_commit<NT>(Bs[(k + 1) & 1], bbuf);
+                }
                 __syncthreads();
             }
 

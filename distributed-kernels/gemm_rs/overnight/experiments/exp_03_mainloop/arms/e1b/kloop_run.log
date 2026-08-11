@@ -1,0 +1,255 @@
+
+##############################################################################################################
+SYMBOL <256,256,32,false>   _Z21gemm_rs_mi300x_kernelILi256ELi256ELi32ELb0EEv14mi300x_globals   lines 8954..13979
+  loop Header=BB3_427    Depth=4  blocks=4   layout 13383..13432  mfma=0
+  loop Header=BB3_461    Depth=4  blocks=6   layout 13646..13698  mfma=0
+  loop Header=BB3_32     Depth=3  blocks=4   layout 9394..9507  mfma=0
+  loop Header=BB3_113    Depth=3  blocks=345 layout 11397..13734  mfma=0
+  loop Header=BB3_16     Depth=2  blocks=3   layout 9228..9256  mfma=0
+  loop Header=BB3_28     Depth=2  blocks=6   layout 9343..9662  mfma=0
+  loop Header=BB3_86     Depth=2  blocks=6   layout 10707..11074  mfma=64
+  loop Header=BB3_97     Depth=2  blocks=3   layout 11149..11177  mfma=0
+  loop Header=BB3_109    Depth=2  blocks=3   layout 11283..11396  mfma=0
+  loop Header=BB3_477    Depth=2  blocks=5   layout 13813..13934  mfma=0
+  loop Header=BB3_12     Depth=1  blocks=47  layout 9171..9917  mfma=0
+  loop Header=BB3_84     Depth=1  blocks=21  layout 10268..13812  mfma=0
+
+  ==== DEEPEST MFMA LOOP: Header=BB3_86 Depth=2 ====
+  blocks (layout order):
+    .LBB3_86        10707..10714  (   8 lines) role=HEADER   term=s_cbranch_scc1 .LBB3_88  .LBB3_86:                               ; %.
+    %bb.87          10715..10735  (  21 lines) role=body/latch term=fallthrough  ; %bb.87:                               ;   
+    .LBB3_88        10736..10976  ( 241 lines) role=body/latch term=s_cbranch_vccnz .LBB3_90  .LBB3_88:                               ;   
+    %bb.89          10977..11063  (  87 lines) role=body/latch term=fallthrough  ; %bb.89:                               ;   
+    .LBB3_90        11064..11071  (   8 lines) role=body/latch term=s_cbranch_scc1 .LBB3_92  .LBB3_90:                               ;   
+    %bb.91          11072..11074  (   3 lines) role=body/latch term=s_branch .LBB3_86  ; %bb.91:                               ;   
+
+  ---- BLOCK .LBB3_86  10707..10714  (5 instrs) ----
+     hist: s_add_i32=1  s_cbranch_scc1=1  s_cmp_ge_i32=1  s_cmp_lt_i32=1  s_cselect_b64=1
+     sync-relevant, PROGRAM ORDER (A=inline asm, C=compiler):
+
+  ---- BLOCK %bb.87  10715..10735  (8 instrs) ----
+     hist: global_load_dwordx4=4
+     sync-relevant, PROGRAM ORDER (A=inline asm, C=compiler):
+        [A] x4    global_load_dwordx4                        L10718..L10733
+
+  ---- BLOCK .LBB3_88  10736..10976  (116 instrs) ----
+     hist: v_mfma_f32_16x16x16_bf16=64  ds_read_b64=24  s_add_i32=2  s_nop=2  s_waitcnt=2  s_and_b32=1  s_andn2_b64=1  s_cbranch_vccnz=1  s_lshl_b32=1
+     sync-relevant, PROGRAM ORDER (A=inline asm, C=compiler):
+        [A] x12   ds_read_b64                                L10746..L10796
+        [A] x1    s_waitcnt lgkmcnt(0)                       L10800..L10800
+        [C] x4    v_mfma_f32_16x16x16_bf16                   L10828..L10831
+        [A] x1    ds_read_b64                                L10836..L10836
+        [C] x4    v_mfma_f32_16x16x16_bf16                   L10839..L10842
+        [A] x1    ds_read_b64                                L10844..L10844
+        [C] x4    v_mfma_f32_16x16x16_bf16                   L10847..L10850
+        [A] x1    ds_read_b64                                L10852..L10852
+        [C] x4    v_mfma_f32_16x16x16_bf16                   L10855..L10858
+        [A] x1    ds_read_b64                                L10860..L10860
+        [C] x4    v_mfma_f32_16x16x16_bf16                   L10863..L10866
+        [A] x1    ds_read_b64                                L10868..L10868
+        [C] x4    v_mfma_f32_16x16x16_bf16                   L10871..L10874
+        [A] x1    ds_read_b64                                L10876..L10876
+        [C] x4    v_mfma_f32_16x16x16_bf16                   L10879..L10882
+        [A] x1    ds_read_b64                                L10884..L10884
+        [C] x4    v_mfma_f32_16x16x16_bf16                   L10887..L10890
+        [A] x5    ds_read_b64                                L10892..L10912
+        [A] x1    s_waitcnt lgkmcnt(0)                       L10916..L10916
+        [C] x32   v_mfma_f32_16x16x16_bf16                   L10944..L10975
+
+  ---- BLOCK %bb.89  10977..11063  (54 instrs) ----
+     hist: ds_write_b64=8  s_waitcnt=4  s_add_i32=2  s_or_b32=2  s_and_b32=1  s_lshl_b32=1
+     sync-relevant, PROGRAM ORDER (A=inline asm, C=compiler):
+        [A] x1    s_waitcnt vmcnt(0)                         L10989..L10989
+        [A] x4    ds_write_b64                               L10992..L11017
+        [A] x1    s_waitcnt lgkmcnt(0)                       L11028..L11028
+        [A] x1    s_waitcnt vmcnt(0)                         L11031..L11031
+        [A] x4    ds_write_b64                               L11034..L11058
+        [A] x1    s_waitcnt lgkmcnt(0)                       L11062..L11062
+
+  ---- BLOCK .LBB3_90  11064..11071  (7 instrs) ----
+     hist: s_add_u32=2  s_addc_u32=2  s_barrier=1  s_cbranch_scc1=1  s_cmp_eq_u32=1
+     sync-relevant, PROGRAM ORDER (A=inline asm, C=compiler):
+        [C] x1    s_barrier                                  L11070..L11070
+
+  ---- BLOCK %bb.91  11072..11074  (2 instrs) ----
+     hist: s_branch=1  s_mov_b32=1
+     sync-relevant, PROGRAM ORDER (A=inline asm, C=compiler):
+
+  ==== TOTAL over all blocks of the k-loop ====
+         64  v_mfma_f32_16x16x16_bf16
+         24  ds_read_b64
+          8  ds_write_b64
+          6  s_waitcnt
+          4  global_load_dwordx4
+          1  s_barrier
+          1  s_branch
+     (all mnemonics, top 25)
+         64  v_mfma_f32_16x16x16_bf16
+         24  ds_read_b64
+         18  v_add_u32_e32
+         12  v_and_b32_e32
+         12  v_lshrrev_b32_e32
+         12  v_xor_b32_e32
+          8  ds_write_b64
+          6  s_waitcnt
+          5  s_add_i32
+          4  global_load_dwordx4
+          4  v_lshl_add_u64
+          2  s_add_u32
+          2  s_addc_u32
+          2  s_and_b32
+          2  s_cbranch_scc1
+          2  s_lshl_b32
+          2  s_nop
+          2  s_or_b32
+          1  s_andn2_b64
+          1  s_barrier
+          1  s_branch
+          1  s_cbranch_vccnz
+          1  s_cmp_eq_u32
+          1  s_cmp_ge_i32
+          1  s_cmp_lt_i32
+  raw dump -> /home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/experiments/exp_03_mainloop/isa/kloop_256_256_32_false.s
+
+##############################################################################################################
+SYMBOL <256,256,32,true>   _Z21gemm_rs_mi300x_kernelILi256ELi256ELi32ELb1EEv14mi300x_globals   lines 14025..19247
+  loop Header=BB4_431    Depth=4  blocks=4   layout 18646..18695  mfma=0
+  loop Header=BB4_465    Depth=4  blocks=6   layout 18909..18961  mfma=0
+  loop Header=BB4_32     Depth=3  blocks=4   layout 14462..14575  mfma=0
+  loop Header=BB4_117    Depth=3  blocks=345 layout 16660..18997  mfma=0
+  loop Header=BB4_16     Depth=2  blocks=3   layout 14299..14327  mfma=0
+  loop Header=BB4_28     Depth=2  blocks=6   layout 14411..14730  mfma=0
+  loop Header=BB4_86     Depth=2  blocks=10  layout 15821..16317  mfma=64
+  loop Header=BB4_101    Depth=2  blocks=3   layout 16392..16420  mfma=0
+  loop Header=BB4_113    Depth=2  blocks=3   layout 16546..16659  mfma=0
+  loop Header=BB4_481    Depth=2  blocks=5   layout 19081..19202  mfma=0
+  loop Header=BB4_12     Depth=1  blocks=47  layout 14242..14985  mfma=0
+  loop Header=BB4_84     Depth=1  blocks=21  layout 15365..19080  mfma=0
+
+  ==== DEEPEST MFMA LOOP: Header=BB4_86 Depth=2 ====
+  blocks (layout order):
+    .LBB4_86        15821..15828  (   8 lines) role=HEADER   term=s_cbranch_scc1 .LBB4_88  .LBB4_86:                               ; %.
+    %bb.87          15829..15849  (  21 lines) role=body/latch term=fallthrough  ; %bb.87:                               ;   
+    .LBB4_88        15850..15944  (  95 lines) role=body/latch term=s_cbranch_scc1 .LBB4_90  .LBB4_88:                               ;   
+    %bb.89          15945..16004  (  60 lines) role=body/latch term=fallthrough  ; %bb.89:                               ; %.
+    .LBB4_90        16005..16124  ( 120 lines) role=body/latch term=s_cbranch_vccnz .LBB4_92  .LBB4_90:                               ;   
+    %bb.91          16125..16184  (  60 lines) role=body/latch term=fallthrough  ; %bb.91:                               ; %.
+    .LBB4_92        16185..16219  (  35 lines) role=body/latch term=s_cbranch_vccnz .LBB4_94  .LBB4_92:                               ;   
+    %bb.93          16220..16306  (  87 lines) role=body/latch term=fallthrough  ; %bb.93:                               ;   
+    .LBB4_94        16307..16314  (   8 lines) role=body/latch term=s_cbranch_scc1 .LBB4_96  .LBB4_94:                               ;   
+    %bb.95          16315..16317  (   3 lines) role=body/latch term=s_branch .LBB4_86  ; %bb.95:                               ;   
+
+  ---- BLOCK .LBB4_86  15821..15828  (5 instrs) ----
+     hist: s_add_i32=1  s_cbranch_scc1=1  s_cmp_ge_i32=1  s_cmp_lt_i32=1  s_cselect_b64=1
+     sync-relevant, PROGRAM ORDER (A=inline asm, C=compiler):
+
+  ---- BLOCK %bb.87  15829..15849  (8 instrs) ----
+     hist: global_load_dwordx4=4
+     sync-relevant, PROGRAM ORDER (A=inline asm, C=compiler):
+        [A] x4    global_load_dwordx4                        L15832..L15847
+
+  ---- BLOCK .LBB4_88  15850..15944  (32 instrs) ----
+     hist: ds_read_b64=12  s_add_i32=2  s_and_b32=1  s_cbranch_scc1=1  s_cmp_eq_u32=1  s_cmp_lg_u32=1  s_cselect_b64=1  s_lshl_b32=1  s_nop=1  s_waitcnt=1
+     sync-relevant, PROGRAM ORDER (A=inline asm, C=compiler):
+        [A] x12   ds_read_b64                                L15860..L15913
+        [A] x1    s_waitcnt lgkmcnt(0)                       L15917..L15917
+
+  ---- BLOCK %bb.89  15945..16004  (58 instrs) ----
+     hist: s_mov_b64=16  s_or_b64=2
+     sync-relevant, PROGRAM ORDER (A=inline asm, C=compiler):
+
+  ---- BLOCK .LBB4_90  16005..16124  (57 instrs) ----
+     hist: v_mfma_f32_16x16x16_bf16=32  ds_read_b64=12  s_nop=2  s_andn2_b64=1  s_cbranch_vccnz=1  s_waitcnt=1
+     sync-relevant, PROGRAM ORDER (A=inline asm, C=compiler):
+        [C] x11   v_mfma_f32_16x16x16_bf16                   L16007..L16023
+        [A] x1    ds_read_b64                                L16025..L16025
+        [C] x3    v_mfma_f32_16x16x16_bf16                   L16028..L16030
+        [A] x1    ds_read_b64                                L16032..L16032
+        [C] x6    v_mfma_f32_16x16x16_bf16                   L16035..L16040
+        [A] x1    ds_read_b64                                L16042..L16042
+        [C] x6    v_mfma_f32_16x16x16_bf16                   L16045..L16050
+        [A] x1    ds_read_b64                                L16052..L16052
+        [C] x6    v_mfma_f32_16x16x16_bf16                   L16055..L16063
+        [A] x8    ds_read_b64                                L16065..L16093
+        [A] x1    s_waitcnt lgkmcnt(0)                       L16097..L16097
+
+  ---- BLOCK %bb.91  16125..16184  (58 instrs) ----
+     hist: s_mov_b64=16  s_or_b64=2
+     sync-relevant, PROGRAM ORDER (A=inline asm, C=compiler):
+
+  ---- BLOCK .LBB4_92  16185..16219  (34 instrs) ----
+     hist: v_mfma_f32_16x16x16_bf16=32  s_andn2_b64=1  s_cbranch_vccnz=1
+     sync-relevant, PROGRAM ORDER (A=inline asm, C=compiler):
+        [C] x32   v_mfma_f32_16x16x16_bf16                   L16186..L16218
+
+  ---- BLOCK %bb.93  16220..16306  (54 instrs) ----
+     hist: ds_write_b64=8  s_waitcnt=4  s_add_i32=2  s_or_b32=2  s_and_b32=1  s_lshl_b32=1
+     sync-relevant, PROGRAM ORDER (A=inline asm, C=compiler):
+        [A] x1    s_waitcnt vmcnt(0)                         L16232..L16232
+        [A] x4    ds_write_b64                               L16235..L16260
+        [A] x1    s_waitcnt lgkmcnt(0)                       L16271..L16271
+        [A] x1    s_waitcnt vmcnt(0)                         L16274..L16274
+        [A] x4    ds_write_b64                               L16277..L16301
+        [A] x1    s_waitcnt lgkmcnt(0)                       L16305..L16305
+
+  ---- BLOCK .LBB4_94  16307..16314  (7 instrs) ----
+     hist: s_add_u32=2  s_addc_u32=2  s_barrier=1  s_cbranch_scc1=1  s_cmp_eq_u32=1
+     sync-relevant, PROGRAM ORDER (A=inline asm, C=compiler):
+        [C] x1    s_barrier                                  L16313..L16313
+
+  ---- BLOCK %bb.95  16315..16317  (2 instrs) ----
+     hist: s_branch=1  s_mov_b32=1
+     sync-relevant, PROGRAM ORDER (A=inline asm, C=compiler):
+
+  ==== TOTAL over all blocks of the k-loop ====
+         64  v_mfma_f32_16x16x16_bf16
+         24  ds_read_b64
+          8  ds_write_b64
+          6  s_waitcnt
+          4  global_load_dwordx4
+          1  s_barrier
+          1  s_branch
+     (all mnemonics, top 25)
+         64  v_mfma_f32_16x16x16_bf16
+         32  s_mov_b64
+         32  v_cndmask_b32_e64
+         32  v_cndmask_b32_sdwa
+         28  v_and_b32_e32
+         24  ds_read_b64
+         18  v_add_u32_e32
+         12  v_lshrrev_b32_e32
+         12  v_xor_b32_e32
+          8  ds_write_b64
+          6  s_waitcnt
+          5  s_add_i32
+          4  global_load_dwordx4
+          4  s_or_b64
+          4  v_lshl_add_u64
+          3  s_cbranch_scc1
+          3  s_nop
+          2  s_add_u32
+          2  s_addc_u32
+          2  s_and_b32
+          2  s_andn2_b64
+          2  s_cbranch_vccnz
+          2  s_cmp_eq_u32
+          2  s_cselect_b64
+          2  s_lshl_b32
+  raw dump -> /home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/experiments/exp_03_mainloop/isa/kloop_256_256_32_true.s
+
+############ whole-file scans for the instructions Q2 asks about ############
+buffer_load                      total=0
+global_load_lds                  total=0
+s_setprio                        total=0
+sched_barrier                    total=0
+sched_group_barrier              total=0
+v_accvgpr                        total=0
+v_mfma_f32_32x32                 total=0
+v_mfma_f32_16x16x16bf16_1k       total=0
+ds_read2                         total=0
+ds_read_b128                     total=6
+global_load_dwordx4              total=82
+buffer_wbl2                      total=6
+buffer_inv                       total=6
+s_sleep                          total=12
+=============== DONE ===============

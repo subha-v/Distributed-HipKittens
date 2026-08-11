@@ -1,0 +1,98 @@
+################ resource tuples (from m1a.log) ################
+instantiation                          SGPRs     VGPRs     AGPRs ScratchSi Dynamic S Occupancy SGPRs Spi VGPRs Spi  LDS Size
+----------------------------------------------------------------------------------------------------------------------------
+BM= 32 BN= 64 BK=64 K_TAIL=0               -        91         0         -     False         -        54         0         -
+BM= 64 BN= 64 BK=64 K_TAIL=0               -        91         0         -     False         -        50         0         -
+BM=128 BN=256 BK=32 K_TAIL=1               -       165         0         -     False         -        73         0         -
+BM=256 BN=256 BK=32 K_TAIL=0               -       246         0         -     False         -        61         0         -
+BM=256 BN=256 BK=32 K_TAIL=1               -       248         0         -     False         -        73         0         -
+BM= 32 BN= 64 BK=64 K_TAIL=1               -        91         0         -     False         -        80         0         -
+
+waves/SIMD -> CTAs/CU at 512 threads (8 waves/CTA, 4 SIMDs/CU):
+  BM= 32 BN= 64 BK=64 K_TAIL=0        0.0 waves/SIMD = 0.00 CTA/CU
+  BM= 64 BN= 64 BK=64 K_TAIL=0        0.0 waves/SIMD = 0.00 CTA/CU
+  BM=128 BN=256 BK=32 K_TAIL=1        0.0 waves/SIMD = 0.00 CTA/CU
+  BM=256 BN=256 BK=32 K_TAIL=0        0.0 waves/SIMD = 0.00 CTA/CU
+  BM=256 BN=256 BK=32 K_TAIL=1        0.0 waves/SIMD = 0.00 CTA/CU
+  BM= 32 BN= 64 BK=64 K_TAIL=1        0.0 waves/SIMD = 0.00 CTA/CU
+
+################ generating ISA (--save-temps) ################
+save-temps exit=0
+-rw-r--r-- 1 15523 15523  108288 Aug 11 09:49 gemm_rs_mi300x-hip-amdgcn-amd-amdhsa-gfx942.o
+-rw-r--r-- 1 15523 15523  777810 Aug 11 09:49 gemm_rs_mi300x-hip-amdgcn-amd-amdhsa-gfx942.s
+-rw-r--r-- 1 15523 15523 2830837 Aug 11 09:49 gemm_rs_mi300x-host-x86_64-unknown-linux-gnu.s
+-rw-r--r-- 1 15523 15523  565528 Aug 11 09:49 gemm_rs_mi300x.o
+ISA file: /home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/build/isa/gemm_rs_mi300x-hip-amdgcn-amd-amdhsa-gfx942.s
+22095 /home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/build/isa/gemm_rs_mi300x-hip-amdgcn-amd-amdhsa-gfx942.s
+
+################ ISA property checks ################
+-- emit path must lower to 16-byte stores --
+global_store_dwordx4                           6
+flat_store_dwordx4                             6
+buffer_store_dwordx4                           0
+global_store_dwordx2 (8B)                      0
+global_store_short (2B tail)                   12
+-- reduction load width --
+global_load_dwordx4                            82
+-- cache/ordering ops --
+buffer_wbl2  (writeback)                       6
+buffer_inv   (invalidate)                      6
+buffer_wbinvl1                                 0
+s_waitcnt vmcnt                                410
+s_sleep (poll backoff)                         12
+global_atomic                                  0
+flat_atomic                                    24
+s_barrier                                      84
+-- MFMA --
+v_mfma (any)                                   176
+v_mfma_f32_16x16x16_bf16                       176
+v_mfma_f32_32x32x8                             0
+-- spill indicators --
+scratch_store                                  0
+scratch_load                                   0
+
+-- per-kernel .s metadata (amdhsa) --
+- .agpr_count:     0
+.group_segment_fixed_size: 0
+.max_flat_workgroup_size: 512
+.name:           _Z21gemm_rs_mi300x_kernelILi32ELi64ELi64ELb0EEv14mi300x_globals
+.private_segment_fixed_size: 0
+.sgpr_count:     106
+.vgpr_count:     91
+- .agpr_count:     0
+.group_segment_fixed_size: 0
+.max_flat_workgroup_size: 512
+.name:           _Z21gemm_rs_mi300x_kernelILi64ELi64ELi64ELb0EEv14mi300x_globals
+.private_segment_fixed_size: 0
+.sgpr_count:     106
+.vgpr_count:     91
+- .agpr_count:     0
+.group_segment_fixed_size: 0
+.max_flat_workgroup_size: 512
+.name:           _Z21gemm_rs_mi300x_kernelILi128ELi256ELi32ELb1EEv14mi300x_globals
+.private_segment_fixed_size: 0
+.sgpr_count:     106
+.vgpr_count:     165
+- .agpr_count:     0
+.group_segment_fixed_size: 0
+.max_flat_workgroup_size: 512
+.name:           _Z21gemm_rs_mi300x_kernelILi256ELi256ELi32ELb0EEv14mi300x_globals
+.private_segment_fixed_size: 0
+.sgpr_count:     106
+.vgpr_count:     246
+- .agpr_count:     0
+.group_segment_fixed_size: 0
+.max_flat_workgroup_size: 512
+.name:           _Z21gemm_rs_mi300x_kernelILi256ELi256ELi32ELb1EEv14mi300x_globals
+.private_segment_fixed_size: 0
+.sgpr_count:     106
+.vgpr_count:     248
+- .agpr_count:     0
+.group_segment_fixed_size: 0
+.max_flat_workgroup_size: 512
+.name:           _Z21gemm_rs_mi300x_kernelILi32ELi64ELi64ELb1EEv14mi300x_globals
+.private_segment_fixed_size: 0
+.sgpr_count:     106
+.vgpr_count:     91
+
+################ DONE ################

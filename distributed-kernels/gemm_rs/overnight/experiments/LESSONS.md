@@ -2,6 +2,99 @@
 
 ## Session 2 — 2026-08-11 overnight (optimization session)
 
+- **WIN, exp_03/E1(b): the mainloop now overlaps its global loads with its
+  MFMAs. Geomean 269.96 → 256.09 µs (−5.14%), confirmed at 255.59 µs on an
+  independent repeat.** Per-shape `77.31 / 104.93 / 91.68 / 200.49 / 750.55 /
+  2520.29`, i.e. **−10.0% / −7.8% / −5.4% / −0.7% / −2.4% / −4.3%**. Full ladder
+  passed (17/17 at both 1e-2 and 2e-3, worst `max|diff|` 4.883e-04 — identical
+  to the baseline; all three controls; 600-epoch soak). `kittens::load` was cut
+  at its `vmcnt(0)` into `load_issue` (global loads, no wait) and `load_commit`
+  (`vmcnt(0)`, ds_writes, `lgkmcnt(0)`) in our own adapter, with the issue
+  hoisted above the MFMA block and the commit sunk below it. ISA confirms the
+  `s_waitcnt vmcnt(0)` now sits **after** all 64 MFMAs, and all 4
+  `global_load_dwordx4` are in flight together where the fused helper drained
+  after every 2 — so two exposed round trips per k-iteration became one covered
+  one. Full record in `exp_03_mainloop/result.md`. Only full `vmcnt(0)` /
+  `lgkmcnt(0)` waits; no counted wait was introduced.
+
+- **TRAP, and the most transferable thing in exp_03: a bare `s_waitcnt
+  lgkmcnt(0)` does NOT protect a register filled from LDS, and the failure is
+  silent, total, and shape-dependent.** The first build put the wait between the
+  fragment `ds_read`s and the MFMAs exactly as designed, and failed M3 on **14
+  of 17 shapes** with `max|diff|` 1e19–9e30 and NaN, ~99.9% of elements wrong,
+  **no error bit set** — healthy protocol, garbage arithmetic. `s_waitcnt` has
+  no operands, so it carries no data dependence; the `ds_read` is an
+  `asm volatile` whose output the compiler thinks is live immediately; and
+  `v_mfma` is a plain intrinsic with no memory effects, so the machine scheduler
+  hoisted MFMAs above the wait. It did so in **exactly** the three
+  `K_TAIL=false` instantiations (3 of 4 MFMAs per k-iteration in
+  `<32,64,64,false>`, 4 in `<64,64,64,false>`, 1 of 64 in
+  `<256,256,32,false>`) and nowhere else. Hazard ⇔ failure, exactly. The
+  `K_TAIL=true` instantiations were clean **only because `mask_a_k_tail`
+  fragments the block** — pure luck, invisible in the source.
+  Fix: `frag_anchor` launders each base tile's register pair through
+  `asm volatile("" : "+v"(...))` after the wait, which is a real def, so every
+  consumer is ordered by data dependence rather than scheduler goodwill. **Zero
+  instructions, zero registers** (233 VGPR before and after). A
+  `sched_barrier(0)` would likely also work but only constrains a pass instead
+  of establishing a dependence — weaker for the same price.
+  Generalisable: **in this tree every memory op is inside `asm volatile`, so
+  `SIInsertWaitcnts` is blind and every wait is load-bearing source, not a
+  compiler service.** Corollary: `__syncthreads()` emits a bare `s_barrier`
+  with no `lgkmcnt`, and a spill of a register whose `global_load` has not
+  landed would store stale contents with no `vmcnt` to stop it.
+  `exp_03_mainloop/lds_race_check.sh` now checks all of this mechanically for
+  both counters (tracking asm-issued `ds_read`/`global_load` destinations since
+  the last drain, counted waits handled). **Run it after every mainloop change:
+  a 30-second static check that replaces a 3-minute M3 failure.** It also
+  confirms the previously-recorded latent last-k-iteration `lgkmcnt` race is now
+  repaired.
+
+- **exp_03/P3: splitting the k-step into two `BK/2` halves cleared the spills
+  and is timing-neutral; it is a prerequisite, not a win.** 270.12 µs vs 269.96
+  (+0.06%). But `<256,256,32,*>` went **256 → 233 VGPR with the 12 B scratch and
+  both VGPR spills gone**, and `<128,256,32,true>` 170 → 153. Bit-exact:
+  `mma_ABt` already chains its k tiles ascending into the same accumulator
+  element, so splitting the k range preserves every addition's order — observed
+  `max|diff|` unchanged. Occupancy did **not** move (2 waves/SIMD): residency is
+  LDS-bound at 1 CTA/CU, so freed registers buy headroom, never occupancy. That
+  headroom is the whole point — E1(b) needs +13/+15 VGPRs and lands at 246/248
+  against the 256 cap. **E1(b) on unsplit fragments would have needed ~269 and
+  spilled the staging buffer, which is not merely slow but WRONG.** Sequencing
+  two arms so the cheap one pays for the expensive one was the right call.
+
+- **NOTE, sizing the next axis: the mainloop is no longer 46% of shape 6.**
+  Re-run the attribution on the new winner before picking the next mechanism;
+  E2 (XGMI egress) and E3 (release granularity) are now proportionally larger.
+  Also **E1(c) is worth less than pre-registered**: the scheduler already
+  interleaves the second half's `ds_read`s with the first half's MFMAs for free.
+  And **shape 4 (4096×4096×4096) gained nothing (−0.7%)** — with only 16
+  k-iterations per tile its cost is not in the mainloop, and it is now the worst
+  `× SOL` row at 3.06.
+
+- **TOOLING DEFECT: `tools/gate_ladder.sh:53` asserts the M2 metadata table has
+  ≥7 rows, but the dispatch has exactly 6 distinct instantiations, so the
+  committed ladder cannot pass on the committed baseline.** 7 was right until
+  exp_04 retiled row 1 from `<32,256,32,false>` to `<32,64,64,false>`, which
+  collapsed it into the generic even-K row. Stale against `c0a6bdd2`, not
+  against any experiment. exp_03 gated both arms with
+  `experiments/exp_03_mainloop/ladder.sh`, a faithful copy whose M2 asserts all
+  six expected tuples **by name** (strictly stronger than a row count: vacuous
+  table, missing instantiation and unexpected extra all fail); nothing the
+  benchmark measures was changed. **Fix the constant in `tools/`.**
+
+- **TOOLING DEFECT: the assembler's loop-depth comments are not a reliable
+  guide to k-loop membership, and `p0_30_kloop.sh` trusts them.** After P3 the
+  prefetch block `.LBB3_86` is annotated `in Loop: Header=BB3_84 Depth=1` —
+  outside the k-loop, which would be illegal — and the k-loop inventory
+  consequently showed **no `global_load` at all**. Reading the branches settles
+  it: the latch does `s_cbranch_scc0 .LBB3_86` / `s_branch .LBB3_87`, i.e. the
+  compiler turned the in-body `if (k + 1 < k_iters)` guard into a **choice of
+  latch target**, entering the prefetch block on every iteration but the last.
+  `MachineLoopInfo` simply picked `BB3_87` as the natural-loop header of a now
+  multi-entry region. Use `exp_03_mainloop/cfg_dump.sh` or `where_prefetch.sh`
+  when a block appears to have vanished from a loop.
+
 - **TRAP: the previous session left three GPU processes running for seven
   hours, and the obvious `ps | grep` could not see them.** At session start
   `rocm-smi` showed GPUs 2/6/7 at 100% utilization drawing 218–233 W (idle is
@@ -89,6 +182,57 @@
   stderr writes *inside every timed call*. Any evaluator number intended for
   `RESULTS.md` must be taken with `HK_DEBUG=0`. Debug output is for localizing
   the hang, never for a number.
+
+- **WIN, exp_03: the mainloop now overlaps global loads with MFMAs. Geomean
+  269.96 → 256.09 µs (−5.14%)**, reproduced at 255.59 µs on an independent
+  repeat. Per shape `77.31 / 104.93 / 91.68 / 200.49 / 750.55 / 2520.29`, i.e.
+  −10.0% / −7.8% / −5.4% / −0.7% / −2.4% / −4.3%. Cumulative for the night:
+  **285.02 → 256.09 µs, −10.2%.**
+  Two arms, and the order mattered:
+  - **P3 (split the k-step into two BK/2 halves)** was **timing-neutral
+    (+0.06%)** but cleared the 12 B scratch and **both VGPR spills** and freed
+    **23 registers** on the 256-row configs (256 → 233). Bit-exact, as
+    pre-registered, because `mma_ABt` already chains k ascending per
+    accumulator element. Occupancy did not move — residency is LDS-bound at
+    1 CTA/CU, not VGPR-bound. **Keep it: it is what pays for E1(b)**, which
+    lands at 246/248 VGPR against the 256 cap with 8-10 to spare. A neutral
+    result that buys headroom for the next change is not a failed experiment.
+  - **E1(b) (split `G::load` into issue and commit)** is the win. The ISA
+    confirms the reordering survived: `s_waitcnt vmcnt(0)` now sits **after**
+    all 64 MFMAs, and all four `global_load_dwordx4` are in flight together
+    where the fused helper drained after every two. **Two exposed global round
+    trips per k-iteration became one covered one.**
+
+- **TRAP, and the sharpest one of the session: `s_waitcnt lgkmcnt(0)` alone
+  does NOT protect a register loaded from LDS.** A bare wait has no operands,
+  so it creates no data dependence. The `ds_read` is an `asm volatile` whose
+  output the compiler believes is live immediately, and `v_mfma` is a plain
+  intrinsic with no memory effects — so the scheduler is free to hoist MFMAs
+  *above* the wait, and it did, in **exactly** the three `K_TAIL=false`
+  instantiations and nowhere else. Result: **14 of 17 shapes failed with
+  `max|diff|` between 1e19 and 9e30, NaNs, and NO error bit set.** The
+  `K_TAIL=true` instantiations were clean only by accident, because
+  `mask_a_k_tail` happened to fragment the scheduling region.
+  Fix: launder each base tile through `asm volatile("" : "+v"(...))` after the
+  wait, creating a real def-use edge. **Zero instructions, zero registers.**
+  Generalizable rule: **when LDS traffic is hidden behind `asm volatile`, the
+  wait and the consumer must be tied by a data dependence, not by program
+  order.** Ordering alone is not a contract with the scheduler.
+  This is the same root cause as the previously-recorded latent last-k-iteration
+  race — `SIInsertWaitcnts` cannot see LDS events it never observes — and
+  `experiments/exp_03_mainloop/lds_race_check.sh` now catches the whole class
+  mechanically for both counters in ~30 s. Run it after any mainloop edit. It
+  also confirms the old latent race is now repaired.
+
+- **TRAP (self-inflicted): a gate assertion that is too strict blocks
+  everything, and it is as bad as one that is too loose.** After fixing M2's
+  silent false pass I asserted **7** instantiation rows — but exp_04 retiled
+  config row 1 onto the pre-existing `<32,64,64,false>` template, so there are
+  now **6** distinct instantiations (rows 4 and 5 also share
+  `<256,256,32,false>`). The committed ladder could not pass on the committed
+  baseline. Fixed with a named `M2_EXPECT` constant and a failure message that
+  says to update it when the dispatch table changes. **Count distinct
+  instantiations, not config rows.**
 
 - **E2: the XGMI ceiling is 315-336 GB/s per GPU, not 448, and our 127 GB/s is
   ~39% of achievable — but the "16-byte scattered stores" diagnosis is

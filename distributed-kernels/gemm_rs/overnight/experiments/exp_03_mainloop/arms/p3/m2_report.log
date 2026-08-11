@@ -1,0 +1,283 @@
+################ raw resource remarks ################
+Function Name: _Z21gemm_rs_mi300x_kernelILi32ELi64ELi64ELb0EEv14mi300x_globals
+124 | void gemm_rs_mi300x_kernel(const mi300x_globals g) {
+| ^
+TotalSGPRs: 106
+VGPRs: 89
+AGPRs: 0
+ScratchSize [bytes/lane]: 0
+Dynamic Stack: False
+Occupancy [waves/SIMD]: 5
+SGPRs Spill: 54
+VGPRs Spill: 0
+LDS Size [bytes/block]: 0
+Function Name: _Z21gemm_rs_mi300x_kernelILi64ELi64ELi64ELb0EEv14mi300x_globals
+TotalSGPRs: 106
+VGPRs: 91
+AGPRs: 0
+ScratchSize [bytes/lane]: 0
+Dynamic Stack: False
+Occupancy [waves/SIMD]: 5
+SGPRs Spill: 49
+VGPRs Spill: 0
+LDS Size [bytes/block]: 0
+Function Name: _Z21gemm_rs_mi300x_kernelILi128ELi256ELi32ELb1EEv14mi300x_globals
+TotalSGPRs: 106
+VGPRs: 153
+AGPRs: 0
+ScratchSize [bytes/lane]: 0
+Dynamic Stack: False
+Occupancy [waves/SIMD]: 3
+SGPRs Spill: 72
+VGPRs Spill: 0
+LDS Size [bytes/block]: 0
+Function Name: _Z21gemm_rs_mi300x_kernelILi256ELi256ELi32ELb0EEv14mi300x_globals
+TotalSGPRs: 106
+VGPRs: 233
+AGPRs: 0
+ScratchSize [bytes/lane]: 0
+Dynamic Stack: False
+Occupancy [waves/SIMD]: 2
+SGPRs Spill: 61
+VGPRs Spill: 0
+LDS Size [bytes/block]: 0
+Function Name: _Z21gemm_rs_mi300x_kernelILi256ELi256ELi32ELb1EEv14mi300x_globals
+TotalSGPRs: 106
+VGPRs: 233
+AGPRs: 0
+ScratchSize [bytes/lane]: 0
+Dynamic Stack: False
+Occupancy [waves/SIMD]: 2
+SGPRs Spill: 73
+VGPRs Spill: 0
+LDS Size [bytes/block]: 0
+Function Name: _Z21gemm_rs_mi300x_kernelILi32ELi64ELi64ELb1EEv14mi300x_globals
+TotalSGPRs: 106
+VGPRs: 89
+AGPRs: 0
+ScratchSize [bytes/lane]: 0
+Dynamic Stack: False
+Occupancy [waves/SIMD]: 5
+SGPRs Spill: 80
+VGPRs Spill: 0
+LDS Size [bytes/block]: 0
+1 warning generated when compiling for gfx942.
+In file included from /home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:32:
+
+################ metadata table ################
+BM/BN/BK            VGPR  AGPR  SGPR  scratch staticLDS  maxwg
+--------------------------------------------------------------
+ 32/ 64/64 tail=0     89     0   106        0         0    512
+ 64/ 64/64 tail=0     91     0   106        0         0    512
+128/256/32 tail=1    153     0   106        0         0    512
+256/256/32 tail=0    233     0   106        0         0    512
+256/256/32 tail=1    233     0   106        0         0    512
+ 32/ 64/64 tail=1     89     0   106        0         0    512
+
+NOTE: LDS is requested dynamically at launch (extern __shared__), so
+      group_segment_fixed_size is 0 here; the real per-CTA LDS is
+      2*(BM+BN)*BK*2 bytes = 36864/32768/49152/65536/65536/24576/24576.
+
+################ ordering ops in context ################
+=== every buffer_wbl2 with 6 lines of context ===
+2250-	s_mov_b64 exec, s[8:9]
+2251-	s_cbranch_execz .LBB0_159
+2252-; %bb.158:                              ;   in Loop: Header=BB0_85 Depth=1
+2253:	buffer_wbl2 sc0 sc1
+2254-	s_waitcnt vmcnt(0)
+2255-.LBB0_159:                              ; %_ZN17hk_gemm_rs_mi300x22release_payload_systemEv.exit
+2256-                                        ;   in Loop: Header=BB0_85 Depth=1
+--
+4800-	s_mov_b64 exec, s[6:7]
+4801-	s_cbranch_execz .LBB1_161
+4802-; %bb.160:                              ;   in Loop: Header=BB1_85 Depth=1
+4803:	buffer_wbl2 sc0 sc1
+4804-	s_waitcnt vmcnt(0)
+4805-.LBB1_161:                              ; %_ZN17hk_gemm_rs_mi300x22release_payload_systemEv.exit
+4806-                                        ;   in Loop: Header=BB1_85 Depth=1
+--
+8701-	s_mov_b64 exec, s[26:27]
+8702-	s_cbranch_execz .LBB2_312
+8703-; %bb.311:                              ;   in Loop: Header=BB2_85 Depth=1
+8704:	buffer_wbl2 sc0 sc1
+8705-	s_waitcnt vmcnt(0)
+8706-.LBB2_312:                              ; %_ZN17hk_gemm_rs_mi300x22release_payload_systemEv.exit
+8707-                                        ;   in Loop: Header=BB2_85 Depth=1
+--
+13765-	s_mov_b64 exec, s[10:11]
+13766-	s_cbranch_execz .LBB3_471
+13767-; %bb.470:                              ;   in Loop: Header=BB3_84 Depth=1
+13768:	buffer_wbl2 sc0 sc1
+13769-	s_waitcnt vmcnt(0)
+13770-.LBB3_471:                              ; %_ZN17hk_gemm_rs_mi300x22release_payload_systemEv.exit
+13771-                                        ;   in Loop: Header=BB3_84 Depth=1
+--
+19021-	s_mov_b64 exec, s[28:29]
+19022-	s_cbranch_execz .LBB4_475
+19023-; %bb.474:                              ;   in Loop: Header=BB4_84 Depth=1
+19024:	buffer_wbl2 sc0 sc1
+19025-	s_waitcnt vmcnt(0)
+19026-.LBB4_475:                              ; %_ZN17hk_gemm_rs_mi300x22release_payload_systemEv.exit
+19027-                                        ;   in Loop: Header=BB4_84 Depth=1
+--
+21659-	s_mov_b64 exec, s[8:9]
+21660-	s_cbranch_execz .LBB5_163
+21661-; %bb.162:                              ;   in Loop: Header=BB5_85 Depth=1
+21662:	buffer_wbl2 sc0 sc1
+21663-	s_waitcnt vmcnt(0)
+21664-.LBB5_163:                              ; %_ZN17hk_gemm_rs_mi300x22release_payload_systemEv.exit
+21665-                                        ;   in Loop: Header=BB5_85 Depth=1
+
+=== every buffer_inv with 6 lines of context ===
+363-                                        ;   in Loop: Header=BB0_13 Depth=1
+364-	s_barrier
+365-	s_waitcnt vmcnt(0)
+366:	buffer_inv sc0 sc1
+367-	s_and_saveexec_b64 s[12:13], s[10:11]
+368-	s_cbranch_execz .LBB0_39
+369-; %bb.27:                               ; %.lr.ph.i285.preheader
+--
+2840-                                        ;   in Loop: Header=BB1_13 Depth=1
+2841-	s_barrier
+2842-	s_waitcnt vmcnt(0)
+2843:	buffer_inv sc0 sc1
+2844-	s_and_saveexec_b64 s[12:13], s[10:11]
+2845-	s_cbranch_execz .LBB1_39
+2846-; %bb.27:                               ; %.lr.ph.i286.preheader
+--
+5390-                                        ;   in Loop: Header=BB2_13 Depth=1
+5391-	s_barrier
+5392-	s_waitcnt vmcnt(0)
+5393:	buffer_inv sc0 sc1
+5394-	s_and_saveexec_b64 s[12:13], s[10:11]
+5395-	s_cbranch_execz .LBB2_39
+5396-; %bb.27:                               ; %.lr.ph.i295.preheader
+--
+9284-                                        ;   in Loop: Header=BB3_12 Depth=1
+9285-	s_barrier
+9286-	s_waitcnt vmcnt(0)
+9287:	buffer_inv sc0 sc1
+9288-	s_and_saveexec_b64 s[12:13], s[10:11]
+9289-	s_cbranch_execz .LBB3_38
+9290-; %bb.26:                               ; %.lr.ph.i285.preheader
+--
+14352-                                        ;   in Loop: Header=BB4_12 Depth=1
+14353-	s_barrier
+14354-	s_waitcnt vmcnt(0)
+14355:	buffer_inv sc0 sc1
+14356-	s_and_saveexec_b64 s[12:13], s[10:11]
+14357-	s_cbranch_execz .LBB4_38
+14358-; %bb.26:                               ; %.lr.ph.i295.preheader
+--
+19627-                                        ;   in Loop: Header=BB5_13 Depth=1
+19628-	s_barrier
+19629-	s_waitcnt vmcnt(0)
+19630:	buffer_inv sc0 sc1
+19631-	s_and_saveexec_b64 s[12:13], s[10:11]
+19632-	s_cbranch_execz .LBB5_39
+19633-; %bb.27:                               ; %.lr.ph.i294.preheader
+
+=== s_sleep sites (bounded poll backoff) ===
+305-	v_mov_b64_e32 v[8:9], s[34:35]
+306-	v_cmp_gt_u64_e32 vcc, s[70:71], v[8:9]
+307-	s_mov_b64 s[72:73], -1
+308-	s_or_b64 s[68:69], s[68:69], exec
+309-	s_cbranch_vccnz .LBB0_16
+310-; %bb.18:                               ;   in Loop: Header=BB0_17 Depth=2
+311:	s_sleep 4
+312-	flat_load_dword v4, v[6:7] offset:256 sc0 sc1
+313-	s_andn2_b64 s[18:19], s[68:69], exec
+--
+1708-	v_mov_b64_e32 v[8:9], s[34:35]
+1709-	v_cmp_gt_u64_e32 vcc, s[74:75], v[8:9]
+1710-	s_mov_b64 s[76:77], -1
+1711-	s_or_b64 s[20:21], s[20:21], exec
+1712-	s_cbranch_vccnz .LBB0_103
+1713-; %bb.105:                              ;   in Loop: Header=BB0_104 Depth=2
+1714:	s_sleep 4
+1715-	flat_load_dword v8, v[6:7] offset:256 sc0 sc1
+1716-	s_andn2_b64 s[14:15], s[20:21], exec
+--
+2782-	v_mov_b64_e32 v[8:9], s[34:35]
+2783-	v_cmp_gt_u64_e32 vcc, s[70:71], v[8:9]
+2784-	s_mov_b64 s[72:73], -1
+2785-	s_or_b64 s[68:69], s[68:69], exec
+2786-	s_cbranch_vccnz .LBB1_16
+2787-; %bb.18:                               ;   in Loop: Header=BB1_17 Depth=2
+2788:	s_sleep 4
+2789-	flat_load_dword v4, v[6:7] offset:256 sc0 sc1
+2790-	s_andn2_b64 s[20:21], s[68:69], exec
+--
+4186-	v_mov_b64_e32 v[30:31], s[34:35]
+4187-	v_cmp_gt_u64_e32 vcc, s[20:21], v[30:31]
+4188-	s_mov_b64 s[76:77], -1
+4189-	s_or_b64 s[18:19], s[18:19], exec
+4190-	s_cbranch_vccnz .LBB1_94
+4191-; %bb.96:                               ;   in Loop: Header=BB1_95 Depth=2
+4192:	s_sleep 4
+4193-	flat_load_dword v12, v[28:29] offset:256 sc0 sc1
+4194-	s_andn2_b64 s[6:7], s[18:19], exec
+--
+5332-	v_mov_b64_e32 v[8:9], s[58:59]
+5333-	v_cmp_gt_u64_e32 vcc, s[70:71], v[8:9]
+5334-	s_mov_b64 s[72:73], -1
+5335-	s_or_b64 s[68:69], s[68:69], exec
+5336-	s_cbranch_vccnz .LBB2_16
+5337-; %bb.18:                               ;   in Loop: Header=BB2_17 Depth=2
+5338:	s_sleep 4
+5339-	flat_load_dword v4, v[6:7] offset:256 sc0 sc1
+5340-	s_andn2_b64 s[20:21], s[68:69], exec
+--
+7086-	v_mov_b64_e32 v[80:81], s[58:59]
+7087-	v_cmp_gt_u64_e32 vcc, s[92:93], v[80:81]
+7088-	s_mov_b64 s[94:95], -1
+7089-	s_or_b64 s[90:91], s[90:91], exec
+7090-	s_cbranch_vccnz .LBB2_98
+7091-; %bb.100:                              ;   in Loop: Header=BB2_99 Depth=2
+7092:	s_sleep 4
+7093-	flat_load_dword v74, v[78:79] offset:256 sc0 sc1
+7094-	s_andn2_b64 s[54:55], s[90:91], exec
+--
+
+=== atomic sites (expect epoch RMW + err atomicOr only) ===
+41:	flat_atomic_add v[2:3], v1 offset:1216
+331:	flat_atomic_or v[6:7], v66
+1008:	flat_atomic_add v[2:3], v1
+1737:	flat_atomic_or v[6:7], v57
+2518:	flat_atomic_add v[2:3], v1 offset:1216
+2808:	flat_atomic_or v[6:7], v66
+3485:	flat_atomic_add v[2:3], v1
+4215:	flat_atomic_or v[28:29], v65
+5073:	flat_atomic_add v[2:3], v1 offset:1216
+5358:	flat_atomic_or v[6:7], v66
+6032:	flat_atomic_add v[2:3], v1
+7118:	flat_atomic_or v[78:79], v149
+8971:	flat_atomic_add v[2:3], v1 offset:1216
+9254:	flat_atomic_or v[2:3], v66
+9931:	flat_atomic_add v[2:3], v1
+11168:	flat_atomic_or v[142:143], v221
+14039:	flat_atomic_add v[2:3], v1 offset:1216
+14320:	flat_atomic_or v[2:3], v66
+14992:	flat_atomic_add v[2:3], v1
+16409:	flat_atomic_or v[142:143], v227
+19310:	flat_atomic_add v[2:3], v1 offset:1216
+19595:	flat_atomic_or v[6:7], v66
+20269:	flat_atomic_add v[2:3], v1
+21125:	flat_atomic_or v[6:7], v57
+
+=== 16-byte peer stores ===
+724:	global_store_dwordx4 v[56:57], v[24:27], off
+2148:	flat_store_dwordx4 v[30:31], v[62:65]
+3201:	global_store_dwordx4 v[56:57], v[24:27], off
+4698:	flat_store_dwordx4 v[36:37], v[70:73]
+5746:	global_store_dwordx4 v[56:57], v[24:27], off
+8599:	flat_store_dwordx4 v[94:95], v[100:103]
+9649:	global_store_dwordx4 v[40:41], v[2:5], off
+13664:	flat_store_dwordx4 v[158:159], v[226:229]
+14710:	global_store_dwordx4 v[40:41], v[2:5], off
+18920:	flat_store_dwordx4 v[158:159], v[228:231]
+19984:	global_store_dwordx4 v[56:57], v[24:27], off
+21559:	flat_store_dwordx4 v[30:31], v[62:65]
+
+=== scratch (spill) sites ===
+################ DONE ################

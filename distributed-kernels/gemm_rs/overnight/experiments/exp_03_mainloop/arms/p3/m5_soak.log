@@ -1,0 +1,21 @@
+soak: 600 epochs, shape m=512 n=4096 k=12288 bias=1, verifying every 1 epoch(s)
+  epoch    1: n_calls=1 epoch cells all == n_calls  max|diff|=4.883e-04     7.2s
+  epoch   50: n_calls=50 epoch cells all == n_calls  max|diff|=4.883e-04     7.5s
+  epoch  100: n_calls=100 epoch cells all == n_calls  max|diff|=4.883e-04     7.8s
+  epoch  150: n_calls=150 epoch cells all == n_calls  max|diff|=4.883e-04     8.1s
+  epoch  200: n_calls=200 epoch cells all == n_calls  max|diff|=4.883e-04     8.4s
+  epoch  250: n_calls=250 epoch cells all == n_calls  max|diff|=4.883e-04     8.6s
+  epoch  300: n_calls=300 epoch cells all == n_calls  max|diff|=4.883e-04     8.9s
+  epoch  350: n_calls=350 epoch cells all == n_calls  max|diff|=4.883e-04     9.2s
+  epoch  400: n_calls=400 epoch cells all == n_calls  max|diff|=4.883e-04     9.5s
+  epoch  450: n_calls=450 epoch cells all == n_calls  max|diff|=4.883e-04     9.7s
+  epoch  500: n_calls=500 epoch cells all == n_calls  max|diff|=4.883e-04    10.0s
+  epoch  550: n_calls=550 epoch cells all == n_calls  max|diff|=4.883e-04    10.3s
+  epoch  600: n_calls=600 epoch cells all == n_calls  max|diff|=4.883e-04    10.6s
+
+total launches: 600
+final epoch-cell check : PASS (all scheduled cells == 600, unscheduled == 0)
+final signal-cell check: PASS (all touched ready/credit == 600)
+worst max|abs diff| over soak: 4.883e-04 (tight tolerance 0.002)
+
+GATE M5 PASSED: 600 skewed changing-input epochs, no host reset, epochs and signals exact, outputs correct throughout

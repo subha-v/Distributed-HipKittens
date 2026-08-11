@@ -1,0 +1,161 @@
+python include: /usr/include/python3.12
+pybind include: /usr/local/lib/python3.12/dist-packages/pybind11/include
+
+########## M1a: production TU ##########
+In file included from /home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:32:
+/home/subvadla/dhk/include/pyutils/pyutils.cuh:59:13: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+   59 |             hipFuncSetAttribute((void *) kernel, hipFuncAttributeMaxDynamicSharedMemorySize, __dynamic_shared_memory__);
+      |             ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark: Function Name: _Z21gemm_rs_mi300x_kernelILi32ELi64ELi64ELb0EEv14mi300x_globals [-Rpass-analysis=kernel-resource-usage]
+  124 | void gemm_rs_mi300x_kernel(const mi300x_globals g) {
+      | ^
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     TotalSGPRs: 106 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     VGPRs: 91 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     AGPRs: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     ScratchSize [bytes/lane]: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     Dynamic Stack: False [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     Occupancy [waves/SIMD]: 5 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     SGPRs Spill: 54 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     VGPRs Spill: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     LDS Size [bytes/block]: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark: Function Name: _Z21gemm_rs_mi300x_kernelILi64ELi64ELi64ELb0EEv14mi300x_globals [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     TotalSGPRs: 106 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     VGPRs: 91 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     AGPRs: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     ScratchSize [bytes/lane]: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     Dynamic Stack: False [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     Occupancy [waves/SIMD]: 5 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     SGPRs Spill: 50 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     VGPRs Spill: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     LDS Size [bytes/block]: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark: Function Name: _Z21gemm_rs_mi300x_kernelILi128ELi256ELi32ELb1EEv14mi300x_globals [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     TotalSGPRs: 106 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     VGPRs: 165 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     AGPRs: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     ScratchSize [bytes/lane]: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     Dynamic Stack: False [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     Occupancy [waves/SIMD]: 3 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     SGPRs Spill: 73 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     VGPRs Spill: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     LDS Size [bytes/block]: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark: Function Name: _Z21gemm_rs_mi300x_kernelILi256ELi256ELi32ELb0EEv14mi300x_globals [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     TotalSGPRs: 106 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     VGPRs: 246 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     AGPRs: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     ScratchSize [bytes/lane]: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     Dynamic Stack: False [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     Occupancy [waves/SIMD]: 2 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     SGPRs Spill: 61 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     VGPRs Spill: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     LDS Size [bytes/block]: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark: Function Name: _Z21gemm_rs_mi300x_kernelILi256ELi256ELi32ELb1EEv14mi300x_globals [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     TotalSGPRs: 106 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     VGPRs: 248 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     AGPRs: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     ScratchSize [bytes/lane]: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     Dynamic Stack: False [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     Occupancy [waves/SIMD]: 2 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     SGPRs Spill: 73 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     VGPRs Spill: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     LDS Size [bytes/block]: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark: Function Name: _Z21gemm_rs_mi300x_kernelILi32ELi64ELi64ELb1EEv14mi300x_globals [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     TotalSGPRs: 106 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     VGPRs: 91 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     AGPRs: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     ScratchSize [bytes/lane]: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     Dynamic Stack: False [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     Occupancy [waves/SIMD]: 5 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     SGPRs Spill: 80 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     VGPRs Spill: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     LDS Size [bytes/block]: 0 [-Rpass-analysis=kernel-resource-usage]
+1 warning generated when compiling for gfx942.
+In file included from /home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:32:
+/home/subvadla/dhk/include/pyutils/pyutils.cuh:59:13: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+   59 |             hipFuncSetAttribute((void *) kernel, hipFuncAttributeMaxDynamicSharedMemorySize, __dynamic_shared_memory__);
+      |             ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+1 warning generated when compiling for host.
+M1a exit=0
+
+########## M1b: negative-control TU ##########
+In file included from /home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:32:
+/home/subvadla/dhk/include/pyutils/pyutils.cuh:59:13: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+   59 |             hipFuncSetAttribute((void *) kernel, hipFuncAttributeMaxDynamicSharedMemorySize, __dynamic_shared_memory__);
+      |             ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark: Function Name: _Z21gemm_rs_mi300x_kernelILi32ELi64ELi64ELb0EEv14mi300x_globals [-Rpass-analysis=kernel-resource-usage]
+  124 | void gemm_rs_mi300x_kernel(const mi300x_globals g) {
+      | ^
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     TotalSGPRs: 106 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     VGPRs: 91 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     AGPRs: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     ScratchSize [bytes/lane]: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     Dynamic Stack: False [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     Occupancy [waves/SIMD]: 5 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     SGPRs Spill: 77 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     VGPRs Spill: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     LDS Size [bytes/block]: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark: Function Name: _Z21gemm_rs_mi300x_kernelILi64ELi64ELi64ELb0EEv14mi300x_globals [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     TotalSGPRs: 106 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     VGPRs: 91 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     AGPRs: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     ScratchSize [bytes/lane]: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     Dynamic Stack: False [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     Occupancy [waves/SIMD]: 5 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     SGPRs Spill: 74 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     VGPRs Spill: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     LDS Size [bytes/block]: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark: Function Name: _Z21gemm_rs_mi300x_kernelILi128ELi256ELi32ELb1EEv14mi300x_globals [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     TotalSGPRs: 106 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     VGPRs: 165 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     AGPRs: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     ScratchSize [bytes/lane]: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     Dynamic Stack: False [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     Occupancy [waves/SIMD]: 3 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     SGPRs Spill: 98 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     VGPRs Spill: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     LDS Size [bytes/block]: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark: Function Name: _Z21gemm_rs_mi300x_kernelILi256ELi256ELi32ELb0EEv14mi300x_globals [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     TotalSGPRs: 106 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     VGPRs: 246 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     AGPRs: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     ScratchSize [bytes/lane]: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     Dynamic Stack: False [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     Occupancy [waves/SIMD]: 2 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     SGPRs Spill: 86 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     VGPRs Spill: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     LDS Size [bytes/block]: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark: Function Name: _Z21gemm_rs_mi300x_kernelILi256ELi256ELi32ELb1EEv14mi300x_globals [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     TotalSGPRs: 106 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     VGPRs: 249 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     AGPRs: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     ScratchSize [bytes/lane]: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     Dynamic Stack: False [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     Occupancy [waves/SIMD]: 2 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     SGPRs Spill: 104 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     VGPRs Spill: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     LDS Size [bytes/block]: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark: Function Name: _Z21gemm_rs_mi300x_kernelILi32ELi64ELi64ELb1EEv14mi300x_globals [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     TotalSGPRs: 106 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     VGPRs: 92 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     AGPRs: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     ScratchSize [bytes/lane]: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     Dynamic Stack: False [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     Occupancy [waves/SIMD]: 5 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     SGPRs Spill: 104 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     VGPRs Spill: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:124:1: remark:     LDS Size [bytes/block]: 0 [-Rpass-analysis=kernel-resource-usage]
+1 warning generated when compiling for gfx942.
+In file included from /home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp:32:
+/home/subvadla/dhk/include/pyutils/pyutils.cuh:59:13: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+   59 |             hipFuncSetAttribute((void *) kernel, hipFuncAttributeMaxDynamicSharedMemorySize, __dynamic_shared_memory__);
+      |             ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+1 warning generated when compiling for host.
+M1b exit=0
+
+########## summary ##########
+OK   /home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/build/gemm_rs_mi300x.o (564032 bytes)
+OK   /home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/build/gemm_rs_mi300x_control.o (568384 bytes)
+-- first 60 diagnostic lines of m1a --
+/home/subvadla/dhk/include/pyutils/pyutils.cuh:59:13: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+1 warning generated when compiling for gfx942.
+/home/subvadla/dhk/include/pyutils/pyutils.cuh:59:13: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+1 warning generated when compiling for host.

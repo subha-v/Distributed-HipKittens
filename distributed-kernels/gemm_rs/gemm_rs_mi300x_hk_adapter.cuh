@@ -80,6 +80,165 @@ __device__ __forceinline__ bool error_bit_set(const int* errp, int bit) {
 }
 
 // ---------------------------------------------------------------------------
+// Global -> shared, split into an ISSUE half and a COMMIT half (exp_03/E1(b)).
+//
+// kittens::load(ST&, const GL&, COORD) fuses four things into one call:
+// global_load_dwordx4 into a per-thread float4 staging buffer, s_waitcnt
+// vmcnt(0), the ds_write_b64 pair, and s_waitcnt lgkmcnt(0). The fusion is why
+// a k+1 "prefetch" cannot overlap iteration k's MFMAs: the round trip is
+// drained before control leaves the call. These two helpers are that function
+// cut in half at its vmcnt(0), so the caller can put work in between. Index
+// arithmetic, the `row < rows` predicate, the unit_coord/src_ptr derivation and
+// the dst.idx() addressing are copied unchanged from
+// include/cdna3/ops/warp/memory/tile/global_to_shared.cuh (which is shared with
+// other kernels and is not ours to edit).
+//
+// One deliberate deviation, provably behaviour-identical: the donor iterates
+// j over `small_calls` (16) inside a `big_calls` loop, relying on dead-code
+// elimination of the slots whose `row < rows` predicate is unsatisfiable. Here
+// the loop bound is `total_calls`, which is exactly the number of slots any
+// lane can satisfy the predicate for (row < rows <=> j*N_THREADS + laneid <
+// rows*memcpy_per_row <=> j < total_calls), so no slot that could load is
+// dropped and the staging buffer's register footprint no longer depends on the
+// optimizer folding threadIdx range information. big_calls == 1 is asserted
+// rather than assumed, because a split buffer cannot express the donor's reuse
+// of buf[] across successive big calls.
+// ---------------------------------------------------------------------------
+
+template<kittens::ducks::st::all ST, int N_THREADS>
+struct g2s_plan {
+    using T = typename ST::dtype;
+    static constexpr int elem_per_memcpy      = sizeof(float4) / sizeof(T);
+    static constexpr int elem_per_half_memcpy = sizeof(float2) / sizeof(T);
+    static constexpr int memcpy_per_row       = ST::cols / elem_per_memcpy;
+    static constexpr int total_calls =
+        (ST::cols * ST::rows + N_THREADS * elem_per_memcpy - 1) /
+        (N_THREADS * elem_per_memcpy);
+    static constexpr int small_calls = 16;
+    static constexpr int big_calls   = (total_calls + small_calls - 1) / small_calls;
+    static constexpr int slots       = total_calls;
+    static_assert(big_calls == 1,
+                  "issue/commit split needs the whole tile in one staging pass");
+};
+
+// Number of float4 staging slots the caller must provide for one tile.
+template<kittens::ducks::st::all ST, int N_THREADS>
+inline constexpr int g2s_slots = g2s_plan<ST, N_THREADS>::slots;
+
+// Full-drain waits only. Counted waits make the count an invariant the
+// scheduler can silently invalidate (see gemm_rs_device_tile.cpp:786-812 for a
+// 30x numerical error that still passed a 2e-2 gate); the win here comes from
+// where the wait sits, not from making it counted.
+__device__ __forceinline__ void wait_vmcnt0() {
+#ifdef BUILTINS_ONLY
+    __builtin_amdgcn_s_waitcnt(0);
+#else
+    asm volatile("s_waitcnt vmcnt(0)");
+#endif
+}
+__device__ __forceinline__ void wait_lgkmcnt0() {
+#ifdef BUILTINS_ONLY
+    __builtin_amdgcn_s_waitcnt(0);
+#else
+    asm volatile("s_waitcnt lgkmcnt(0)");
+#endif
+}
+
+// A bare s_waitcnt is NOT enough to protect a register filled from LDS, and the
+// failure is silent. The wait has no operands, so it has no data dependence on
+// anything; the ds_read that fills a fragment is an asm volatile whose output
+// the compiler believes is available the instant the asm ends. Volatile asm
+// blocks keep their order relative to each other, but an MFMA is a plain
+// intrinsic with no memory effects, so the machine scheduler is free to hoist
+// it above the wait -- and it does, in exactly the instantiations where nothing
+// else fragments the scheduling region. Measured on this kernel: MFMAs hoisted
+// above the wait in all three K_TAIL=false instantiations (3 of 4 MFMAs per
+// k-iteration in <32,64,64,false>), producing ~1e19 garbage on 14 of 17 shapes,
+// while the K_TAIL=true ones happened to be clean because mask_a_k_tail split
+// the block.
+//
+// frag_anchor gives the drain teeth: after the wait, every base tile's register
+// pair is laundered through an empty asm volatile with a "+v" tie, which is a
+// real def. Any consumer of that register is now ordered after it by data
+// dependence rather than by scheduler goodwill. Emits no instructions. One
+// operand per base tile, matching the ds_read_b64 that filled it (which writes
+// data[0..1] as one 64-bit value).
+template<typename RT>
+__device__ __forceinline__ void frag_anchor(RT& t) {
+    #pragma unroll
+    for (int h = 0; h < RT::height; ++h) {
+        #pragma unroll
+        for (int w = 0; w < RT::width; ++w) {
+            asm volatile("" : "+v"(
+                *reinterpret_cast<std::uint64_t*>(&t.tiles[h][w].data[0])));
+        }
+    }
+}
+
+// Drain the ds_reads that filled these two fragments, then anchor both.
+template<typename RTA, typename RTB>
+__device__ __forceinline__ void acquire_frags(RTA& a, RTB& b) {
+    wait_lgkmcnt0();
+    frag_anchor(a);
+    frag_anchor(b);
+}
+
+// Issue the tile's global loads into `buf`. NO waitcnt: on return the data is
+// in flight, not in registers, and `buf` must not be read until load_commit.
+template<kittens::ducks::st::all ST, int N_THREADS, int axis = 2,
+         bool assume_aligned = false, kittens::ducks::gl::all GL,
+         kittens::ducks::coord::tile COORD = kittens::coord<ST>>
+__device__ __forceinline__ void load_issue(float4* buf, const GL& src,
+                                           const COORD& idx) {
+    using P = g2s_plan<ST, N_THREADS>;
+    const int row_stride = src.template stride<axis>();
+    kittens::coord<> unit_coord = idx.template unit_coord<axis, 3>();
+    typename GL::dtype* src_ptr = (typename GL::dtype*)&src[unit_coord];
+    const int laneid = threadIdx.x % N_THREADS;
+
+    #pragma unroll
+    for (int j = 0; j < P::slots; ++j) {
+        const int load_idx = j * N_THREADS + laneid;
+        const int row = load_idx / P::memcpy_per_row;
+        const int col = (load_idx % P::memcpy_per_row) * P::elem_per_memcpy;
+        if (row < ST::rows) {
+            buf[j] = kittens::load_global_vec4_async(
+                (float4*)(src_ptr + (row * row_stride + col)));
+        }
+    }
+}
+
+// Land the issued loads and publish them to LDS: vmcnt(0), the ds_writes, then
+// lgkmcnt(0) so the caller's __syncthreads() only has to order the barrier.
+// (__syncthreads() alone would NOT do it: every LDS op in this tree is inside
+// asm volatile, so SIInsertWaitcnts never sees an LDS event and emits no
+// lgkmcnt with the s_barrier.)
+template<int N_THREADS, kittens::ducks::st::all ST>
+__device__ __forceinline__ void load_commit(ST& dst, const float4* buf) {
+    using P = g2s_plan<ST, N_THREADS>;
+    uint32_t dst_ptr = reinterpret_cast<uintptr_t>(&dst.data[0]);
+    const int laneid = threadIdx.x % N_THREADS;
+
+    wait_vmcnt0();
+
+    #pragma unroll
+    for (int j = 0; j < P::slots; ++j) {
+        const int load_idx = j * N_THREADS + laneid;
+        const int row = load_idx / P::memcpy_per_row;
+        const int col = (load_idx % P::memcpy_per_row) * P::elem_per_memcpy;
+        if (row < dst.rows) {
+            kittens::store_shared_vec(dst.idx(dst_ptr, {row, col}),
+                                      {buf[j].x, buf[j].y});
+            kittens::store_shared_vec(
+                dst.idx(dst_ptr, {row, col + P::elem_per_half_memcpy}),
+                {buf[j].z, buf[j].w});
+        }
+    }
+
+    wait_lgkmcnt0();
+}
+
+// ---------------------------------------------------------------------------
 // MI300X emit: FP32 accumulators are converted to bf16 through the already
 // dead A/B LDS and emitted as 16-byte peer packets (exp-23 EV=1 discipline at
 // EB-row band granularity). Every store is bounded by `valid_cols` (N tail).

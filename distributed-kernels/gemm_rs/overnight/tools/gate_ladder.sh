@@ -47,10 +47,16 @@ docker exec dhk-gemmrs bash $ON/tools/m2_isa.sh  > "$L/m2_prereq_isa.log" 2>&1 |
 docker exec dhk-gemmrs bash $ON/tools/m2_report.sh 2>&1 | tee "$L/m2_report.log"
 
 grep -qE 'Error|Traceback|No such file' "$L/m2_report.log" && fail "M2 (report could not read its inputs)"
-# 7 instantiations must appear in the metadata table, each with a resource tuple.
+# Every instantiation reachable from dispatch_gemm_rs_mi300x must appear in the
+# metadata table with a resource tuple. Count DISTINCT instantiations, not
+# config rows: rows 4 and 5 share <256,256,32,false>, and since exp_04 retiled
+# row 1 onto the pre-existing generic template, row 1 shares <32,64,64,false>.
+# That is 6 today. UPDATE M2_EXPECT whenever the dispatch table changes -- an
+# expectation that is too high blocks every ladder, too low makes M2 vacuous.
+M2_EXPECT=6
 rows=$(sed -n '/metadata table/,/ordering ops/p' "$L/m2_report.log" | grep -cE 'tail=[01]')
-echo "  M2 metadata rows: $rows (expect 7)"
-[ "$rows" -ge 7 ] || fail "M2 (metadata table has $rows rows, expected 7 -- gate is vacuous)"
+echo "  M2 metadata rows: $rows (expect $M2_EXPECT)"
+[ "$rows" -ge "$M2_EXPECT" ] || fail "M2 (table has $rows rows, expected $M2_EXPECT; if the dispatch table changed, update M2_EXPECT in this script)"
 echo "  --- resource tuples ---"
 sed -n '/metadata table/,/ordering ops/p' "$L/m2_report.log" | grep -E 'BM/BN/BK|tail=[01]'
 
