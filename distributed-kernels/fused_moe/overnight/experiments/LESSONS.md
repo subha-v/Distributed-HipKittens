@@ -787,3 +787,28 @@
   `store_peer_packets` tells a caller whether it is latency-bound,
   bandwidth-bound or cache-bound, and this campaign answered that question three
   times by experiment.
+
+- 2026-08-11 exp_19 **the operating point is confirmed optimal for this design.**
+  Post-exp_14 sweep, g=1 mode 2, screened: C=8 7,099 | C=16 7,013 | C=24 7,091 |
+  C=32 7,076 | C=40 6,995 | **C=64 6,949/6,972** | C=80 7,011 | C=96 7,157 |
+  C=128 7,614. flush_rows at C=64: fr=4 7,022 | **fr=16 6,949** | fr=64 7,108.
+  g=2 at C=64 is 7,839, so g=1 stays. The curve is flat from C=40 to C=64 and
+  turns over on both sides. **Reverted-tree verification reproduces the ratchet
+  (C=64 -> 6,972, 1.005x paired pf6gm), so exp_16/exp_17's reverts are clean.**
+- 2026-08-11 **why the bandwidth diagnosis is subtler than "something is
+  saturated".** Neither obvious resource is near peak: M7 reads ~470 MB of W2 in
+  1,586 us = ~296 GB/s against 8 TB/s of HBM, and the pool moves ~312 MB over
+  xGMI in ~2.8 ms = ~111 GB/s against 537 GB/s of aggregate egress. So the
+  interference is **not** capacity and **not** peak-bandwidth saturation -- it is
+  request-level contention in the shared path. exp_08 attributes ~36% of it to
+  the per-XCD L2 (moving the pool to dedicated dies recovered exactly that
+  much); the remaining ~64% is beyond the XCD, and exp_17's null rules out LLC
+  capacity, leaving queueing at the Infinity Cache / HBM controllers as the
+  residual explanation. **W2 is ~470 MB against a 256 MB LLC, so M7 streams its
+  weights every epoch and cannot be made resident** -- which is why it is
+  sensitive to any co-resident traffic at all.
+- 2026-08-11 **the claim cannot be removed at g > 1** (checked, not assumed):
+  with several chunks per group, multiple lanes on the same row can each see
+  their own slice complete and then all probe and find the group complete, so
+  more than one claimant is genuinely possible. exp_14's deletion is correct
+  precisely and only because g == 1 makes the completing lane unique.
