@@ -23,6 +23,7 @@ import importlib.util
 import os
 import sys
 import time
+import weakref
 
 import torch
 import torch.distributed as dist
@@ -133,8 +134,13 @@ def _align(value, alignment=4096):
 #
 # The group is still tracked, but only to decide when the collective setup path
 # has to be re-entered: the first call of a new group, and any call whose shape
-# differs from the last one. _LAST_PG holds a strong reference so a recycled
-# object address cannot make a new group look like the old one.
+# differs from the last one. _LAST_PG is a WEAKREF, not a strong reference:
+# a strong reference here outlives destroy_process_group and pins the old
+# NCCL communicator and its TCPStore, and the next init_process_group on the
+# same MASTER_PORT then never completes -- measured under eval.py, where all
+# eight ranks finished 101 calls and then blocked in
+# _new_process_group_helper. A weakref cannot make a recycled address look
+# like the old group either, because the test below compares the referent.
 _STATES = {}      # (rank, m, n, k, has_bias) -> _ShapeState
 _LAST_PG = None
 _LAST_KEY = None
@@ -320,12 +326,13 @@ def custom_kernel(data):
     group = _current_group()
     state = _STATES.get(key)
     settled = (state is not None and group is not None
-               and group is _LAST_PG and key == _LAST_KEY)
+               and _LAST_PG is not None and _LAST_PG() is group
+               and key == _LAST_KEY)
     _log(f"cache {'hit' if state is not None else 'miss'} "
          f"settled={settled} keys={len(_STATES)}")
     if not settled:
         state = _setup(key, m, n, k_global, bias is not None, rank, state)
-        _LAST_PG = group
+        _LAST_PG = weakref.ref(group) if group is not None else None
         _LAST_KEY = key
     _log("state ready")
 

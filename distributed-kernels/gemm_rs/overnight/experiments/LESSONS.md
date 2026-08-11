@@ -203,6 +203,54 @@
     where the fused helper drained after every two. **Two exposed global round
     trips per k-iteration became one covered one.**
 
+- **BLOCKER A IS ROOT-CAUSED AND FIXED. The evaluator hang was ours, and it was
+  one line — a strong reference.** `hk_submission.py` cached the current
+  `ProcessGroup` in a module global `_LAST_PG` as a **strong** reference, to
+  distinguish a live group from a recycled address. That reference outlives
+  `destroy_process_group()` and **pins the old NCCL communicator and its
+  TCPStore**, so the *next* `init_process_group` on `eval.py`'s fixed
+  `MASTER_PORT` can never complete. The in-code justification was right about
+  addresses and wrong about lifetime. Demoting `_LAST_PG` to a **weakref**
+  fixes it: a dead referent returns `None`, which still defeats address reuse,
+  and torch holds its own reference while a group is current so all ranks
+  compute the same `settled` answer at the same call — collective symmetry is
+  preserved.
+  Verified: 8/8 ranks, two shapes, two process groups, `allclose=True` at
+  `max|diff| = 9.766e-04`. A **control** using plain `torch.matmul` +
+  `reduce_scatter_tensor` — no globals, no IPC — passed the identical
+  init/destroy/init sequence, which is what proves the fault was ours and not
+  torch, NCCL or the container.
+  What this retires from the ledger:
+  - **Suspect #1 (repeated `hipIpcOpenMemHandle` → `hipErrorAlreadyMapped`) is
+    dead.** Under `eval.py` all 8 ranks completed the full IPC exchange, both
+    regions, all 7 peers, with zero `FAILED peer` and zero `AlreadyMapped`.
+  - **The "6 of 8 ranks reach `state ready`" signature is superseded** — all 8
+    now reach it. The earlier signature came from the pre-fix cache, and the
+    falsifiable prediction written into the fix held exactly: no rank stranded
+    at `setup barrier returned`.
+  - The kernel itself was never implicated. Under the evaluator the 8 ranks ran
+    **101 consecutive `custom_kernel` calls each — 808 total, zero error bits,
+    in 1.38 s** — and passed the evaluator's *own* correctness oracle
+    (`_run_distributed_benchmark` runs one obligatory `wrap_check_implementation`
+    and bails on failure, so 100 subsequent repeats prove it passed).
+  **Still to do: no numbers were taken.** The 60-minute box went entirely to
+  root-causing. Test mode has not been run in-session and every run used
+  `HK_DEBUG=1`, so nothing from that session is quotable under our own rule.
+  Two branches remain unexercised on hardware: the fixed path has seen only
+  three shapes, and the **mixed-vote** branch (some workers holding the key,
+  others not, after a worker↔rank permutation) has still never executed —
+  both `mp_smoke` cases voted unanimously `False`. Watch the `cache vote` lines.
+
+- **TRAP: `push.ps1` is not safe to run while another experiment is mid-edit.**
+  It `scp`s the kernel sources as well as the tree, so pushing while a
+  concurrent arm has a half-written `gemm_rs_mi300x.cpp` ships broken code —
+  or, worse, silently reverts a validated kernel while leaving `build/*.so`
+  intact, so the next run measures something nobody chose. Track A correctly
+  refused to push for this reason after finding the node and Windows copies
+  differed. Use `tools/fix_node_crlf.sh` when only line-ending normalization is
+  wanted; it touches files already on the node and copies nothing. Check first
+  with an LF-normalized hash comparison rather than assuming.
+
 - **Attribution RE-MEASURED on the post-E1(b) winner, and it reorders
   everything.** The old table was taken on a binary with neither `NR=32` nor
   the mainloop overlap, so it described a kernel that no longer exists. Fresh
