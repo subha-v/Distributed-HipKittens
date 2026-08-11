@@ -90,10 +90,18 @@ Two consequences:
   slower**. Coalescing is right for loads and wrong for atomics: 32 RMWs to 2
   lines serialize at the line, where 32 RMWs to 32 lines proceed in parallel
   across L2 banks. **Scattering atomics is a feature of the current layout.**
+- **Placement confirms the mechanism, and closes A8.** `exp_08` added mode 3 —
+  mode 2 with the pool on *whole XCDs* instead of a spread tail. At `C=64`, same
+  CTA counts, only placement differing: M7 interference **−36%** (so it really
+  is per-XCD L2 contention), but the service pool, squeezed onto two dies,
+  slowed **+54%**, for **+26% worse overall**. *The interference and the service
+  throughput are the same resource seen from two sides — you cannot isolate the
+  communication engine from the compute without also starving it.*
 - **So M4 must reduce the NUMBER of arrivals, not relocate them.** Per-XCD
-  aggregation with one cross-XCD release per XCD (AMD Research's *Fleet* shape)
-  is exactly that, and remains the top experiment. Any variant that merely moves
-  counters around is predicted to fail — exp_07 is the evidence.
+  aggregation (AMD Research's *Fleet* shape) is exactly that and remains the top
+  experiment. Any variant that merely moves counters is predicted to fail —
+  exp_07 and exp_08 are both evidence. **But see the caveat below: a cheap M4
+  may not exist.**
 
 ## The thesis of the night
 
