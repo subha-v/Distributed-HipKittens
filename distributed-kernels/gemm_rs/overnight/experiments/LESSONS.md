@@ -90,6 +90,45 @@
   `RESULTS.md` must be taken with `HK_DEBUG=0`. Debug output is for localizing
   the hang, never for a number.
 
+- **TRAP: Gate M2 could not fail. It was a silent false pass all session.**
+  `tools/m2_report.sh` reads `overnight/build/m1a.log` and
+  `overnight/build/isa/*.s`, which only `tools/m1_build.sh` and
+  `tools/m2_isa.sh` produce — and `overnight/build/` does not exist in a freshly
+  synced tree. The script runs `set -uo pipefail` **without `-e`**, and every
+  step is a `grep` or a `python3` heredoc, so with its inputs missing it printed
+  six missing-file errors plus a `FileNotFoundError` and **exited 0**. Any
+  ladder calling it recorded "M2 PASS" while checking nothing — which would have
+  hidden exactly the spill regression E1(b) is most likely to cause.
+  `tools/gate_ladder.sh` now runs the two prerequisites first, greps the report
+  for `Error|Traceback|No such file`, and asserts the metadata table contains
+  all **7** instantiation rows before proceeding. General lesson: a gate that
+  has never failed is not evidence of correctness; make it fail on purpose once.
+
+- **E3 is worth ~3%, not 9% — the attribution that motivated it was measured
+  under the OLD reducer split.** Three corrections from the protocol review,
+  all of which survive independent arithmetic:
+  1. **Half the scored shapes cannot benefit at all.** At `NR=32` there are 272
+     producer CTAs, and tiles-per-CTA is **1 / 2 / 1 / 1 / 2 / 4** for shapes
+     1-6. A release-grouping rule can only amortize where a CTA emits more than
+     one tile, so shapes 1, 3 and 4 are already minimal and become free built-in
+     control arms. Best-case geomean gain is ~3%.
+  2. **The `vmcnt(0)` half of the release is not recoverable.** The next tile's
+     `G::load` immediately issues `global_load_dwordx4 → s_waitcnt vmcnt(0)`,
+     and gfx9 `vmcnt` retires in order, so deferred peer stores get drained a
+     few instructions into the next tile regardless. Only the `buffer_wbl2` and
+     the two barriers are recoverable — **E3's value is coupled to E1(b)**.
+  3. The 250.3 µs figure was measured with the pre-`exp_02` `NR=8` split — its
+     shape-6 total of 2861.7 µs matches `NR=8`'s 2850.2, not `NR=32`'s 2632.1.
+     **Re-measure the attribution before sizing E3.**
+  This does not cancel the exp_04 finding that E3 gates further tile work; it
+  sharpens it into a *synergy*: finer tiling is what raises tiles-per-CTA, and
+  higher tiles-per-CTA is exactly what E3 needs in order to amortize. Neither
+  is worth much alone on shapes 1/3/4; together they may be.
+  Rejected outright: **per-peer batching** (one release already covers all
+  destinations, so splitting by peer strictly *increases* the release count) and
+  **unbounded per-CTA-per-epoch** (the eleven official shapes take the generic
+  row, where 8192×8192×28672 gives **117 tiles per CTA**).
+
 - **LATENT CORRECTNESS HAZARD found in the shipped mainloop by ISA read
   (exp_03/P0). Not a measurement artifact — read the ISA before dismissing
   it.** In `<256,256,32,*>` the k-loop is three blocks: a header issuing 24

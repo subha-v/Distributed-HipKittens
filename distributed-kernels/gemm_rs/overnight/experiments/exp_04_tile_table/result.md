@@ -85,9 +85,24 @@ Shape 1 tolerated 4× the tiles only because its release cost was **0.4 µs**.
 
 **Therefore: E3 (release granularity) gates any further tile refinement.** Per-
 tile release is a fixed per-tile tax that makes finer tiling uneconomic
-everywhere except shape 1, where it happened to be negligible. Amortizing the
-release across tiles does not just recover its own 9-14%; it unlocks an axis
-that is currently closed. Run E3 before revisiting E4.
+everywhere except shape 1, where it happened to be negligible.
+
+The E3 protocol review sharpens this into a **two-way synergy**, and the
+sharpening matters because neither half is worth much alone. At `NR=32` there
+are 272 producer CTAs, so tiles-per-CTA across the six shapes is
+**1 / 2 / 1 / 1 / 2 / 4**. Release grouping can only amortize where a CTA emits
+more than one tile, so **E3 alone cannot help shapes 1, 3 or 4 at all** and its
+best-case geomean gain is ~3%, not the 9% the attribution suggested. (That
+attribution was also taken under the old `NR=8` split — its shape-6 total of
+2861.7 µs matches `NR=8`'s 2850.2, not `NR=32`'s 2632.1 — so it must be
+re-measured before sizing.)
+
+But finer tiling is precisely what *raises* tiles-per-CTA, and higher
+tiles-per-CTA is precisely what E3 needs to amortize. Retiling shape 3 to
+`BN=64` gives 720 tiles = 2.6 per CTA; grouped at N=4 that is ~180 release
+groups against today's 192 — the release cost stays flat while the ragged-N
+waste disappears and occupancy triples. **Run E3 first, then revisit E4 on
+shape 3.** Run neither in isolation expecting the other's benefit.
 
 ## Remaining tile-table headroom: small
 
