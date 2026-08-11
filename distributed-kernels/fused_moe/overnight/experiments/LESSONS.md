@@ -812,3 +812,16 @@
   their own slice complete and then all probe and find the group complete, so
   more than one claimant is genuinely possible. exp_14's deletion is correct
   precisely and only because g == 1 makes the completing lane unique.
+
+- 2026-08-11 **dec08 CONFIRMS the ratchet -- the sub-5% win is real and
+  reproducible.** CLAUDE.md requires re-running any sub-5% delta, and the win
+  was 0.65%. Second independent 5-rotation campaign at the same point:
+  `production 7,725.2` / `pf6gm_mega 6,894.0` (0.89240) /
+  **`mps_mega 6,869.1`** (0.88918 vs production, **0.99638 vs pf6gm**).
+  Against dec07 (mps 6,866.1, pf6gm 6,910.9, ratio 0.99351):
+  **`mps_mega` reproduces to 0.04%** (6,866.1 vs 6,869.1) while `pf6gm_mega`
+  itself drifts 0.24% between campaigns -- so the MPS arm is the *steadier* of
+  the two. Both campaigns put mps below pf6gm, and dec07's per-rotation ranges do
+  not overlap (mps 6,860.3-6,867.5 vs pf6gm 6,896.9-6,925.7).
+  **Ratchet: mps_mega ~0.889x production against pf6gm's ~0.893x, a confirmed
+  ~0.5% win, all gates green in both campaigns.**
