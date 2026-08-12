@@ -1,0 +1,199 @@
+--- a/prefill_opt/host/e004pf_k0pf_ab.py
++++ b/prefill_opt/host/e004pf_k0pf_ab.py
+@@ -150,6 +150,16 @@ if MOK_WARMUP_ITERS < 0 or MOK_TIMED_ITERS <= 0:
+     raise ValueError("MoK warmup must be nonnegative and timed iterations must be positive")
+ if MOK_ABSOLUTE_TOLERANCE < 0 or MOK_RELATIVE_TOLERANCE < 0:
+     raise ValueError("MoK correctness tolerances must be nonnegative")
++# exp_32 gate hardening. `cand_out` is cleared once per gate episode but NEVER
++# between epochs, and the MoK corpus feeds identical input and identical routing
++# every iteration, so a row a candidate fails to write returns the previous
++# epoch's bit-identical correct answer -- invisible to [MOK GATE], to
++# combine_bit_exact, and to 600 soak epochs. Poison with a value that cannot
++# survive a correct run; correctness.py's `nonfinite == 0` gate then catches it.
++MOK_POISON_OUT = os.environ.get("K0_MOK_POISON_OUT", "1").strip() not in ("", "0")
++# bf16 quiet NaN, payload 0x55. NOT 0x7FC0 (what a computed 0/0 rounds to) and
++# NOT 0x7F80 (inf), so a survivor is distinguishable from a kernel-produced NaN.
++MOK_POISON_I16 = 0x7FD5
+ GBLK = int(os.environ.get("K0_GBLK", "256"))   # frozen gather block (best_1075x)
+ CBLK = int(os.environ.get("K0_CBLK", "512"))   # frozen combine block (best_1075x)
+ NSLOT = 2                                        # double-buffered epoch slots
+@@ -1797,6 +1807,40 @@ pf2_n2r_flags, pf2_n2r_flags_p = mori_t((WORLD, 1), "int32")
+ pf2_n2r_flags.zero_()
+ pf2_n2r_grid = torch.zeros((1,), dtype=torch.int32, device="cuda")
+ cand_out = torch.zeros((T, H), dtype=torch.bfloat16, device=dev)
++
++
++def _poison_out():
++    """exp_32: fill the shared candidate output with a recognisable bf16 NaN.
++    Called ONLY from untimed regions (eager gate, soak, post-timing verify)."""
++    if MOK_POISON_OUT:
++        cand_out.view(torch.int16).fill_(MOK_POISON_I16)
++    else:
++        cand_out.zero_()
++
++
++def _poison_count():
++    """Elements still holding the poison pattern. Zero in a correct run."""
++    if not MOK_POISON_OUT:
++        return 0
++    return int((cand_out.view(torch.int16) == MOK_POISON_I16).sum().item())
++
++
++def _poison_rows(limit=16):
++    _bad = (cand_out.view(torch.int16) == MOK_POISON_I16).any(dim=1)
++    return torch.nonzero(_bad, as_tuple=False).flatten()[:limit].cpu().tolist()
++
++
++def _poison_report(tag, name):
++    """Print and return the survivor count. Nonzero means the arm left a row of
++    `out` unwritten this epoch -- the exact bug class a stale `out` hides."""
++    _n = _poison_count()
++    if _n:
++        print(f"[POISON] {tag} arm={name} rank={rank} survivors={_n} "
++              f"first_rows={_poison_rows()}", flush=True)
++    elif rank == 0:
++        print(f"[POISON] {tag} arm={name} survivors=0", flush=True)
++    return _n
++
+ base_out = torch.zeros((T, H), dtype=torch.bfloat16, device=dev)
+ SPIN = int(os.environ.get("K0_SPIN_LIMIT", "2000000"))   # bounded, fail-closed; low enough that a broken acquire fails FAST            # bounded, fail-closed (shared node)
+ hbarrier()
+@@ -4500,13 +4544,24 @@ if int(os.environ.get("K0_DECODE_EAGER_PHASE_PROFILE", "0")) and T <= 512 and _D
+ # ===================== eager correctness on every arm + positive control =====================
+ R["eager"] = {}
+ _eager_all_local = True
++# exp_32 P0: the [MOK GATE] loop below runs AFTER this loop has finished, so for
++# every candidate arm it re-reads the SAME cand_out bytes -- whichever candidate
++# ran last (_obuf returns the identical object for all of them). Compute each
++# arm's MoK gate HERE, while its own bytes are still live, and have that loop
++# consume the stash. Without this, P1's poison for a given arm is only checked
++# when that arm happens to be last in the rotated order.
++_mok_eager_stash = {}
+ for name, body, buf in ARMS:
+     if os.environ.get("K0_MPS_TRACE"):
+         with open("/out/progress_rank{}.log".format(int(os.environ.get("RANK", "-1"))), "a") as _pf:
+             _pf.write("arm " + name + chr(10))
+     hbarrier()
+-    if name not in _PROD_LIKE: cand_out.zero_()   # FAIRNESS: never zero production's own combine-output view
++    if name not in _PROD_LIKE: _poison_out()   # FAIRNESS: never touch production's own combine-output view
+     perr.zero_(); pperr.zero_(); torch.cuda.synchronize(); body(sp()); torch.cuda.synchronize()
++    if name not in _PROD_LIKE:
++        R.setdefault("poison", {})[name] = _poison_report("eager", name)
++    if K0_BENCHMARK_PROTOCOL == "mok_eager":
++        _mok_eager_stash[name] = mok_gate(_obuf(name))
+     R["eager"][name] = gate(_obuf(name)); R["eager"][name]["pass"] = ok_arm(name, R["eager"][name])
+     R["eager"][name]["pperr"] = int(pperr.cpu().numpy().reshape(-1)[0])   # !=0 => an acquire timed out (diagnostic)
+     R["eager"][name]["plan_err"] = int(perr.cpu().numpy().reshape(-1)[0]) if name in _CUSTOM_PLAN_ARMS else 0
+@@ -4568,7 +4623,7 @@ R["mok_correctness"] = {}
+ _mok_correctness_all_local = True
+ if K0_BENCHMARK_PROTOCOL == "mok_eager":
+     for name, _, _ in ARMS:
+-        _mok_stats = mok_gate(_obuf(name))
++        _mok_stats = _mok_eager_stash[name]   # exp_32 P0: that arm's OWN bytes
+         _mok_local = bool(
+             _mok_stats["pass"]
+             and R["eager"][name]["plan_err"] == 0
+@@ -4945,17 +5000,29 @@ if K0_BENCHMARK_PROTOCOL == "mok_eager":
+         hbarrier()
+         _mps_soak_error = 0
+         _mps_soak_completed = 0
++        _mps_soak_poison = 0
++        _mps_soak_poison_epoch = -1
+         for _mps_epoch in range(_mps_soak_iters):
++            # exp_32 P2: re-poison before EVERY epoch. The soak is fully untimed
++            # (no HIP events anywhere in this loop), so this turns one
++            # end-of-soak check into 600 independent single-epoch coverage trials.
++            _poison_out()
+             _mps_body(sp())
+             torch.cuda.synchronize()
+             _mps_local_error = int(pperr.item())
++            _mps_local_poison = _poison_count()
+             _mps_error_tensor = torch.tensor(
+-                _mps_local_error, dtype=torch.int32, device="cuda"
++                [_mps_local_error, _mps_local_poison],
++                dtype=torch.int32, device="cuda",
+             )
+             dist.all_reduce(_mps_error_tensor, op=dist.ReduceOp.MAX)
+-            _mps_soak_error = int(_mps_error_tensor.item())
++            _mps_soak_error = int(_mps_error_tensor[0].item())
++            _mps_soak_poison = int(_mps_error_tensor[1].item())
+             _mps_soak_completed = _mps_epoch + 1
+-            if _mps_soak_error != 0:
++            if _mps_soak_error != 0 or _mps_soak_poison != 0:
++                if _mps_soak_poison != 0:
++                    _mps_soak_poison_epoch = _mps_epoch
++                    _poison_report("soak", "mps_mega")
+                 break
+         hbarrier()
+         _mps_soak_gate = mok_gate(_obuf("mps_mega"))
+@@ -4967,17 +5034,22 @@ if K0_BENCHMARK_PROTOCOL == "mok_eager":
+             "requested_epochs": _mps_soak_iters,
+             "completed_epochs": _mps_soak_completed,
+             "pperr": _mps_soak_error,
++            "poison_survivors": _mps_soak_poison,
++            "poison_first_bad_epoch": _mps_soak_poison_epoch,
+             "correctness": _mps_soak_gate,
+             "pass": bool(
+                 _mps_soak_completed == _mps_soak_iters
+                 and _mps_soak_error == 0
++                and _mps_soak_poison == 0
+                 and _mps_soak_gate["pass_all_ranks"]
+             ),
+         }
+         if rank == 0:
+             print(
+                 f"[MPS SOAK] completed={_mps_soak_completed}/{_mps_soak_iters} "
+-                f"pperr={_mps_soak_error} pass={R['mps_soak']['pass']}",
++                f"pperr={_mps_soak_error} poison={_mps_soak_poison} "
++                f"poison_epoch={_mps_soak_poison_epoch} "
++                f"pass={R['mps_soak']['pass']}",
+                 flush=True,
+             )
+         # --- exp_05 stage 0 (Distributed-HipKittens overnight): ADDITIVE diagnostic.
+@@ -5051,7 +5123,7 @@ if K0_BENCHMARK_PROTOCOL == "mok_eager":
+ 
+     def _mok_measure_arm(name, body):
+         if name != "production":
+-            cand_out.zero_()
++            _poison_out()
+         perr.zero_()
+         pperr.zero_()
+         torch.cuda.synchronize()
+@@ -5077,6 +5149,26 @@ if K0_BENCHMARK_PROTOCOL == "mok_eager":
+             dtype=np.float64,
+         )
+         aligned_us = _mok_rank_max(local_us)
++        # exp_32 P3: the timed loop leaves cand_out holding 600 epochs of
++        # accumulated writes, so a row a LATE epoch failed to write still reads
++        # an earlier epoch's bit-identical correct answer and the gates below
++        # cannot see it. Re-poison and run ONE untimed epoch so they see
++        # single-epoch coverage in the steady state the timed loop just left.
++        # This is strictly after every HIP event has been consumed and after the
++        # rank-max all-reduce above, so it cannot touch a measurement. pperr is
++        # NOT cleared: it is atomicOr-accumulated, so output_gate["pperr"] below
++        # still reports the OR over warmup + timed + this epoch. Skipped when
++        # pperr is already set, because M8 suppresses every batch on a live error
++        # bit and would leave a false poison survivor.
++        if MOK_POISON_OUT and name != "production" and int(pperr.item()) == 0:
++            _poison_out()
++            torch.cuda.synchronize()
++            hbarrier()
++            body(sp())
++            torch.cuda.synchronize()
++            hbarrier()
++            R.setdefault("poison", {})[name + "_post_timing"] = _poison_report(
++                "post_timing", name)
+         strict_gate = gate(_obuf(name))
+         strict_gate["pass"] = ok_arm(name, strict_gate)
+         output_gate = mok_gate(_obuf(name))
+ 
+--- a/benchmarks/mok_synthetic_prefill/run_campaign.sh
++++ b/benchmarks/mok_synthetic_prefill/run_campaign.sh
+@@ -131,6 +131,7 @@ for run in $(seq 1 "${run_count}"); do
+       -e "K0_MOK_TIMED_ITERS=${K0_MOK_TIMED_ITERS:-100}" \
+       -e "K0_MOK_ABSOLUTE_TOLERANCE=${K0_MOK_ABSOLUTE_TOLERANCE:-0.1}" \
+       -e "K0_MOK_RELATIVE_TOLERANCE=${K0_MOK_RELATIVE_TOLERANCE:-0.1}" \
++      -e "K0_MOK_POISON_OUT=${K0_MOK_POISON_OUT:-1}" \
+       -e "K0_MOK_WEIGHT_CHUNK_ELEMENTS=${K0_MOK_WEIGHT_CHUNK_ELEMENTS:-33554432}" \
+       -e "K0_PF5_PRIMITIVE_ONLY=${K0_PF5_PRIMITIVE_ONLY:-0}" \
+       -e "K0_PF6GM_G=${K0_PF6GM_G:-3}" \
