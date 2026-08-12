@@ -198,6 +198,27 @@ the queue wait cannot consume its run window, and it will execute arms (a) and
 (b) unattended when the lease frees. Nothing was stolen and the stale KFD entry
 was never signalled.
 
+### Tick calibration: the independent number already exists
+
+exp_21 landed while this arm was queued and it measured the same instruction on
+this node directly: **`s_memrealtime` = 99.7366 MHz** (10.0264 ns/tick), 5 reps,
+spread 0.0101%, two-stage against `steady_clock` in a dedicated kernel
+(`exp_21_saturation/saturation.json:tick_rate_hz` = 99,735,808 Hz,
+`LESSONS.md:1051`). That is **−0.264% from the sibling's declared gfx950
+100 MHz**, so the sibling's figure is close but not exact here, and the axis
+should use the measured value.
+
+`trace_run.py` now carries that number as `EXP21_TICKS_PER_US` and cross-checks
+its own in-situ regression against both it and the 100 MHz hypothesis,
+emitting a per-reference `agree`/`DISAGREE` verdict at a 1% threshold into
+`tick_rate.json`. The two methods share no machinery beyond the instruction:
+exp_21 times a dedicated kernel against `steady_clock`, this arm regresses the
+production kernel's own device span in ticks against hipEvent microseconds
+across three shapes of very different duration. **Agreement would make the
+x-axis the best-supported quantity in the figure; disagreement blocks the
+figure**, since a wrong rate does not distort the plot visibly — it silently
+rescales the entire time axis.
+
 ### One process trap worth recording: CRLF
 
 The second capture attempt died with `syntax error: unexpected end of file` and

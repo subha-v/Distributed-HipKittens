@@ -66,18 +66,13 @@ run() { docker exec "$NAME" bash -c "$1"; }
 # not, which meant a rank-1 number could be taken against a node still draining
 # someone else's job. Wait rather than abort on the first sample: a previous
 # run's last worker can linger for tens of seconds after its parent returns.
+#
+# Liveness-aware: a process that crashed and wedged in `exit_mm` keeps its KFD
+# entry indefinitely, cannot dispatch work, and cannot be signalled, so counting
+# raw `--showpids` rows makes this wait non-terminating. See tools/kfd_live.sh.
 echo "===== node-clean preflight ====="
-for i in $(seq 1 30); do
-  n=$(rocm-smi --showpids 2>/dev/null | awk '/^[0-9]+/{print $1}' | wc -l)
-  if [ "$n" = "0" ]; then echo "node clean after $((i*10-10))s"; break; fi
-  [ "$i" = "1" ] && echo "KFD pids: $n -- waiting for the node to drain"
-  if [ "$i" = "30" ]; then
-    echo "ABORT: node still dirty after 300s"
-    rocm-smi --showpids 2>&1 | sed -n '/PID/,/^====/p'
-    exit 1
-  fi
-  sleep 10
-done
+. "$(dirname "${BASH_SOURCE[0]}")/kfd_live.sh"
+kfd_wait_clean 30 10 || exit 1
 
 echo "===== stage arm + apply the metadata repair ====="
 run "rm -rf $DIR && mkdir -p $DIR/.tmp && cp $SRC/eval.py $SRC/task.py $SRC/utils.py $SRC/reference.py $DIR/ && cp $SRC/cases.txt $DIR/cases_test.txt"

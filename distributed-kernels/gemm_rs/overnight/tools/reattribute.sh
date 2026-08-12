@@ -24,19 +24,14 @@ stamp=$(date -u +%Y%m%dT%H%M%SZ)
 # Wait for a clean node rather than aborting on the first sample. A previous
 # run's last worker can linger for tens of seconds after its parent returns, and
 # aborting on that wastes a whole invocation.
-wait_clean() {
-  local tries=${1:-30} n
-  for ((i=0; i<tries; i++)); do
-    n=$(rocm-smi --showpids 2>/dev/null | awk '/^[0-9]+/{print $1}' | wc -l)
-    if [ "$n" = "0" ]; then echo "node clean after ${i}0s"; return 0; fi
-    [ "$i" = "0" ] && echo "KFD pids: $n -- waiting for the node to drain"
-    sleep 10
-  done
-  echo "ABORT: node still dirty after $((tries*10))s"
-  rocm-smi --showpids 2>&1 | sed -n '/PID/,/^====/p'
-  return 1
-}
-wait_clean 30 || exit 1
+#
+# Liveness-aware since 2026-08-12: the old version counted `rocm-smi --showpids`
+# rows, which include processes that have CRASHED and wedged in `exit_mm`. Such a
+# process has no address space, cannot dispatch a kernel, and cannot be
+# signalled -- so waiting for it never terminates. That cost the aug11 figure
+# queue ~40 minutes across several campaigns. See tools/kfd_live.sh.
+. "$(dirname "${BASH_SOURCE[0]}")/kfd_live.sh"
+kfd_wait_clean 30 10 || exit 1
 
 echo "===== forcing a rebuild of every ablation arm ====="
 docker exec dhk-gemmrs bash -c "rm -fv $ON/harness/build/gemm_rs_abl_*.so $ON/harness/ablate/*.cpp 2>/dev/null; true"

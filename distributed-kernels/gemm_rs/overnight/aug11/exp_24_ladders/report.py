@@ -82,8 +82,18 @@ for proto in ("graded", "pipelined"):
 
 print("\n################ 3. RATIOS: graded vs pipelined, SIDE BY SIDE ################")
 print("ours / rank-1 and ours / reference. >1 means the other arm is faster.")
-print("`dilution` = pipelined ratio - graded ratio. Positive means the graded")
-print("protocol's shared ~90 us constant FLATTERS us by compressing toward 1.")
+print()
+print("The dilution statistic is SIGNED-CORRECTED. The ~90 us graded constant is")
+print("added to numerator and denominator alike, so it always compresses the ratio")
+print("TOWARD 1 -- which flatters us where we are behind (ratio>1, graded looks")
+print("closer to parity than we are) and UNDERSELLS us where we are ahead")
+print("(ratio<1, graded hides part of a real win). Reporting `pipelined - graded`")
+print("alone would flip sign between those two regimes and read as an")
+print("inconsistent pattern. So the columns are:")
+print("  gap|g| = |graded ratio - 1|      the apparent distance from parity")
+print("  gap|p| = |pipelined ratio - 1|   the honest kernel-to-kernel distance")
+print("  compress = 1 - gap|g|/gap|p|     fraction of the true gap the graded")
+print("                                   protocol hides. Positive = diluted.")
 for other in ("rank1", "reference"):
     for stat in ("best", "median"):
         g = doc["ratios"].get(f"ours_vs_{other}__graded__{stat}")
@@ -92,31 +102,42 @@ for other in ("rank1", "reference"):
             continue
         print(f"\n--- ours / {other}, statistic = {stat} ---")
         print(f"{'#':>2} {'shape':>16} {'graded':>9} {'pipelined':>10} "
-              f"{'dilution':>9} {'floor%':>7} {'exp_14':>7}")
-        dil = []
+              f"{'gap|g|':>7} {'gap|p|':>7} {'compress':>9} {'floor%':>7} "
+              f"{'exp_14':>7} {'side':>6}")
+        comp, sides = [], []
         for i in range(6):
             a = g["per_shape"][i]
             b = p["per_shape"][i]
             if not a or not b:
                 print(f"{i+1:>2} {LABELS[i]:>16} {'--':>9} {'--':>10}")
                 continue
-            d = b["ratio"] - a["ratio"]
-            dil.append(d)
-            nf = doc["ratios"].get(f"null_floor__graded__best")
+            gg, gp = abs(a["ratio"] - 1), abs(b["ratio"] - 1)
+            c = (1 - gg / gp) if gp > 1e-9 else float("nan")
+            comp.append(c)
+            side = "ahead" if b["ratio"] < 1 else "behind"
+            sides.append(side)
+            nf = doc["ratios"].get("null_floor__graded__best")
             fl = (abs(nf["per_shape"][i]["ratio"] - 1) * 100
                   if nf and nf["per_shape"][i] else float("nan"))
             prior = f"{PRIOR[i]:.3f}" if other == "rank1" else "-"
             print(f"{i+1:>2} {LABELS[i]:>16} {a['ratio']:>9.4f} "
-                  f"{b['ratio']:>10.4f} {d:>+9.4f} {fl:>6.2f}% {prior:>7}")
+                  f"{b['ratio']:>10.4f} {gg:>7.4f} {gp:>7.4f} {c:>+8.1%} "
+                  f"{fl:>6.2f}% {prior:>7} {side:>6}")
+        gg = abs(g["geomean"] - 1)
+        gp = abs(p["geomean"] - 1)
         print(f"{'GEOMEAN':>19} {g['geomean']:>9.4f} {p['geomean']:>10.4f} "
-              f"{p['geomean'] - g['geomean']:>+9.4f}")
-        if dil:
-            n_pos = sum(1 for d in dil if d > 0)
-            print(f"  pipelined worse than graded on {n_pos}/{len(dil)} shapes; "
-                  f"dilution median {statistics.median(dil):+.4f}, "
-                  f"range [{min(dil):+.4f}, {max(dil):+.4f}]")
-            print(f"  PATTERN {'HOLDS' if n_pos == len(dil) else 'DOES NOT HOLD'} "
-                  f"across all shapes")
+              f"{gg:>7.4f} {gp:>7.4f} "
+              f"{(1 - gg/gp) if gp > 1e-9 else float('nan'):>+8.1%}")
+        ok = [c for c in comp if c == c]
+        if ok:
+            n_pos = sum(1 for c in ok if c > 0)
+            print(f"  graded hides part of the true gap on {n_pos}/{len(ok)} shapes; "
+                  f"compression median {statistics.median(ok):+.1%}, "
+                  f"range [{min(ok):+.1%}, {max(ok):+.1%}]")
+            print(f"  DILUTION PATTERN "
+                  f"{'HOLDS on every shape' if n_pos == len(ok) else 'IS NOT UNIFORM'}")
+            print(f"  we are AHEAD on {sides.count('ahead')}/{len(sides)} shapes "
+                  f"(pipelined, the honest protocol)")
 
 print("\n################ 4. THE SIX NULL FLOORS MEASURED TONIGHT ################")
 print("ours vs ours_null: same file, two module names, same pool, same run.")

@@ -41,6 +41,14 @@ rt = H.rt
 CU_COUNT = 304
 DEPTH = 64                                # must equal hk_trace::DEPTH
 USABLE = DEPTH - 1
+
+# exp_21's independent calibration of the same instruction on this node:
+# 99.7366 MHz = 9.97366e-2 ticks/ns = 99.7366 ticks/us, 5 reps, spread 0.0101%,
+# measured two-stage against steady_clock in a dedicated kernel
+# (aug11/exp_21_saturation/saturation.json:tick_rate_hz, LESSONS.md:1051).
+# It shares no machinery with the in-situ regression below beyond the
+# instruction itself, which is what makes the agreement meaningful.
+EXP21_TICKS_PER_US = 99.7358085
 PHASE_NAMES = [
     "CTA_BEG", "MAINLOOP_BEG", "MAINLOOP_END", "CREDIT_WAIT_BEG",
     "CREDIT_WAIT_END", "EMIT_BEG", "EMIT_END", "RELEASE_BEG", "RELEASE_END",
@@ -233,12 +241,30 @@ def main():
         "intercept_ticks": intercept,
         "r2": r2,
         "sibling_hypothesis_ticks_per_us": 100.0,
+        "exp21_measured_ticks_per_us": EXP21_TICKS_PER_US,
+        "exp21_spread_pct": 0.0101,
         "note": "The gfx950 sibling asserts s_memrealtime is 100 MHz (10 ns "
                 "ticks). FIGURE_SPECS.md section 5 item 7 flags that as a "
                 "quantity to verify on gfx942. The number used by the figure "
                 "is the measured slope above; the hypothesis is recorded only "
                 "so the two can be compared in result.md.",
     }
+    # Two independent calibrations agreeing is worth far more than one, and a
+    # disagreement means this figure's x-axis is wrong -- a bad tick rate does
+    # not distort the plot visibly, it silently rescales the whole time axis.
+    # exp_21 measured the rate directly against steady_clock in a dedicated
+    # kernel; this arm regresses the production kernel's own span against
+    # hipEvent time, so the two share no machinery beyond the instruction.
+    if ticks_per_us:
+        for label, reference in (("exp_21 sat_calib", EXP21_TICKS_PER_US),
+                                 ("sibling gfx950 spec", 100.0)):
+            disagreement = abs(ticks_per_us - reference) / reference
+            verdict = "agree" if disagreement <= 0.01 else "DISAGREE"
+            tick.setdefault("cross_checks", []).append({
+                "reference": label, "ticks_per_us": reference,
+                "rel_delta": disagreement, "verdict": verdict})
+            print(f"  vs {label:<22} {reference:9.4f}: "
+                  f"{disagreement:+.3%}  {verdict}")
     with open(os.path.join(args.outdir, "tick_rate.json"), "w") as handle:
         json.dump(tick, handle, indent=2)
     print(f"\nticks_per_us = {ticks_per_us} (r2={r2}); "

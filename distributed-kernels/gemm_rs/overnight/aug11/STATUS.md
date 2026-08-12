@@ -166,6 +166,19 @@ order reversal — it is necessary but **not sufficient**.
 *better* than its published 2.41% — the published table is **not uniformly
 conservative**, so floors must be measured in the run that produces the ratios.
 
+## FIRST THING TO KNOW: the stale-pid predicate
+
+A dead process (`wchan=exit_mm`) still appears in `rocm-smi --showpids` forever. It
+cannot dispatch work and cannot be signalled. **Eleven files under `tools/` plus
+several experiment runners each reimplement the drain check and all of them
+counted it**, which blocked the figure queue for ~40 minutes with all 8 GPUs idle.
+
+**Use `tools/kfd_live.sh`** — source it, do not reimplement:
+`kfd_live_count`, `kfd_stale_list`, `kfd_wait_clean`. `gpu_lease.sh`,
+`reattribute.sh` and `run_rank1_bench3.sh` are converted; **convert the rest on
+next touch.** The pattern to delete on sight is
+`rocm-smi --showpids | awk '/^[0-9]+/' | wc -l`.
+
 ## Node state — read before believing any timing taken after 05:15
 
 A stale KFD entry (pid 3001610) holds ~1.25 GB/GPU and will not clear. It is a

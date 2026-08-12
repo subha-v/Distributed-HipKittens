@@ -973,6 +973,50 @@ MI300X libraries reach 60-75%**. Realistic capture is **~250 µs on shape 6 and
 is a grind of several landed changes, not one win — and shapes 1-4 contribute
 nothing.
 
+## THE STALE-PID BLINDNESS IS SYSTEMIC — it cost ~40 minutes of the figure queue
+
+Fixing `gpu_lease.sh` was not enough, because **every drain check in this tree
+independently reimplements the same broken test.** `grep -l showpids` finds it in
+**eleven files** under `tools/` (`reattribute.sh`, `gate_ladder.sh`,
+`run_reference_arm.sh`, `run_rank1_bench3.sh`, `run_ours_eval_clean.sh`,
+`run_baseline.sh`, `reap_stale.sh`, `who_owns_gpus.sh`, `gpu_busy.sh`, …) plus
+experiment runners that copied the pattern.
+
+**The concrete cost.** exp_24 **completed shape 2** of the ladder — 354 s, all five
+arms, `harness_floor` at 5.15 µs best pipelined — then entered its own preflight
+for shape index 1 and logged `waiting for kfd drain (fds=1)` every ~11 s
+indefinitely. The `fds=1` was the dead m9 process. A campaign that was working
+perfectly sat blocked on a corpse, holding the lease, with exp_21, exp_22 and
+exp_26 queued behind it and **all 8 GPUs idle**.
+
+**The fix is a shared helper, `tools/kfd_live.sh`**, to be *sourced* rather than
+re-implemented: `kfd_live_count`, `kfd_stale_list`, and `kfd_wait_clean` which
+reports the dead set once and then waits only on the living. `reattribute.sh` and
+`run_rank1_bench3.sh` now source it. **The remaining callers should be converted
+the next time each is touched** — the pattern to delete on sight is
+`rocm-smi --showpids | awk '/^[0-9]+/' | wc -l`.
+
+**The general lesson, and it generalizes past GPUs:** when a readiness test is
+copy-pasted into a dozen scripts, a wrong test becomes a dozen wrong tests, and
+fixing the one you noticed leaves the other eleven to bite you later — in this
+case within twenty minutes, in a different experiment. **A predicate that several
+scripts must agree on belongs in one sourced function.**
+
+### Disclosed preemption
+
+I broke the lease to free it for exp_22, the last outstanding figure. Between the
+diagnosis and the release, exp_24 had already exited and **exp_26 had acquired**,
+so the `steal` actually preempted **exp_26's `campaign3.sh`**, not exp_24. That is
+recorded here and must be repeated in exp_26's `result.md`. It was the right call
+on priority — exp_26 is Phase 2 work that is **blocked on its own
+`VM_L2_PROTECTION_FAULT` anyway**, while exp_22 is the last missing paper figure —
+but it was not the preemption I intended, and the lease's `steal` path should
+print the current owner *before* acting so the operator can reconsider.
+
+exp_24 lost only shape 2, preserved in
+`exp_24_ladders/logs/full_run.partial_shape2.log` (157 result lines), and needs a
+liveness-aware runner before it restarts regardless.
+
 ## Measurement discipline carried into the figure work
 
 - **The harness bias is per-allocation AND partly allocation-ORDER, not
