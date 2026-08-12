@@ -203,6 +203,101 @@ and `ts_combine_us` are predicted to move in **opposite** directions and one
 total cannot separate them. If M6 drops and the combine rises by more, the
 response is to chase the epilogue's register allocation — not to close the axis.
 
+## exp_24 MEASURED — A is real (−91 µs end-to-end), B is closed
+
+**Mechanism A (delete the 448 MiB dead `part` zero-fill): CONFIRMED.**
+
+| population | n | plan M3→M5 mean | σ |
+|---|---:|---:|---:|
+| without A (`g` = 33, 289, 545, 801) | 7 | **428.96 µs** | 4.73 |
+| with A (`g` = 97, 353) | 4 | **377.75 µs** | 7.56 |
+
+**Δ = −51.2 µs on the plan phase, SE 4.18, t = 12.3.** End-to-end `m2→end` is
+**−91.2 ± 33.6 µs** (t = 2.7) — *more* than the plan delta, consistent with
+−51 µs of plan plus LLC-pollution relief elsewhere. Best composed screen point
+`g = 353` reads **6,645.3 µs / 0.8516**. Resource tuple clean, scratch actually
+improved 144 → 128 B/lane, MFMA census and atomic count unchanged.
+
+Honest cross-check the agent ran and reported: 469,762,048 B removed in 51.2 µs
+implies **9.2 TB/s**, which is above HBM peak — so those stores were never
+costing a full HBM write-back (nothing reads them and the next epoch overwrites
+them, so the LLC was absorbing much of the traffic). The deletion is worth
+51 µs of plan time, not the 100–300 µs a naive bytes÷bandwidth model predicted.
+A 5-rotation decision campaign on `g = 97` (A alone, single variable) is running.
+
+**Mechanism B (throttle depth): the axis is CLOSED.**
+
+| depth | n | M7 mean | Δ vs 8 | |
+|---:|---:|---:|---:|---|
+| 4 | 2 | 2,659.4 | −82.9 | t = 1.3 — **null** |
+| **8 (shipped)** | 7 | **2,742.3** (σ 63.1) | — | |
+| 16 | 1 | 3,204.4 | **+462.1** | 7.3σ |
+| 32 | 1 | 3,112.2 | **+369.9** | 5.9σ |
+
+**The throttle is not a smooth knob — its entire ~500 µs benefit is already
+realized at depth ≤ 8, and 16/32 are catastrophically worse.** exp_21 picked the
+right value first try. No further win on this axis.
+
+### A correction that changes how every later screen is read
+
+**End-to-end screen resolution is far worse than the 0.52 % measured earlier.**
+All six `g = 33` control points tonight spread **6,795.1 → 7,243.7 µs = 6.6 %**.
+A screen cannot rank anything under ~5 % end-to-end.
+
+**But the phase stamps are excellent instruments**: plan M3→M5 has σ = 4.7 µs
+(1.1 %) and M6 has σ ≈ 22.9 µs. That is exactly how a −51 µs effect became a
+12σ result while being invisible end-to-end. **Rule for the rest of the night:
+screen phase-local mechanisms on their phase stamp, and reserve end-to-end
+numbers for campaigns.** This directly determines how exp_26's mask ladder
+(a predicted 75–200 µs M6 effect ⇒ 3–9σ on the M6 stamp) and exp_27
+(−130…−190 µs, also M6) get judged.
+
+## exp_32 — the poison patch is ready; the S-1 load guard is KILLED
+
+**S-1 killed, and the kill saved a regression.** The dead slot loads are
+genuinely unpredicated (15 of 16 issue with no exec mask, no compare, no
+branch), so the 154 MiB / 34 % figure is confirmed as *issued* volume — but
+every dead load reads `base_slot(cur,0)`, **one 14,336 B rank-local region, 224
+cache lines**, resident in L1/L2/LLC with zero xGMI. Revised prize **≈ 4 µs
+(band 0–15) = 0.06 % end-to-end**, ten times below screen resolution. Worse, the
+patch would likely *regress*: the unconditional issue **is** the load pipeline —
+fifteen loads in flight drained by one `s_waitcnt vmcnt(0)` — and guarding
+forbids the hoist, converting it into ~10.5 serialized issue-then-drain round
+trips. No patch written.
+
+Side finding worth carrying: `fanout[t]` is wave-uniform by construction but
+reaches LLVM as a VGPR, so all 16 slot guards are EXEC-mask guards. A
+`readfirstlane` makes them scalar branches and deletes 8–12 % of M8's executed
+instructions — still only ~0.1 % end-to-end, so it should ride along with
+another M8 edit rather than get its own campaign.
+
+**The poison patch is mechanically generated and verified** (`git apply -p1`
+clean against the node's exact files, patched Python passes `ast.parse`, patched
+shell passes `bash -n`). Three **untimed** insertion sites — the eager per-arm
+epoch, before every one of the 600 soak epochs, and one extra untimed
+verification epoch after `_mok_rank_max` so the post-timing `[MOK GATE]` becomes
+a real single-epoch coverage check. Nothing is inserted between timed
+iterations: a 56 MiB fill there would displace 22 % of the Infinity Cache and
+perturb the very inter-rank skew that the rank-max p50 measures.
+`K0_MOK_POISON_OUT` defaults **on** and is forwarded through `run_campaign.sh`.
+
+Three refinements to the original diagnosis:
+1. `out` **is** cleared once per gate episode — the accurate statement is that
+   it is never cleared *between* epochs, and the 600-epoch soak has no clear at
+   all. Zero is not a usable poison anyway: one missing row of 4,096 moves the
+   L1 ratio by 0.024 % against a 0.1 gate.
+2. `correctness.py` gives a better hook than expected — a SUM-all-reduced
+   `nonfinite == 0` on the candidate buffer, **an equality that cannot be
+   dialled**, so one surviving NaN on any rank fails three independent ways.
+3. **The existing negative control cannot catch staleness** — it is a
+   store-over-a-peer bug in the frozen pull combine and never runs `mps_mega`.
+   A host-only detector self-test was added, plus a kernel-side skip-a-row
+   control for whoever owns the kernel next.
+
+The patch also bundles a **required harness correctness fix**: the `[MOK GATE]`
+loop runs after the eager loop has finished, so for every candidate arm it
+re-reads whichever candidate ran last.
+
 ## exp_25 rev2 — the interleave's ceiling is +211 µs. DEMOTED to a wash.
 
 I proposed promoting the M6/M7 interleave over the static split on the grounds
