@@ -1023,3 +1023,76 @@
   bits [34:42) — bit-identical for every `g <= 0xFF` across every mode (verified
   over all 3,584 combinations). Seventh mechanism selector in a reinterpreted
   field; this is the one that drew blood.
+- 2026-08-12 exp_27 **RATCHET MOVED to 6,482.7 us = 0.8408x production** (was
+  6,568.0 / 0.8522x): -85.3 us, +1.14 points. `C=16,g=353,mode=12,flush_rows=16`
+  plus `K0P6_MPS_ASCALE_TM=1`, commit `f113d73f`. Two candidate campaigns
+  (6,477.0 / 6,488.3, spread 11.3 us) paired against a SAME-SESSION control
+  campaign that reproduced the old ratchet to 0.16 % (6,557.6 / 0.8513).
+  Remaining to 0.80x: -317 us.
+- 2026-08-12 exp_27 **M6's activation-scale gather was reading a group-major
+  array WE manufacture, at 16x line amplification, for a consumer set of one.**
+  `A_scale[k*T_ext + token]` puts one token's 56 FP32 scales 131,072 B apart, so
+  the 96x56 prologue gather fetched **5,376 distinct 64 B lines to deliver
+  21,504 B** (344 KB/task, ~977 MB/epoch) between two `__syncthreads()` where no
+  MFMA can cover it. `sc_stage` is already token-major and holds the same values,
+  so pointing M6 at it makes a row 224 B = **exactly 4 lines** (`224*t mod 64` is
+  always 0 or 32), i.e. **384 lines, 14.0x less line traffic**, and M5's
+  transpose becomes dead and is deleted. **delta M6 = -79.7 us (t = -14.8)**,
+  n=10 per arm over four alternating batches.
+- 2026-08-12 exp_27 `primitives:` **cheap to produce is not cheap to consume, and
+  only the consumption side was ever amplified.** This closes the lesson exp_24
+  opened on `hkp::zero_part_scale_transpose`: exp_24 deleted the fused zero half,
+  exp_27 shows **the transpose half should never have existed**. Producing the
+  group-major copy cost **-2.95 us (t = -1.71, not significant)** because
+  `sc_dst[lane*T_ext + t]` has consecutive `t` ADJACENT, so the scatter coalesces
+  in L2 and the real traffic is just the 7.34 MiB payload. Consuming it cost
+  **80 us**. **Rule: a layout-conversion primitive is a defect until someone has
+  named the consumer that requires the target layout AND shown the line-traffic
+  arithmetic for BOTH layouts.** Corollary for the prediction models: exp_28
+  priced the M5 saving at -17 us and got -3 (6x over), and priced M6 at -140 and
+  got -79.7 (43 % over) -- apply a haircut to the next member of this family.
+- 2026-08-12 exp_27 `primitives:` **there is still no strided-gather-into-LDS
+  primitive**, and this site had its line amplification wrong for the entire life
+  of the kernel because each of the four such sites (`ascale_lds`, `b1s_lds`,
+  `dq2_lds`, `tok_lds`) open-codes its own index decomposition. A
+  `group::gather_rows_to_lds<Rows,Cols>(dst_lds, src, row_index_lds, stride)`
+  owning the "row-fast for LDS banks vs field-fast for coalescing" trade would
+  have made exp_27 a one-line call-site change and made the 16x visible AT the
+  call site. Proposed, not built -- needs a 2nd and 3rd caller.
+- 2026-08-12 exp_27 `ops:` **THE [MOK GATE] DIGITS ARE NOT RUN-REPRODUCIBLE, so
+  "reproduce the ratchet's digits exactly" is not a gate.** Proven here: a batch
+  running a binary whose `.text` is BYTE-IDENTICAL to the ratchet printed
+  `relative` = 0.008293/0.008294/0.008293/0.008293/0.008293 across five runs, and
+  `production` -- an untouched arm -- printed max_abs of both 0.031250 and
+  0.027344 in those same five runs (full-precision sd = 2.7e-5). Cause: MoK's
+  dispatch assigns receive rows by `fetch_add` on a device counter and mode 12's
+  combine is a nondeterministic bf16 remote atomic, so `out` is not
+  bit-reproducible in ANY arm. **The sound substitute is the same-run paired
+  `d = mps_mega - pf6gm_mega` at full precision from the rank JSONs** (pf6gm is
+  untouched and sees the same input, so it fingerprints the run): shift
+  -8.8e-9, t = -0.73, i.e. 0.032 % of the input drift. Plus
+  `max_abs(mps) == max_abs(pf6gm)` in **160/160** (run x rank) cells, and the
+  negative control sitting **108x** above the arm so a layout error cannot hide.
+- 2026-08-12 exp_27 `ops:` **CLUSTER BY RUN. Eight ranks in a run share one
+  input.** The same null above reads **t = -5.01** if the 160 (run, rank) cells
+  are treated as independent and **t = -0.73** with runs as units. This is the
+  clustering form of the known "single-batch t-statistics overstate
+  significance" trap and it nearly produced a false STOP.
+- 2026-08-12 exp_27 `ops:` **fingerprint an arm by the `.text` hash of the
+  resolved JIT hsaco plus an arm-discriminating immediate, never by the file
+  hash.** exp_27's two candidate batches landed in DIFFERENT JIT directories
+  (`5635a2f2a370`, `be7b189d458d`) with DIFFERENT file hashes and **identical
+  `.text`** -- a file-hash comparison would have reported an arm change between
+  two batches of the same arm. The discriminator used here is the gather's loop
+  limit: `0x13ff` (= 5376-257, trip 21) = group-major, `0x43f` (= 1344-257,
+  trip 6) = token-major. Reusable form: `aug11/tools/e27_fp.sh`.
+- 2026-08-12 exp_27 `ops:` **the M6 device stamp is a CALIBRATED predictor of
+  campaign microseconds, not just a directional one.** Stamp delta -79.7 us,
+  paired campaign delta -75.0 us -- agreement within 4.7 us, so M6's saving
+  passes through to end-to-end ~1:1 and M6 is fully on the critical path. The
+  same 20 runs read **-51 us at t = -0.72 end-to-end**, i.e. the 1-proc screen
+  could not see an effect the stamp resolved at t = -14.8. Also: two control
+  batches 8 minutes apart agreed to **+5.1 us (t = 0.74)** while a control 30
+  minutes earlier differed by **50 us** on the same binary -- so control-first-
+  and-last within the session is what makes the stamp trustworthy, and an
+  arm-vs-arm comparison across sessions is not.

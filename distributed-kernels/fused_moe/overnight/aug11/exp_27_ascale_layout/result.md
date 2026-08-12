@@ -1,8 +1,16 @@
 # exp_27 result — M6 reads the token-major `sc_stage`; M5's transpose is deleted
 
-**VERDICT: CONFIRMED.** Deleting the group-major activation-scale layout takes
-**ΔM6 = −79.7 µs (t = −14.8)** off the M6 device stamp, inside exp_28's
-pre-registered confirm band `[−190, −60]`. Every correctness gate is green, the
+**VERDICT: CONFIRMED. THE RATCHET MOVES.**
+
+> **6,482.7 µs = 0.8408× production**, from 6,568.0 µs / 0.8522×.
+> **−85.3 µs, +1.14 points**, across two candidate campaigns paired against a
+> same-session control campaign that reproduced the old ratchet to 0.16 %.
+> Commit `f113d73f`. Remaining to 0.80×: **−317 µs.**
+
+Deleting the group-major activation-scale layout takes **ΔM6 = −79.7 µs
+(t = −14.8)** off the M6 device stamp — inside exp_28's pre-registered confirm
+band `[−190, −60]` — and that saving passes through to the campaign essentially
+1:1 (paired campaign delta −75.0 µs). Every correctness gate is green, the
 numerics are unchanged at full float precision, the resource tuple holds exactly,
 and the ISA shows the gather's loop trip count dropping 21 → 6.
 
@@ -207,25 +215,62 @@ be — nothing in this change touches them.
 
 ---
 
-## 5. Campaign
+## 5. Campaigns — THE RATCHET MOVES to 6,482.7 µs / 0.8408×
 
-Launched at 07:24Z on the candidate arm pinned to `f113d73f`:
-`production,pf6gm_mega,mps_mega`, 500 warmup / 100 timed, 5 rotated processes,
-`C=16,g=353,mode=12,flush_rows=16`. Tag `e27camp_cand`.
+Three 5-rotation campaigns, 500 warmup / 100 timed, all three arms,
+`C=16,g=353,mode=12,flush_rows=16`, arms alternated and each one `.text`-
+fingerprinted after the fact. A 1.14 % delta must be paired, not asserted, so a
+**control campaign was run in this same session** rather than leaning on the
+published ratchet number.
 
-**Status: RUNNING at the time of writing.** The stamp ladder had cleared and the
-600-epoch soak has passed in all 20 screen runs, so this is the promotion step,
-not a decision step.
+| campaign | arm | production | pf6gm_mega | **mps_mega** | **mps/prod** | mps/pf6gm | pf6gm/prod |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `e27camp_cand` | 1 | 7,710.7 | 6,891.0 | **6,477.0** | **0.8400** | 0.9399 | 0.8937 |
+| `e27camp2_ctl` | **0** | 7,703.2 | 6,884.4 | **6,557.6** | **0.8513** | 0.9525 | 0.8937 |
+| `e27camp3_cand` | 1 | 7,710.1 | 6,928.5 | **6,488.3** | **0.8415** | 0.9365 | 0.8986 |
 
-Expectation, stated before the number arrives so it is falsifiable: the M6 stamp
-delta is −79.7 µs and the plan delta −3 µs, and the two phases are on the
-critical path, so a campaign in the neighbourhood of **6,568 − 80 ≈ 6,488 µs,
-ratio ≈ 0.842×** would be consistent. A campaign that reads at or above the
-6,568 µs ratchet would contradict the stamp and would have to be resolved before
-the ratchet moves — the stamp measures a phase, and only the campaign sets the
-ratchet.
+Per-rotation `mps_mega` p50s:
 
-*(Section to be completed with `summarize.py` output when the campaign lands.)*
+- candidate 1: 6,494.7 / 6,474.9 / 6,477.0 / 6,468.7 / 6,480.1
+- control:     6,555.3 / 6,567.6 / 6,554.1 / 6,557.6 / 6,576.5
+- candidate 2: 6,488.3 / 6,483.7 / 6,492.8 / 6,497.2 / 6,476.8
+
+**Results:**
+
+- **The control campaign reproduces the published ratchet**: 6,557.6 vs 6,568.0 µs,
+  a 10.4 µs / **0.16 %** difference, and `0.8513` vs `0.8522`. The denominator is
+  the denominator, so the comparison is sound.
+- **Candidate mean of two campaigns = 6,482.7 µs, spread 11.3 µs.** Both campaigns
+  land below every control rotation; the two distributions do not overlap at all.
+- **Same-session paired delta = −75.0 µs (−1.14 %).** Versus the published
+  ratchet, −85.3 µs.
+- `pf6gm/production` reads 0.8937 / 0.8937 / 0.8986, i.e. ≈ 0.896 in all three —
+  the G=3 reference was built, so these are the right arms.
+- Every campaign: `[MOK GATE] pass=True`, `pperr=0`, `control_fails=True`,
+  `[MPS SOAK] 600/600 poison=0`, poison self-test firing at `nonfinite=57344`.
+
+### NEW RATCHET
+
+> **`C=16, g=353, mode=12, flush_rows=16` with `K0P6_MPS_ASCALE_TM=1`
+> = 6,482.7 µs = 0.8408× production** (0.938× `pf6gm_mega`), commit `f113d73f`.
+>
+> Was 6,568.0 µs / 0.8522×. **−85.3 µs and +1.14 points of margin.**
+> Remaining to the 0.80× target (≈ 6,166 µs at this production): **−317 µs.**
+
+### The stamp predicted the campaign
+
+I pre-registered "≈ 6,488 µs, ratio ≈ 0.842×" from the stamp before the campaign
+ran. Measured: 6,477.0 and 6,488.3, ratio 0.8400 and 0.8415. And the paired
+campaign delta (**−75.0 µs**) sits within 4.7 µs of the M6 stamp delta
+(**−79.7 µs**).
+
+That is the most useful methodological result here: **the M6 saving passes through
+to end-to-end essentially 1:1**, so M6 is fully on the critical path, and the
+device stamp is a calibrated predictor of campaign µs for this phase rather than
+merely a directional indicator. It also retroactively justifies the instrument
+choice — the same 20 runs showed −51 µs at t = −0.72 end-to-end, i.e. the screen
+could not see a real effect that the stamp resolved at t = −14.8 and the campaign
+then confirmed.
 
 ---
 
