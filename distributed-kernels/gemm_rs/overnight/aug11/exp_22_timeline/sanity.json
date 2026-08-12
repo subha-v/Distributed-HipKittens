@@ -1,0 +1,98 @@
+{
+  "schema": "exp22.sanity.v2",
+  "context": "first campaign after the exp_26 VM_L2_PROTECTION_FAULT left a stale KFD entry holding ~1.25 GB/GPU with zero CU occupancy",
+  "gate": {
+    "primary": "geomean of M7 means vs 207.18 us (LESSONS.md:598)",
+    "shape5": "M7 mean vs recorded median 645.93 us, and membership of 644.71-669.39 us (LESSONS.md:194)",
+    "not_gated": "best-of-arm vector; best-vs-best across sessions is documented-fragile (LESSONS.md:189)"
+  },
+  "verdict": "PASS",
+  "geomean_of_means_us": 207.76058511611356,
+  "geomean_reference_us": 207.18,
+  "geomean_rel_delta": 0.002802322213116872,
+  "shape5_mean_us": 648.1079757213593,
+  "shape5_reference_median_us": 645.93,
+  "shape5_rel_delta": 0.003371844815009836,
+  "shape5_in_same_config_range": true,
+  "all_correct_tight": true,
+  "rows": [
+    {
+      "shape": "64x7168x18432",
+      "mean_us": 65.26043017705281,
+      "best_us": 65.01585245132446,
+      "rotation_samples_us": [
+        65.01585245132446,
+        65.23199379444122,
+        65.53344428539276
+      ],
+      "reference_best_us": 62.38,
+      "rel_delta_best_context_only": 0.0422547683764742,
+      "correct_tight": true
+    },
+    {
+      "shape": "512x4096x12288",
+      "mean_us": 67.68380602200826,
+      "best_us": 67.48668849468231,
+      "rotation_samples_us": [
+        67.48668849468231,
+        67.59308278560638,
+        67.97164678573608
+      ],
+      "reference_best_us": 64.52,
+      "rel_delta_best_context_only": 0.04598091281280713,
+      "correct_tight": true
+    },
+    {
+      "shape": "2048x2880x2880",
+      "mean_us": 87.32480307420094,
+      "best_us": 86.94492280483246,
+      "rotation_samples_us": [
+        86.94492280483246,
+        87.62061595916748,
+        87.4088704586029
+      ],
+      "reference_best_us": 83.75,
+      "rel_delta_best_context_only": 0.0381483319979995,
+      "correct_tight": true
+    },
+    {
+      "shape": "4096x4096x4096",
+      "mean_us": 200.92718303203583,
+      "best_us": 200.79642534255981,
+      "rotation_samples_us": [
+        200.99379122257233,
+        200.79642534255981,
+        200.99133253097534
+      ],
+      "reference_best_us": 198.71,
+      "rel_delta_best_context_only": 0.010499850750137419,
+      "correct_tight": true
+    },
+    {
+      "shape": "8192x4096x14336",
+      "mean_us": 648.1079757213593,
+      "best_us": 646.1023539304733,
+      "rotation_samples_us": [
+        646.1023539304733,
+        647.9266285896301,
+        650.2949446439743
+      ],
+      "reference_best_us": 613.7,
+      "rel_delta_best_context_only": 0.05279836064929653,
+      "correct_tight": true
+    },
+    {
+      "shape": "8192x8192x29568",
+      "mean_us": 1601.1078159014385,
+      "best_us": 1570.1835602521896,
+      "rotation_samples_us": [
+        1609.9759191274643,
+        1570.1835602521896,
+        1623.1639683246613
+      ],
+      "reference_best_us": 1616.63,
+      "rel_delta_best_context_only": -0.02873040816254212,
+      "correct_tight": true
+    }
+  ]
+}

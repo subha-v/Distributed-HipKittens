@@ -1,0 +1,188 @@
+{
+  "schema": "exp22.phase_summary.v1",
+  "note": "mean is the per-CTA sum averaged over CTAs that ran the phase; producers run concurrently so the mean is the quantity comparable to exp_20's whole-kernel pool, and max is the tail beside it",
+  "arms": [
+    {
+      "file": "/home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_22_timeline/events_ours_s5.json",
+      "tag": "s5",
+      "shape": {
+        "m": 8192,
+        "n": 4096,
+        "k": 14336,
+        "has_bias": true,
+        "seed": 7168
+      },
+      "num_reducer_ctas": 32,
+      "num_gemm_ctas": 272,
+      "mfma_denominator": 272,
+      "ticks_per_us": 99.88791427574935,
+      "device_us_rank0": 742.4650192260742,
+      "correctness": {
+        "1e-2": {
+          "all_close": true,
+          "max_abs_diff": 0.00048828125
+        },
+        "2e-3": {
+          "all_close": true,
+          "max_abs_diff": 0.00048828125
+        }
+      },
+      "drops": 0,
+      "provenance": {
+        "module_sha256": "76dbde0bccc054b6c379ac8f5e4834d0f0d3e3182dfa0520a6635b4c28f26a27",
+        "source_sha256": "080b571926341c64f6b39f746d298769eefc4af3d8ca21bf5496691707ffa994",
+        "captured_utc": "2026-08-12T19:05:28Z"
+      },
+      "phases": {
+        "mainloop": {
+          "ctas": 272,
+          "events": 512,
+          "mean_us": 309.6107058726231,
+          "median_us": 334.03440488195827,
+          "max_us": 372.4975165392287,
+          "events_per_cta": 1.8823529411764706
+        },
+        "credit_wait": {
+          "ctas": 272,
+          "events": 512,
+          "mean_us": 2.136806820106035,
+          "median_us": 2.0422891145453304,
+          "max_us": 3.8042640368981644,
+          "events_per_cta": 1.8823529411764706
+        },
+        "emit": {
+          "ctas": 272,
+          "events": 512,
+          "mean_us": 149.182359186572,
+          "median_us": 132.36836604175664,
+          "max_us": 304.8216615670403,
+          "events_per_cta": 1.8823529411764706
+        },
+        "release": {
+          "ctas": 272,
+          "events": 272,
+          "mean_us": 52.124306259122335,
+          "median_us": 62.009503801440076,
+          "max_us": 91.30233688555595,
+          "events_per_cta": 1.0
+        },
+        "ready_wait": {
+          "ctas": 32,
+          "events": 64,
+          "mean_us": 613.6966162970783,
+          "median_us": 629.8659898565393,
+          "max_us": 636.633575353758,
+          "events_per_cta": 2.0
+        },
+        "reduce": {
+          "ctas": 32,
+          "events": 64,
+          "mean_us": 35.18693953602059,
+          "median_us": 34.77898227416901,
+          "max_us": 42.80798163625408,
+          "events_per_cta": 2.0
+        }
+      },
+      "verdicts": [
+        {
+          "quantity": "credit_wait vs exp_20 sync",
+          "measured_us": 2.136806820106035,
+          "exp20_us": 52.9,
+          "ratio": 0.040393323631494046,
+          "verdict": "DISAGREE"
+        }
+      ]
+    },
+    {
+      "file": "/home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_22_timeline/events_ours_s6.json",
+      "tag": "s6",
+      "shape": {
+        "m": 8192,
+        "n": 8192,
+        "k": 29568,
+        "has_bias": false,
+        "seed": 42
+      },
+      "num_reducer_ctas": 48,
+      "num_gemm_ctas": 256,
+      "mfma_denominator": 256,
+      "ticks_per_us": 99.88791427574935,
+      "device_us_rank0": 1862.0790243148804,
+      "correctness": {
+        "1e-2": {
+          "all_close": true,
+          "max_abs_diff": 0.0001220703125
+        },
+        "2e-3": {
+          "all_close": true,
+          "max_abs_diff": 0.0001220703125
+        }
+      },
+      "drops": 0,
+      "provenance": {
+        "module_sha256": "76dbde0bccc054b6c379ac8f5e4834d0f0d3e3182dfa0520a6635b4c28f26a27",
+        "source_sha256": "080b571926341c64f6b39f746d298769eefc4af3d8ca21bf5496691707ffa994",
+        "captured_utc": "2026-08-12T19:05:28Z"
+      },
+      "phases": {
+        "mainloop": {
+          "ctas": 256,
+          "events": 1024,
+          "mean_us": 1224.3756315441647,
+          "median_us": 1227.135443649551,
+          "max_us": 1269.7832457474094,
+          "events_per_cta": 4.0
+        },
+        "credit_wait": {
+          "ctas": 256,
+          "events": 1024,
+          "mean_us": 2.867902008737292,
+          "median_us": 2.723052152727107,
+          "max_us": 5.165790113261718,
+          "events_per_cta": 4.0
+        },
+        "emit": {
+          "ctas": 256,
+          "events": 1024,
+          "mean_us": 202.01783940841642,
+          "median_us": 196.30002430394526,
+          "max_us": 279.4732496159188,
+          "events_per_cta": 4.0
+        },
+        "release": {
+          "ctas": 256,
+          "events": 256,
+          "mean_us": 39.49489313701464,
+          "median_us": 39.82463773363394,
+          "max_us": 50.77691367144076,
+          "events_per_cta": 1.0
+        },
+        "ready_wait": {
+          "ctas": 48,
+          "events": 128,
+          "mean_us": 1743.160500738771,
+          "median_us": 1743.8345896295195,
+          "max_us": 1747.0381803974337,
+          "events_per_cta": 2.6666666666666665
+        },
+        "reduce": {
+          "ctas": 48,
+          "events": 128,
+          "mean_us": 46.29856074379398,
+          "median_us": 51.27747472892736,
+          "max_us": 54.46104305454214,
+          "events_per_cta": 2.6666666666666665
+        }
+      },
+      "verdicts": [
+        {
+          "quantity": "credit_wait vs exp_20 sync",
+          "measured_us": 2.867902008737292,
+          "exp20_us": 168.6,
+          "ratio": 0.017010094950992243,
+          "verdict": "DISAGREE"
+        }
+      ]
+    }
+  ]
+}

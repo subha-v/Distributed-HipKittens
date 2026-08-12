@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
 # Detach the GPU phase from this ssh session. A dropped Windows-side connection
-# must not orphan a half-run campaign that is holding the node lease: setsid
-# gives it its own session, and the trap inside go_gpu.sh releases the lease on
-# any exit path including the timeout's SIGTERM.
-ON=/home/subvadla/dhk/distributed-kernels/gemm_rs/overnight
-E22=$ON/aug11/exp_22_timeline
-LOG=$E22/logs/go_gpu.log
+# must not orphan a half-run campaign holding the node lease: setsid gives it
+# its own session, and the trap inside the runner releases the lease on any exit
+# path including the timeout's SIGTERM.
+#
+# The outer timeout has to cover the QUEUE WAIT as well as the run. Sizing it to
+# the run alone is how the last attempt died: it expired waiting behind exp_24.
+E22=/home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_22_timeline
+SCRIPT=${EXP22_SCRIPT:-go_armb.sh}
+LOG=$E22/logs/${SCRIPT%.sh}.log
 mkdir -p "$E22/logs"
-if pgrep -f "go_gpu.sh" > /dev/null; then
-  echo "already running:"; pgrep -af "go_gpu.sh"; exit 0
+if pgrep -f "$SCRIPT" > /dev/null; then
+  echo "already running:"; pgrep -af "$SCRIPT"; exit 0
 fi
 : > "$LOG"
-setsid timeout 5400 env EXP22_REUSE_M7="${EXP22_REUSE_M7:-0}" \
-  bash "$E22/go_gpu.sh" "${EXP22_ARMS:-all}" >> "$LOG" 2>&1 < /dev/null &
-sleep 5
+setsid timeout "${EXP22_TIMEOUT:-21600}" bash "$E22/$SCRIPT" >> "$LOG" 2>&1 < /dev/null &
+sleep 6
 echo "launched pid $! ; log=$LOG"
-tail -5 "$LOG"
+tail -12 "$LOG"

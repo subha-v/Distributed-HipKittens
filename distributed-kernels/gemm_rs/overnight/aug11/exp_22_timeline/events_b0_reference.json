@@ -1,0 +1,129 @@
+{
+  "schema": "exp22.events.v1",
+  "arm": "b0_reference",
+  "kind": "kernel_trace",
+  "shape": {
+    "m": 8192,
+    "n": 4096,
+    "k": 14336,
+    "has_bias": true,
+    "seed": 7168
+  },
+  "epoch_ns": 524605,
+  "epoch_count_traced": 35,
+  "epoch_count_usable": 13,
+  "runtime_dispatches_excluded": 1418,
+  "epoch_durations_ns": [
+    544010,
+    538236,
+    640552,
+    526329,
+    659756,
+    637625,
+    511775,
+    519554,
+    516427,
+    518632,
+    517388,
+    524605
+  ],
+  "intervals": [
+    {
+      "name": "Cijk_Alik_Bljk_BBS_BH_Bias_HA_S_SAV_UserArgs_MT256x224x64_MI16x16x1_SN_LDSB0_AFC1_AFEM1_AFEM1_ASEM1_CLR1_CADS0_DTLA0_DTLB0_DTVA1_DTVB0_EPS0_FDSI0_GRPM1_GRVWA8_GRVWB8_GSUAMBSK_GLS0_ISA942_IU1_K1_LDSTI0_LBSPPA0_LBSPPB256_LBSPPM0_LPA0_LPB16_LPM0_LRVW8_LWPMn1_MIAV0_MIWT4_14_MO40_NTn1_NTA0_NTB0_NTC0_NTD4_NTM0_NEPBS16_NLCA2_NLCB1_ONLL1_PGR2_PLR1_PKA1_SIA3_SS1_SPO0_SRVW0_SSO0_SVW4_SK0_SKFTR0_SKXCCM0_TLDS1_ULSGRO0_USL1_UIOFGRO0_USFGROn1_VSn1_VWA4_VWB2_WSGRA0_WSGRB0_WS64_WG64_4_1",
+      "resource": "mfma",
+      "begin_ns": 0,
+      "end_ns": 242958
+    },
+    {
+      "name": "void at::native::elementwise_kernel_manual_unroll<128, 8, at::native::gpu_kernel_impl_nocast<at::native::CUDAFunctor_add<c10::BFloat16> >(at::TensorIteratorBase&, at::native::CUDAFunctor_add<c10::BFloat16> const&)::{lambda(int, bool)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::CUDAFunctor_add<c10::BFloat16> >(at::TensorIteratorBase&, at::native::CUDAFunctor_add<c10::BFloat16> const&)::{lambda(int, bool)#1})",
+      "resource": "hbm",
+      "begin_ns": 242958,
+      "end_ns": 284333
+    },
+    {
+      "name": "ncclDevKernel_Generic_2(ncclDevKernelArgsStorage<4096ul>)",
+      "resource": "xgmi",
+      "begin_ns": 284333,
+      "end_ns": 524605
+    }
+  ],
+  "unclassified_names": [],
+  "host_boundaries": {
+    "schema": "exp22.b0_boundaries.v1",
+    "shape": {
+      "m": 8192,
+      "n": 4096,
+      "k": 14336,
+      "has_bias": true,
+      "seed": 7168
+    },
+    "epochs": 12,
+    "monotonic_boundaries_s": [
+      [
+        20444216.03313972,
+        20444216.03390415
+      ],
+      [
+        20444216.034136806,
+        20444216.034770828
+      ],
+      [
+        20444216.034876447,
+        20444216.0356
+      ],
+      [
+        20444216.035703745,
+        20444216.03630359
+      ],
+      [
+        20444216.036402527,
+        20444216.03713691
+      ],
+      [
+        20444216.037247412,
+        20444216.03796309
+      ],
+      [
+        20444216.038076468,
+        20444216.03866272
+      ],
+      [
+        20444216.03875678,
+        20444216.039347555
+      ],
+      [
+        20444216.039444532,
+        20444216.04003223
+      ],
+      [
+        20444216.040125325,
+        20444216.040712412
+      ],
+      [
+        20444216.040807936,
+        20444216.04139379
+      ],
+      [
+        20444216.041503236,
+        20444216.042105604
+      ]
+    ],
+    "device_us_sorted": [
+      566.9419765472412,
+      567.1430230140686,
+      568.585991859436,
+      568.9870119094849,
+      571.3520050048828,
+      580.6540250778198,
+      581.8169713020325,
+      610.1620197296143,
+      694.3950057029724,
+      694.7960257530212,
+      713.5990262031555,
+      716.6060209274292
+    ],
+    "device_us_median": 581.8169713020325
+  },
+  "source_trace": "/home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_22_timeline/prof/s5/k_kernel_trace.csv",
+  "note": "rank 0 only; the other seven ranks ran unprofiled so the collective had real peers. Timestamps are ns relative to the first dispatch of the chosen epoch."
+}

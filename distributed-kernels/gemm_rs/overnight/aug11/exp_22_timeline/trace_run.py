@@ -22,6 +22,7 @@ bias a single-point ratio would fold into the rate.
 """
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
@@ -30,8 +31,17 @@ import sys
 import time
 
 ON = "/home/subvadla/dhk/distributed-kernels/gemm_rs/overnight"
+GEMM = os.path.dirname(ON.rstrip("/"))
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(ON, "harness"))
+
+
+def sha256_of(path):
+    try:
+        with open(path, "rb") as handle:
+            return hashlib.sha256(handle.read()).hexdigest()
+    except OSError:
+        return None
 
 import torch                              # noqa: E402
 import harness_lib as H                   # noqa: E402
@@ -203,9 +213,21 @@ def main():
     ap.add_argument("--warmup-ms", type=float, default=800.0)
     ap.add_argument("--outdir", default=HERE)
     args = ap.parse_args()
+    os.makedirs(args.outdir, exist_ok=True)
 
     rt.enable_peer_access(H.WORLD)
     module = load_trace_module()
+    # Provenance in the artifact itself. exp_26 landed a per-shape release group
+    # that changes shape 5 -- the traced shape -- after this arm was first
+    # written, and a capture on disk with no build identity cannot be told from
+    # a capture of the previous kernel. Stamp it so it never has to be argued.
+    provenance = {
+        "module_sha256": sha256_of(os.path.join(HERE, "build",
+                                                "gemm_rs_mi300x_trace.so")),
+        "source_sha256": sha256_of(os.path.join(GEMM, "gemm_rs_mi300x.cpp")),
+        "captured_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+    print("provenance:", json.dumps(provenance))
     tags = [t.strip() for t in args.shapes.split(",") if t.strip()]
 
     results, calib = {}, []
@@ -281,6 +303,7 @@ def main():
             "diagnostic_policy": "HK_GEMM_RS_MI300X_TRACE is OFF for all "
                                  "campaign timing; no microsecond in this file "
                                  "is a performance number.",
+            "provenance": provenance,
             "shape": result["shape"],
             "plan": result["plan"],
             "ring": {"cu_count": CU_COUNT, "depth": DEPTH,

@@ -1,0 +1,97 @@
+{
+  "schema": "exp22.validation.v1",
+  "bin_us": 10.0,
+  "integral_tolerance": 0.1,
+  "arms": {
+    "ours": {
+      "source": "events_ours_s5.json",
+      "meta": {
+        "mfma_denominator": 272,
+        "mfma_denominator_note": "304 - NR: the CTAs that run a mainloop at all. Dividing by 304 would cap the proxy below 1 and invent an idle band.",
+        "expected_flops": 120259084288,
+        "expected_hbm_bytes": 1040187392,
+        "expected_xgmi_bytes": 58720256,
+        "wgm": 32,
+        "tiles": 512,
+        "num_pid_m": 32
+      },
+      "class_totals": null,
+      "integrals": {
+        "hbm_bytes": {
+          "expected": 1040187392,
+          "integral": 1040187392.0000004,
+          "rel_error": 3.43811001174242e-16,
+          "pass": true
+        },
+        "xgmi_bytes": {
+          "expected": 58720256,
+          "integral": 58720255.99999999,
+          "rel_error": -1.2688263138573217e-16,
+          "pass": true
+        },
+        "flops": {
+          "expected": 120259084288,
+          "integral": 120259084288.0,
+          "rel_error": 0.0,
+          "pass": true
+        }
+      },
+      "epoch_us": 680.0,
+      "all_pass": true
+    },
+    "b0_reference": {
+      "source": "events_b0_reference.json",
+      "meta": {
+        "mfma_denominator": 1,
+        "mfma_denominator_note": "arm (a) strips are binary occupancy bars: a kernel of a class either owns the device or does not. That non-overlap IS the finding.",
+        "expected_flops": 120259084288,
+        "expected_hbm_bytes": 371195904,
+        "expected_xgmi_bytes": 58720256
+      },
+      "class_totals": {
+        "mfma": {
+          "flops": 120259084288,
+          "hbm_bytes": 111149056,
+          "xgmi_bytes": 0
+        },
+        "hbm": {
+          "flops": 0,
+          "hbm_bytes": 134217728,
+          "xgmi_bytes": 0
+        },
+        "xgmi": {
+          "flops": 0,
+          "hbm_bytes": 125829120,
+          "xgmi_bytes": 58720256
+        },
+        "unclassified": {
+          "flops": 0,
+          "hbm_bytes": 0,
+          "xgmi_bytes": 0
+        }
+      },
+      "integrals": {
+        "hbm_bytes": {
+          "expected": 371195904,
+          "integral": 371195904.00000006,
+          "rel_error": 1.6057462955030513e-16,
+          "pass": true
+        },
+        "xgmi_bytes": {
+          "expected": 58720256,
+          "integral": 58720256.000000015,
+          "rel_error": 2.5376526277146434e-16,
+          "pass": true
+        },
+        "flops": {
+          "expected": 120259084288,
+          "integral": 120259084287.99998,
+          "rel_error": -1.2688263138573217e-16,
+          "pass": true
+        }
+      },
+      "epoch_us": 530.0,
+      "all_pass": true
+    }
+  }
+}

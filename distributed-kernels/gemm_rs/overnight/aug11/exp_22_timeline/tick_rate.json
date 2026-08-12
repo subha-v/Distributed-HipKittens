@@ -1,0 +1,72 @@
+{
+  "schema": "exp22.tick_rate.v1",
+  "method": "in-situ regression of rank-0 device span (ticks) on hipEvent device time (us) across shapes; slope = ticks/us",
+  "points": [
+    {
+      "tag": "s5",
+      "span_ticks": 68395,
+      "device_us_rank0": 725.4670262336731
+    },
+    {
+      "tag": "s5",
+      "span_ticks": 70280,
+      "device_us_rank0": 767.5639986991882
+    },
+    {
+      "tag": "s5",
+      "span_ticks": 68547,
+      "device_us_rank0": 742.4650192260742
+    },
+    {
+      "tag": "s6",
+      "span_ticks": 196617,
+      "device_us_rank0": 2004.5669078826904
+    },
+    {
+      "tag": "s6",
+      "span_ticks": 175691,
+      "device_us_rank0": 1803.5039901733398
+    },
+    {
+      "tag": "s6",
+      "span_ticks": 181775,
+      "device_us_rank0": 1862.0790243148804
+    },
+    {
+      "tag": "s2",
+      "span_ticks": 12065,
+      "device_us_rank0": 154.55499291419983
+    },
+    {
+      "tag": "s2",
+      "span_ticks": 12599,
+      "device_us_rank0": 166.6630059480667
+    },
+    {
+      "tag": "s2",
+      "span_ticks": 12645,
+      "device_us_rank0": 165.7010018825531
+    }
+  ],
+  "ticks_per_us": 99.88791427574935,
+  "intercept_ticks": -4411.312222754335,
+  "r2": 0.9998360653893624,
+  "sibling_hypothesis_ticks_per_us": 100.0,
+  "exp21_measured_ticks_per_us": 99.7358085,
+  "exp21_spread_pct": 0.0101,
+  "note": "The gfx950 sibling asserts s_memrealtime is 100 MHz (10 ns ticks). FIGURE_SPECS.md section 5 item 7 flags that as a quantity to verify on gfx942. The number used by the figure is the measured slope above; the hypothesis is recorded only so the two can be compared in result.md.",
+  "cross_checks": [
+    {
+      "reference": "exp_21 sat_calib",
+      "ticks_per_us": 99.7358085,
+      "rel_delta": 0.0015250869074706305,
+      "verdict": "agree"
+    },
+    {
+      "reference": "sibling gfx950 spec",
+      "ticks_per_us": 100.0,
+      "rel_delta": 0.0011208572425064744,
+      "verdict": "agree"
+    }
+  ]
+}

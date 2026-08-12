@@ -180,7 +180,134 @@ because the requirement was to report rather than bucket:
    on exactly that. Excluding them leaves 88 operator dispatches → 36 epochs,
    13 usable.
 
-### Arm (b) — built and correct-by-construction, queued on the lease
+## Phase 3 — arm (b) LANDED. Fig 3 ships with two arms.
+
+Re-run in full after exp_26 landed `HK_GEMM_RS_MI300X_RELEASE_GROUP_PERSHAPE=2`,
+which changes `rgroup` on shape 5 — the traced shape — from 1 to 2. Provenance is
+now stamped inside every `events_ours_*.json` (`module_sha256`, `source_sha256`,
+`captured_utc`) so a capture can never again be of an unprovable build. Source
+`gemm_rs_mi300x.cpp` sha256 `080b5719…ffa994`, `TRACE` reads 0 in the committed
+source, ON only for `build/gemm_rs_mi300x_trace.so`.
+
+### Gates
+
+| gate | result |
+|---|---|
+| flag-OFF resource-tuple parity, re-asserted | **PASS**, 0 failures. `off_absent` ≡ `off_present` on all 7 instantiations; both match the incumbent `98/104/136/246/248/91/92` with zero AGPR, zero scratch, zero VGPR spill |
+| ON cost (disclosure only) | +3 VGPRs (e.g. row 3 `136 → 139`), +12 SGPR spills, `ScratchSize` still 0, zero VGPR spills |
+| correctness, traced build, `1e-2` and `2e-3` | **PASS** both, `max|diff| = 4.88e-4`, on s5, s6 and s2 |
+| error bits / epoch cells / signals | clean; `protocol_problems: []` |
+| ring integrity | **0 drops**, 304/304 CTAs seen, 0 aborted, on all three shapes |
+| tick regression vs exp_21 | 99.8879 vs 99.7358 ticks/µs, **+0.153%, AGREE** (r² = 0.99984) |
+| tick regression vs sibling 100 MHz | **+0.112%, AGREE** |
+| integral conservation | PASS, residuals ~1e-16 — see the caveat below |
+
+Three independent calibrations of `s_memrealtime` on gfx942 now sit within
+0.27% of each other: exp_21's dedicated kernel against `steady_clock`
+(99.7358), this arm's in-situ regression of the production kernel's own span
+against hipEvent time (99.8879), and the sibling's declared gfx950 100 MHz. The
+x-axis is the best-supported quantity in the figure.
+
+### The integral check passes, and it proves less than its name suggests
+
+Residuals are `+3.4e-16 / -1.3e-16 / 0.0` on `hbm_bytes / xgmi_bytes / flops`.
+That is floating-point zero, and it should be: bytes per phase are analytic on
+the host and then **distributed across bins in proportion to interval overlap**,
+so re-summing them recovers the input by construction. **This is a conservation
+check of the binning arithmetic** — it proves no mass is lost or double-counted
+at bin edges, which is a real defect class and is now excluded — **but it is not
+an independent validation of the traffic model.** Stated plainly here so no
+reader mistakes ±0.00% for agreement between two instruments. The ±10% tolerance
+is vacuous against this check; the checks that can actually fail are below.
+
+### What actually cross-checks the model
+
+**The derived xGMI rate is physically admissible and lands where it should.**
+Our emit strip peaks at **420.4 GB/s** against ~448 GB/s of per-GPU xGMI — under
+the ceiling, and close enough to it that a wrong byte model would very likely
+have punched through. The reference arm's RCCL peaks at **244.4 GB/s** on the
+same axis from a separately-computed model, so **our epilogue reaches 1.72× the
+collective's peak egress rate** while moving the same 58.72 MB off-rank.
+
+### The figure's central result, quantified
+
+| shape 5 | ours | reference GEMM+RCCL |
+|---|---:|---:|
+| bins with MFMA proxy > 5% **and** xGMI > 1 GB/s | **17 of 68 (25%)** | **0 of 53 (0%)** |
+| MFMA occupancy proxy, peak / mean | 1.00 / 0.46 | 1.00 / 0.46 |
+| xGMI GB/s, peak / mean | 420.4 / 86.4 | 244.4 / 110.8 |
+| HBM GB/s, peak / mean | 3474.6 / 1529.7 | 3243.9 / 700.4 |
+
+The reference never once overlaps compute with communication; we do it in a
+quarter of the epoch. The MFMA row is **"CTAs in mainloop phase — an occupancy
+proxy"** with denominator **`304 − NR` = 272** on shape 5 (`mfma_denominator`
+is a column in `timeline_bins.csv`, not just an axis label).
+
+### The credit-wait interval: the two instruments DISAGREE, by 25–58×
+
+This is the item that was pre-registered as the thing to look for, and it did
+not come out as predicted. Per-CTA phase sums, rank 0, mean over the CTAs that
+run the phase (producers run concurrently, so the mean is the quantity
+comparable to a whole-kernel ablation pool; max is the tail beside it):
+
+| phase | s5 CTAs | s5 events | s5 mean µs | s5 max | s6 mean µs |
+|---|---:|---:|---:|---:|---:|
+| mainloop | 272 | 512 | 309.6 | 372.5 | 1224.4 |
+| **credit_wait** | 272 | 512 | **2.1** | 3.8 | **2.9** |
+| emit | 272 | 512 | 149.2 | 304.8 | 202.0 |
+| release | 272 | 272 | 52.1 | 91.3 | 39.5 |
+| ready_wait (reducers) | 32 | 64 | 613.7 | 636.6 | 1743.2 |
+| reduce (reducers) | 32 | 64 | 35.2 | 42.8 | 46.3 |
+
+exp_20's `sync` pool is 52.9 µs on s5 and 168.6 µs on s6. The ring says the
+producer's reuse-credit stall is **2.1 µs and 2.9 µs** — 0.04× and 0.02×. The
+instrument is not broken: the pair fires on every producer, 512 and 1024 times,
+with zero drops, and the stamps bracket exactly `m3::wait_reuse_credit` plus the
+`__syncthreads()` that broadcasts its result (verified in source, not assumed).
+
+**The two are not measuring the same quantity.** exp_20's `sync` gate is a macro
+ablation: it deletes the whole signalling path — producer credit wait, reducer
+ready-wait, and the release/publish ordering — and lets the schedule re-form,
+so its 52.9 µs is the cost of the *mechanism*, not of the producer's discrete
+stall. The ring says the producer almost never blocks on a credit. The
+back-pressure lands instead in two other places the ring can see: `emit`
+(149.2 µs, and 58.72 MB over that interval is ~394 GB/s aggregate, i.e. the
+interval is bandwidth-shaped) and `release` (52.1 µs, which contains the
+`vmcnt(0)` drain of the in-flight peer stores).
+
+**Consequence for the figure — and it is the good one.** The credit-wait pair
+was added so a stall could not hide inside the emit interval and deflate the
+xGMI strip. It shows the possible inflation is ~2.1 µs of a 149.2 µs interval,
+**≈1.4%**. The xGMI strip is honest to within 1.4% for that specific concern,
+and now that is measured rather than assumed.
+
+**Consequence for Phase 2 — flagged upward.** Anyone reading exp_20's table and
+setting out to attack a 52.9 µs "sync" pool would be attacking a producer stall
+that is 2.1 µs. The addressable mass in that neighbourhood is in `release` and
+in the tail of `emit`, not in credit acquisition.
+
+### exp_26's release change is directly visible in the trace
+
+On shape 5 the ring records **512 emit events but only 272 release events —
+exactly 1 per producer against ~1.9 tiles per producer**, i.e. one release per
+two tiles. That is `rgroup = 2`, observed rather than asserted. Shape 6 shows
+1024 emits to 256 releases, one per four tiles, matching the shipped
+`RELEASE_GROUP=4` there. **A reader comparing this release strip against
+exp_20's 65.4 µs release attribution must know it predates exp_26**, which cut
+shape 5's release count in half for −6.56% (≈ −43 µs); the strip plotted here
+is the shipped behaviour.
+
+### Arm (c): NOT taken. Fig 3 ships with two arms, and says so.
+
+The lease was free when arm (b) landed. I did not take it. Arm (c) needs the
+frozen rank-1 submission running under `rocprofv3`, and that integration is the
+one thing in this tree with a history of consuming multi-hour time-boxes without
+producing a number. Fig 3 is complete and internally cross-checked with two
+arms, and the contrast it exists to draw — 25% overlap against 0% — is fully
+carried by those two. A third arm is worth having; it is not worth risking a
+rushed one against a finished figure. Available as a separate dispatch.
+
+### Arm (b) — build notes (from the first attempt)
 
 The diagnostic build now compiles and loads (`gemm_rs_mi300x_trace.so`,
 429,264 B). One defect found and fixed, in the *verification*, not the build:

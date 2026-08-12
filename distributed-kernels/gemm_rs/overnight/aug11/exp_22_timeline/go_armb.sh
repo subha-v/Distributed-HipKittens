@@ -34,8 +34,14 @@ grep -n -A1 "ifndef HK_GEMM_RS_MI300X_TRACE\|ifndef HK_GEMM_RS_MI300X_RELEASE_GR
 
 echo
 echo "############ GATE 1 (CPU): flag-OFF resource-tuple parity, re-asserted ############"
-docker exec -w "$E22" dhk-gemmrs bash "$E22/parity_gate.sh" 2>&1 | tail -30
-parity_rc=${PIPESTATUS[0]}
+# Re-assert, not re-derive: parity_check.py compares the two OFF arms to each
+# other AND both to the incumbent tuple it has hard-coded. Skipped only if the
+# verdict on disk is newer than the source it was taken from.
+if [ "$E22/parity.json" -nt "$GEMM/gemm_rs_mi300x.cpp" ]; then
+  echo "parity.json is newer than the source; re-asserting from disk"
+else
+  docker exec -w "$E22" dhk-gemmrs bash "$E22/parity_gate.sh" 2>&1 | tail -30
+fi
 docker exec -w "$E22" dhk-gemmrs python3 -c "
 import json
 d = json.load(open('$E22/parity.json'))
@@ -48,6 +54,17 @@ echo "############ build the diagnostic module (flag ON) ############"
 docker exec -w "$E22" dhk-gemmrs bash "$E22/build_trace.sh" || {
   echo "ABORT: diagnostic build failed"; exit 1; }
 sha256sum "$E22/build/gemm_rs_mi300x_trace.so"
+
+# An earlier capture of unknown build identity is sitting here. Archive rather
+# than overwrite, so the new run's outputs cannot be confused with it and the
+# old one stays available if the two ever need comparing.
+PREV=$E22/prev_run_$(date +%H%M)
+if ls "$E22"/events_ours_*.json >/dev/null 2>&1; then
+  mkdir -p "$PREV"
+  mv "$E22"/events_ours_*.json "$E22/tick_rate.json" "$E22/validation.json" \
+     "$E22/timeline_bins.csv" "$PREV/" 2>/dev/null
+  echo "archived the previous capture to $PREV"
+fi
 
 echo
 echo "############ acquiring the lease (blocks; exp_24 may hold it) ############"
