@@ -30,6 +30,12 @@ while keeping operator policy separate from distributed mechanisms.
 - `dependencies.lock.json` — exact source hashes, toolchain record, derived-file
   ledger for the MPS sibling, and missing external pin called out explicitly.
 - `BUILDING.md` — explicit genco include roots, flags, and acceptance gates.
+- `overnight/` — date-organized experiment log (see `overnight/README.md`):
+  `aug10/` holds the MPS overnight loop that produced the current ratchet
+  (`mps_mega` 0.888× production, exp_01–exp_21, STATUS/LESSONS ledgers);
+  `aug11/` holds the planned NanoFlow-analog instrumentation experiments
+  (exp_22 saturation-vs-CTA-count ubench, exp_23 resource-utilization
+  timeline).
 - `../common/check_port_invariants.py` — static and optional upstream hash checks.
 
 The common HipKittens layer does not know routing, task descriptors, or the PF6
