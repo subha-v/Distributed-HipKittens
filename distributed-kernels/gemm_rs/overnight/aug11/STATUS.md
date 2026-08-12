@@ -2,11 +2,25 @@
 
 ## ===== MORNING READ: what landed, in one screen =====
 
-**Tonight was a figure night and the figures landed.** Six of seven queue items are
-complete with plot-ready data on disk; the seventh (exp_24, external ladders) got
-through one shape and is restarting. No ratchet change: the shipped kernel is
-untouched, so the gap to rank-1 is still **1.098× graded** — but see the caveat,
-because that number is now known to flatter us.
+**Tonight was a figure night, the figures landed, AND Track B landed a win.** All
+seven queue items produced data; exp_22's third arm is the only piece still owed.
+
+**Two things overturn what this project believed at the start of the night:**
+
+1. **We do NOT beat reference GEMM+RCCL under the harness that actually grades
+   us.** Our own controlled instrument says `ours/reference` = **0.8863×** (a win);
+   the official evaluator, one process per rank, says **1.1349×** (a loss). The
+   inflation from one instrument to the other is **arm-dependent** — ours 1.71×,
+   reference 1.33×, rank-1 1.16× — so it does not cancel in the ratio, and
+   **ordering disagrees on four of six shapes**. Our kernel pays the most, which
+   makes the **per-call host tax the largest single term separating us from rank-1
+   under the grading protocol** — no longer a residue. See exp_24 §12.
+2. **exp_26 landed a real optimization**: shape 5 **−6.56% (≈ −43 µs)**, 80/80
+   paired rounds in both allocation orders, full ladder green including M9,
+   bit-identical to the incumbent, register tuple unchanged. Pipelined geomean best
+   **203.78 → 200.00 µs**. The graded ratio at this config is **being re-measured
+   now** — exp_26's own ≈1.085× is an arithmetic projection from a pipelined
+   measurement and is explicitly not a graded measurement.
 
 | paper figure | experiment | headline number | data |
 |---|---|---|---|
@@ -16,7 +30,8 @@ because that number is now known to flatter us.
 | **Fig 4** waterfall | exp_23 | **1.113×** cumulative = **1.082× task order × 1.028× granularity**; 192/192 arms correct at both tolerances | `exp_23_waterfall/waterfall.json`, `stats.json` |
 | Q1 rung validity | exp_23 | four rungs are four binaries, distinguished at the sites their mechanisms predict | `exp_23_waterfall/fingerprints.json` |
 | Q5 sensitivity | exp_25 | **premise falsified in sign, then shown NOT IDENTIFIABLE** (mask ⟂ comm share confounded at ρ=±1.00) | `exp_25_sensitivity/knob_by_shape.json` |
-| Q6 ladders | exp_24 | **INCOMPLETE** — shape 2 done, restarting with a fixed drain check | `exp_24_ladders/ladders_quick.json` |
+| Q6 ladders | exp_24 | **LANDED, both instruments.** Controlled: **1.0971× graded / 1.1189× pipelined** vs rank-1, `ours/reference` 0.8863×. Evaluator: **1.6159×** and **1.1349×** — the ordering flips | `exp_24_ladders/ladders.json` |
+| — | Track B win | exp_26 | **LANDED** — per-shape release group; shape 5 **−6.56%**, 80/80 paired rounds, full ladder + M9 green | `exp_26_release_pershape/logs/ab_pershape_*.json` |
 
 ### What died tonight (negatives are results)
 
@@ -48,17 +63,41 @@ because that number is now known to flatter us.
    cannot dispatch, and cannot be signalled. The predicate lived wrong in **eleven
    files**; use `tools/kfd_live.sh`.
 
-### Where Track B stands
+### Where Track B stands — it got its turn and it landed
 
-No landed optimization, so **no ratchet movement** — and that is the honest
-statement. What tonight bought Track B is a *correct* target list: the mainloop is
-latency-bound and worth a realistic **−5.15% geomean** (≈250 µs on shape 6, 90 µs on
-shape 5), which would take the graded gap **1.098× → ~1.046×**; every individual
-mechanism is ≤1% of geomean, so it is a grind, not a win. The cheapest µs on the
-board is **release granularity** (exp_21: protocol costs 0.440× of egress at
-identical bytes), which exp_26 owns and which is **blocked on a real
-`VM_L2_PROTECTION_FAULT`** — a correctness bug, caught before it could ship because
-its macro was forced to default 0.
+**exp_26 shipped `RELEASE_GROUP_PERSHAPE = 2`.** Pipelined geomean best
+**203.78 → 200.00 µs**, entirely from shape 5's **−6.56%**. The release axis that
+exp_21 identified as the whole egress residue (protocol costs 0.440× of egress at
+identical payload bytes) paid out on the first attempt.
+
+Three things from it that outlive the win:
+
+- **How a rule is spelled matters as much as the rule.** `min(RELEASE_GROUP,
+  tiles_per_cta)` — the obvious spelling, and the one I proposed — costs **+2 VGPRs
+  on five of seven instantiations** against rows already at 246-248 of 256, and gave
+  back most of the win. Spelled as a **descending select over compile-time
+  literals** it costs **zero** registers and restores the incumbent's tuple exactly.
+  Same rule, same `rgroup` on every shape, **5 percentage points apart** in measured
+  effect. Never revert to `1`; revert to `0`.
+- **The `VM_L2_PROTECTION_FAULT` was the M9 harness, not the kernel** — the cheaper
+  of the two hypotheses, as ranked. M9's frozen golden predates exp_14's retile, and
+  row 3's stale `128/256/32` map **reads B rows out to 3072 of a 2880-row operand**:
+  the exact out-of-bounds read the retile removed, preserved inside the golden.
+  `gate_ladder.sh` now refuses a stale golden instead of faulting the node.
+- **The premise I gave for why this was safe was wrong**, though the conclusion
+  held. I argued `min(MAX, tiles_per_cta)` "keeps every group full" and so avoids
+  E3's failure mode. **Fullness was never the discriminator**: E3's 3.75% loss came
+  from a group of 2 on a CTA owning exactly 2 — a *full* group. `FULL_ONLY=1` at
+  `RG=4` spared that shape by arithmetic accident. What actually changes is
+  **publication delay**, and the measurement says the writeback saving beats it at
+  this size — which explains E3's result rather than contradicting it, since row 2
+  was an 88 µs shape and shape 5 is a 660 µs one.
+
+**Next for Track B, re-ranked by exp_24 §12:** the **per-call host tax** is now the
+top item, ahead of the mainloop. Under the evaluator our kernel inflates 1.71×
+against rank-1's 1.16×, so per-call, per-process cost is a first-order term rather
+than exp_12's footnote. The mainloop remains worth a realistic −5.15% geomean but is
+a grind of several ≤1% changes.
 
 > **Caveat on the headline ratio.** exp_24 measured the evaluator's harness
 > constant at **90.38 µs**, added identically to both arms, which compresses every

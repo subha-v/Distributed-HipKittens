@@ -1153,6 +1153,94 @@ sign between passes. **The positive control confirms the instrument has power**
   and the graded protocol is per-call with barriers, which is exactly where a
   release saving can behave differently. **Do not quote 1.085× as measured.**
 
+## exp_24 §12 — THE EVALUATOR OVERTURNS HALF THE VERDICT
+
+Two instruments, same night, same node, and they **disagree about the ordering of
+the arms**:
+
+| ratio | instrument A (controlled, same-run, 5 arms, full rotation) | instrument B (official evaluator, process-per-rank) |
+|---|---:|---:|
+| `ours / rank-1` | 1.0971 | **1.6159** |
+| `ours / reference` | **0.8863** (a win) | **1.1349** (a loss) |
+
+**Pre-registration expected a roughly common 25-45% inflation that would cancel in
+the ratios. It does not cancel — the inflation is arm-dependent:**
+
+| arm | A | B | B/A |
+|---|---:|---:|---:|
+| ours | 339.3 | 578.7 | **1.71×** |
+| reference | 382.8 | 509.9 | 1.33× |
+| rank-1 | 309.3 | 358.1 | 1.16× |
+
+**Ordering disagrees on four of six shapes**; the two instruments agree only on
+shapes 5 and 6, the largest, where kernel time dominates per-call overhead.
+
+**So "we beat reference GEMM+RCCL" must be retired as an unqualified claim.** Under
+instrument A it is true and carried by the small and mid shapes — we win on 1-4
+(0.75-0.93×) and **lose on 5 and 6** (1.0824, 1.0568). Under the harness that
+actually grades us it is **false outright**.
+
+**What it means**: instrument A's one-process / 8-device shortcut is **not a neutral
+reparametrization and it favours our kernel specifically.** Eight ranks share one
+launch path and one IPC setup, while the evaluator pays that cost eight times
+independently — and our kernel has the largest such cost of the three arms. That is
+exp_12's "per-call host tax" residue, now a **first-order term**.
+
+**What it does not mean**: that instrument A is wrong. A is the right tool for
+*attributing* a difference to the kernel (same-run interleaved, null arm, full
+rotation, per-shape floors). B is the right tool for *stating where we stand*.
+**Never average or blend them, and never quote A's `ours/reference` win as an
+evaluator result.** Confidence: medium-high on direction, medium on magnitude —
+instrument B ran **one rotation only**, and a second with the arm order reversed is
+the cheap next step.
+
+**Action: the per-call host tax moves to the top of the optimization queue**, ahead
+of the mainloop.
+
+### Two more results from that run worth keeping
+
+- **The netted graded table was DROPPED on both of its pre-set conditions**, which is
+  the right outcome. The `harness_floor` is **not shape-independent** — per-shape
+  medians `103 / 87 / 86 / 87 / 108 / 157` µs, a **67.5% spread scaling with operand
+  size**, because `clear_l2` and the input clone both grow — and its own rsd is
+  **88.7-215%**, median 171.6%. Had it been published it would have read
+  `ours/rank1` 1.0713× and `ours/reference` 0.7818×. **Those numbers must not be
+  used.** A netted table with a 172%-rsd, size-dependent subtrahend is more
+  misleading than none.
+- **The graded-flatters-us finding is real at the geomean but NOT per shape.**
+  Compression is +18.4% (best) at the geomean, but per shape it ranges **+88.4%
+  (shape 2) to −100.4% (shape 4)** — on two of six shapes graded *overstates* the
+  gap. Shape 2 was the quick run's only shape and is the **single most diluted shape
+  in the ladder**, so the striking 1.0496-vs-1.2207 result was true and **not
+  generalizable**. The claim survives only as a geomean claim.
+
+## exp_26 — the A/B INSTRUMENT was systematically biased, and the null arm caught it
+
+This is the most transferable finding of the night's Track B work, and it
+retroactively puts a question mark on any result produced by this instrument family.
+
+**The defect.** exp_05's paired A/B advances every arm one position per round:
+`order = (r + i) mod n`. Under that scheme arm *j* runs **exactly `(j − k) mod n`
+blocks after arm *k* in every round of every pass**. So any effect that depends on
+what ran immediately before a block is a **constant offset on that pair**, not noise
+that averages out. Rotation feels like the fix for order effects; for *pairwise*
+contrasts it is the opposite.
+
+**The evidence.** The **null arm** — two builds of the *same* rule — read **−2.29%
+on shape 6 in 57 of 64 paired rounds, at p < 10⁻⁴, on behaviour that cannot
+differ**, and −0.77% on shape 4 in 58 of 64. Drawing a **fresh permutation per
+round** collapsed it to −0.61%, and the real effect on shape 5 went from "inside the
+floor" to **80/80**.
+
+**Consequences.** The fix is four lines (shuffle per round, seeded per shape so
+forward and reversed passes stay independent draws). The defect lives in
+`experiments/exp_05_release_granularity/ab_release_group.py` **and everything
+descended from it**, and it is strong enough to have **manufactured or erased a
+result** in any experiment that used it. It should be fixed everywhere and past
+paired results re-examined. Note also that best-of-pass is the statistic that failed
+here — it compares two arms' luckiest rounds **from different draws**; the
+**within-round paired median** is what resolved.
+
 ## Measurement discipline carried into the figure work
 
 - **The harness bias is per-allocation AND partly allocation-ORDER, not

@@ -1,22 +1,40 @@
-exp_24: wire the repaired rank-1 driver and make the ladder survive a slow instrument B
+exp_24: evaluator cross-check overturns half the verdict -- we do NOT beat reference under the real harness
 
-Three fixes found by inspecting the two tools the parent pushed, before spending
-hours of GPU time on them:
+Instrument B (official eval.py, one process per rank, all three arms check: pass,
+no parser refusals) disagrees with instrument A on ARM ORDERING, which is the one
+thing it was built to test:
 
-- build_crosscheck filtered instrument B's popcorn files on a `benchmark`
-  filename prefix, but run_rank1_bench3.sh names its files after its pass label
-  (warm/test/bench), not after the eval.py mode. Every rank-1 number would have
-  been silently dropped. It now skips only test-mode files, which carry no timing
-  blocks, and flags rank-1's JIT-warming pass as throwaway so it cannot become
-  the headline.
-- The rank-1 cross-check arm now calls the repaired tools/run_rank1_bench3.sh,
-  which performs all three passes itself in the mandatory warm -> test -> bench
-  order. Its four repairs are verified mechanically before use and disclosed in
-  result.md 8.8 with the behaviour-preserving argument: they change only how the
-  arm is launched, never what it computes.
-- Aggregation now runs twice, once the moment instrument A finishes and again
-  after B, so a long or dead instrument B cannot take a completed six-shape
-  ladder down with it at the --expect-b assertion.
+                 A (graded)   B (evaluator)   B/A
+  ours              339.3         578.7      1.71x
+  reference         382.8         509.9      1.33x
+  rank-1            309.3         358.1      1.16x
 
-The run is detached behind tools/gpu_lease.sh with an exit trap, since the queue
-wait alone can exceed an hour and the ladder several more.
+  ours/rank1       1.0971        1.6159
+  ours/reference   0.8863        1.1349
+
+The inflation is arm-dependent rather than a shared constant, so it does not cancel
+in the ratios. Ordering disagrees on four of six shapes; A and B agree only on
+shapes 5 and 6, the two largest, where kernel time dominates per-call overhead.
+
+Reading: instrument A's one-process/8-device shortcut is not a neutral
+reparametrization and it favours our kernel specifically. A launches eight devices
+from one process sharing one launch path and one IPC setup; the evaluator pays that
+cost eight times. Ours inflates most, rank-1 least. That is exp_12's per-call host
+tax appearing as a first-order term instead of a footnote, and it moves that item up
+the optimization queue: under the protocol that actually grades us it is the largest
+single term separating us from rank-1.
+
+Neither instrument is discarded. A is the controlled one -- same-run interleaved,
+five arms including a null, full rotation, both protocols, a measured per-shape noise
+floor -- and is the right tool for attributing a difference to the kernel. B is the
+harness that grades us and is the right tool for stating where we stand. They answer
+different questions and must not be blended; A's ours/reference win must not be
+quoted as an evaluator result.
+
+Confidence is medium-high on direction, medium on magnitude: the flip is a 28-point
+swing, consistent across four shapes and monotone in shape size, but instrument B
+ran a single rotation with no repeat to bound drift. A second rotation with reversed
+arm order would settle it.
+
+rank-1's warm pass came out 0.97x its bench pass, confirming the repaired driver
+warms the JIT correctly and that the mandatory warm -> test -> bench order works.
