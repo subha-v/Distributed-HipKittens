@@ -36,32 +36,53 @@ SCRATCH = f"{HARNESS}/ablate"
 BUILD = f"{HARNESS}/build"
 
 # (anchor, replacement) pairs. Each anchor must appear exactly once.
+#
+# ANCHOR HYGIENE, learned by paying for it (aug11/exp_20_attribution): three of
+# these nine anchors were dead against the kernel they were meant to cut, and
+# `generate()` raises on the first one, so the whole table was unobtainable.
+# Two causes, both avoidable:
+#   - Anchors that quoted COMMENT text. E3's group loop rewrote the egress
+#     comment from "per-band credit wait, emit, one release, publish" to
+#     "per-band credit wait, then emit", killing the mainloop's #endif anchor.
+#     Every anchor below now quotes only executable code.
+#   - Anchors that carried the WRONG INDENTATION. E3 wrapped the tile body in an
+#     outer group loop, moving the mainloop from 12 to 16 spaces and the emit
+#     body from 16 to 20. A leading-whitespace mismatch on the FIRST line of a
+#     multi-line anchor still matches (str.count sees the tail of the real
+#     indent), which is why anchors 1 and 8 kept working by luck while 2, 3 and
+#     9 -- whose mismatch is on a CONTINUATION line, where the newline pins the
+#     column -- silently went to zero. Indentation below is exact.
 PATCHES = [
     # 1. mainloop
     #
     # Re-anchored after exp_03 (E1b) replaced the fused `G::load` with the
-    # issue/commit split. Anchor on the k=0 prologue issue rather than on the
-    # comment above it: the in-loop issues carry `k + 1`, so this text is
-    # unique, and it does not depend on comment wording that gets edited.
-    ("""            m3::load_issue<ST_A, NT>(abuf, g.a, {0, 0, tm, 0});""",
+    # issue/commit split, and again after E3 re-indented the body. Anchor on the
+    # k=0 prologue issue pair: the in-loop issues carry `kn`, so `{0, 0, tm, 0}`
+    # is unique, and no comment wording is involved.
+    ("""                m3::load_issue<ST_A, NT>(abuf, g.a, {0, 0, tm, 0});
+                m3::load_issue<ST_B, NT>(bbuf, g.b, {0, 0, tn, 0});""",
      """#if !ABL_SKIP_MAINLOOP
-            m3::load_issue<ST_A, NT>(abuf, g.a, {0, 0, tm, 0});"""),
-    ("""                __syncthreads();
-            }
-
-            // ---- egress: per-band credit wait, emit, one release, publish ---""",
-     """                __syncthreads();
-            }
-#endif
-
-            // ---- egress: per-band credit wait, emit, one release, publish ---"""),
-    # 2. emit destination: same bytes, same path, local slot
-    ("""                const int lrow = (row0 - dest * slice) / EB;
-                int dest_eff = dest;""",
-     """                const int lrow = (row0 - dest * slice) / EB;
-                int dest_eff = dest;
+                m3::load_issue<ST_A, NT>(abuf, g.a, {0, 0, tm, 0});
+                m3::load_issue<ST_B, NT>(bbuf, g.b, {0, 0, tn, 0});"""),
+    # Closes the mainloop cut on the k-loop's own last statements plus its brace
+    # -- structural, and `As[(k + 1) & 1]` appears exactly once in the file.
+    ("""                    m3::load_commit<NT>(As[(k + 1) & 1], abuf);
+                    m3::load_commit<NT>(Bs[(k + 1) & 1], bbuf);
+                    __syncthreads();
+                }""",
+     """                    m3::load_commit<NT>(As[(k + 1) & 1], abuf);
+                    m3::load_commit<NT>(Bs[(k + 1) & 1], bbuf);
+                    __syncthreads();
+                }
+#endif"""),
+    # 2. emit destination: same bytes, same path, local slot.
+    # The declaration alone is unique and is the whole anchor; the previous
+    # version dragged in the `lrow` line above it, which also occurs in the
+    # credit-wait block and at a different indent.
+    ("""                    int dest_eff = dest;""",
+     """                    int dest_eff = dest;
 #if ABL_EMIT_LOCAL
-                dest_eff = me;   // same volume, no XGMI
+                    dest_eff = me;   // same volume, no XGMI
 #endif"""),
     # 3. reduce
     ("""        m3::pull_sum_bf16_strip_mlp8(""",
@@ -91,13 +112,13 @@ PATCHES = [
 #endif
 
     const int red_tiles = lrows * cols;"""),
-    ("""            if (threadIdx.x < (unsigned)bands) {""",
+    ("""                if (threadIdx.x < (unsigned)bands) {""",
      """#if !ABL_NO_PROTOCOL
-            if (threadIdx.x < (unsigned)bands) {"""),
-    ("""            __syncthreads();
-            if (m3::error_bit_set(errp, m3::ERR_PRODUCER_CREDIT)) return;""",
-     """            __syncthreads();
-            if (m3::error_bit_set(errp, m3::ERR_PRODUCER_CREDIT)) return;
+                if (threadIdx.x < (unsigned)bands) {"""),
+    ("""                __syncthreads();
+                if (m3::error_bit_set(errp, m3::ERR_PRODUCER_CREDIT)) return;""",
+     """                __syncthreads();
+                if (m3::error_bit_set(errp, m3::ERR_PRODUCER_CREDIT)) return;
 #endif"""),
 ]
 

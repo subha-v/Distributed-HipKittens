@@ -63,6 +63,38 @@ teaches.
      arithmetic — it removes a producer wave on **none** of the six shapes.
   That is a positive, a positive, and a negative, all on one architecture.
 
+## exp_20 (in flight) — the attribution instrument was UNOBTAINABLE, not stale
+
+Both ledgers say the attribution table is "stale" (predates exp_05/E3 and
+exp_13). That undersold the problem. `harness/exp_ablation.py` cuts the kernel
+by exact-substring anchors and `generate()` asserts `count(anchor) == 1`,
+**raising on the first failure**, so a single dead anchor makes the entire
+six-arm table unobtainable rather than inaccurate. Three of the nine anchors
+were dead against the current kernel, both causes introduced by E3's release
+grouping:
+
+1. **Anchors that quoted COMMENT text.** E3 rewrote the egress comment from
+   "per-band credit wait, emit, one release, publish" to "per-band credit wait,
+   then emit", which killed the anchor that closed the mainloop cut. Every
+   anchor is now re-cut to quote **only executable code**.
+2. **Anchors carrying the wrong INDENTATION.** E3 wrapped the tile body in an
+   outer group loop, moving the mainloop from 12 spaces to 16 and the emit body
+   from 16 to 20. The subtle part, and the reason this hid: a leading-whitespace
+   mismatch on the **first** line of a multi-line anchor still matches, because
+   `str.count` happily matches the tail of the real indent — but a mismatch on a
+   **continuation** line cannot, because the preceding newline pins the column.
+   So anchors 1 and 8 kept working by luck while 2, 3 and 9 went silently to
+   zero.
+
+Consequence to carry forward: **any change that re-indents or re-comments the
+tile body silently disables the attribution instrument**, and the failure
+presents as a `SystemExit` at whichever anchor happens to be checked first,
+which reads like a broken script rather than a stale table. `exp_ablation.py`'s
+anchor set is now a maintenance dependency of every mainloop/egress edit; check
+it in the same commit. The repair (re-anchored to executable code at exact
+indentation, with the rationale in-file) is behaviour-preserving: the six cuts
+are the same six cuts.
+
 ## Measurement discipline carried into the figure work
 
 - **The harness bias is per-allocation AND partly allocation-ORDER, not

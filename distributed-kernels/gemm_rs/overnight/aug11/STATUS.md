@@ -65,12 +65,36 @@ Since then two more landed:
 
 | # | experiment | paper figure | status |
 |---|---|---|---|
-| exp_20 | bottleneck attribution refresh | Q3 | **running** |
-| exp_21 | saturation vs CTA count (NanoFlow Fig 7 analog) | Fig 2 / Q4 | queued |
-| exp_22 | per-layer resource timeline (NanoFlow v2 Fig 10 analog) | Fig 3 / Q4 | queued |
-| exp_23 | knob waterfall — **the money figure** | Fig 4 / Q1 | queued |
+| exp_20 | bottleneck attribution refresh | Q3 | **running** (GPU) |
+| exp_21 | saturation vs CTA count (NanoFlow Fig 7 analog) | Fig 2 / Q4 | **building** (greenfield ubench) |
+| exp_22 | per-layer resource timeline (NanoFlow v2 Fig 10 analog) | Fig 3 / Q4 | queued — needs new kernel instrumentation |
+| exp_23 | knob waterfall — **the money figure** | Fig 4 / Q1 | **building** (4 rung binaries + fingerprints) |
 | exp_24 | external ladders refresh | Q6 | queued |
-| exp_25 | per-shape sensitivity readout | Q5 | queued |
+| exp_25 | per-shape sensitivity readout | Q5 | queued (derives from exp_20 + exp_23) |
+
+Figure specs distilled from the sibling MI350X branch (read-only, via
+`git show`) are in `aug11/FIGURE_SPECS.md` — including the ten MI350X-only
+facts (76.8/537.6 GB/s ceilings, 256-CU grids, gfx950 occupancy claims,
+`s_memrealtime` tick rate) that must be **re-measured on gfx942** rather than
+quoted. `docs/distributed/PAPER.md` was found and its Q1-Q6 definitions are
+captured there.
+
+## Session infrastructure notes
+
+- **`tools/push_scoped.ps1` is new and is the only push tool safe to use while
+  several agents are working.** `push.ps1` scps the whole overnight tree *plus*
+  all four kernel sources, so one agent running it ships every other agent's
+  half-written file and can silently revert a validated kernel while leaving
+  `build/*.so` intact. The scoped tool pushes a caller-declared path set.
+- Two facts from tonight's harness survey that change how the queue is run:
+  **`exp_ablation.py` emits no JSON at all** (stdout table only, so every
+  attribution deliverable needs a wrapper), and **there is no CTA-count or grid
+  override anywhere in the codebase** (grid is hardcoded `dim3(m3::CU_COUNT)`
+  = 304; only the host scalar `num_gemm_ctas` varies). exp_21 therefore cannot
+  bend the production kernel and is a standalone module.
+- **No per-CTA timestamp instrumentation exists** (no `s_memrealtime`,
+  `wall_clock64` or trace buffer anywhere in the kernel). exp_22 arm (b) is
+  greenfield kernel work behind a compile flag, gated on resource-tuple parity.
 
 Then **Phase 2**: the optimization loop resumes against the refreshed profile.
 
