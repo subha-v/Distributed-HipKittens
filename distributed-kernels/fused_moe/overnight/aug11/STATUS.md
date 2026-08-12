@@ -203,6 +203,70 @@ and `ts_combine_us` are predicted to move in **opposite** directions and one
 total cannot separate them. If M6 drops and the combine rises by more, the
 response is to chase the epilogue's register allocation — not to close the axis.
 
+## exp_29 design verdict — SAFE but readiness-limited; KILLED as specified
+
+The pipelined combine is **provably safe** — the consume-and-zero proof survives
+because pipelining moves *when* the zero happens, not *what gates it*, and each
+slot row has exactly one writing rank so the flag is a complete gate. It is
+still not worth building, for a reason that has nothing to do with correctness.
+
+**The prize is readiness-limited, not capacity-limited.** A token becomes
+reducible only when the **last of its 8 routed experts' M7 tiles** completes.
+Top-k picks 8 distinct experts, a tile carries exactly one expert, and M7 walks
+tile index roughly linearly, so `P(reducible by t) = (t/S)^8`. **The median
+token is reducible with 8.3 % of M7 remaining; at M7's halfway point 0.4 % of
+tokens are reducible.** No pool size, scheduling policy or primitive moves that
+curve — it belongs to **M7's task order**, not to the combine.
+
+Predicted `Δcombine = −112 µs` against `ΔM7 = +90 µs`, net **≈ −22 µs, band
+−230 to +160** — straddling zero, and screens cannot adjudicate a 0.3 % effect
+against a 0.52 % σ. Two sub-policies died on arithmetic on the way: pool-only
+needs `C ≈ 43` to reach coverage, which costs +338 µs of M7 to buy at most
+430 µs of combine; backlog-driven has nothing to tune, because the backlog is
+~0 for 80 % of M7 and then floods.
+
+One structural finding worth keeping: **the CTA that publishes `row_ready` is
+usually not even on the same GPU** (≈19,089 peer stores vs ≈2,727 self stores),
+and `tau` is nowhere on the producing rank, so a per-token counter bumped by the
+publisher is *structurally impossible* — it would need a new `tau_table` plus
+~21.5k system-scope remote RMWs injected into M7, i.e. exp_20's +624 µs
+peer-write class.
+
+### Two things exp_29 handed back that are worth more than its own mechanism
+
+**S-1 — a one-line wave-uniform load guard, ~154 MiB of deleted loads.**
+`KRN:547` issues the slot load unconditionally and guards only the accumulate at
+`KRN:561`. `fanout[t]` is **wave-uniform** (every lane computes it at
+`KRN:484-489`), so hoisting the guard deletes **34 % of the combine's read
+instructions** — today out-of-fanout lanes re-read one 14,336 B region.
+**Worth more than the entire pipelining mechanism, with none of its risk.**
+Needs a 10-minute ISA check first in case LLVM already sinks the load.
+
+**The real unlock — reorder M7 nc-major.** `task = nc·num_tiles + tile` turns
+the readiness curve into a 16-step staircase with **15/16 of the combine
+unblocked before M7 ends**, lifting the ceiling from ~17 % to ~85 %. That is
+M-series **M8 / COMET layer-1**, and it is now `exp_30`.
+
+## THE MEASUREMENT-INTEGRITY BUG — applies to every number tonight
+
+**`out` is never cleared between epochs, and the campaign feeds identical inputs
+every iteration. So any bug whose signature is "this row didn't get written"
+returns the previous epoch's bit-identical correct answer** — invisible to
+`[MOK GATE]`, invisible to `combine_bit_exact`, invisible to 600 soak epochs. A
+rare premature-ready is similarly invisible: one token short by one of ~5.25
+addends is a 19 % error on that token, which dilutes to ~0.3 % against a 10 %
+gate.
+
+This is the same class as exp_25's `a2_done` landmine (identical per-iteration
+input makes epoch `e−1`'s `A2q` bit-identical to epoch `e`'s, so a missing
+readiness edge returns the right answer *and posts the best number in the
+sweep*). Both say the gate ladder is weaker than it looks against
+staleness-shaped bugs.
+
+**Fix: poison `out` with NaN between iterations — one host-side line, no kernel
+change.** It collapses the whole class, and the zero-nonfinite gate already
+exists to catch it. This lands before any further mechanism is timed.
+
 ### Two corrections to `CONTEXT/m6_m7_structure.md` from the ISA read
 
 1. **§5.3 item 4 is wrong.** M6's K-loop *does* contain a compiler-inserted
