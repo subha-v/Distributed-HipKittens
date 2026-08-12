@@ -408,6 +408,57 @@ staleness-shaped bugs.
 change.** It collapses the whole class, and the zero-nonfinite gate already
 exists to catch it. This lands before any further mechanism is timed.
 
+### exp_26 rev2 (`7a06fb56`) — the four hints are four different knobs
+
+Builds turned out to be ~6 s, so all **16 masks** were enumerated rather than
+sampled, and the effects factor cleanly. Bits are `DSW | MFMA | VMEM | DSR`:
+
+| bit | effect | resource cost |
+|---|---|---|
+| **2 — MFMA** | **the entire 33/49/14 → 48/48/0 barrier realignment** | **none — every resource field byte-identical to the donor** |
+| 0 — DS read | the drain move (`mfma 0 → 48`) **and all 96 migrated scratch accesses** | scratch instructions 21 → 114 |
+| 1 — VMEM | **exact no-op** — all eight pairs differing only in bit 1 are byte-identical (phase 1's `16+kGM = 19` already matched the measured 19) | — |
+| 3 — DS write | perturbs the bytes, moves no metric | — |
+
+So the first report described **two independent effects on different bits as one
+effect.** The drain move and the scratch migration are both pure functions of
+bit 0 and 16 masks leave nowhere for them to come apart — but the question is
+moot, because **bit 2 buys the barrier win for free.**
+
+**Recommended arm: mask 4.** It is the only bit that changes the schedule while
+leaving the resource profile byte-identical to the donor, which makes it a
+genuinely single-variable arm: if the campaign moves, the barrier realignment
+moved it. That also yields a clean 2×2 ladder — **mask 0** (control) / **4**
+(barrier only, free) / **1** (drain only, +scratch) / **5** (both, +scratch).
+
+**The migration is worse than "96 more spill accesses", and it is a known
+regression.** A `-gline-tables-only` build (verified not to perturb codegen)
+attributes all 96 to a **single source line**: `n2_phase2_gm_mps.cpp:145`, the
+`peer_tab[xr >> maxtok_sh]` base load in the remote-atomic accumulate loop.
+Across the kernel's 282 `flat_atomic_pk_add_bf16`, bit 0 puts a `scratch_load`
+exactly **17 instructions ahead of 96 of them** — constant min = median = max,
+i.e. one inlined shape — which is character-for-character the regression that
+exp_21 restructured `throttle_plan` into four booleans to remove. Bit 0
+re-triggers it *from the phase-1 side* by pushing whole-function pressure past
+the same 256-VGPR ceiling. Note the direction: spilled **bytes go down**
+(144 → 128 B/lane, 16 → 14 VGPRs) while **accesses go up** 21 → 114 — the
+allocator evicted fewer values but picked the one read on the hottest path.
+Follow-up worth taking: relieve one live VGPR in phase 2's epilogue and bit 0
+becomes free. That needs both files under one owner.
+
+**Mask 0 plus the two new task macros is `.text`-byte-identical to the donor
+build** (`96049dfa…`, 166,656 B, identical resource tuple and K-loop timeline),
+so `N2GM_P1_TASK_START`/`_STRIDE` compile to the donor's loop exactly and F1 is
+unblocked. Diff is now +174 / −9 (a per-bit mask made the "wrap in `#else`"
+shape untenable); the `−0` provenance claim is replaced by the stronger measured
+one.
+
+**Phase 2's hint, measured directly: 17 VMEM reads per half against a hint
+asking for 29.** The one-line patch to `14 + kGM` preserves the `kGM = 1` anchor
+for free (`8 + 7·1 = 15 = 14 + 1`), so it is a parameterization fix, not a
+retune — same property that made phase 1's safe. Written up with line numbers
+and a content match in `activate.md` §7.1 as **exp_31**.
+
 ### Two corrections to `CONTEXT/m6_m7_structure.md` from the ISA read
 
 1. **§5.3 item 4 is wrong.** M6's K-loop *does* contain a compiler-inserted
