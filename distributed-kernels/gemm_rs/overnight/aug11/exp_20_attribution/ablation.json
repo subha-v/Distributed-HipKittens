@@ -1,0 +1,640 @@
+{
+  "experiment": "aug11/exp_20_attribution",
+  "what": "macro-gated stage attribution of the fused GEMM->ReduceScatter megakernel at the current best config",
+  "generated_utc": "2026-08-12T09:10:46Z",
+  "source_log": "/home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_20_attribution/reattribute_run.log",
+  "iters": 40,
+  "config": {
+    "wgm4": "0",
+    "release_group": "4",
+    "release_group_full_only": "1",
+    "grid_ctas": 304,
+    "world": 8,
+    "arch": "gfx942 (MI300X, SPX, 304 CU)",
+    "note": "per-shape bm/bn/bk/nr are on each shape record; host_abi.hpp:109-116",
+    "expected_shape6_full_us": "1670",
+    "tolerance_pct": "6",
+    "freshness": "passed",
+    "negative_controls": "0",
+    "tile_sweep": "0",
+    "shape_table": "32/64/128:NR56, 64/128/64:NR32, 128/192/32:NR32, 256/256/32:NR32, 256/256/32:NR32, 256/256/32:NR48",
+    "kernel_md5": "ef8cbb202575285ac58d2c0f262a9eaa",
+    "ablate_scratch_md5": "c874231b26e23601a5c5786b83eafa42",
+    "node": "banff-sc-cs47-05.dh170.dcgpu",
+    "gpus": "8xMI300X_gfx942_SPX",
+    "cu_per_gpu": "304",
+    "clocks": "perf_determinism_1900",
+    "canonical_log": "/home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/experiments/logs/reattribute_20260812T085932Z.log"
+  },
+  "clocks": {
+    "before": "perf_determinism on 8/8 GPUs",
+    "after": "perf_determinism on 8/8 GPUs"
+  },
+  "freshness_gate": {
+    "expected_shape6_full_us": 1617,
+    "tolerance_pct": 12,
+    "measured_shape6_full_us": 1632.5,
+    "passed": true
+  },
+  "noise_floor_pct": {
+    "1": 3.48,
+    "2": 0.93,
+    "3": 1.61,
+    "4": 2.41,
+    "5": 2.17,
+    "6": 4.28
+  },
+  "schema": {
+    "unit": "microseconds, pipelined wall time per world-8 operation, 40 iterations per cell",
+    "shapes[].full_us": "unablated scratch build of the current kernel; the denominator for every share",
+    "shapes[].arms_us": "raw pipelined wall time of each single-cut arm; every stage below is full_us minus one of these",
+    "shapes[].stages_us.gemm": "full - nomain: the k-loop's MFMA math plus its A/B global->LDS traffic",
+    "shapes[].stages_us.egress": "full - emitlocal: the peer/xGMI cost of egress with store volume and instruction count held fixed (same bytes to the local rank's own slot)",
+    "shapes[].stages_us.reduce": "full - nored: the reducer's 8-source pull, fp32 sum and bf16 store",
+    "shapes[].stages_us.sync": "full - noproto: all cross-rank synchronization (credit waits, ready publishes, reducer participation)",
+    "shapes[].stages_us.release": "full - norelease: the per-release-group buffer_wbl2 sc0 sc1 L2 writeback plus its vmcnt drain",
+    "shapes[].stage_share": "stages_us / full_us",
+    "shapes[].floor_pct / floor_us": "the shape's allocation-noise floor. A stage whose |delta| is under floor_us is NOT measured; see stage_clears_floor.",
+    "shapes[].stage_clears_floor": "per stage, |delta| >= floor_us",
+    "shapes[].ranked_stages": "stages by absolute us, largest first; entries that do not clear the floor are still listed but must not be ranked against each other",
+    "shapes[].stage_sum_over_full": "sum of the five stages / full. Single-cut deltas OVERLAP wherever the phases overlap, so this is NOT expected to be 1.0 and the stages are NOT a budget: >1 means the phases genuinely overlap in the pipeline, <1 means part of full is priced by no cut.",
+    "ranking": "stages ordered by absolute us on shape 6 (the largest graded shape); also carries each stage's summed us over all six shapes and its mean share.",
+    "shapes[].geometry": "arithmetic on the landed shape table, NOT a measurement. waves_x_k_iters is the overhead-bound cost column (producer waves x mainloop iterations per tile); effective_release_group is 1 wherever tiles_per_cta < RELEASE_GROUP, because RELEASE_GROUP_FULL_ONLY=1 refuses a partial group.",
+    "shapes[].x_sol": "full_us / the published task.yml SOL for this shape. The SOL table is the bf16 MFMA roofline with no budget for the reduce-scatter, so it is a scale marker, not a target.",
+    "shapes[].m7": "same-config M7 gate timing (3 rotations x 50 pipelined iters, order-rotated). full_vs_m7_mean is the freshness cross-check: the ablation's `full` arm is a separate build of the same source, so it should agree with M7 within the shape's allocation-noise floor. bound=HOST means issuing eight launches from one CPU thread costs >0.9x the wall, i.e. the number describes the host, not the kernel."
+  },
+  "caveats": [
+    "Only the `full` arm is numerically correct; the other five exist solely to price a phase and are expected to fail verification.",
+    "Deltas are single-cut and therefore NOT additive. Rank stages by size; do not treat the sum as a budget.",
+    "`norelease` removes publication ordering and is not a legal kernel.",
+    "One process drives all 8 devices here, which is not the evaluator's topology.",
+    "Shape 1 is bound=HOST at ~10x SOL: a ~63 us call whose stage deltas are a few us and are inside its floor. No mainloop conclusion may be drawn from it."
+  ],
+  "shapes": [
+    {
+      "shape_index": 1,
+      "shape": "64x7168x18432",
+      "m": 64,
+      "n": 7168,
+      "k": 18432,
+      "has_bias": false,
+      "bm": 32,
+      "bn": 64,
+      "bk": 128,
+      "nr": 56,
+      "full_us": 67.1,
+      "arms_us": {
+        "nomain": 64.6,
+        "emitlocal": 64.5,
+        "nored": 67.4,
+        "noproto": 68.1,
+        "norelease": 67.6
+      },
+      "stages_us": {
+        "gemm": 2.5,
+        "egress": 2.6,
+        "reduce": -0.3,
+        "sync": -1.0,
+        "release": -0.5
+      },
+      "stage_share": {
+        "gemm": 0.0373,
+        "egress": 0.0387,
+        "reduce": -0.0045,
+        "sync": -0.0149,
+        "release": -0.0075
+      },
+      "floor_pct": 3.48,
+      "floor_us": 2.34,
+      "stage_clears_floor": {
+        "gemm": true,
+        "egress": true,
+        "reduce": false,
+        "sync": false,
+        "release": false
+      },
+      "ranked_stages": [
+        "egress",
+        "gemm",
+        "reduce",
+        "release",
+        "sync"
+      ],
+      "stage_sum_us": 3.3,
+      "stage_sum_over_full": 0.0492,
+      "geometry": {
+        "bm": 32,
+        "bn": 64,
+        "bk": 128,
+        "num_reducer_ctas": 56,
+        "num_gemm_ctas": 248,
+        "k_local": 2304,
+        "k_iters": 18,
+        "gemm_tiles": 224,
+        "producer_waves": 1,
+        "waves_x_k_iters": 18,
+        "last_wave_fill": 0.9032,
+        "tiles_per_cta": 1,
+        "effective_release_group": 1,
+        "release_grouping_active": false
+      },
+      "sol_us": 6.46,
+      "x_sol": 10.39,
+      "m7": {
+        "mean_us": 66.41,
+        "device_max_us": 64.29,
+        "samples_us": [
+          66.37923419475555,
+          65.88585674762726,
+          66.95710122585297
+        ],
+        "full_vs_m7_mean": 1.0104,
+        "host_issue_us_per_op": 62.34,
+        "bound": "HOST"
+      }
+    },
+    {
+      "shape_index": 2,
+      "shape": "512x4096x12288",
+      "m": 512,
+      "n": 4096,
+      "k": 12288,
+      "has_bias": true,
+      "bm": 64,
+      "bn": 128,
+      "bk": 64,
+      "nr": 32,
+      "full_us": 67.5,
+      "arms_us": {
+        "nomain": 66.4,
+        "emitlocal": 64.9,
+        "nored": 68.3,
+        "noproto": 64.9,
+        "norelease": 66.6
+      },
+      "stages_us": {
+        "gemm": 1.1,
+        "egress": 2.6,
+        "reduce": -0.8,
+        "sync": 2.6,
+        "release": 0.9
+      },
+      "stage_share": {
+        "gemm": 0.0163,
+        "egress": 0.0385,
+        "reduce": -0.0119,
+        "sync": 0.0385,
+        "release": 0.0133
+      },
+      "floor_pct": 0.93,
+      "floor_us": 0.63,
+      "stage_clears_floor": {
+        "gemm": true,
+        "egress": true,
+        "reduce": true,
+        "sync": true,
+        "release": true
+      },
+      "ranked_stages": [
+        "egress",
+        "sync",
+        "gemm",
+        "release",
+        "reduce"
+      ],
+      "stage_sum_us": 6.4,
+      "stage_sum_over_full": 0.0948,
+      "geometry": {
+        "bm": 64,
+        "bn": 128,
+        "bk": 64,
+        "num_reducer_ctas": 32,
+        "num_gemm_ctas": 272,
+        "k_local": 1536,
+        "k_iters": 24,
+        "gemm_tiles": 256,
+        "producer_waves": 1,
+        "waves_x_k_iters": 24,
+        "last_wave_fill": 0.9412,
+        "tiles_per_cta": 1,
+        "effective_release_group": 1,
+        "release_grouping_active": false
+      },
+      "sol_us": 8.19,
+      "x_sol": 8.24,
+      "m7": {
+        "mean_us": 82.78,
+        "device_max_us": 80.5,
+        "samples_us": [
+          66.42207503318787,
+          114.11905288696289,
+          67.79618561267853
+        ],
+        "full_vs_m7_mean": 0.8154,
+        "host_issue_us_per_op": 62.43,
+        "bound": "device"
+      }
+    },
+    {
+      "shape_index": 3,
+      "shape": "2048x2880x2880",
+      "m": 2048,
+      "n": 2880,
+      "k": 2880,
+      "has_bias": true,
+      "bm": 128,
+      "bn": 192,
+      "bk": 32,
+      "nr": 32,
+      "full_us": 87.7,
+      "arms_us": {
+        "nomain": 71.5,
+        "emitlocal": 67.1,
+        "nored": 79.8,
+        "noproto": 71.5,
+        "norelease": 81.2
+      },
+      "stages_us": {
+        "gemm": 16.2,
+        "egress": 20.6,
+        "reduce": 7.9,
+        "sync": 16.2,
+        "release": 6.5
+      },
+      "stage_share": {
+        "gemm": 0.1847,
+        "egress": 0.2349,
+        "reduce": 0.0901,
+        "sync": 0.1847,
+        "release": 0.0741
+      },
+      "floor_pct": 1.61,
+      "floor_us": 1.41,
+      "stage_clears_floor": {
+        "gemm": true,
+        "egress": true,
+        "reduce": true,
+        "sync": true,
+        "release": true
+      },
+      "ranked_stages": [
+        "egress",
+        "gemm",
+        "sync",
+        "reduce",
+        "release"
+      ],
+      "stage_sum_us": 67.4,
+      "stage_sum_over_full": 0.7685,
+      "geometry": {
+        "bm": 128,
+        "bn": 192,
+        "bk": 32,
+        "num_reducer_ctas": 32,
+        "num_gemm_ctas": 272,
+        "k_local": 360,
+        "k_iters": 12,
+        "gemm_tiles": 240,
+        "producer_waves": 1,
+        "waves_x_k_iters": 12,
+        "last_wave_fill": 0.8824,
+        "tiles_per_cta": 1,
+        "effective_release_group": 1,
+        "release_grouping_active": false
+      },
+      "sol_us": 23.04,
+      "x_sol": 3.81,
+      "m7": {
+        "mean_us": 87.37,
+        "device_max_us": 85.6,
+        "samples_us": [
+          87.82759308815002,
+          87.0291143655777,
+          87.2669368982315
+        ],
+        "full_vs_m7_mean": 1.0037,
+        "host_issue_us_per_op": 62.15,
+        "bound": "device"
+      }
+    },
+    {
+      "shape_index": 4,
+      "shape": "4096x4096x4096",
+      "m": 4096,
+      "n": 4096,
+      "k": 4096,
+      "has_bias": false,
+      "bm": 256,
+      "bn": 256,
+      "bk": 32,
+      "nr": 32,
+      "full_us": 203.5,
+      "arms_us": {
+        "nomain": 165.0,
+        "emitlocal": 117.3,
+        "nored": 184.6,
+        "noproto": 171.8,
+        "norelease": 185.2
+      },
+      "stages_us": {
+        "gemm": 38.5,
+        "egress": 86.2,
+        "reduce": 18.9,
+        "sync": 31.7,
+        "release": 18.3
+      },
+      "stage_share": {
+        "gemm": 0.1892,
+        "egress": 0.4236,
+        "reduce": 0.0929,
+        "sync": 0.1558,
+        "release": 0.0899
+      },
+      "floor_pct": 2.41,
+      "floor_us": 4.9,
+      "stage_clears_floor": {
+        "gemm": true,
+        "egress": true,
+        "reduce": true,
+        "sync": true,
+        "release": true
+      },
+      "ranked_stages": [
+        "egress",
+        "gemm",
+        "sync",
+        "reduce",
+        "release"
+      ],
+      "stage_sum_us": 193.6,
+      "stage_sum_over_full": 0.9514,
+      "geometry": {
+        "bm": 256,
+        "bn": 256,
+        "bk": 32,
+        "num_reducer_ctas": 32,
+        "num_gemm_ctas": 272,
+        "k_local": 512,
+        "k_iters": 16,
+        "gemm_tiles": 256,
+        "producer_waves": 1,
+        "waves_x_k_iters": 16,
+        "last_wave_fill": 0.9412,
+        "tiles_per_cta": 1,
+        "effective_release_group": 1,
+        "release_grouping_active": false
+      },
+      "sol_us": 65.54,
+      "x_sol": 3.1,
+      "m7": {
+        "mean_us": 201.14,
+        "device_max_us": 199.27,
+        "samples_us": [
+          201.49126648902893,
+          201.51518285274506,
+          200.42575895786285
+        ],
+        "full_vs_m7_mean": 1.0117,
+        "host_issue_us_per_op": 62.06,
+        "bound": "device"
+      }
+    },
+    {
+      "shape_index": 5,
+      "shape": "8192x4096x14336",
+      "m": 8192,
+      "n": 4096,
+      "k": 14336,
+      "has_bias": true,
+      "bm": 256,
+      "bn": 256,
+      "bk": 32,
+      "nr": 32,
+      "full_us": 641.9,
+      "arms_us": {
+        "nomain": 336.7,
+        "emitlocal": 462.2,
+        "nored": 590.2,
+        "noproto": 589.0,
+        "norelease": 576.5
+      },
+      "stages_us": {
+        "gemm": 305.2,
+        "egress": 179.7,
+        "reduce": 51.7,
+        "sync": 52.9,
+        "release": 65.4
+      },
+      "stage_share": {
+        "gemm": 0.4755,
+        "egress": 0.28,
+        "reduce": 0.0805,
+        "sync": 0.0824,
+        "release": 0.1019
+      },
+      "floor_pct": 2.17,
+      "floor_us": 13.93,
+      "stage_clears_floor": {
+        "gemm": true,
+        "egress": true,
+        "reduce": true,
+        "sync": true,
+        "release": true
+      },
+      "ranked_stages": [
+        "gemm",
+        "egress",
+        "release",
+        "sync",
+        "reduce"
+      ],
+      "stage_sum_us": 654.9,
+      "stage_sum_over_full": 1.0203,
+      "geometry": {
+        "bm": 256,
+        "bn": 256,
+        "bk": 32,
+        "num_reducer_ctas": 32,
+        "num_gemm_ctas": 272,
+        "k_local": 1792,
+        "k_iters": 56,
+        "gemm_tiles": 512,
+        "producer_waves": 2,
+        "waves_x_k_iters": 112,
+        "last_wave_fill": 0.8824,
+        "tiles_per_cta": 2,
+        "effective_release_group": 1,
+        "release_grouping_active": false
+      },
+      "sol_us": 131.07,
+      "x_sol": 4.9,
+      "m7": {
+        "mean_us": 641.1,
+        "device_max_us": 638.08,
+        "samples_us": [
+          641.8254971504211,
+          640.0784105062485,
+          641.4110213518143
+        ],
+        "full_vs_m7_mean": 1.0012,
+        "host_issue_us_per_op": 62.36,
+        "bound": "device"
+      }
+    },
+    {
+      "shape_index": 6,
+      "shape": "8192x8192x29568",
+      "m": 8192,
+      "n": 8192,
+      "k": 29568,
+      "has_bias": false,
+      "bm": 256,
+      "bn": 256,
+      "bk": 32,
+      "nr": 48,
+      "full_us": 1632.5,
+      "arms_us": {
+        "nomain": 640.3,
+        "emitlocal": 1256.5,
+        "nored": 1552.7,
+        "noproto": 1463.9,
+        "norelease": 1617.5
+      },
+      "stages_us": {
+        "gemm": 992.2,
+        "egress": 376.0,
+        "reduce": 79.8,
+        "sync": 168.6,
+        "release": 15.0
+      },
+      "stage_share": {
+        "gemm": 0.6078,
+        "egress": 0.2303,
+        "reduce": 0.0489,
+        "sync": 0.1033,
+        "release": 0.0092
+      },
+      "floor_pct": 4.28,
+      "floor_us": 69.87,
+      "stage_clears_floor": {
+        "gemm": true,
+        "egress": true,
+        "reduce": true,
+        "sync": true,
+        "release": false
+      },
+      "ranked_stages": [
+        "gemm",
+        "egress",
+        "sync",
+        "reduce",
+        "release"
+      ],
+      "stage_sum_us": 1631.6,
+      "stage_sum_over_full": 0.9994,
+      "geometry": {
+        "bm": 256,
+        "bn": 256,
+        "bk": 32,
+        "num_reducer_ctas": 48,
+        "num_gemm_ctas": 256,
+        "k_local": 3696,
+        "k_iters": 116,
+        "gemm_tiles": 1024,
+        "producer_waves": 4,
+        "waves_x_k_iters": 464,
+        "last_wave_fill": 1.0,
+        "tiles_per_cta": 4,
+        "effective_release_group": 4,
+        "release_grouping_active": true
+      },
+      "sol_us": 379.43,
+      "x_sol": 4.3,
+      "m7": {
+        "mean_us": 1614.54,
+        "device_max_us": 1596.94,
+        "samples_us": [
+          1602.548211812973,
+          1612.544134259224,
+          1628.5227239131927
+        ],
+        "full_vs_m7_mean": 1.0111,
+        "host_issue_us_per_op": 63.68,
+        "bound": "device"
+      }
+    }
+  ],
+  "ranking": [
+    {
+      "stage": "gemm",
+      "shape6_us": 992.2,
+      "shape6_share": 0.6078,
+      "sum_us_all_shapes": 1355.7,
+      "mean_share": 0.2518,
+      "clears_floor_on_shapes": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    },
+    {
+      "stage": "egress",
+      "shape6_us": 376.0,
+      "shape6_share": 0.2303,
+      "sum_us_all_shapes": 667.7,
+      "mean_share": 0.2077,
+      "clears_floor_on_shapes": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    },
+    {
+      "stage": "sync",
+      "shape6_us": 168.6,
+      "shape6_share": 0.1033,
+      "sum_us_all_shapes": 271.0,
+      "mean_share": 0.0916,
+      "clears_floor_on_shapes": [
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    },
+    {
+      "stage": "reduce",
+      "shape6_us": 79.8,
+      "shape6_share": 0.0489,
+      "sum_us_all_shapes": 157.2,
+      "mean_share": 0.0493,
+      "clears_floor_on_shapes": [
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    },
+    {
+      "stage": "release",
+      "shape6_us": 15.0,
+      "shape6_share": 0.0092,
+      "sum_us_all_shapes": 105.6,
+      "mean_share": 0.0468,
+      "clears_floor_on_shapes": [
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  ]
+}

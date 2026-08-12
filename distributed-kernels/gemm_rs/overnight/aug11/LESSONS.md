@@ -209,6 +209,63 @@ Queued as Phase 2 exp_26, behind the mainloop, which is 30× larger.
 - Shape 5 needs **its own null arm in both construction orders** — aug11's
   re-measured floors are 2-2.6× worse than published.
 
+## exp_20 — attribution refreshed at the current best (Q3). LANDED.
+
+Pipelined µs per world-8 op. `floor` is that shape's allocation-noise floor;
+`*` marks a pool inside its floor, i.e. **not measured**.
+
+| # | shape | full | GEMM | egress | sync | reduce | release | floor | ranking |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---|
+| 1 | 64×7168×18432 | 67.1 | 2.5 | 2.6 | −1.0\* | −0.3\* | −0.5\* | 2.34 | host-bound |
+| 2 | 512×4096×12288 | 67.5 | 1.1 | 2.6 | 2.6 | −0.8 | 0.9 | 0.63 | host-bound |
+| 3 | 2048×2880×2880 | 87.7 | 16.1 | 20.6 | 16.2 | 7.9 | 6.5 | 1.41 | egress > sync ≈ GEMM |
+| 4 | 4096×4096×4096 | 203.5 | 38.5 | **86.2** | 31.8 | 18.9 | 18.3 | 4.90 | **egress** > GEMM |
+| 5 | 8192×4096×14336 | 641.9 | **305.2** | 179.7 | 52.9 | 51.7 | **65.4** | 13.93 | **GEMM** > egress > release |
+| 6 | 8192×8192×29568 | 1632.5 | **992.2** | 376.0 | 168.6 | 79.8 | 15.0\* | 69.87 | **GEMM** > egress > sync |
+
+**The ranking inverts with size**: egress owns the mid shapes (42.4% of shape
+4), the mainloop owns the large ones (47.6% and **60.8%**). GEMM is still #1 on
+shapes 5 and 6 — the only two we lose to rank-1 — and became *relatively more*
+dominant (60.8% vs 46% in the oldest table).
+
+Every pool shrank 8-13% since the last table while the **shares barely moved**,
+except `release`, which fell **−88.9%** and structurally disappeared.
+
+- **THE CHEAPEST UNCLAIMED WIN: `release` is still 65.4 µs (10.2%) on shape 5.**
+  `RELEASE_GROUP_FULL_ONLY=1` groups only when a producer CTA owns ≥4 tiles, and
+  `tiles_per_cta` is **1/1/1/1/2/4** — so shape 6 groups and shape 5 does not,
+  still paying a release per tile on a shape that carries the gap. Counters
+  corroborate independently: release-driven L2 writebacks are **13.1% on shape 6
+  versus 56.4% on shape 5**. A **per-shape** group size (2 for shape 5, 4 for
+  shape 6) keeps every group *full*, so it does not reintroduce the partial-group
+  reducer starvation that cost 3.6-3.9% on shape 2.
+- **Shapes 1 and 2 are HOST-bound and have no resolving power** in this harness
+  (shape 1: 62.3 µs of issue inside a 66.4 µs wall). Do not rank kernel work off
+  them, and do not read their pool deltas as signal — most sit inside the floor.
+- **Egress width is now CLOSED across the whole scored set**, not just shape 6:
+  amplification is **1.0005-1.0043×** on shapes 2-6, with shape 6 at 117.52 MB
+  fabric against 117.44 MB useful (1.0007×) and 99.9% at 64 B — materially
+  identical to exp_08 on a kernel 8.2% faster. EA write latency on shape 6 fell
+  2887 → 2090 cycles.
+- **Arithmetic correction worth keeping:** exp_08's "102 GB/s" divided by an
+  egress *pool*, not the wall. Over the wall shape 6 is 72.0 GB/s; over its
+  376.0 µs pool it is 312.6 GB/s, ~70% of nominal xGMI. On shape 3 the same
+  arithmetic yields **501.9 GB/s — above the ceiling**, which proves that delta
+  is partly *overlapped* rather than serial egress time. **A single-cut delta is
+  not a duration.**
+
+- **TRAP: three of nine `exp_ablation.py` anchors were dead, and `generate()`
+  raises on the first — so the table was not obtainable at all.** Two quoted
+  comment text that E3 rewrote; one had stale indentation on a continuation
+  line. Subtlety now documented in the file: **a wrong indent on an anchor's
+  *first* line still matches**, which is why some anchors kept working by luck
+  while continuation-line ones silently went to zero.
+- **TRAP: stale scratch disguised as fresh.** `ablate/gemm_rs_ablate.cpp`
+  carried today's mtime and all five gate macros but was **30,610 bytes against
+  the 50,556 this run generates** — generations old, with a current mtime only
+  because `push.ps1` rewrites them. `reattribute.sh`'s force-remove and its
+  freshness assertion are load-bearing, not belt-and-braces.
+
 ## Measurement discipline carried into the figure work
 
 - **The harness bias is per-allocation AND partly allocation-ORDER, not

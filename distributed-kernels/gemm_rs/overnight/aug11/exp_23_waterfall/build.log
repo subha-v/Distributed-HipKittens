@@ -1,0 +1,65 @@
+exp_23 build started 2026-08-12T04:19:16-05:00
+exp_23 rung build   src=/home/subvadla/dhk/distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp
+src sha256: ef61006eed6f70a25ed9635a94d5b581eb5f82a2c33c035b94cf44a8abffb560
+hipcc: HIP version: 7.2.53211-c2d9476115
+
+########## gemm_rs_w23_a  (WGM4=1 RELEASE_GROUP=1 FULL_ONLY=1) ##########
+  compile exit=0
+  link exit=0
+  isa: 25245 lines -> /home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_23_waterfall/build/isa/gemm_rs_w23_a.s
+  OK   gemm_rs_w23_a.so (409024 bytes, fallback=0)
+
+########## gemm_rs_w23_b  (WGM4=0 RELEASE_GROUP=1 FULL_ONLY=1) ##########
+  compile exit=0
+  link exit=0
+  isa: 25254 lines -> /home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_23_waterfall/build/isa/gemm_rs_w23_b.s
+  OK   gemm_rs_w23_b.so (409024 bytes, fallback=0)
+
+########## gemm_rs_w23_c  (WGM4=0 RELEASE_GROUP=4 FULL_ONLY=1) ##########
+  compile exit=0
+  link exit=0
+  isa: 26009 lines -> /home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_23_waterfall/build/isa/gemm_rs_w23_c.s
+  OK   gemm_rs_w23_c.so (411936 bytes, fallback=0)
+
+########## gemm_rs_w23_null  (WGM4=0 RELEASE_GROUP=4 FULL_ONLY=1) ##########
+  compile exit=0
+  link exit=0
+  isa: 26009 lines -> /home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_23_waterfall/build/isa/gemm_rs_w23_null.s
+  OK   gemm_rs_w23_null.so (411952 bytes, fallback=0)
+
+########## import check ##########
+  gemm_rs_w23_a: OK exports=['gemm_rs_mi300x', 'gemm_rs_mi300x_configure', 'gemm_rs_mi300x_run']
+  gemm_rs_w23_b: OK exports=['gemm_rs_mi300x', 'gemm_rs_mi300x_configure', 'gemm_rs_mi300x_run']
+  gemm_rs_w23_c: OK exports=['gemm_rs_mi300x', 'gemm_rs_mi300x_configure', 'gemm_rs_mi300x_run']
+  gemm_rs_w23_null: OK exports=['gemm_rs_mi300x', 'gemm_rs_mi300x_configure', 'gemm_rs_mi300x_run']
+
+ALL RUNGS BUILT
+===== BUILD EXIT 0 =====
+  rung so_sha256[:12]  isa_sha256[:12]    lines    instr    mfma   wbl2     cbr
+     a   caa8fd939490     ac5e47804fd1    25245    20190     184      7    1268
+     b   5d8d3882e89b     47311c13c02f    25254    20201     184      7    1268
+     c   16996e40403d     d2d80efb2002    26009    20734     184      7    1272
+  null   51723ebfd24b     58b2df27d8e2    26009    20734     184      7    1272
+
+resource tuple, rung c (the shipped configuration):
+  BM=32 BN=64 BK=128 K_TAIL=0  SGPRs=- VGPRs=- AGPRs=- ScratchSize=- Dynamic Stack=- Occupancy=- SGPRs Spill=- VGPRs Spill=- LDS Size=-
+  BM=64 BN=128 BK=64 K_TAIL=0  SGPRs=- VGPRs=- AGPRs=- ScratchSize=- Dynamic Stack=- Occupancy=- SGPRs Spill=- VGPRs Spill=- LDS Size=-
+  BM=128 BN=192 BK=32 K_TAIL=1  SGPRs=- VGPRs=- AGPRs=- ScratchSize=- Dynamic Stack=- Occupancy=- SGPRs Spill=- VGPRs Spill=- LDS Size=-
+  BM=256 BN=256 BK=32 K_TAIL=0  SGPRs=- VGPRs=- AGPRs=- ScratchSize=- Dynamic Stack=- Occupancy=- SGPRs Spill=- VGPRs Spill=- LDS Size=-
+  BM=256 BN=256 BK=32 K_TAIL=1  SGPRs=- VGPRs=- AGPRs=- ScratchSize=- Dynamic Stack=- Occupancy=- SGPRs Spill=- VGPRs Spill=- LDS Size=-
+  BM=32 BN=64 BK=64 K_TAIL=0  SGPRs=- VGPRs=- AGPRs=- ScratchSize=- Dynamic Stack=- Occupancy=- SGPRs Spill=- VGPRs Spill=- LDS Size=-
+  BM=32 BN=64 BK=64 K_TAIL=1  SGPRs=- VGPRs=- AGPRs=- ScratchSize=- Dynamic Stack=- Occupancy=- SGPRs Spill=- VGPRs Spill=- LDS Size=-
+
+  [PASS] A1: a.isa=ac5e47804fd1149c b.isa=47311c13c02f64eb
+  [PASS] A2: b.isa=47311c13c02f64eb c.isa=d2d80efb200294e9
+  [PASS] A3: b vs c differ in s_cbranch 1268->1272, instructions 20201->20734
+  [FAIL] A4: c.isa=d2d80efb200294e9 null.isa=58b2df27d8e2f371
+  [PASS] A5.v_mfma: v_mfma per rung: {'a': 184, 'b': 184, 'c': 184, 'null': 184}
+  [FAIL] A6: 7 instantiations; VGPR multiset [] != expected [91, 92, 98, 104, 136, 246, 248]; BM=32 BN=64 BK=128 K_TAIL=0: AGPRs unparsed; BM=32 BN=64 BK=128 K_TAIL=0: ScratchSize [bytes/lane] unparsed; BM=32 BN=64 BK=128 K_TAIL=0: VGPRs Spill unparsed; BM=32 BN=64 BK=128 K_TAIL=0: SGPRs Spill unparsed; BM=64 BN=128 BK=64 K_TAIL=0: AGPRs unparsed
+  [warn] A6b: vs /home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/harness/build/gemm_rs_mi300x.log: differs on ['BM=32 BN=64 BK=64 K_TAIL=0', 'BM=32 BN=64 BK=128 K_TAIL=0', 'BM=256 BN=256 BK=32 K_TAIL=0', 'BM=128 BN=192 BK=32 K_TAIL=1']
+  [PASS] A7: entry-point import checked by build_rungs.sh/import_check.py
+
+wrote /home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_23_waterfall/fingerprints.json
+
+2 HARD assertion(s) failed -- the rungs are NOT four distinct binaries. Do not measure; report as a blocker.
+===== FINGERPRINT EXIT 1 =====

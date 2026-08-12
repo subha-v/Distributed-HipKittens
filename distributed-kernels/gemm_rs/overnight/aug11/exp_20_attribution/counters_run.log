@@ -1,0 +1,287 @@
+############ g1 fabric volume / transaction size ############
+  [s6_full_g1] already collected
+  [s5_full_g1] already collected
+############ g2 backpressure / L2 writeback ############
+  [s6_full_g2] already collected
+  [s5_full_g2] already collected
+############ g3 SQ busy vs wait / MFMA ############
+  [s6_full_g3] already collected
+  [s5_full_g3] already collected
+############ controls (shape 6) ############
+  [s6_emitlocal_g1] already collected
+  [s6_prod_g1] already collected
+
+############ AGGREGATE (exp_08's prof_agg.py, verbatim) ############
+=== s1_full_g1
+    agents=8 kept_dispatches_per_agent=4 kernels=['void gemm_rs_mi300x_kernel<32, 64, 128, false>']
+    profiled dispatch us: min=59.1 med=131.0 max=259.1 (PROFILER-PERTURBED, not a timing result)
+    --- per-rank per-launch counter means (divided by 8 agents x 4 dispatches) ---
+    TCC_EA0_RDREQ                               535,389.4
+    TCC_EA0_WRREQ                                18,224.0
+    TCC_EA0_WRREQ_64B                            16,128.0
+    TCC_EA0_WRREQ_DRAM                            4,112.0
+    --- derived ---
+    EA write requests / rank / launch               18,224
+      of which 64 B                                 16,128   (88.5%)
+      of which 32 B                                  2,096   (11.5%)
+    bytes leaving L2 via EA (MB)                      1.10
+    EA wr requests destined DRAM                     4,112   (22.6%)
+    EA wr requests NOT DRAM (fabric)                14,112   (77.4%)
+    fabric bytes (MB), bounds                 0.84 .. 0.90
+=== s1_full_g2
+    agents=8 kept_dispatches_per_agent=4 kernels=['void gemm_rs_mi300x_kernel<32, 64, 128, false>']
+    profiled dispatch us: min=58.5 med=128.3 max=227.3 (PROFILER-PERTURBED, not a timing result)
+    --- per-rank per-launch counter means (divided by 8 agents x 4 dispatches) ---
+    TCC_CYCLE                                35,465,295.0
+    TCC_EA0_WRREQ                                18,224.0
+    TCC_EA0_WRREQ_LEVEL                      56,489,269.4
+    TCC_WRITEBACK                                10,280.0
+    --- derived ---
+    EA write requests / rank / launch               18,224
+      of which 64 B                                    nan   (nan%)
+      of which 32 B                                    nan   (nan%)
+    bytes leaving L2 via EA (MB)                       nan
+    EA wr requests destined DRAM                       nan   (nan%)
+    EA wr requests NOT DRAM (fabric)                   nan   (nan%)
+    fabric bytes (MB), bounds                  nan .. nan
+=== s1_full_g3
+    agents=8 kept_dispatches_per_agent=4 kernels=['void gemm_rs_mi300x_kernel<32, 64, 128, false>']
+    profiled dispatch us: min=57.4 med=174.2 max=317.9 (PROFILER-PERTURBED, not a timing result)
+    --- per-rank per-launch counter means (divided by 8 agents x 4 dispatches) ---
+    TCC_ALL_TC_OP_WB_WRITEBACK                    8,064.0
+    TCC_NC_REQ                                   14,112.0
+    TCC_NORMAL_WRITEBACK                              0.0
+    TCC_WRITE                                    17,920.0
+=== s2_full_g1
+    agents=8 kept_dispatches_per_agent=4 kernels=['void gemm_rs_mi300x_kernel<64, 128, 64, false>']
+    profiled dispatch us: min=65.9 med=159.6 max=310.4 (PROFILER-PERTURBED, not a timing result)
+    --- per-rank per-launch counter means (divided by 8 agents x 4 dispatches) ---
+    TCC_EA0_RDREQ                               453,182.5
+    TCC_EA0_WRREQ                                74,544.0
+    TCC_EA0_WRREQ_64B                            73,728.0
+    TCC_EA0_WRREQ_DRAM                           16,752.0
+    --- derived ---
+    EA write requests / rank / launch               74,544
+      of which 64 B                                 73,728   (98.9%)
+      of which 32 B                                    816   (1.1%)
+    bytes leaving L2 via EA (MB)                      4.74
+    EA wr requests destined DRAM                    16,752   (22.5%)
+    EA wr requests NOT DRAM (fabric)                57,792   (77.5%)
+    fabric bytes (MB), bounds                 3.67 .. 3.70
+=== s2_full_g2
+    agents=8 kept_dispatches_per_agent=4 kernels=['void gemm_rs_mi300x_kernel<64, 128, 64, false>']
+    profiled dispatch us: min=66.2 med=137.1 max=271.6 (PROFILER-PERTURBED, not a timing result)
+    --- per-rank per-launch counter means (divided by 8 agents x 4 dispatches) ---
+    TCC_CYCLE                                39,212,529.5
+    TCC_EA0_WRREQ                                74,544.0
+    TCC_EA0_WRREQ_LEVEL                     437,306,547.2
+    TCC_WRITEBACK                                37,800.0
+    --- derived ---
+    EA write requests / rank / launch               74,544
+      of which 64 B                                    nan   (nan%)
+      of which 32 B                                    nan   (nan%)
+    bytes leaving L2 via EA (MB)                       nan
+    EA wr requests destined DRAM                       nan   (nan%)
+    EA wr requests NOT DRAM (fabric)                   nan   (nan%)
+    fabric bytes (MB), bounds                  nan .. nan
+=== s2_full_g3
+    agents=8 kept_dispatches_per_agent=4 kernels=['void gemm_rs_mi300x_kernel<64, 128, 64, false>']
+    profiled dispatch us: min=61.9 med=155.4 max=313.5 (PROFILER-PERTURBED, not a timing result)
+    --- per-rank per-launch counter means (divided by 8 agents x 4 dispatches) ---
+    TCC_ALL_TC_OP_WB_WRITEBACK                   35,763.8
+    TCC_NC_REQ                                   57,792.0
+    TCC_NORMAL_WRITEBACK                          1,082.3
+    TCC_WRITE                                    74,240.0
+=== s3_full_g1
+    agents=8 kept_dispatches_per_agent=4 kernels=['void gemm_rs_mi300x_kernel<128, 192, 32, true>']
+    profiled dispatch us: min=83.9 med=149.4 max=296.3 (PROFILER-PERTURBED, not a timing result)
+    --- per-rank per-launch counter means (divided by 8 agents x 4 dispatches) ---
+    TCC_EA0_RDREQ                               248,112.7
+    TCC_EA0_WRREQ                               208,144.0
+    TCC_EA0_WRREQ_64B                           207,360.0
+    TCC_EA0_WRREQ_DRAM                           46,444.0
+    --- derived ---
+    EA write requests / rank / launch              208,144
+      of which 64 B                                207,360   (99.6%)
+      of which 32 B                                    784   (0.4%)
+    bytes leaving L2 via EA (MB)                     13.30
+    EA wr requests destined DRAM                    46,444   (22.3%)
+    EA wr requests NOT DRAM (fabric)               161,700   (77.7%)
+    fabric bytes (MB), bounds                10.32 .. 10.35
+=== s3_full_g2
+    agents=8 kept_dispatches_per_agent=4 kernels=['void gemm_rs_mi300x_kernel<128, 192, 32, true>']
+    profiled dispatch us: min=83.3 med=201.1 max=394.2 (PROFILER-PERTURBED, not a timing result)
+    --- per-rank per-launch counter means (divided by 8 agents x 4 dispatches) ---
+    TCC_CYCLE                                53,917,484.0
+    TCC_EA0_WRREQ                               208,144.0
+    TCC_EA0_WRREQ_LEVEL                     892,229,896.7
+    TCC_WRITEBACK                               104,584.0
+    --- derived ---
+    EA write requests / rank / launch              208,144
+      of which 64 B                                    nan   (nan%)
+      of which 32 B                                    nan   (nan%)
+    bytes leaving L2 via EA (MB)                       nan
+    EA wr requests destined DRAM                       nan   (nan%)
+    EA wr requests NOT DRAM (fabric)                   nan   (nan%)
+    fabric bytes (MB), bounds                  nan .. nan
+=== s3_full_g3
+    agents=8 kept_dispatches_per_agent=4 kernels=['void gemm_rs_mi300x_kernel<128, 192, 32, true>']
+    profiled dispatch us: min=84.4 med=166.2 max=316.1 (PROFILER-PERTURBED, not a timing result)
+    --- per-rank per-launch counter means (divided by 8 agents x 4 dispatches) ---
+    TCC_ALL_TC_OP_WB_WRITEBACK                  101,323.4
+    TCC_NC_REQ                                  161,700.0
+    TCC_NORMAL_WRITEBACK                          2,356.2
+    TCC_WRITE                                   207,840.0
+=== s4_full_g1
+    agents=8 kept_dispatches_per_agent=4 kernels=['void gemm_rs_mi300x_kernel<256, 256, 32, false>']
+    profiled dispatch us: min=191.4 med=248.5 max=307.3 (PROFILER-PERTURBED, not a timing result)
+    --- per-rank per-launch counter means (divided by 8 agents x 4 dispatches) ---
+    TCC_EA0_RDREQ                               462,725.8
+    TCC_EA0_WRREQ                               590,640.0
+    TCC_EA0_WRREQ_64B                           589,824.0
+    TCC_EA0_WRREQ_DRAM                          131,440.0
+    --- derived ---
+    EA write requests / rank / launch              590,640
+      of which 64 B                                589,824   (99.9%)
+      of which 32 B                                    816   (0.1%)
+    bytes leaving L2 via EA (MB)                     37.77
+    EA wr requests destined DRAM                   131,440   (22.3%)
+    EA wr requests NOT DRAM (fabric)               459,200   (77.7%)
+    fabric bytes (MB), bounds                29.36 .. 29.39
+=== s4_full_g2
+    agents=8 kept_dispatches_per_agent=4 kernels=['void gemm_rs_mi300x_kernel<256, 256, 32, false>']
+    profiled dispatch us: min=188.5 med=234.5 max=300.3 (PROFILER-PERTURBED, not a timing result)
+    --- per-rank per-launch counter means (divided by 8 agents x 4 dispatches) ---
+    TCC_CYCLE                                56,832,579.0
+    TCC_EA0_WRREQ                               590,640.0
+    TCC_EA0_WRREQ_LEVEL                   1,679,015,564.4
+    TCC_WRITEBACK                               295,848.0
+    --- derived ---
+    EA write requests / rank / launch              590,640
+      of which 64 B                                    nan   (nan%)
+      of which 32 B                                    nan   (nan%)
+    bytes leaving L2 via EA (MB)                       nan
+    EA wr requests destined DRAM                       nan   (nan%)
+    EA wr requests NOT DRAM (fabric)                   nan   (nan%)
+    fabric bytes (MB), bounds                  nan .. nan
+=== s4_full_g3
+    agents=8 kept_dispatches_per_agent=4 kernels=['void gemm_rs_mi300x_kernel<256, 256, 32, false>']
+    profiled dispatch us: min=189.5 med=239.6 max=300.8 (PROFILER-PERTURBED, not a timing result)
+    --- per-rank per-launch counter means (divided by 8 agents x 4 dispatches) ---
+    TCC_ALL_TC_OP_WB_WRITEBACK                  116,406.8
+    TCC_NC_REQ                                  459,200.0
+    TCC_NORMAL_WRITEBACK                        177,787.9
+    TCC_WRITE                                   590,336.0
+=== s5_full_g1
+    agents=8 kept_dispatches_per_agent=4 kernels=['void gemm_rs_mi300x_kernel<256, 256, 32, false>']
+    profiled dispatch us: min=645.8 med=718.3 max=814.7 (PROFILER-PERTURBED, not a timing result)
+    --- per-rank per-launch counter means (divided by 8 agents x 4 dispatches) ---
+    TCC_EA0_RDREQ                             1,963,123.6
+    TCC_EA0_WRREQ                             1,180,976.0
+    TCC_EA0_WRREQ_64B                         1,179,648.0
+    TCC_EA0_WRREQ_DRAM                          262,576.0
+    --- derived ---
+    EA write requests / rank / launch            1,180,976
+      of which 64 B                              1,179,648   (99.9%)
+      of which 32 B                                  1,328   (0.1%)
+    bytes leaving L2 via EA (MB)                     75.54
+    EA wr requests destined DRAM                   262,576   (22.2%)
+    EA wr requests NOT DRAM (fabric)               918,400   (77.8%)
+    fabric bytes (MB), bounds                58.74 .. 58.78
+=== s5_full_g2
+    agents=8 kept_dispatches_per_agent=4 kernels=['void gemm_rs_mi300x_kernel<256, 256, 32, false>']
+    profiled dispatch us: min=619.3 med=670.1 max=732.2 (PROFILER-PERTURBED, not a timing result)
+    --- per-rank per-launch counter means (divided by 8 agents x 4 dispatches) ---
+    TCC_CYCLE                               146,195,739.0
+    TCC_EA0_WRREQ                             1,180,976.0
+    TCC_EA0_WRREQ_LEVEL                   3,572,393,531.5
+    TCC_WRITEBACK                               591,272.0
+    --- derived ---
+    EA write requests / rank / launch            1,180,976
+      of which 64 B                                    nan   (nan%)
+      of which 32 B                                    nan   (nan%)
+    bytes leaving L2 via EA (MB)                       nan
+    EA wr requests destined DRAM                       nan   (nan%)
+    EA wr requests NOT DRAM (fabric)                   nan   (nan%)
+    fabric bytes (MB), bounds                  nan .. nan
+=== s5_full_g3
+    agents=8 kept_dispatches_per_agent=4 kernels=['void gemm_rs_mi300x_kernel<256, 256, 32, false>']
+    profiled dispatch us: min=609.6 med=657.2 max=736.3 (PROFILER-PERTURBED, not a timing result)
+    --- per-rank per-launch counter means (divided by 8 agents x 4 dispatches) ---
+    TCC_ALL_TC_OP_WB_WRITEBACK                  333,564.9
+    TCC_NC_REQ                                  918,400.0
+    TCC_NORMAL_WRITEBACK                        254,224.7
+    TCC_WRITE                                 1,180,672.0
+=== s6_emitlocal_g1
+    agents=8 kept_dispatches_per_agent=4 kernels=['void gemm_rs_mi300x_kernel<256, 256, 32, true>']
+    profiled dispatch us: min=1309.6 med=1409.5 max=1590.2 (PROFILER-PERTURBED, not a timing result)
+    --- per-rank per-launch counter means (divided by 8 agents x 4 dispatches) ---
+    TCC_EA0_RDREQ                             6,803,868.0
+    TCC_EA0_WRREQ                               789,224.6
+    TCC_EA0_WRREQ_64B                           786,872.6
+    TCC_EA0_WRREQ_DRAM                          787,432.6
+    --- derived ---
+    EA write requests / rank / launch              789,225
+      of which 64 B                                786,873   (99.7%)
+      of which 32 B                                  2,352   (0.3%)
+    bytes leaving L2 via EA (MB)                     50.44
+    EA wr requests destined DRAM                   787,433   (99.8%)
+    EA wr requests NOT DRAM (fabric)                 1,792   (0.2%)
+    fabric bytes (MB), bounds                 0.06 .. 0.11
+=== s6_full_g1
+    agents=8 kept_dispatches_per_agent=4 kernels=['void gemm_rs_mi300x_kernel<256, 256, 32, true>']
+    profiled dispatch us: min=1616.8 med=1678.7 max=1784.1 (PROFILER-PERTURBED, not a timing result)
+    --- per-rank per-launch counter means (divided by 8 agents x 4 dispatches) ---
+    TCC_EA0_RDREQ                             6,826,695.1
+    TCC_EA0_WRREQ                             2,361,648.0
+    TCC_EA0_WRREQ_64B                         2,359,296.0
+    TCC_EA0_WRREQ_DRAM                          524,848.0
+    --- derived ---
+    EA write requests / rank / launch            2,361,648
+      of which 64 B                              2,359,296   (99.9%)
+      of which 32 B                                  2,352   (0.1%)
+    bytes leaving L2 via EA (MB)                    151.07
+    EA wr requests destined DRAM                   524,848   (22.2%)
+    EA wr requests NOT DRAM (fabric)             1,836,800   (77.8%)
+    fabric bytes (MB), bounds               117.48 .. 117.56
+=== s6_full_g2
+    agents=8 kept_dispatches_per_agent=4 kernels=['void gemm_rs_mi300x_kernel<256, 256, 32, true>']
+    profiled dispatch us: min=1531.9 med=1616.6 max=1718.2 (PROFILER-PERTURBED, not a timing result)
+    --- per-rank per-launch counter means (divided by 8 agents x 4 dispatches) ---
+    TCC_CYCLE                               311,779,870.0
+    TCC_EA0_WRREQ                             2,361,648.0
+    TCC_EA0_WRREQ_LEVEL                   4,936,518,164.4
+    TCC_WRITEBACK                             1,182,120.0
+    --- derived ---
+    EA write requests / rank / launch            2,361,648
+      of which 64 B                                    nan   (nan%)
+      of which 32 B                                    nan   (nan%)
+    bytes leaving L2 via EA (MB)                       nan
+    EA wr requests destined DRAM                       nan   (nan%)
+    EA wr requests NOT DRAM (fabric)                   nan   (nan%)
+    fabric bytes (MB), bounds                  nan .. nan
+=== s6_full_g3
+    agents=8 kept_dispatches_per_agent=4 kernels=['void gemm_rs_mi300x_kernel<256, 256, 32, true>']
+    profiled dispatch us: min=1604.5 med=1688.3 max=1968.3 (PROFILER-PERTURBED, not a timing result)
+    --- per-rank per-launch counter means (divided by 8 agents x 4 dispatches) ---
+    TCC_ALL_TC_OP_WB_WRITEBACK                  154,684.4
+    TCC_NC_REQ                                1,836,800.0
+    TCC_NORMAL_WRITEBACK                      1,016,653.9
+    TCC_WRITE                                 2,361,344.0
+=== s6_prod_g1
+    agents=8 kept_dispatches_per_agent=4 kernels=['void gemm_rs_mi300x_kernel<256, 256, 32, true>']
+    profiled dispatch us: min=1580.7 med=1692.6 max=1795.8 (PROFILER-PERTURBED, not a timing result)
+    --- per-rank per-launch counter means (divided by 8 agents x 4 dispatches) ---
+    TCC_EA0_RDREQ                             6,826,649.0
+    TCC_EA0_WRREQ                             2,361,648.0
+    TCC_EA0_WRREQ_64B                         2,359,296.0
+    TCC_EA0_WRREQ_DRAM                          524,848.0
+    --- derived ---
+    EA write requests / rank / launch            2,361,648
+      of which 64 B                              2,359,296   (99.9%)
+      of which 32 B                                  2,352   (0.1%)
+    bytes leaving L2 via EA (MB)                    151.07
+    EA wr requests destined DRAM                   524,848   (22.2%)
+    EA wr requests NOT DRAM (fabric)             1,836,800   (77.8%)
+    fabric bytes (MB), bounds               117.48 .. 117.56
+COUNTERS DONE

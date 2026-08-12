@@ -1,0 +1,651 @@
+{
+  "experiment": "aug11/exp_20_attribution",
+  "what": "one rocprofv3 1.1.0 counter pass at the current best config, gfx942, ALL SIX graded shapes, plus two shape-6 controls",
+  "generated_utc": "2026-08-12T09:16:21Z",
+  "warm": 2,
+  "meas": 4,
+  "schema": {
+    "cells[tag].counters_per_rank_per_launch": "each counter summed over the measured dispatch window and divided by agents x dispatches, i.e. one rank, one launch",
+    "cells[tag].usable": "the driver reported correct=1 and errors=none UNDER instrumentation. Counter collection can serialize dispatches until the bounded credit/ready spins time out; a kernel that returned early on the sticky error bit reports deflated traffic, so an unusable cell must not be read.",
+    "cells[tag].derived.fabric_bytes_MB_bounds": "the 32/64 B split is known only in aggregate, so off-die bytes are bounded rather than assumed",
+    "tags": "s<shape>_<arm>_g<group>; s6_emitlocal_g1 is the known-answer control (off-die writes must collapse) and s6_prod_g1 is the production-vs-scratch cross-check",
+    "shapes[]": "per-shape rollup merged from that shape's three counter groups; `cells` remains the provenance",
+    "shapes[].useful_bytes_mb": "7/8 * M*N*2 -- of the eight output slices a rank produces it keeps one locally and sends seven off-rank, so 7/8 of the bf16 output crosses the fabric",
+    "shapes[].amplification": "fabric_bytes_mb / useful_bytes_mb. 1.0 means the fabric carries exactly the payload and nothing else.",
+    "shapes[].ea_write_latency_cycles": "TCC_EA0_WRREQ_LEVEL / TCC_EA0_WRREQ, that counter's own documented use. A QUEUEING signal, not a bandwidth one: it rises when a fixed request count is concentrated on fewer links.",
+    "shapes[].fabric_flag_requests_measured": "off-die requests that remain when every payload byte is routed to the local rank (the s6_emitlocal_g1 control), i.e. the protocol's publications and credits. Constant in the world size, so it is a negligible share on the large shapes and a material one on the smallest.",
+    "shapes[].writeback_capacity_share": "TCC_NORMAL_WRITEBACK / TCC_WRITEBACK: lines that left L2 by ordinary capacity eviction. The complement, writeback_release_share, is the share pushed by the release's buffer_wbl2 sc0 sc1.",
+    "shapes[].achieved_fabric_gbps": "fabric_bytes_mb over the ablation's `full` wall time for the same shape and config. An average over the whole kernel, not a peak."
+  },
+  "counters_known_unusable_on_gfx942": [
+    "TCC_EA0_WRREQ_GMI_CREDIT_STALL",
+    "TCC_EA0_WRREQ_IO_CREDIT_STALL",
+    "TCC_EA0_WRREQ_DRAM_CREDIT_STALL"
+  ],
+  "counters_seen": [
+    "TCC_ALL_TC_OP_WB_WRITEBACK",
+    "TCC_CYCLE",
+    "TCC_EA0_RDREQ",
+    "TCC_EA0_WRREQ",
+    "TCC_EA0_WRREQ_64B",
+    "TCC_EA0_WRREQ_DRAM",
+    "TCC_EA0_WRREQ_LEVEL",
+    "TCC_NC_REQ",
+    "TCC_NORMAL_WRITEBACK",
+    "TCC_WRITE",
+    "TCC_WRITEBACK"
+  ],
+  "collection_errors": [],
+  "cells": {
+    "s1_full_g1": {
+      "agents": 8,
+      "dispatches_per_agent": 4,
+      "counters_per_rank_per_launch": {
+        "TCC_EA0_RDREQ": 535389.4,
+        "TCC_EA0_WRREQ": 18224.0,
+        "TCC_EA0_WRREQ_64B": 16128.0,
+        "TCC_EA0_WRREQ_DRAM": 4112.0
+      },
+      "prof_line": "PROF module=gemm_rs_abl_full shape=64x7168x18432 warm=2 meas=4 correct=1 tight=1 maxdiff=6.104e-05 errors=none tiles_per_cta=224/248 eb=8 nr=56",
+      "usable": true,
+      "derived": {
+        "ea_write_requests": 18224.0,
+        "frac_64B": 0.885,
+        "bytes_leaving_l2_MB": 1.1,
+        "frac_requests_to_dram": 0.2256,
+        "fabric_requests_not_dram": 14112.0,
+        "fabric_bytes_MB_bounds": [
+          0.84,
+          0.9
+        ]
+      }
+    },
+    "s1_full_g2": {
+      "agents": 8,
+      "dispatches_per_agent": 4,
+      "counters_per_rank_per_launch": {
+        "TCC_CYCLE": 35465295.0,
+        "TCC_EA0_WRREQ": 18224.0,
+        "TCC_EA0_WRREQ_LEVEL": 56489269.4,
+        "TCC_WRITEBACK": 10280.0
+      },
+      "prof_line": "PROF module=gemm_rs_abl_full shape=64x7168x18432 warm=2 meas=4 correct=1 tight=1 maxdiff=6.104e-05 errors=none tiles_per_cta=224/248 eb=8 nr=56",
+      "usable": true,
+      "derived": {
+        "l2_writebacks": 10280.0
+      }
+    },
+    "s1_full_g3": {
+      "agents": 8,
+      "dispatches_per_agent": 4,
+      "counters_per_rank_per_launch": {
+        "TCC_ALL_TC_OP_WB_WRITEBACK": 8064.0,
+        "TCC_NC_REQ": 14112.0,
+        "TCC_NORMAL_WRITEBACK": 0.0,
+        "TCC_WRITE": 17920.0
+      },
+      "prof_line": "PROF module=gemm_rs_abl_full shape=64x7168x18432 warm=2 meas=4 correct=1 tight=1 maxdiff=6.104e-05 errors=none tiles_per_cta=224/248 eb=8 nr=56",
+      "usable": true,
+      "derived": {}
+    },
+    "s2_full_g1": {
+      "agents": 8,
+      "dispatches_per_agent": 4,
+      "counters_per_rank_per_launch": {
+        "TCC_EA0_RDREQ": 453182.5,
+        "TCC_EA0_WRREQ": 74544.0,
+        "TCC_EA0_WRREQ_64B": 73728.0,
+        "TCC_EA0_WRREQ_DRAM": 16752.0
+      },
+      "prof_line": "PROF module=gemm_rs_abl_full shape=512x4096x12288 warm=2 meas=4 correct=1 tight=1 maxdiff=4.883e-04 errors=none tiles_per_cta=256/272 eb=64 nr=32",
+      "usable": true,
+      "derived": {
+        "ea_write_requests": 74544.0,
+        "frac_64B": 0.9891,
+        "bytes_leaving_l2_MB": 4.74,
+        "frac_requests_to_dram": 0.2247,
+        "fabric_requests_not_dram": 57792.0,
+        "fabric_bytes_MB_bounds": [
+          3.67,
+          3.7
+        ]
+      }
+    },
+    "s2_full_g2": {
+      "agents": 8,
+      "dispatches_per_agent": 4,
+      "counters_per_rank_per_launch": {
+        "TCC_CYCLE": 39212529.5,
+        "TCC_EA0_WRREQ": 74544.0,
+        "TCC_EA0_WRREQ_LEVEL": 437306547.2,
+        "TCC_WRITEBACK": 37800.0
+      },
+      "prof_line": "PROF module=gemm_rs_abl_full shape=512x4096x12288 warm=2 meas=4 correct=1 tight=1 maxdiff=4.883e-04 errors=none tiles_per_cta=256/272 eb=64 nr=32",
+      "usable": true,
+      "derived": {
+        "l2_writebacks": 37800.0
+      }
+    },
+    "s2_full_g3": {
+      "agents": 8,
+      "dispatches_per_agent": 4,
+      "counters_per_rank_per_launch": {
+        "TCC_ALL_TC_OP_WB_WRITEBACK": 35763.8,
+        "TCC_NC_REQ": 57792.0,
+        "TCC_NORMAL_WRITEBACK": 1082.3,
+        "TCC_WRITE": 74240.0
+      },
+      "prof_line": "PROF module=gemm_rs_abl_full shape=512x4096x12288 warm=2 meas=4 correct=1 tight=1 maxdiff=4.883e-04 errors=none tiles_per_cta=256/272 eb=64 nr=32",
+      "usable": true,
+      "derived": {}
+    },
+    "s3_full_g1": {
+      "agents": 8,
+      "dispatches_per_agent": 4,
+      "counters_per_rank_per_launch": {
+        "TCC_EA0_RDREQ": 248112.7,
+        "TCC_EA0_WRREQ": 208144.0,
+        "TCC_EA0_WRREQ_64B": 207360.0,
+        "TCC_EA0_WRREQ_DRAM": 46444.0
+      },
+      "prof_line": "PROF module=gemm_rs_abl_full shape=2048x2880x2880 warm=2 meas=4 correct=1 tight=1 maxdiff=4.883e-04 errors=none tiles_per_cta=240/272 eb=128 nr=32",
+      "usable": true,
+      "derived": {
+        "ea_write_requests": 208144.0,
+        "frac_64B": 0.9962,
+        "bytes_leaving_l2_MB": 13.3,
+        "frac_requests_to_dram": 0.2231,
+        "fabric_requests_not_dram": 161700.0,
+        "fabric_bytes_MB_bounds": [
+          10.32,
+          10.35
+        ]
+      }
+    },
+    "s3_full_g2": {
+      "agents": 8,
+      "dispatches_per_agent": 4,
+      "counters_per_rank_per_launch": {
+        "TCC_CYCLE": 53917484.0,
+        "TCC_EA0_WRREQ": 208144.0,
+        "TCC_EA0_WRREQ_LEVEL": 892229896.7,
+        "TCC_WRITEBACK": 104584.0
+      },
+      "prof_line": "PROF module=gemm_rs_abl_full shape=2048x2880x2880 warm=2 meas=4 correct=1 tight=1 maxdiff=4.883e-04 errors=none tiles_per_cta=240/272 eb=128 nr=32",
+      "usable": true,
+      "derived": {
+        "l2_writebacks": 104584.0
+      }
+    },
+    "s3_full_g3": {
+      "agents": 8,
+      "dispatches_per_agent": 4,
+      "counters_per_rank_per_launch": {
+        "TCC_ALL_TC_OP_WB_WRITEBACK": 101323.4,
+        "TCC_NC_REQ": 161700.0,
+        "TCC_NORMAL_WRITEBACK": 2356.2,
+        "TCC_WRITE": 207840.0
+      },
+      "prof_line": "PROF module=gemm_rs_abl_full shape=2048x2880x2880 warm=2 meas=4 correct=1 tight=1 maxdiff=4.883e-04 errors=none tiles_per_cta=240/272 eb=128 nr=32",
+      "usable": true,
+      "derived": {}
+    },
+    "s4_full_g1": {
+      "agents": 8,
+      "dispatches_per_agent": 4,
+      "counters_per_rank_per_launch": {
+        "TCC_EA0_RDREQ": 462725.8,
+        "TCC_EA0_WRREQ": 590640.0,
+        "TCC_EA0_WRREQ_64B": 589824.0,
+        "TCC_EA0_WRREQ_DRAM": 131440.0
+      },
+      "prof_line": "PROF module=gemm_rs_abl_full shape=4096x4096x4096 warm=2 meas=4 correct=1 tight=1 maxdiff=3.052e-05 errors=none tiles_per_cta=256/272 eb=256 nr=32",
+      "usable": true,
+      "derived": {
+        "ea_write_requests": 590640.0,
+        "frac_64B": 0.9986,
+        "bytes_leaving_l2_MB": 37.77,
+        "frac_requests_to_dram": 0.2225,
+        "fabric_requests_not_dram": 459200.0,
+        "fabric_bytes_MB_bounds": [
+          29.36,
+          29.39
+        ]
+      }
+    },
+    "s4_full_g2": {
+      "agents": 8,
+      "dispatches_per_agent": 4,
+      "counters_per_rank_per_launch": {
+        "TCC_CYCLE": 56832579.0,
+        "TCC_EA0_WRREQ": 590640.0,
+        "TCC_EA0_WRREQ_LEVEL": 1679015564.4,
+        "TCC_WRITEBACK": 295848.0
+      },
+      "prof_line": "PROF module=gemm_rs_abl_full shape=4096x4096x4096 warm=2 meas=4 correct=1 tight=1 maxdiff=3.052e-05 errors=none tiles_per_cta=256/272 eb=256 nr=32",
+      "usable": true,
+      "derived": {
+        "l2_writebacks": 295848.0
+      }
+    },
+    "s4_full_g3": {
+      "agents": 8,
+      "dispatches_per_agent": 4,
+      "counters_per_rank_per_launch": {
+        "TCC_ALL_TC_OP_WB_WRITEBACK": 116406.8,
+        "TCC_NC_REQ": 459200.0,
+        "TCC_NORMAL_WRITEBACK": 177787.9,
+        "TCC_WRITE": 590336.0
+      },
+      "prof_line": "PROF module=gemm_rs_abl_full shape=4096x4096x4096 warm=2 meas=4 correct=1 tight=1 maxdiff=3.052e-05 errors=none tiles_per_cta=256/272 eb=256 nr=32",
+      "usable": true,
+      "derived": {}
+    },
+    "s5_full_g1": {
+      "agents": 8,
+      "dispatches_per_agent": 4,
+      "counters_per_rank_per_launch": {
+        "TCC_EA0_RDREQ": 1963123.6,
+        "TCC_EA0_WRREQ": 1180976.0,
+        "TCC_EA0_WRREQ_64B": 1179648.0,
+        "TCC_EA0_WRREQ_DRAM": 262576.0
+      },
+      "prof_line": "PROF module=gemm_rs_abl_full shape=8192x4096x14336 warm=2 meas=4 correct=1 tight=1 maxdiff=4.883e-04 errors=none tiles_per_cta=512/272 eb=256 nr=32",
+      "usable": true,
+      "derived": {
+        "ea_write_requests": 1180976.0,
+        "frac_64B": 0.9989,
+        "bytes_leaving_l2_MB": 75.54,
+        "frac_requests_to_dram": 0.2223,
+        "fabric_requests_not_dram": 918400.0,
+        "fabric_bytes_MB_bounds": [
+          58.74,
+          58.78
+        ]
+      }
+    },
+    "s5_full_g2": {
+      "agents": 8,
+      "dispatches_per_agent": 4,
+      "counters_per_rank_per_launch": {
+        "TCC_CYCLE": 146195739.0,
+        "TCC_EA0_WRREQ": 1180976.0,
+        "TCC_EA0_WRREQ_LEVEL": 3572393531.5,
+        "TCC_WRITEBACK": 591272.0
+      },
+      "prof_line": "PROF module=gemm_rs_abl_full shape=8192x4096x14336 warm=2 meas=4 correct=1 tight=1 maxdiff=4.883e-04 errors=none tiles_per_cta=512/272 eb=256 nr=32",
+      "usable": true,
+      "derived": {
+        "l2_writebacks": 591272.0
+      }
+    },
+    "s5_full_g3": {
+      "agents": 8,
+      "dispatches_per_agent": 4,
+      "counters_per_rank_per_launch": {
+        "TCC_ALL_TC_OP_WB_WRITEBACK": 333564.9,
+        "TCC_NC_REQ": 918400.0,
+        "TCC_NORMAL_WRITEBACK": 254224.7,
+        "TCC_WRITE": 1180672.0
+      },
+      "prof_line": "PROF module=gemm_rs_abl_full shape=8192x4096x14336 warm=2 meas=4 correct=1 tight=1 maxdiff=4.883e-04 errors=none tiles_per_cta=512/272 eb=256 nr=32",
+      "usable": true,
+      "derived": {}
+    },
+    "s6_emitlocal_g1": {
+      "agents": 8,
+      "dispatches_per_agent": 4,
+      "counters_per_rank_per_launch": {
+        "TCC_EA0_RDREQ": 6803868.0,
+        "TCC_EA0_WRREQ": 789224.6,
+        "TCC_EA0_WRREQ_64B": 786872.6,
+        "TCC_EA0_WRREQ_DRAM": 787432.6
+      },
+      "prof_line": "PROF module=gemm_rs_abl_emitlocal shape=8192x8192x29568 warm=2 meas=4 correct=0 tight=0 maxdiff=3.461e-02 errors=none tiles_per_cta=1024/256 eb=256 nr=48",
+      "usable": false,
+      "derived": {
+        "ea_write_requests": 789224.6,
+        "frac_64B": 0.997,
+        "bytes_leaving_l2_MB": 50.44,
+        "frac_requests_to_dram": 0.9977,
+        "fabric_requests_not_dram": 1792.0,
+        "fabric_bytes_MB_bounds": [
+          0.06,
+          0.11
+        ]
+      }
+    },
+    "s6_full_g1": {
+      "agents": 8,
+      "dispatches_per_agent": 4,
+      "counters_per_rank_per_launch": {
+        "TCC_EA0_RDREQ": 6826695.1,
+        "TCC_EA0_WRREQ": 2361648.0,
+        "TCC_EA0_WRREQ_64B": 2359296.0,
+        "TCC_EA0_WRREQ_DRAM": 524848.0
+      },
+      "prof_line": "PROF module=gemm_rs_abl_full shape=8192x8192x29568 warm=2 meas=4 correct=1 tight=1 maxdiff=1.221e-04 errors=none tiles_per_cta=1024/256 eb=256 nr=48",
+      "usable": true,
+      "derived": {
+        "ea_write_requests": 2361648.0,
+        "frac_64B": 0.999,
+        "bytes_leaving_l2_MB": 151.07,
+        "frac_requests_to_dram": 0.2222,
+        "fabric_requests_not_dram": 1836800.0,
+        "fabric_bytes_MB_bounds": [
+          117.48,
+          117.56
+        ]
+      }
+    },
+    "s6_full_g2": {
+      "agents": 8,
+      "dispatches_per_agent": 4,
+      "counters_per_rank_per_launch": {
+        "TCC_CYCLE": 311779870.0,
+        "TCC_EA0_WRREQ": 2361648.0,
+        "TCC_EA0_WRREQ_LEVEL": 4936518164.4,
+        "TCC_WRITEBACK": 1182120.0
+      },
+      "prof_line": "PROF module=gemm_rs_abl_full shape=8192x8192x29568 warm=2 meas=4 correct=1 tight=1 maxdiff=1.221e-04 errors=none tiles_per_cta=1024/256 eb=256 nr=48",
+      "usable": true,
+      "derived": {
+        "l2_writebacks": 1182120.0
+      }
+    },
+    "s6_full_g3": {
+      "agents": 8,
+      "dispatches_per_agent": 4,
+      "counters_per_rank_per_launch": {
+        "TCC_ALL_TC_OP_WB_WRITEBACK": 154684.4,
+        "TCC_NC_REQ": 1836800.0,
+        "TCC_NORMAL_WRITEBACK": 1016653.9,
+        "TCC_WRITE": 2361344.0
+      },
+      "prof_line": "PROF module=gemm_rs_abl_full shape=8192x8192x29568 warm=2 meas=4 correct=1 tight=1 maxdiff=1.221e-04 errors=none tiles_per_cta=1024/256 eb=256 nr=48",
+      "usable": true,
+      "derived": {}
+    },
+    "s6_prod_g1": {
+      "agents": 8,
+      "dispatches_per_agent": 4,
+      "counters_per_rank_per_launch": {
+        "TCC_EA0_RDREQ": 6826649.0,
+        "TCC_EA0_WRREQ": 2361648.0,
+        "TCC_EA0_WRREQ_64B": 2359296.0,
+        "TCC_EA0_WRREQ_DRAM": 524848.0
+      },
+      "prof_line": "PROF module=gemm_rs_mi300x shape=8192x8192x29568 warm=2 meas=4 correct=1 tight=1 maxdiff=1.221e-04 errors=none tiles_per_cta=1024/256 eb=256 nr=48",
+      "usable": true,
+      "derived": {
+        "ea_write_requests": 2361648.0,
+        "frac_64B": 0.999,
+        "bytes_leaving_l2_MB": 151.07,
+        "frac_requests_to_dram": 0.2222,
+        "fabric_requests_not_dram": 1836800.0,
+        "fabric_bytes_MB_bounds": [
+          117.48,
+          117.56
+        ]
+      }
+    }
+  },
+  "shapes": [
+    {
+      "shape_index": 1,
+      "shape": "64x7168x18432",
+      "m": 64,
+      "n": 7168,
+      "k": 18432,
+      "usable": true,
+      "groups": [
+        "1",
+        "2",
+        "3"
+      ],
+      "fabric_bytes_mb": 0.87,
+      "fabric_bytes_mb_bounds": [
+        0.836,
+        0.903
+      ],
+      "useful_bytes_mb": 0.803,
+      "amplification": 1.0832,
+      "ea_write_requests": 18224,
+      "ea_write_requests_64b": 16128,
+      "wrreq_64b_share": 0.88499,
+      "ea_write_requests_dram": 4112,
+      "fabric_requests": 14112,
+      "bytes_leaving_l2_mb": 1.099,
+      "ea_read_requests": 535389,
+      "fabric_payload_requests_analytic": 12544,
+      "fabric_flag_requests_measured": 1792,
+      "flag_share_of_fabric_requests": 0.12698,
+      "ea_write_latency_cycles": 3099.7,
+      "ea_write_latency_same_pass": true,
+      "tcc_cycles": 35465295,
+      "l2_writeback_lines": 10280,
+      "l2_write_requests": 17920,
+      "l2_writeback_capacity": 0,
+      "l2_writeback_wb_op": 8064,
+      "l2_noncoherent_requests": 14112,
+      "writeback_capacity_share": 0.0,
+      "writeback_release_share": 0.7844,
+      "full_us_from_ablation": 67.1,
+      "achieved_fabric_gbps": 13.0
+    },
+    {
+      "shape_index": 2,
+      "shape": "512x4096x12288",
+      "m": 512,
+      "n": 4096,
+      "k": 12288,
+      "usable": true,
+      "groups": [
+        "1",
+        "2",
+        "3"
+      ],
+      "fabric_bytes_mb": 3.686,
+      "fabric_bytes_mb_bounds": [
+        3.673,
+        3.699
+      ],
+      "useful_bytes_mb": 3.67,
+      "amplification": 1.0043,
+      "ea_write_requests": 74544,
+      "ea_write_requests_64b": 73728,
+      "wrreq_64b_share": 0.98905,
+      "ea_write_requests_dram": 16752,
+      "fabric_requests": 57792,
+      "bytes_leaving_l2_mb": 4.745,
+      "ea_read_requests": 453182,
+      "fabric_payload_requests_analytic": 57344,
+      "fabric_flag_requests_measured": 1792,
+      "flag_share_of_fabric_requests": 0.03101,
+      "ea_write_latency_cycles": 5866.4,
+      "ea_write_latency_same_pass": true,
+      "tcc_cycles": 39212530,
+      "l2_writeback_lines": 37800,
+      "l2_write_requests": 74240,
+      "l2_writeback_capacity": 1082,
+      "l2_writeback_wb_op": 35764,
+      "l2_noncoherent_requests": 57792,
+      "writeback_capacity_share": 0.0286,
+      "writeback_release_share": 0.9461,
+      "full_us_from_ablation": 67.5,
+      "achieved_fabric_gbps": 54.6
+    },
+    {
+      "shape_index": 3,
+      "shape": "2048x2880x2880",
+      "m": 2048,
+      "n": 2880,
+      "k": 2880,
+      "usable": true,
+      "groups": [
+        "1",
+        "2",
+        "3"
+      ],
+      "fabric_bytes_mb": 10.336,
+      "fabric_bytes_mb_bounds": [
+        10.324,
+        10.349
+      ],
+      "useful_bytes_mb": 10.322,
+      "amplification": 1.0014,
+      "ea_write_requests": 208144,
+      "ea_write_requests_64b": 207360,
+      "wrreq_64b_share": 0.99623,
+      "ea_write_requests_dram": 46444,
+      "fabric_requests": 161700,
+      "bytes_leaving_l2_mb": 13.296,
+      "ea_read_requests": 248113,
+      "fabric_payload_requests_analytic": 161280,
+      "fabric_flag_requests_measured": 1792,
+      "flag_share_of_fabric_requests": 0.01108,
+      "ea_write_latency_cycles": 4286.6,
+      "ea_write_latency_same_pass": true,
+      "tcc_cycles": 53917484,
+      "l2_writeback_lines": 104584,
+      "l2_write_requests": 207840,
+      "l2_writeback_capacity": 2356,
+      "l2_writeback_wb_op": 101323,
+      "l2_noncoherent_requests": 161700,
+      "writeback_capacity_share": 0.0225,
+      "writeback_release_share": 0.9688,
+      "full_us_from_ablation": 87.7,
+      "achieved_fabric_gbps": 117.9
+    },
+    {
+      "shape_index": 4,
+      "shape": "4096x4096x4096",
+      "m": 4096,
+      "n": 4096,
+      "k": 4096,
+      "usable": true,
+      "groups": [
+        "1",
+        "2",
+        "3"
+      ],
+      "fabric_bytes_mb": 29.376,
+      "fabric_bytes_mb_bounds": [
+        29.363,
+        29.389
+      ],
+      "useful_bytes_mb": 29.36,
+      "amplification": 1.0005,
+      "ea_write_requests": 590640,
+      "ea_write_requests_64b": 589824,
+      "wrreq_64b_share": 0.99862,
+      "ea_write_requests_dram": 131440,
+      "fabric_requests": 459200,
+      "bytes_leaving_l2_mb": 37.775,
+      "ea_read_requests": 462726,
+      "fabric_payload_requests_analytic": 458752,
+      "fabric_flag_requests_measured": 1792,
+      "flag_share_of_fabric_requests": 0.0039,
+      "ea_write_latency_cycles": 2842.7,
+      "ea_write_latency_same_pass": true,
+      "tcc_cycles": 56832579,
+      "l2_writeback_lines": 295848,
+      "l2_write_requests": 590336,
+      "l2_writeback_capacity": 177788,
+      "l2_writeback_wb_op": 116407,
+      "l2_noncoherent_requests": 459200,
+      "writeback_capacity_share": 0.6009,
+      "writeback_release_share": 0.3935,
+      "full_us_from_ablation": 203.5,
+      "achieved_fabric_gbps": 144.4
+    },
+    {
+      "shape_index": 5,
+      "shape": "8192x4096x14336",
+      "m": 8192,
+      "n": 4096,
+      "k": 14336,
+      "usable": true,
+      "groups": [
+        "1",
+        "2",
+        "3"
+      ],
+      "fabric_bytes_mb": 58.756,
+      "fabric_bytes_mb_bounds": [
+        58.735,
+        58.778
+      ],
+      "useful_bytes_mb": 58.72,
+      "amplification": 1.0006,
+      "ea_write_requests": 1180976,
+      "ea_write_requests_64b": 1179648,
+      "wrreq_64b_share": 0.99888,
+      "ea_write_requests_dram": 262576,
+      "fabric_requests": 918400,
+      "bytes_leaving_l2_mb": 75.54,
+      "ea_read_requests": 1963124,
+      "fabric_payload_requests_analytic": 917504,
+      "fabric_flag_requests_measured": 1792,
+      "flag_share_of_fabric_requests": 0.00195,
+      "ea_write_latency_cycles": 3025.0,
+      "ea_write_latency_same_pass": true,
+      "tcc_cycles": 146195739,
+      "l2_writeback_lines": 591272,
+      "l2_write_requests": 1180672,
+      "l2_writeback_capacity": 254225,
+      "l2_writeback_wb_op": 333565,
+      "l2_noncoherent_requests": 918400,
+      "writeback_capacity_share": 0.43,
+      "writeback_release_share": 0.5641,
+      "full_us_from_ablation": 641.9,
+      "achieved_fabric_gbps": 91.5
+    },
+    {
+      "shape_index": 6,
+      "shape": "8192x8192x29568",
+      "m": 8192,
+      "n": 8192,
+      "k": 29568,
+      "usable": true,
+      "groups": [
+        "1",
+        "2",
+        "3"
+      ],
+      "fabric_bytes_mb": 117.518,
+      "fabric_bytes_mb_bounds": [
+        117.48,
+        117.555
+      ],
+      "useful_bytes_mb": 117.441,
+      "amplification": 1.0007,
+      "ea_write_requests": 2361648,
+      "ea_write_requests_64b": 2359296,
+      "wrreq_64b_share": 0.999,
+      "ea_write_requests_dram": 524848,
+      "fabric_requests": 1836800,
+      "bytes_leaving_l2_mb": 151.07,
+      "ea_read_requests": 6826695,
+      "fabric_payload_requests_analytic": 1835008,
+      "fabric_flag_requests_measured": 1792,
+      "flag_share_of_fabric_requests": 0.00098,
+      "ea_write_latency_cycles": 2090.3,
+      "ea_write_latency_same_pass": true,
+      "tcc_cycles": 311779870,
+      "l2_writeback_lines": 1182120,
+      "l2_write_requests": 2361344,
+      "l2_writeback_capacity": 1016654,
+      "l2_writeback_wb_op": 154684,
+      "l2_noncoherent_requests": 1836800,
+      "writeback_capacity_share": 0.86,
+      "writeback_release_share": 0.1309,
+      "full_us_from_ablation": 1632.5,
+      "achieved_fabric_gbps": 72.0
+    }
+  ],
+  "caveats": [
+    "Counter collection instruments and may serialize dispatches, so no time measured under it is meaningful. Only transaction COUNTS are used.",
+    "TCC_EA0_WRREQ_STALL is unusable on this ASIC (it reads ~81 M cycles while every *_CREDIT_STALL sub-counter reads ~0) and was deliberately not collected."
+  ]
+}

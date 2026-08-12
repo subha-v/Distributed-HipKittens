@@ -1,0 +1,544 @@
+{
+  "rungs": {
+    "a": {
+      "label": "a",
+      "module": "gemm_rs_w23_a",
+      "config": {
+        "WGM4": 1,
+        "RELEASE_GROUP": 1,
+        "RELEASE_GROUP_FULL_ONLY": 1
+      },
+      "so_path": "/home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_23_waterfall/build/gemm_rs_w23_a.so",
+      "so_sha256": "caa8fd939490bbab79e2515be0b2fe78a1363492c09b8d16869e640998934be0",
+      "so_bytes": 409024,
+      "isa_path": "/home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_23_waterfall/build/isa/gemm_rs_w23_a.s",
+      "isa_sha256": "ec714ea8a64442848ab8155a4f79b5ced777189fb26469d3697446092ff42cfb",
+      "isa_raw_sha256": "ac5e47804fd1149c1fa76d0a612d897c7b31a15f7f29391d89626164a3fe033f",
+      "isa_lines": 25245,
+      "isa_counts": {
+        "instructions": 20190,
+        "v_mfma": 184,
+        "buffer_wbl2": 7,
+        "buffer_inv": 7,
+        "s_cbranch": 1268,
+        "s_branch": 264,
+        "s_barrier": 98,
+        "global_store_dwordx4": 7,
+        "global_load_dwordx4": 98,
+        "s_waitcnt_vmcnt": 462,
+        "scratch_store": 0,
+        "scratch_load": 0,
+        "v_cndmask": 589,
+        "s_cselect": 535
+      },
+      "resources": [
+        {
+          "instantiation": "BM=32 BN=64 BK=128 K_TAIL=0",
+          "TotalSGPRs": "106",
+          "VGPRs": "98",
+          "AGPRs": "0",
+          "ScratchSize [bytes/lane]": "0",
+          "Dynamic Stack": "False",
+          "Occupancy [waves/SIMD]": "4",
+          "SGPRs Spill": "51",
+          "VGPRs Spill": "0",
+          "LDS Size [bytes/block]": "0"
+        },
+        {
+          "instantiation": "BM=64 BN=128 BK=64 K_TAIL=0",
+          "TotalSGPRs": "106",
+          "VGPRs": "104",
+          "AGPRs": "0",
+          "ScratchSize [bytes/lane]": "0",
+          "Dynamic Stack": "False",
+          "Occupancy [waves/SIMD]": "4",
+          "SGPRs Spill": "56",
+          "VGPRs Spill": "0",
+          "LDS Size [bytes/block]": "0"
+        },
+        {
+          "instantiation": "BM=128 BN=192 BK=32 K_TAIL=1",
+          "TotalSGPRs": "106",
+          "VGPRs": "136",
+          "AGPRs": "0",
+          "ScratchSize [bytes/lane]": "0",
+          "Dynamic Stack": "False",
+          "Occupancy [waves/SIMD]": "3",
+          "SGPRs Spill": "73",
+          "VGPRs Spill": "0",
+          "LDS Size [bytes/block]": "0"
+        },
+        {
+          "instantiation": "BM=256 BN=256 BK=32 K_TAIL=0",
+          "TotalSGPRs": "106",
+          "VGPRs": "246",
+          "AGPRs": "0",
+          "ScratchSize [bytes/lane]": "0",
+          "Dynamic Stack": "False",
+          "Occupancy [waves/SIMD]": "2",
+          "SGPRs Spill": "57",
+          "VGPRs Spill": "0",
+          "LDS Size [bytes/block]": "0"
+        },
+        {
+          "instantiation": "BM=256 BN=256 BK=32 K_TAIL=1",
+          "TotalSGPRs": "106",
+          "VGPRs": "248",
+          "AGPRs": "0",
+          "ScratchSize [bytes/lane]": "0",
+          "Dynamic Stack": "False",
+          "Occupancy [waves/SIMD]": "2",
+          "SGPRs Spill": "73",
+          "VGPRs Spill": "0",
+          "LDS Size [bytes/block]": "0"
+        },
+        {
+          "instantiation": "BM=32 BN=64 BK=64 K_TAIL=0",
+          "TotalSGPRs": "106",
+          "VGPRs": "91",
+          "AGPRs": "0",
+          "ScratchSize [bytes/lane]": "0",
+          "Dynamic Stack": "False",
+          "Occupancy [waves/SIMD]": "5",
+          "SGPRs Spill": "51",
+          "VGPRs Spill": "0",
+          "LDS Size [bytes/block]": "0"
+        },
+        {
+          "instantiation": "BM=32 BN=64 BK=64 K_TAIL=1",
+          "TotalSGPRs": "106",
+          "VGPRs": "91",
+          "AGPRs": "0",
+          "ScratchSize [bytes/lane]": "0",
+          "Dynamic Stack": "False",
+          "Occupancy [waves/SIMD]": "5",
+          "SGPRs Spill": "82",
+          "VGPRs Spill": "0",
+          "LDS Size [bytes/block]": "0"
+        }
+      ],
+      "two_step_link": true
+    },
+    "b": {
+      "label": "b",
+      "module": "gemm_rs_w23_b",
+      "config": {
+        "WGM4": 0,
+        "RELEASE_GROUP": 1,
+        "RELEASE_GROUP_FULL_ONLY": 1
+      },
+      "so_path": "/home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_23_waterfall/build/gemm_rs_w23_b.so",
+      "so_sha256": "5d8d3882e89b6cae1e0d3beff031d1242a4e57f707a1be3ddb4cb46ac25e077d",
+      "so_bytes": 409024,
+      "isa_path": "/home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_23_waterfall/build/isa/gemm_rs_w23_b.s",
+      "isa_sha256": "366d4f08a030afaae5d1964cb2eb54586b396a5132fbda63e4553af2548519f2",
+      "isa_raw_sha256": "47311c13c02f64eb6d46355a0be3de38f3c7ce765d9f63f7f6a4686effd9a965",
+      "isa_lines": 25254,
+      "isa_counts": {
+        "instructions": 20201,
+        "v_mfma": 184,
+        "buffer_wbl2": 7,
+        "buffer_inv": 7,
+        "s_cbranch": 1268,
+        "s_branch": 264,
+        "s_barrier": 98,
+        "global_store_dwordx4": 7,
+        "global_load_dwordx4": 98,
+        "s_waitcnt_vmcnt": 462,
+        "scratch_store": 0,
+        "scratch_load": 0,
+        "v_cndmask": 589,
+        "s_cselect": 542
+      },
+      "resources": [
+        {
+          "instantiation": "BM=32 BN=64 BK=128 K_TAIL=0",
+          "TotalSGPRs": "106",
+          "VGPRs": "98",
+          "AGPRs": "0",
+          "ScratchSize [bytes/lane]": "0",
+          "Dynamic Stack": "False",
+          "Occupancy [waves/SIMD]": "4",
+          "SGPRs Spill": "52",
+          "VGPRs Spill": "0",
+          "LDS Size [bytes/block]": "0"
+        },
+        {
+          "instantiation": "BM=64 BN=128 BK=64 K_TAIL=0",
+          "TotalSGPRs": "106",
+          "VGPRs": "104",
+          "AGPRs": "0",
+          "ScratchSize [bytes/lane]": "0",
+          "Dynamic Stack": "False",
+          "Occupancy [waves/SIMD]": "4",
+          "SGPRs Spill": "59",
+          "VGPRs Spill": "0",
+          "LDS Size [bytes/block]": "0"
+        },
+        {
+          "instantiation": "BM=128 BN=192 BK=32 K_TAIL=1",
+          "TotalSGPRs": "106",
+          "VGPRs": "136",
+          "AGPRs": "0",
+          "ScratchSize [bytes/lane]": "0",
+          "Dynamic Stack": "False",
+          "Occupancy [waves/SIMD]": "3",
+          "SGPRs Spill": "74",
+          "VGPRs Spill": "0",
+          "LDS Size [bytes/block]": "0"
+        },
+        {
+          "instantiation": "BM=256 BN=256 BK=32 K_TAIL=0",
+          "TotalSGPRs": "106",
+          "VGPRs": "246",
+          "AGPRs": "0",
+          "ScratchSize [bytes/lane]": "0",
+          "Dynamic Stack": "False",
+          "Occupancy [waves/SIMD]": "2",
+          "SGPRs Spill": "58",
+          "VGPRs Spill": "0",
+          "LDS Size [bytes/block]": "0"
+        },
+        {
+          "instantiation": "BM=256 BN=256 BK=32 K_TAIL=1",
+          "TotalSGPRs": "106",
+          "VGPRs": "248",
+          "AGPRs": "0",
+          "ScratchSize [bytes/lane]": "0",
+          "Dynamic Stack": "False",
+          "Occupancy [waves/SIMD]": "2",
+          "SGPRs Spill": "74",
+          "VGPRs Spill": "0",
+          "LDS Size [bytes/block]": "0"
+        },
+        {
+          "instantiation": "BM=32 BN=64 BK=64 K_TAIL=0",
+          "TotalSGPRs": "106",
+          "VGPRs": "91",
+          "AGPRs": "0",
+          "ScratchSize [bytes/lane]": "0",
+          "Dynamic Stack": "False",
+          "Occupancy [waves/SIMD]": "5",
+          "SGPRs Spill": "51",
+          "VGPRs Spill": "0",
+          "LDS Size [bytes/block]": "0"
+        },
+        {
+          "instantiation": "BM=32 BN=64 BK=64 K_TAIL=1",
+          "TotalSGPRs": "106",
+          "VGPRs": "91",
+          "AGPRs": "0",
+          "ScratchSize [bytes/lane]": "0",
+          "Dynamic Stack": "False",
+          "Occupancy [waves/SIMD]": "5",
+          "SGPRs Spill": "83",
+          "VGPRs Spill": "0",
+          "LDS Size [bytes/block]": "0"
+        }
+      ],
+      "two_step_link": true
+    },
+    "c": {
+      "label": "c",
+      "module": "gemm_rs_w23_c",
+      "config": {
+        "WGM4": 0,
+        "RELEASE_GROUP": 4,
+        "RELEASE_GROUP_FULL_ONLY": 1
+      },
+      "so_path": "/home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_23_waterfall/build/gemm_rs_w23_c.so",
+      "so_sha256": "16996e40403d8d6735d2a6a025dee2e56db2eca45c35a7c671fd7984a804824f",
+      "so_bytes": 411936,
+      "isa_path": "/home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_23_waterfall/build/isa/gemm_rs_w23_c.s",
+      "isa_sha256": "7926c2e872835c8d86687d4915b7fadde19c542c094eefbeb9e2190e770ba90c",
+      "isa_raw_sha256": "d2d80efb200294e913266b2a68f5621f02c1b43fd23544f69a4983ca46021268",
+      "isa_lines": 26009,
+      "isa_counts": {
+        "instructions": 20734,
+        "v_mfma": 184,
+        "buffer_wbl2": 7,
+        "buffer_inv": 7,
+        "s_cbranch": 1272,
+        "s_branch": 267,
+        "s_barrier": 98,
+        "global_store_dwordx4": 7,
+        "global_load_dwordx4": 98,
+        "s_waitcnt_vmcnt": 462,
+        "scratch_store": 0,
+        "scratch_load": 0,
+        "v_cndmask": 589,
+        "s_cselect": 577
+      },
+      "resources": [
+        {
+          "instantiation": "BM=32 BN=64 BK=128 K_TAIL=0",
+          "TotalSGPRs": "106",
+          "VGPRs": "98",
+          "AGPRs": "0",
+          "ScratchSize [bytes/lane]": "0",
+          "Dynamic Stack": "False",
+          "Occupancy [waves/SIMD]": "4",
+          "SGPRs Spill": "54",
+          "VGPRs Spill": "0",
+          "LDS Size [bytes/block]": "0"
+        },
+        {
+          "instantiation": "BM=64 BN=128 BK=64 K_TAIL=0",
+          "TotalSGPRs": "106",
+          "VGPRs": "104",
+          "AGPRs": "0",
+          "ScratchSize [bytes/lane]": "0",
+          "Dynamic Stack": "False",
+          "Occupancy [waves/SIMD]": "4",
+          "SGPRs Spill": "60",
+          "VGPRs Spill": "0",
+          "LDS Size [bytes/block]": "0"
+        },
+        {
+          "instantiation": "BM=128 BN=192 BK=32 K_TAIL=1",
+          "TotalSGPRs": "106",
+          "VGPRs": "136",
+          "AGPRs": "0",
+          "ScratchSize [bytes/lane]": "0",
+          "Dynamic Stack": "False",
+          "Occupancy [waves/SIMD]": "3",
+          "SGPRs Spill": "79",
+          "VGPRs Spill": "0",
+          "LDS Size [bytes/block]": "0"
+        },
+        {
+          "instantiation": "BM=256 BN=256 BK=32 K_TAIL=0",
+          "TotalSGPRs": "106",
+          "VGPRs": "246",
+          "AGPRs": "0",
+          "ScratchSize [bytes/lane]": "0",
+          "Dynamic Stack": "False",
+          "Occupancy [waves/SIMD]": "2",
+          "SGPRs Spill": "63",
+          "VGPRs Spill": "0",
+          "LDS Size [bytes/block]": "0"
+        },
+        {
+          "instantiation": "BM=256 BN=256 BK=32 K_TAIL=1",
+          "TotalSGPRs": "106",
+          "VGPRs": "248",
+          "AGPRs": "0",
+          "ScratchSize [bytes/lane]": "0",
+          "Dynamic Stack": "False",
+          "Occupancy [waves/SIMD]": "2",
+          "SGPRs Spill": "79",
+          "VGPRs Spill": "0",
+          "LDS Size [bytes/block]": "0"
+        },
+        {
+          "instantiation": "BM=32 BN=64 BK=64 K_TAIL=0",
+          "TotalSGPRs": "106",
+          "VGPRs": "91",
+          "AGPRs": "0",
+          "ScratchSize [bytes/lane]": "0",
+          "Dynamic Stack": "False",
+          "Occupancy [waves/SIMD]": "5",
+          "SGPRs Spill": "58",
+          "VGPRs Spill": "0",
+          "LDS Size [bytes/block]": "0"
+        },
+        {
+          "instantiation": "BM=32 BN=64 BK=64 K_TAIL=1",
+          "TotalSGPRs": "106",
+          "VGPRs": "92",
+          "AGPRs": "0",
+          "ScratchSize [bytes/lane]": "0",
+          "Dynamic Stack": "False",
+          "Occupancy [waves/SIMD]": "5",
+          "SGPRs Spill": "88",
+          "VGPRs Spill": "0",
+          "LDS Size [bytes/block]": "0"
+        }
+      ],
+      "two_step_link": true
+    },
+    "null": {
+      "label": "null",
+      "module": "gemm_rs_w23_null",
+      "config": {
+        "WGM4": 0,
+        "RELEASE_GROUP": 4,
+        "RELEASE_GROUP_FULL_ONLY": 1
+      },
+      "so_path": "/home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_23_waterfall/build/gemm_rs_w23_null.so",
+      "so_sha256": "51723ebfd24b414897ec0818d26e028bf4ff633c73055c2c0b34d751b8a2ac9f",
+      "so_bytes": 411952,
+      "isa_path": "/home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_23_waterfall/build/isa/gemm_rs_w23_null.s",
+      "isa_sha256": "7926c2e872835c8d86687d4915b7fadde19c542c094eefbeb9e2190e770ba90c",
+      "isa_raw_sha256": "58b2df27d8e2f3711d86f3cb074f02d8028c0494d0f6c1e8d0477a50f7b4bbe5",
+      "isa_lines": 26009,
+      "isa_counts": {
+        "instructions": 20734,
+        "v_mfma": 184,
+        "buffer_wbl2": 7,
+        "buffer_inv": 7,
+        "s_cbranch": 1272,
+        "s_branch": 267,
+        "s_barrier": 98,
+        "global_store_dwordx4": 7,
+        "global_load_dwordx4": 98,
+        "s_waitcnt_vmcnt": 462,
+        "scratch_store": 0,
+        "scratch_load": 0,
+        "v_cndmask": 589,
+        "s_cselect": 577
+      },
+      "resources": [
+        {
+          "instantiation": "BM=32 BN=64 BK=128 K_TAIL=0",
+          "TotalSGPRs": "106",
+          "VGPRs": "98",
+          "AGPRs": "0",
+          "ScratchSize [bytes/lane]": "0",
+          "Dynamic Stack": "False",
+          "Occupancy [waves/SIMD]": "4",
+          "SGPRs Spill": "54",
+          "VGPRs Spill": "0",
+          "LDS Size [bytes/block]": "0"
+        },
+        {
+          "instantiation": "BM=64 BN=128 BK=64 K_TAIL=0",
+          "TotalSGPRs": "106",
+          "VGPRs": "104",
+          "AGPRs": "0",
+          "ScratchSize [bytes/lane]": "0",
+          "Dynamic Stack": "False",
+          "Occupancy [waves/SIMD]": "4",
+          "SGPRs Spill": "60",
+          "VGPRs Spill": "0",
+          "LDS Size [bytes/block]": "0"
+        },
+        {
+          "instantiation": "BM=128 BN=192 BK=32 K_TAIL=1",
+          "TotalSGPRs": "106",
+          "VGPRs": "136",
+          "AGPRs": "0",
+          "ScratchSize [bytes/lane]": "0",
+          "Dynamic Stack": "False",
+          "Occupancy [waves/SIMD]": "3",
+          "SGPRs Spill": "79",
+          "VGPRs Spill": "0",
+          "LDS Size [bytes/block]": "0"
+        },
+        {
+          "instantiation": "BM=256 BN=256 BK=32 K_TAIL=0",
+          "TotalSGPRs": "106",
+          "VGPRs": "246",
+          "AGPRs": "0",
+          "ScratchSize [bytes/lane]": "0",
+          "Dynamic Stack": "False",
+          "Occupancy [waves/SIMD]": "2",
+          "SGPRs Spill": "63",
+          "VGPRs Spill": "0",
+          "LDS Size [bytes/block]": "0"
+        },
+        {
+          "instantiation": "BM=256 BN=256 BK=32 K_TAIL=1",
+          "TotalSGPRs": "106",
+          "VGPRs": "248",
+          "AGPRs": "0",
+          "ScratchSize [bytes/lane]": "0",
+          "Dynamic Stack": "False",
+          "Occupancy [waves/SIMD]": "2",
+          "SGPRs Spill": "79",
+          "VGPRs Spill": "0",
+          "LDS Size [bytes/block]": "0"
+        },
+        {
+          "instantiation": "BM=32 BN=64 BK=64 K_TAIL=0",
+          "TotalSGPRs": "106",
+          "VGPRs": "91",
+          "AGPRs": "0",
+          "ScratchSize [bytes/lane]": "0",
+          "Dynamic Stack": "False",
+          "Occupancy [waves/SIMD]": "5",
+          "SGPRs Spill": "58",
+          "VGPRs Spill": "0",
+          "LDS Size [bytes/block]": "0"
+        },
+        {
+          "instantiation": "BM=32 BN=64 BK=64 K_TAIL=1",
+          "TotalSGPRs": "106",
+          "VGPRs": "92",
+          "AGPRs": "0",
+          "ScratchSize [bytes/lane]": "0",
+          "Dynamic Stack": "False",
+          "Occupancy [waves/SIMD]": "5",
+          "SGPRs Spill": "88",
+          "VGPRs Spill": "0",
+          "LDS Size [bytes/block]": "0"
+        }
+      ],
+      "two_step_link": true,
+      "raw_diff_lines_vs_c": 5,
+      "raw_diff_is_cuid_only": true
+    }
+  },
+  "assertions": [
+    {
+      "id": "A1",
+      "hard": true,
+      "passed": true,
+      "detail": "a.isa=ec714ea8a6444284 b.isa=366d4f08a030afaa"
+    },
+    {
+      "id": "A1b",
+      "hard": false,
+      "passed": true,
+      "detail": "a vs b differ in instructions 20190->20201, s_cselect 535->542"
+    },
+    {
+      "id": "A2",
+      "hard": true,
+      "passed": true,
+      "detail": "b.isa=366d4f08a030afaa c.isa=7926c2e872835c8d"
+    },
+    {
+      "id": "A3",
+      "hard": false,
+      "passed": true,
+      "detail": "b vs c differ in s_cbranch 1268->1272, instructions 20201->20734"
+    },
+    {
+      "id": "A4",
+      "hard": true,
+      "passed": true,
+      "detail": "c.isa=7926c2e872835c8d null.isa=7926c2e872835c8d; raw ISA differs on 5 line(s), cuid-only=True"
+    },
+    {
+      "id": "A5.v_mfma",
+      "hard": true,
+      "passed": true,
+      "detail": "v_mfma per rung: {'a': 184, 'b': 184, 'c': 184, 'null': 184}"
+    },
+    {
+      "id": "A6",
+      "hard": true,
+      "passed": true,
+      "detail": "7 instantiations; clean"
+    },
+    {
+      "id": "A6b",
+      "hard": false,
+      "passed": true,
+      "detail": "vs /home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/harness/build/gemm_rs_mi300x.log: identical"
+    },
+    {
+      "id": "A7",
+      "hard": true,
+      "passed": true,
+      "detail": "entry-point import checked by build_rungs.sh/import_check.py"
+    }
+  ],
+  "notes": [],
+  "shipped_config_rungs": [
+    "c",
+    "null"
+  ],
+  "fallback_builds": []
+}
