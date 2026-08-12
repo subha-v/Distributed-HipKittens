@@ -6,6 +6,10 @@ tonight is **`LESSONS.md` in this folder** (aug10's remains at
 this folder — that is the morning read**; per-experiment detail is in
 `exp_N_*/result.md`.
 
+**Read the two OPEN sections below before quoting any number from this file.**
+Every timing result in this document is a **T=4096** result — that is now known to
+be the only shape at which either megakernel is correct.
+
 ## Where we start
 
 | arm | µs (campaign, 5-rotation median rank-max p50) | vs `production` |
@@ -15,6 +19,217 @@ this folder — that is the morning read**; per-experiment detail is in
 | **`mps_mega` mode 12, `C=16 g=33 flush_rows=16`** | **6,685.5 / 6,683.1** | **0.866** |
 
 Target: **0.80× ≈ 6,172 µs**, i.e. **−513 µs** from the ratchet.
+
+## OPEN DEFECT — both megakernels are WRONG at T=1024 and T=2048 (exp_36)
+
+**Unfixed, unattributed, and it bounds every number in this document.**
+
+| arm | T=1024 | T=2048 | T=4096 |
+|---|---|---|---|
+| `mps_mega` | **7 of 8 ranks' output entirely unwritten** — poison survivors 7,340,032 = T·H per rank | same shape, 14,680,064 survivors | correct |
+| `pf6gm_mega` | `max_abs=1.71 relative=0.846` | `max_abs=1.81` | correct |
+| `production` | `max_abs=0.023 pass=True` | passes | correct |
+
+`pperr = 0` throughout — **the kernel does not report an error, it silently
+under-writes.** Reproduced 6/6 configs with capacities pinned at T=4096 **and
+again with capacities scaled to T**, so it is not a driver capacity-sizing
+mistake. **`pf6gm_mega` is wrong there too, so this is not an MPS bug — it is
+shape fragility in both megakernels.** T ≤ 512 is a separate and benign matter
+(host guard at `ab.py:554`, "prefill-only").
+
+Two consequences, both binding: **every timing result in this document is a
+T=4096 result** and must be captioned as one, and this defect is the single thing
+standing between paper Q5 and a real batch/seqlen axis. **Worth its own
+experiment.** Do not report a T-sweep until it is fixed.
+
+## OPEN RATCHET CANDIDATE — `C=8` beats the `C=16` ratchet by 28.6 µs (exp_36)
+
+**NOT ratcheted. Under paired confirmation in exp_37 (running, pinned at
+`b5215081`). Do not move the ratchet on this alone.**
+
+exp_36's CTA-dedication sweep at T=4096, same-run, all gates green:
+
+| C | g | mode | n | p50 µs | replicates | ratio | Δ vs C=16 |
+|---:|---:|---:|---:|---:|---|---:|---:|
+| 4 | 353 | 12 | 1 | 6,466.1 | — | 0.8395 | −32.0 |
+| **8** | **353** | **12** | **3** | **6,469.5** | 6,464.7 / 6,472.3 / 6,471.5 | **0.8388** | **−28.6** |
+| 16 | 353 | 12 | 3 | 6,498.1 | 6,488.7 / 6,504.6 / 6,500.8 | 0.8427 | — (ratchet) |
+| 32 | 353 | 12 | 1 | 6,719.3 | — | 0.8705 | +221.2 |
+| 64 | 1 | **2** | 1 | 6,829.6 | — | 0.8841 | +331.5 |
+
+**Placement is monotonically harmful in `C`, and the ratchet's C=16 is not the
+optimum of its own axis.** Three non-overlapping replicates each at C=8 and
+C=16. The whole effect lives in **M7**, the payload-carrying phase; **M6 is flat
+to ±1.5 % across every arm**. The ranking reproduces identically under the second
+router seed (1234 → 2468). Every step *toward* dedicating CTAs to communication
+is a loss — which is paper Q2's answer arriving from the sensitivity sweep rather
+than from the placement experiment.
+
+The standing ratchet remains **`C=16 g=353 mode=12 flush_rows=16` = 6,482.7 µs =
+0.8408×** until a paired same-run campaign says otherwise.
+
+## exp_22 — saturation curves LANDED (paper Q4a / Fig 2)
+
+250/250 plan points, 8× MI350X, `E22_SRC_REV 10`, `saturation.json` schema
+`exp22-saturation-1`. 0/250 points with `rel_iqr_pct` above 1 % (median 0.05 %).
+
+| series | knee C | plateau | % of nominal | reading |
+|---|---:|---:|---:|---|
+| xgmi single mlp4 | **8** | 56.9 GB/s | 74.1 % of 76.8 | saturated |
+| xgmi single mlp1 / mlp8 | 16 | 55.5 / 55.7 | 72.2 / 72.6 % | saturated |
+| xgmi rr7 mlp4 | **32** | 355.0 GB/s | 66.0 % of 537.6 | saturated |
+| xgmi rr7 mlp1 / mlp8 | *(64)* | — | 61.2 / 61.3 % at C=64 | **no knee in range** (C64/C32 = 1.87 / 1.73) |
+| hbm | **128** | 4,151.9 GB/s | 51.9 % of 8,000 | saturated |
+| mfma shapes 4 / 16 / 256 | **none** | 119.9 / 352.0 TFLOPS | 5.2 / 15.3 % | **linear to 256**, R² ≥ 0.99989 |
+
+**Communication saturates at 8–32 CTAs against 256 CTAs of compute capacity — a
+topology-sized pool is sufficient and a large one is waste.** MFMA has no knee at
+all, per-CTA efficiency 0.987–0.998 from 32 to 256 CTAs: **the
+one-block-per-CU premise confirmed directly, so there is no issue-slot
+contention for a dedicated pool to relieve.** H4 SUPPORTED ×3.
+
+**H3 refuted in the good direction — the payload rides free, the protocol does
+not.** Payload-only concurrent/isolated median **0.9951 (n=42)**; with the
+protocol compiled in the same ratio falls to **0.878**, and the g=16 probe costs
+up to **−42 %** (`rr7 c16`: 193.3 → 113.1 GB/s). **exp_20 reproduced as a
+curve.** And **`reserved_only` never wins**: carrying payload costs the compute
+pool **0.073 %** median, while *dedicating* the same 16 CTAs costs **6.25 %**
+before a byte moves. Two honest exceptions where a payload pool does tax compute:
+HBM at C=128 (10.1 %) and pushing past a saturated link's knee (14.2 %, a
+cache-regime flip).
+
+Concurrency is **proven per point**, not assumed: `wall < res_span + cmp_span` at
+**75/75** (span-sum/wall 1.62–1.82), which is stronger than the
+by-construction `overlap_pct`.
+
+**The H1 falsifier FIRED and is reported unsoftened.** The gate asked for 75 % of
+the 76.8 GB/s nominal (57.6 GB/s), but the achievable ceiling is **56.9–57.3
+GB/s (74.1–74.6 %) at every C from 8 to 64** — **no CTA count could have
+passed.** The threshold was calibrated against a spec sheet instead of a measured
+ceiling; the mechanism was fine. The substantive question still separates: C8
+55.2 → C64 56.5 GB/s, so **8× the pushers buys +2.4 %** and then nothing.
+
+Three `knee_ctas` values in the JSON are artifacts and must not be annotated as
+knees (`rr7` mlp1/mlp8, still rising; `mfma`, just linearity), and
+`reserved_only` points carry `value = 0` **by design** — their payload is
+`cmp_tflops_median`, never the bandwidth axis.
+
+## exp_36 — sensitivity (paper Q5 / Fig 7): two of three axes do not exist
+
+**The pre-registered grid could not be run, and the reason is the finding.**
+`sensitivity_grid.json`, 49 points, pin `b5215081`, 15 campaigns + 10 screens, all
+gates green at the one feasible shape.
+
+- **The routing-std axis is not a knob.** `K0_SYNTH_ROUTE` is **rejected** under
+  `K0_INPUT_MODE=mok_synthetic`, which `run_campaign.sh` hard-wires and
+  `K0_BENCHMARK_PROTOCOL=mok_eager` requires (reproduced on all 8 ranks); the
+  synthetic-route families are **decode-only** (`WORLD=8, T=64, TOPK=8, E=32`);
+  and **`synthetic_routes.py` has no `std` parameter at all** — `skewed_hot` is a
+  fixed deterministic pattern. **std = 0.032 and 0.05 were never settable.** The
+  only routing variable that exists is the router seed, whose reachable
+  destination-load CV spans **0.0034–0.0086, i.e. 4–15× *less* imbalance than
+  COMET's 0.032** — reported as a weak substitute, not as a skew axis.
+- **The T axis collapses to one point** — see the open-defect section above.
+- **`C = 0` at any skew still needs mode 14** and is recorded as
+  `"status": "requires_mode_14"` rather than faked with a large-C proxy.
+
+Verdicts against pre-registration: prediction 1 (small vs large T) **unresolved —
+no second T exists**; prediction 2 (a pool re-enters under skew) **unresolved as
+stated and refuted where testable** — placement is monotonically harmful;
+prediction 3 (depth sensitivity) **SUPPORTED** — depth 4 beats depth 8 by
+**72.7 µs** and throttle-off costs **626.9 µs**; prediction 4 (zero peer wait)
+**SUPPORTED** — `[MPS SPIN]` 0/0 at all 25 green points. **The throttle is worth
+10–30× more than placement**, and M6 is flat within 1.5 % across every arm: the
+entire difference lives in M7.
+
+Driver deviation, auditable: `K0_T` and four other shape variables are hard-wired
+as `docker -e` flags that cannot be overridden from outside, so `rc_T.sh` was
+generated from `run_campaign.sh` **by sed** (full diff in `raw/rc_T.sh.diff`,
+touching only those five lines plus a `SCRIPT_DIR` override). At T=4096 the
+generated defaults reproduce the hard-wired values exactly and the control screen
+read **0.8420×** against the known 0.8408× — **the driver is not a confound.**
+
+## exp_34 — mode 14 REVIEWED and CPU-GATED; no GPU number exists
+
+**Committed at `291dfa08`. Protocol review: APPROVE-WITH-CONDITIONS, and every
+condition is now cleared.** Still owed: correctness, negative control, 600-epoch
+soak, campaign. **Do not quote a number — there is none.**
+
+Review findings, all SOUND: happens-before on both the local and remote paths;
+the **tid-0 observation** is sound because the code decomposes `cta_acquire` into
+`__syncthreads()` plus a per-thread `acquire_fence<system>`, which is
+**equal-or-stronger than the library idiom**, and no payload load falls in the
+gap; **epoch staleness** sound (unsigned `>=`, `epoch = mega_count+1` so a zero
+cell never satisfies the first poll, `retired[q] >= e` makes a future value
+unreachable, wrap at 2³² against 600 epochs); **deadlock-free**; **mode
+isolation** sound because every predicate change is an *added disjunct* on
+`mode == 14`, so **modes 2 and 12 are bit-identical**.
+
+Conditions cleared:
+
+| condition | evidence |
+|---|---|
+| `row_ready` capacity | `mori_t((WORLD, T_LOC_MAX))` = **327,680 words**; mode 14's highest write is **319,488** — 32 KB of headroom, no overflow, and the entry guard **fails closed** if a future shape removes it |
+| no concurrent clear | `row_ready` zeroed once at setup; the only other clear is gated on `K0_PF6GM_DECOMP=1` (never set under `benchmarks/`) and is bracketed by `synchronize()` + `dist.barrier()` |
+| acquire is real in ISA | **`buffer_inv sc0 sc1` present and preceding the first payload load**, proven with a marker build |
+| negative control exists | `negative_control.patch` cuts the publish loop to `R < world-1`; expected bit 25 on rank 7 only, gate fail |
+| resource parity | tuple byte-identical to the arm; `K0P6_MPS_SRC_REV` → **28** |
+
+**A confound was found and fixed, and it is the reason this got three rungs
+instead of one.** Mode 14 had *also* deleted the per-task VMEM drain (~2,840
+`vmcnt(0)` + `__syncthreads()` per CTA), which would have made the waterfall rung
+measure two variables. The drain is now selectable — **`g |= 0x80`
+(`kCoarseKeepDrainBit`) retains it** — so the waterfall reads: **mode 12 →
+`g=481,mode=14` (granularity alone) → `g=353,mode=14` (+ drain deletion).** The
+event publication **genuinely cannot be retained** (no consumer, and keeping it
+would make error bit 26 ambiguous), so that rung must be labelled **"coarse
+readiness including the event publication it deletes"**, not granularity alone.
+
+Pre-registration stands unchanged: band **5,990–6,440 µs**, point estimate
+~6,215, **above 6,568 falsifies**, and the number is **BANKED, not ratcheted** —
+at `C = 0` mode 14 is a homogeneous megakernel. Debit still to price in: 96 of
+282 `flat_atomic_pk_add_bf16` acquire a scratch op within 40 instructions ahead
+(exp_26 measured that exact migration at +2.81 µs, t = 0.61 — a null).
+
+## exp_23 — timeline instrument SPEC READY (paper Q4b / Fig 3), GO at Tier A
+
+CPU only; the kernel files were **read only**. `patch_spec.md` is a ~20-minute
+mechanical apply: **Tier A is five one-line `ts_last`→`ts_mark` swaps** at sites
+that already decode the config and already read the clock, plus **a one-line host
+buffer resize — no ABI change**, no new descriptor slot, no new flag, no atomics,
+no LDS, and no code in either MFMA span. `parse_events.py`, `bin_timeline.py`,
+`xcheck.py` and `selftest.py` are all built and **self-tested across 8 mutation
+classes with every verdict proven to flip**. Verdict **GO at Tier A** (~15 %
+parity risk), conditional at A+B, **NO-GO at A+B+C until the parity gate is
+green**; ~45–55 min of GPU for all three arms.
+
+Two plan corrections that change the figure:
+
+1. **`pf6gm_mega` cannot be instrumented** — 55-word descriptor, no MPS state
+   slot — so the homogeneous panel must be **`mps_mega C=0,mode=0` labelled
+   "bulk, no overlap"**. Same wall exp_33 hit from the other side.
+2. **This node has no live xGMI throughput counter** (`amd-smi --xgmi` → N/A,
+   `--shownodesbw` → 0-0), so the promised bandwidth cross-check is replaced by a
+   **UMC duty-cycle check ±15 pp plus a 52.8 GB/s fabric-ceiling bound**, with
+   **rocprof TCC-EA** named as the remaining gap.
+
+Also corrected in passing: `design.md`'s stale `LDS 155,428` / `SGPR 104` — the
+real tuple is **155,496 / 106**.
+
+## Queue state (supersedes the table in §"THE FIGURE NIGHT LANDED")
+
+| item | state |
+|---|---|
+| **exp_33** attribution (Q3) | **DONE** — `phase_stamps.json` |
+| **exp_22** saturation (Q4a) | **DONE** — `saturation.json`, 250/250 points |
+| **exp_36** sensitivity (Q5) | **DONE as far as the harness allows** — `sensitivity_grid.json`; T=4096 only, skew axis absent |
+| **exp_35** waterfall (Q1) | **PARTIAL, 3 rungs of 6** (the mode-14 rung split in two) |
+| **exp_34** mode 14 | **BUILT + REVIEWED + CPU-GATED, NOT MEASURED.** Committed `291dfa08`, `K0P6_MPS_SRC_REV 28`. Next: correctness → negative control → soak → campaign |
+| **exp_23** timeline (Q4b) | **SPEC READY** — patch spec + tooling done and self-tested; needs the ~20-min apply, the 4-TU CPU parity gate, then ~45–55 min GPU |
+| **exp_37** placement (Q2) | **CAMPAIGN RUNNING**, pinned at `b5215081`; also carries the C=8 paired confirmation |
+| C=8 ratchet candidate | **OPEN** — see the open-ratchet section; do not move the ratchet without a paired same-run result |
+| T=1024/2048 correctness | **OPEN DEFECT**, unowned — see the open-defect section |
+| Q6 external ladders | **NOT STARTED** (stretch) |
 
 ## THE FIGURE NIGHT LANDED (exp_33 + exp_35, pinned at `ca5b683f`)
 
@@ -99,6 +314,11 @@ confounded with the mechanism.
 | d | + coarse arrival signals (mode 14) | — | `null` | | | `pending_exp_34` |
 | e | + nc-major producer task order | — | `null` | | | `not_built` |
 
+> **Rung count updated to 6 by exp_34.** The mode-14 rung splits in two now that
+> the per-task VMEM drain deletion is selectable: (d) `g=481,mode=14` = coarse
+> readiness with the drain retained, (e) `g=353,mode=14` = + drain deletion,
+> (f) nc-major. See §"exp_34".
+
 **With `C` held fixed at 16, one scheduling bit moves end-to-end by −615.0 µs —
 1.52× the entire (a)→(c) gap of −404.4 µs — while relocating the payload into
 the producer's epilogue *without* that bound costs +210.6 µs against a baseline
@@ -136,6 +356,9 @@ bundles the mode-12 transport, the C=16 pool, and the per-row protocol. Step
 (b)→(c) is strictly single-variable.
 
 ### Queue state after tonight's figure block
+
+> **SUPERSEDED by §"Queue state" above.** exp_22 and exp_36 have since landed and
+> exp_34 has passed protocol review. Kept for the record.
 
 | item | state |
 |---|---|
