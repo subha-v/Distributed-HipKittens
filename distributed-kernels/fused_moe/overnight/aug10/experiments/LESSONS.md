@@ -955,3 +955,71 @@
   form (`peer_tab<8>::build(desc)`); packet transports want a
   `max_outstanding` depth knob — throttling is the mechanism the winners
   ship, and nothing in the API expresses it.
+- 2026-08-12 exp_24 **NEW RATCHET: `C=16 g=353 mode=12 flush_rows=16`
+  (= dead-`part`-zero deleted + throttle depth 4) at 6,568.0 +/- 4.6 us =
+  0.8522x production, 0.9487x pf6gm**, THREE independent 5-rotation campaigns
+  (6,571.4 / 6,562.7 / 6,569.8; production 7,706.8 mean, pf6gm 6,923.0 mean),
+  full ladder green in all 15 rotations: `[MOK GATE]` all three arms,
+  `control_fails=True`, 600/600 soak `pperr=0`. Previous best exp_21 `g=33` =
+  6,685.5 / 0.8665, so **−117.5 us, +1.43 points vs production and +1.86 vs the
+  homogeneous megakernel**. Intermediate point `g=97` (A only, depth 8) =
+  6,618.9 +/- 6.2 us / 0.8595, n=3. In-build control `g=33` = 6,692.6 / 0.8685
+  reproduces exp_21 to 0.11%. Reference check `pf6gm/prod` 0.8952-0.9002 (G=3).
+  SRC_REV 24, commit 520fe9c6.
+- 2026-08-12 exp_24 **the M5 `part` zero-fill was 448 MiB/rank/epoch of DEAD
+  stores in mode 12, and deleting it is worth −51.2 +/- 4.2 us of the M3->M5
+  plan phase (t=12.3, 11 paired screens) and −73.7 us / −0.90 points end to
+  end (4 campaigns).** Mode 12 stopped reading `part` at exp_21 (M7 targets the
+  owner's `slots`, M8 takes `part = nullptr`, the pool's only reader is behind
+  an unreachable `continue`) but the M5 loop kept zeroing all T_ext rows. The
+  zero was FULLY EXPOSED on the M3->M4 critical path — CTA 0's serial
+  `tile_desc` build and CTA 1's CSR scan are not the plan-phase bottleneck.
+  **The LLC-eviction story is dead**: M6 moved −14.7 +/- 11.3 us (t=1.3),
+  as pre-registered, because W13 (939 MB) and W2 (469 MB) each exceed the
+  256 MB Infinity Cache anyway. Next plan-phase lever is CTA 0's serial
+  `E=32` loop; 378 us remain for a 7.3 MiB transpose + 3 grid barriers.
+- 2026-08-12 exp_24 **the epilogue RMW throttle is a CLIFF, not a curve, and
+  exp_21's depth 8 was not the optimum.** M7 by cap depth:
+  4 -> 2,659 | **8 -> 2,742** | 16 -> 3,204 | 32 -> 3,112 | unthrottled 3,189.
+  One step deeper than 8 loses the ENTIRE ~500 us the throttle was worth (16
+  and 32 sit at the unthrottled cost, 7.3σ and 5.9σ); shallower is flat to
+  slightly better, and depth 4 wins **−50.9 us (−0.77 %)** at campaign
+  resolution (n=3 vs n=3, sigma ~5 us each, ~9 sigma). Screens could not see it
+  (M7 −83 +/- 63 us); campaigns could. Depth 2 is unmeasured — and the `g`
+  `0x300` selector has no room left, which is the encoding's problem, not the
+  mechanism's.
+- 2026-08-12 exp_24 **the remote-atomic epilogue is NOT instruction-issue
+  bound.** Folding `slot_off` into the peer table removes 3 instructions from
+  each of 117 M remote atomics per rank per epoch (~350 M ops) and measured a
+  campaign-resolution **null** (6,692.6 vs exp_21's 6,685.5/6,683.1, +0.11 %).
+  Corroborates exp_21's rate-shaped reading and Mechanism B's cliff: the loop
+  waits on the fabric. Useful as a register-pressure *enabler* only.
+- 2026-08-12 exp_24 `ops:` **the w1t1p1 screen tail is much fatter than the
+  documented sigma.** `harness_recipe.md` §5 reports σ = 0.52 % on
+  `ratio_vs_prod` over 6 repeats; exp_24 saw a repeated control drift **6.6 %**
+  inside one batch (6,795 -> 7,244), with no foreign KFD process, no foreign
+  container on a GPU, and no stale lease. Treat ~3 % as the smallest callable
+  end-to-end screen delta. Device stamps are far better instruments for
+  phase-local mechanisms (plan M3->M5 σ = 4.7 us / 1.1 %; M7 σ = 63 us /
+  2.3 %), and campaigns reproduce to 0.09 %. **Screens order points; campaigns
+  set the ratchet; stamps attribute mechanisms.**
+- 2026-08-12 exp_24 `primitives:` **a primitive that fuses two jobs with
+  different liveness makes dead work undeletable.**
+  `hkp::zero_part_scale_transpose` welds a 14 KiB buffer zero to a scale
+  transpose that share nothing but a loop index. Mode 12 killed the zero's
+  consumer at exp_21 and the fusion kept 448 MiB/rank/epoch alive for four
+  experiments, because deleting it required editing a read-only header or
+  duplicating the live half. **Rule: never fuse two jobs in one primitive
+  unless they share a consumer.** Also: `packet.cuh`'s missing
+  `max_outstanding` should be a **compile-time template parameter** (a runtime
+  carrier cost two rejected shapes and a register fix — the wait depth is an
+  instruction immediate); and `peer.cuh`'s missing tabulation should be
+  **offset-biased** (`peer_tab<8>::build(desc, uniform_offset)`), because
+  pre-adding a uniform base is what frees the register the caller needs.
+- 2026-08-12 exp_24 `ops:` **the `g` config field silently overflowed into the
+  `mode` field for any `g > 0xFF` and still validated.** `encode_config` shifted
+  an unmasked 8-bit-intended `g` left by 8, so `g = 0x121` set `mode |= 1` and
+  decoded back as `g = 0x21`. Now masked, with `g`'s high byte parked at packed
+  bits [34:42) — bit-identical for every `g <= 0xFF` across every mode (verified
+  over all 3,584 combinations). Seventh mechanism selector in a reinterpreted
+  field; this is the one that drew blood.

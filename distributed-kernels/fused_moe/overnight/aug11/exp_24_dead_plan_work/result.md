@@ -1,20 +1,37 @@
 # exp_24 result — dead `part` zero-fill (A) and the throttle-depth sweep (B)
 
+## NEW RATCHET — confirmed over three 5-rotation campaigns
+
+`mps_mega`, `C=16, g=353, mode=12, flush_rows=16` = **A + throttle depth 4**:
+
+| | production | pf6gm_mega | **mps_mega** | mps/prod | mps/pf6gm |
+|---|---:|---:|---:|---:|---:|
+| **exp_24 (this)**, n=3, σ 4.6 µs | 7,706.8 | 6,923.0 | **6,568.0** | **0.8522** | **0.9487** |
+| exp_21 ratchet | 7,715.6 | 6,911.4 | 6,685.5 | 0.8665 | 0.9673 |
+
+**−117.5 µs. The margin over `production` widens 1.43 points (0.8665 → 0.8522)
+and over the homogeneous megakernel by 1.86 points (0.9673 → 0.9487).** Both
+mechanisms contribute, both were gated independently, and every one of the eight
+campaigns tonight passed the full ladder.
+
 **Verdict, one line each.**
 
 - **Mechanism A is a WIN, not a null.** Deleting the 448 MiB of dead `part` zero
   stores removes **51.2 ± 4.2 µs** from the M3→M5 plan phase (−11.9 % of that
-  phase, t = 12.3 over 11 paired screens). It is worth ~0.8 % end to end, which
-  is *below* what a single screen can resolve — the device stamps are what make
-  it a measurement instead of a guess.
-- **Mechanism B: depth 8 was a good pick, and the axis is now closed on the deep
-  side.** Depth 16 and 32 put **M7 back at exp_21's unthrottled cost**
-  (+462 µs and +370 µs vs depth 8, 7.3σ and 5.9σ). Depth 4 is
-  indistinguishable from 8 (−83 ± 63 µs, t = 1.3). The useful cap is ≤ 8 and
-  the whole benefit is gone by 16.
+  phase, t = 12.3 over 11 paired screens) and **−73.7 µs (−1.10 %) end to end
+  over four 5-rotation campaigns**. The end-to-end effect is *below* single-screen
+  resolution; the device stamps are what made it a measurement rather than a
+  guess, and the campaigns are what made it a ratchet.
+- **Mechanism B: 8 was a good first guess but NOT the optimum, and the axis is a
+  cliff, not a curve.** Depth 16 and 32 put **M7 back at exp_21's unthrottled
+  cost** (+462 µs and +370 µs vs depth 8, 7.3σ and 5.9σ). Depth **4** is
+  invisible at screen resolution but worth **−50.9 µs (−0.77 %)** at campaign
+  resolution (n=3 vs n=3, σ ≈ 5 µs each). Useful cap ≤ 8; best measured cap
+  **4**; the entire benefit is gone by 16.
 - **A pre-existing measurement hazard got worse, and it changes how screens
   should be read**: a repeated control drifted **6.6 %** inside one batch. The
-  documented σ = 0.52 % band understates the tail.
+  documented σ = 0.52 % band understates the tail. Campaigns, by contrast,
+  reproduced `g=97` to **σ = 6.2 µs (0.09 %)** over three runs.
 
 Node: `gbt350-odcdh2-c05-1`, 8× MI350X gfx950. Kernel commit `520fe9c6`,
 `K0P6_MPS_SRC_REV 24`. Node checkout `cd7918a5`, verified **source-identical** to
@@ -23,9 +40,51 @@ Node: `gbt350-odcdh2-c05-1`, 8× MI350X gfx950. Kernel commit `520fe9c6`,
 
 ---
 
-## 1. Gate ladder — every point, both batches
+## 0. Decision campaigns — 5 rotated processes, 500 warmup / 100 timed
 
-**17 of 17 screens passed the full ladder**: `[MOK GATE] mps_mega pass=True`
+`summary["arm_p50_us"][arm]["median"]`, i.e. the median over processes of the
+rank-max p50. Every campaign: `[MOK GATE]` green on all three arms in all five
+rotations, `control_fails=True`, `[MPS SOAK] 600/600 pperr=0`.
+
+| batch | `g` | mechanism | `mps_us` | `prod_us` | `pf6gm_us` | **mps/prod** | mps/pf6gm | pf6gm/prod |
+|---|---:|---|---:|---:|---:|---:|---:|---:|
+| e24c#2 | 33 | control (exp_21 protocol) | 6,692.6 | 7,706.1 | 6,910.4 | 0.8685 | 0.9685 | 0.8967 |
+| e24c#1 | 97 | **A**, depth 8 | 6,625.9 | 7,699.2 | 6,900.6 | 0.8606 | 0.9602 | 0.8963 |
+| e24d#1 | 97 | **A**, depth 8 | 6,616.7 | 7,704.1 | 6,896.4 | 0.8589 | 0.9595 | 0.8952 |
+| e24d#3 | 97 | **A**, depth 8 | 6,614.2 | 7,700.5 | 6,902.0 | 0.8589 | 0.9583 | 0.8963 |
+| e24d#2 | 353 | **A + depth 4** | **6,571.4** | 7,708.5 | 6,939.5 | **0.8525** | 0.9470 | 0.9002 |
+| e24e#1 | 353 | **A + depth 4** | **6,562.7** | 7,707.6 | 6,903.1 | **0.8515** | 0.9507 | 0.8956 |
+| e24e#2 | 353 | **A + depth 4** | **6,569.8** | 7,704.2 | 6,926.4 | **0.8527** | 0.9485 | 0.8990 |
+
+Reference check: `pf6gm/prod` reads **0.8952-0.9002** against the expected
+~0.896 for a G=3 build. The tree is the one we think it is.
+
+Per-config summary:
+
+| `g` | mechanism | n | `mps_us` mean | σ | mps/prod mean |
+|---:|---|---:|---:|---:|---:|
+| 33 | control | 1 | 6,692.6 | — | 0.8685 |
+| 97 | **A**, depth 8 | 3 | 6,618.9 | 6.2 (0.09 %) | 0.8595 |
+| 353 | **A + depth 4** | 3 | **6,568.0** | **4.6 (0.07 %)** | **0.8522** |
+
+**What each step buys, paired within this build:**
+
+| comparison | Δ µs | Δ ratio | note |
+|---|---:|---:|---|
+| exp_24 control vs exp_21's published ratchet | +7.1 / +9.5 | +0.0020 / +0.0028 | **MPS-DELTA (6) is a measured NULL** — the `slot_off` fold neither helped nor hurt, so the control *is* the ratchet and A's delta is honest |
+| **A** vs control | **−73.7** | **−0.0090** | Mechanism A |
+| **A + depth 4** vs **A** | **−50.9** | **−0.0073** | Mechanism B's best point |
+| **A + depth 4** vs control | **−124.6** | **−0.0163** | both mechanisms |
+| **A + depth 4** vs exp_21's ratchet | **−117.5** | **−0.0143** | the night's net |
+
+Both candidate configs reproduce to **σ ≈ 5-6 µs (0.07-0.09 %)** across
+independent campaigns — the same class as exp_21's paired campaigns (0.04 %) —
+which is why a 51 µs step is decisive here and completely invisible on a screen.
+
+## 1. Gate ladder — every point, every batch
+
+**17 of 17 screens and 5 of 5 campaigns passed the full ladder**:
+`[MOK GATE] mps_mega pass=True`
 (`max_abs` 0.0352-0.0391, `relative` 0.0083 — the gates are 0.1/0.1),
 `[MARK] control_fails=True`, `pperr = 0`, `[MPS SOAK] completed=600/600`,
 `eager_status=valid_diagnostic`, `spin_fail_max=0`, `rc=0`. No tolerance was
@@ -145,9 +204,26 @@ realised at depths ≤ 8 and is completely gone by 16.** The knee is between 8 a
 
 Depth 4 is a null on M7 but was the faster arm end-to-end in both batches where
 it appeared (6759.2 vs a 6902.3 control mean; and A+depth 4 at 6645.3 vs A-only
-at 6744.7). Two favourable points is a hint, not a result, and it is inside the
-drift band established in §3. **`g = 353` (A + depth 4) is the one composed
-candidate worth a second campaign after `g = 97`.**
+at 6744.7). Two favourable points was a hint, not a result — **and the campaigns
+turned it into one**: `g = 353` at 6,568.0 ± 4.6 µs (n=3) against `g = 97` at
+6,618.9 ± 6.2 µs (n=3), i.e. **−50.9 µs (−0.77 %)**, roughly 9σ of either
+population. So depth 4 beats depth 8 by a small but unambiguous margin — one the
+M7 stamp could not resolve (−82.9 ± 63 µs) and the end-to-end screen could not
+either.
+
+**The shape of this axis is the finding.** It is not a smooth optimum:
+
+```
+depth   4      8       16       32      unthrottled (exp_21)
+M7      2659   2742    3204     3112    3189
+```
+
+Shallower than 8 is flat-to-slightly-better; one step deeper than 8 loses the
+**entire** ~500 µs the throttle was worth. A knob with a cliff on one side and a
+plateau on the other should be set on the plateau, and 4 is on the plateau.
+Whether 2 is better still is the obvious next point and is **not** measured
+here — `g` bits `0x300` have no encoding left for it, which is itself a finding
+(§10, item 2).
 
 ## 6. Screen resolution — a correction to the harness note
 
@@ -188,12 +264,19 @@ per depth) put a `scratch_load` 5 instructions ahead of **every** remote atomic
 it. `build.md` §3 has the diagnosis and the fix (four SGPR lane masks, plus
 folding `slot_off` into the peer table to free the register that pays for them).
 
-**Confound, stated plainly:** that fold (MPS-DELTA (6)) means exp_24's control
-arm is exp_21's protocol with three fewer instructions per remote atomic, so
-`g = 33` here is **not** byte-identical to the 6,685 µs ratchet build. Both
-mechanisms are read against the in-batch control, so their deltas are clean;
-what this batch cannot certify is "control == ratchet". The `e24c` campaign
-measures `g = 33` at campaign resolution precisely to price that fold.
+**Confound, stated plainly and then priced.** That fold (MPS-DELTA (6)) means
+exp_24's control arm is exp_21's protocol with three fewer instructions per
+remote atomic, so `g = 33` here is **not** byte-identical to the 6,685 µs
+ratchet build. The `e24c` campaign measured `g = 33` at campaign resolution
+precisely to price it: **6,692.6 µs vs exp_21's 6,685.5 / 6,683.1 — a null
+(+0.11 %), inside the run-to-run band.** So removing 3 instructions from each of
+117 M remote atomics bought nothing measurable, the confound is closed, and
+Mechanism A's −73.7 µs is measured against a control that *is* the ratchet.
+
+That null is worth keeping: it says the epilogue's remote-atomic loop is **not
+instruction-issue bound**. 117 M × 3 instructions is ~350 M scalar/vector ops per
+rank per epoch, and they cost nothing — the loop is waiting on the fabric, which
+is exactly what exp_21's throttle result and Mechanism B's cliff both say.
 
 ## 8. Flag encoding — verified, not assumed
 
@@ -293,11 +376,24 @@ non-mode-12 arm) · `encode_config` / `decode_config` / `config_is_valid` ·
    would have left the spill in place. **The general primitive is "a peer
    address table pre-biased by a uniform base", not "a peer pointer table".**
 
-## 11. Artifacts
+## 11. Open at hand-off
 
-Node: `~/overnight-scratch/screen_e24a.csv`, `screen_e24b.csv`,
-`screen_e24c.csv`, `e24{a,b,c}_batch.out`, per-run logs
-`~/overnight-scratch/e24{a,b,c}_*.log`, campaign roots `~/k0-mok-e24{a,b,c}/`.
-Baseline snapshot for the resource gate: `~/exp24-base/fused_moe` (rev 23).
-Build artifacts: `~/exp24-stage/build/{base,exp24}.{hsaco,elf,s,log}`.
-Probes: `../tools/probes/p27..p49`.
+- **Depth 2 is unmeasured and the encoding has no room for it.** The `0x300`
+  selector is full (8/4/16/32). Since 4 beat 8 and the deep side is a cliff, the
+  next point on this axis is *shallower*, not deeper — and it needs one more bit
+  or a re-mapped selector. Cheap, and the last two steps on this axis have both
+  paid (~500 µs at exp_21, 51 µs here).
+- **The plan phase is now plausibly CTA-0-bound** (§4): 378 µs remain for a
+  7.3 MiB transpose, three grid barriers, and CTA 0's serial `E = 32` loop at
+  `KRN:1250-1273`. Nothing else in M3-M5 moves bytes.
+- **`flush_rows` and `C` have not been re-swept since the ratchet moved twice.**
+  exp_21 tuned `C` around the depth-8 kernel; the optimum may have shifted.
+
+## 12. Artifacts
+
+Node: `~/overnight-scratch/screen_e24{a,b,c,d,e}.csv`, `e24{a..e}_batch.out`,
+per-run logs `~/overnight-scratch/e24{a..e}_*.log`, campaign roots
+`~/k0-mok-e24{a..e}/`. Baseline snapshot for the resource gate:
+`~/exp24-base/fused_moe` (rev 23). Build artifacts:
+`~/exp24-stage/build/{base,exp24}.{hsaco,elf,s,log}`. Config-decode proof:
+`~/exp24-stage/cfgtest/`. Probes: `../tools/probes/p27..p53`.
