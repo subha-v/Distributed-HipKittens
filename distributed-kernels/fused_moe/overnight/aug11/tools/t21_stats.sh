@@ -4,7 +4,9 @@
 # order); the FIRST tag is the control every other arm is tested against.
 set -uo pipefail
 cd "$HOME/overnight-scratch" || exit 1
-python3 - "$@" <<'PY'
+# Control FIRST. Edit as batches land (nsh.ps1 forwards no arguments).
+TAGS="e26_m0a e26_m4 e26_m1"
+python3 - $TAGS <<'PY'
 import csv, math, sys
 
 def betacf(a, b, x):
