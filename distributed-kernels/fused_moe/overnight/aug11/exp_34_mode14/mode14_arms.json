@@ -1,0 +1,2062 @@
+{
+ "experiment": "exp_34_mode14",
+ "pin": "291dfa08",
+ "src_rev": 28,
+ "band_pre_registered_us": [
+  5990,
+  6440
+ ],
+ "falsification_threshold_us": 6568,
+ "harness": "mok_synthetic_prefill run_campaign.sh, 5 rotations, 500 warmup / 100 timed, K0_MPS_SOAK_ITERS=600, T=4096",
+ "clustering": "campaign value = median over the 5 processes of the rank-max p50 (summary.json arm_p50_us.values); arm value = median over campaigns. Never clustered by (run, rank).",
+ "stamps_note": "timestamps=1 is NOT free; stamps-on and stamps-off arms are separate records and are never compared to each other.",
+ "arms": [
+  {
+   "arm_id": "rev26_mode12_C16_g353_ts0",
+   "src_rev": 26,
+   "head": "f113d73f",
+   "mode": 12,
+   "C": 16,
+   "g": 353,
+   "g_decode": {
+    "physical_g": 1,
+    "detect_dual": false,
+    "throttle": true,
+    "skip_part_zero": true,
+    "coarse_keep_drain": false,
+    "throttle_depth_sel": 1
+   },
+   "stamps": 0,
+   "status": "OK",
+   "campaigns": [
+    {
+     "tag": "e34r26",
+     "run_id": "2_C16g353mode12flush_rows16timestamps0_20260812T184551Z",
+     "iters": "w500t100p5",
+     "mps_mega_p50_us": 6497.3,
+     "production_p50_us": 7700.6,
+     "pf6gm_mega_p50_us": 6917.2,
+     "ratio_vs_production": 0.8437,
+     "mps_per_run_values_us": [
+      6497.668981552124,
+      6486.268997192383,
+      6497.609615325928,
+      6475.80885887146,
+      6497.309446334839
+     ],
+     "production_per_run_values_us": [
+      7687.601089477539,
+      7700.602054595947,
+      7700.942516326904,
+      7702.822923660278,
+      7684.682607650757
+     ],
+     "gates_green": true,
+     "pperr": "0",
+     "soak_epochs": "600/600",
+     "phase_stamps": {
+      "planM6": null,
+      "M7": null,
+      "combine": null,
+      "servicedrain": null,
+      "m2_to_end": null,
+      "plan_M3toM5": null,
+      "M6": null
+     },
+     "hsaco": "be7b189d458d"
+    }
+   ],
+   "p50_median": 6497.3,
+   "production_p50_same_run": 7700.6,
+   "pf6gm_p50_same_run": 6917.2,
+   "phase_stamps": {
+    "planM6": null,
+    "M7": null,
+    "combine": null,
+    "servicedrain": null,
+    "m2_to_end": null,
+    "plan_M3toM5": null,
+    "M6": null
+   },
+   "servicedrain_status": "stamps off",
+   "servicedrain_raw_us": [
+    null
+   ],
+   "spin": {
+    "success_max": 0.0,
+    "fail_max": 0.0
+   },
+   "gates_green": true,
+   "n_campaigns": 1,
+   "n_campaigns_attempted": 1,
+   "gate_lines": [
+    "[MARK] control_fails=True",
+    "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008293 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008293 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008294 pass=True",
+    "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True",
+    "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+    "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+    "[POISON] post_timing arm=mps_mega survivors=0"
+   ],
+   "ratio_vs_production": 0.8437,
+   "mode12_control_arm_id": "rev26_mode12_C16_g353_ts0",
+   "mode12_control_p50_us": 6497.3,
+   "delta_vs_mode12_control": 0.0,
+   "ratchet_rev26_p50_us": 6497.3,
+   "delta_vs_ratchet_rev26": 0.0
+  },
+  {
+   "arm_id": "rev26_mode12_C16_g353_ts1",
+   "src_rev": 26,
+   "head": "f113d73f",
+   "mode": 12,
+   "C": 16,
+   "g": 353,
+   "g_decode": {
+    "physical_g": 1,
+    "detect_dual": false,
+    "throttle": true,
+    "skip_part_zero": true,
+    "coarse_keep_drain": false,
+    "throttle_depth_sel": 1
+   },
+   "stamps": 1,
+   "status": "OK",
+   "campaigns": [
+    {
+     "tag": "e34r26",
+     "run_id": "1_C16g353mode12flush_rows16timestamps1_20260812T184241Z",
+     "iters": "w500t100p5",
+     "mps_mega_p50_us": 6499.5,
+     "production_p50_us": 7694.8,
+     "pf6gm_mega_p50_us": 6888.6,
+     "ratio_vs_production": 0.8447,
+     "mps_per_run_values_us": [
+      6491.58501625061,
+      6499.4659423828125,
+      6501.147031784058,
+      6520.227909088135,
+      6485.788345336914
+     ],
+     "production_per_run_values_us": [
+      7700.236558914185,
+      7702.09813117981,
+      7691.179990768433,
+      7694.779872894287,
+      7691.101551055908
+     ],
+     "gates_green": true,
+     "pperr": "0",
+     "soak_epochs": "600/600",
+     "phase_stamps": {
+      "planM6": 2813.0,
+      "M7": 2673.9,
+      "combine": 289.0,
+      "servicedrain": 2744.5,
+      "m2_to_end": 5776.0,
+      "plan_M3toM5": 369.4,
+      "M6": 2443.6
+     },
+     "hsaco": "5635a2f2a370"
+    }
+   ],
+   "p50_median": 6499.5,
+   "production_p50_same_run": 7694.8,
+   "pf6gm_p50_same_run": 6888.6,
+   "phase_stamps": {
+    "planM6": 2813.0,
+    "M7": 2673.9,
+    "combine": 289.0,
+    "servicedrain": 2744.5,
+    "m2_to_end": 5776.0,
+    "plan_M3toM5": 369.4,
+    "M6": 2443.6
+   },
+   "servicedrain_status": "written",
+   "servicedrain_raw_us": [
+    2744.5
+   ],
+   "spin": {
+    "success_max": 1.0,
+    "fail_max": 0.0
+   },
+   "gates_green": true,
+   "n_campaigns": 1,
+   "n_campaigns_attempted": 1,
+   "gate_lines": [
+    "[MARK] control_fails=True",
+    "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008293 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008294 pass=True",
+    "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True",
+    "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+    "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+    "[POISON] post_timing arm=mps_mega survivors=0"
+   ],
+   "ratio_vs_production": 0.8447,
+   "mode12_control_arm_id": "rev26_mode12_C16_g353_ts1",
+   "mode12_control_p50_us": 6499.5,
+   "delta_vs_mode12_control": 0.0,
+   "ratchet_rev26_p50_us": 6499.5,
+   "delta_vs_ratchet_rev26": 0.0
+  },
+  {
+   "arm_id": "rev28_mode12_C16_g353_ts0",
+   "src_rev": 28,
+   "head": "291dfa08",
+   "mode": 12,
+   "C": 16,
+   "g": 353,
+   "g_decode": {
+    "physical_g": 1,
+    "detect_dual": false,
+    "throttle": true,
+    "skip_part_zero": true,
+    "coarse_keep_drain": false,
+    "throttle_depth_sel": 1
+   },
+   "stamps": 0,
+   "status": "OK",
+   "campaigns": [
+    {
+     "tag": "e34c1",
+     "run_id": "2_C16g353mode12flush_rows16timestamps0_20260812T180324Z",
+     "iters": "w500t100p5",
+     "mps_mega_p50_us": 7222.2,
+     "production_p50_us": 7695.0,
+     "pf6gm_mega_p50_us": 6902.7,
+     "ratio_vs_production": 0.9386,
+     "mps_per_run_values_us": [
+      7222.216844558716,
+      7212.877035140991,
+      7216.817378997803,
+      7225.937128067017,
+      7225.558042526245
+     ],
+     "production_per_run_values_us": [
+      7694.982051849365,
+      7694.1423416137695,
+      7696.0625648498535,
+      7701.562404632568,
+      7685.2428913116455
+     ],
+     "gates_green": true,
+     "pperr": "0",
+     "soak_epochs": "600/600",
+     "phase_stamps": {
+      "planM6": null,
+      "M7": null,
+      "combine": null,
+      "servicedrain": null,
+      "m2_to_end": null,
+      "plan_M3toM5": null,
+      "M6": null
+     },
+     "hsaco": "61efee2b3a20"
+    },
+    {
+     "tag": "e34c1",
+     "run_id": "5_C16g353mode12flush_rows16timestamps0_20260812T181250Z",
+     "iters": "w500t100p5",
+     "mps_mega_p50_us": 7224.2,
+     "production_p50_us": 7699.9,
+     "pf6gm_mega_p50_us": 6905.7,
+     "ratio_vs_production": 0.9382,
+     "mps_per_run_values_us": [
+      7223.636865615845,
+      7212.476968765259,
+      7224.1575717926025,
+      7253.018140792847,
+      7249.717950820923
+     ],
+     "production_per_run_values_us": [
+      7705.041885375977,
+      7698.621988296509,
+      7695.042848587036,
+      7699.9030113220215,
+      7708.142995834351
+     ],
+     "gates_green": true,
+     "pperr": "0",
+     "soak_epochs": "600/600",
+     "phase_stamps": {
+      "planM6": null,
+      "M7": null,
+      "combine": null,
+      "servicedrain": null,
+      "m2_to_end": null,
+      "plan_M3toM5": null,
+      "M6": null
+     },
+     "hsaco": "61efee2b3a20"
+    },
+    {
+     "tag": "e34d",
+     "run_id": "1_C16g353mode12flush_rows16_20260812T182532Z",
+     "iters": "w500t100p5",
+     "mps_mega_p50_us": 7220.1,
+     "production_p50_us": 7696.7,
+     "pf6gm_mega_p50_us": 6905.5,
+     "ratio_vs_production": 0.9381,
+     "mps_per_run_values_us": [
+      7220.077037811279,
+      7218.156576156616,
+      7213.6969566345215,
+      7234.596967697144,
+      7250.298023223877
+     ],
+     "production_per_run_values_us": [
+      7707.141876220703,
+      7691.521883010864,
+      7695.641994476318,
+      7704.602003097534,
+      7696.722030639648
+     ],
+     "gates_green": true,
+     "pperr": "0",
+     "soak_epochs": "600/600",
+     "phase_stamps": {
+      "planM6": null,
+      "M7": null,
+      "combine": null,
+      "servicedrain": null,
+      "m2_to_end": null,
+      "plan_M3toM5": null,
+      "M6": null
+     },
+     "hsaco": "47abe3062174"
+    },
+    {
+     "tag": "e34d",
+     "run_id": "3_C16g353mode12flush_rows16timestamps0_20260812T183149Z",
+     "iters": "w500t100p5",
+     "mps_mega_p50_us": 7225.4,
+     "production_p50_us": 7704.8,
+     "pf6gm_mega_p50_us": 6893.2,
+     "ratio_vs_production": 0.9378,
+     "mps_per_run_values_us": [
+      7209.837913513184,
+      7224.178075790405,
+      7225.358009338379,
+      7225.538969039917,
+      7235.098361968994
+     ],
+     "production_per_run_values_us": [
+      7704.442977905273,
+      7699.383020401001,
+      7705.483436584473,
+      7711.503982543945,
+      7704.804182052612
+     ],
+     "gates_green": true,
+     "pperr": "0",
+     "soak_epochs": "600/600",
+     "phase_stamps": {
+      "planM6": null,
+      "M7": null,
+      "combine": null,
+      "servicedrain": null,
+      "m2_to_end": null,
+      "plan_M3toM5": null,
+      "M6": null
+     },
+     "hsaco": "61efee2b3a20"
+    },
+    {
+     "tag": "e34f",
+     "run_id": "3_C16g353mode12flush_rows16timestamps0_20260812T192158Z",
+     "iters": "w500t100p5",
+     "mps_mega_p50_us": 7224.6,
+     "production_p50_us": 7712.0,
+     "pf6gm_mega_p50_us": 6892.8,
+     "ratio_vs_production": 0.9368,
+     "mps_per_run_values_us": [
+      7224.297046661377,
+      7227.176904678345,
+      7224.637031555176,
+      7222.217559814453,
+      7234.577894210815
+     ],
+     "production_per_run_values_us": [
+      7693.462133407593,
+      7715.703010559082,
+      7714.002847671509,
+      7699.222564697266,
+      7711.98296546936
+     ],
+     "gates_green": true,
+     "pperr": "0",
+     "soak_epochs": "600/600",
+     "phase_stamps": {
+      "planM6": null,
+      "M7": null,
+      "combine": null,
+      "servicedrain": null,
+      "m2_to_end": null,
+      "plan_M3toM5": null,
+      "M6": null
+     },
+     "hsaco": "61efee2b3a20"
+    }
+   ],
+   "p50_median": 7224.2,
+   "production_p50_same_run": 7699.9,
+   "pf6gm_p50_same_run": 6902.7,
+   "phase_stamps": {
+    "planM6": null,
+    "M7": null,
+    "combine": null,
+    "servicedrain": null,
+    "m2_to_end": null,
+    "plan_M3toM5": null,
+    "M6": null
+   },
+   "servicedrain_status": "stamps off",
+   "servicedrain_raw_us": [
+    null,
+    null,
+    null,
+    null,
+    null
+   ],
+   "spin": {
+    "success_max": 0.0,
+    "fail_max": 0.0
+   },
+   "gates_green": true,
+   "n_campaigns": 5,
+   "n_campaigns_attempted": 5,
+   "gate_lines": [
+    "[MARK] control_fails=True",
+    "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008293 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008293 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008294 pass=True",
+    "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True",
+    "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+    "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+    "[POISON] post_timing arm=mps_mega survivors=0"
+   ],
+   "ratio_vs_production": 0.9382,
+   "mode12_control_arm_id": "rev28_mode12_C16_g353_ts0",
+   "mode12_control_p50_us": 7224.2,
+   "delta_vs_mode12_control": 0.0,
+   "ratchet_rev26_p50_us": 6497.3,
+   "delta_vs_ratchet_rev26": 726.9
+  },
+  {
+   "arm_id": "rev28_mode12_C16_g353_ts1",
+   "src_rev": 28,
+   "head": "291dfa08",
+   "mode": 12,
+   "C": 16,
+   "g": 353,
+   "g_decode": {
+    "physical_g": 1,
+    "detect_dual": false,
+    "throttle": true,
+    "skip_part_zero": true,
+    "coarse_keep_drain": false,
+    "throttle_depth_sel": 1
+   },
+   "stamps": 1,
+   "status": "OK",
+   "campaigns": [
+    {
+     "tag": "e34d",
+     "run_id": "2_C16g353mode12flush_rows16timestamps1_20260812T182841Z",
+     "iters": "w500t100p5",
+     "mps_mega_p50_us": 7234.6,
+     "production_p50_us": 7699.5,
+     "pf6gm_mega_p50_us": 6871.3,
+     "ratio_vs_production": 0.9396,
+     "mps_per_run_values_us": [
+      7226.977348327637,
+      7234.55810546875,
+      7236.598014831543,
+      7225.378036499023,
+      7237.858057022095
+     ],
+     "production_per_run_values_us": [
+      7700.523614883423,
+      7706.682920455933,
+      7697.343111038208,
+      7699.522972106934,
+      7692.342042922974
+     ],
+     "gates_green": true,
+     "pperr": "0",
+     "soak_epochs": "600/600",
+     "phase_stamps": {
+      "planM6": 2814.5,
+      "M7": 3472.7,
+      "combine": 323.2,
+      "servicedrain": 3580.2,
+      "m2_to_end": 6610.4,
+      "plan_M3toM5": 379.3,
+      "M6": 2435.2
+     },
+     "hsaco": "61efee2b3a20"
+    },
+    {
+     "tag": "e34e",
+     "run_id": "2_C16g353mode12flush_rows16timestamps1_20260812T185308Z",
+     "iters": "w500t100p5",
+     "mps_mega_p50_us": 7225.1,
+     "production_p50_us": 7695.9,
+     "pf6gm_mega_p50_us": 6871.7,
+     "ratio_vs_production": 0.9388,
+     "mps_per_run_values_us": [
+      7240.398645401001,
+      7225.05784034729,
+      7221.058130264282,
+      7226.158142089844,
+      7221.498012542725
+     ],
+     "production_per_run_values_us": [
+      7695.203065872192,
+      7694.602966308594,
+      7695.903062820435,
+      7718.5235023498535,
+      7700.984954833984
+     ],
+     "gates_green": true,
+     "pperr": "0",
+     "soak_epochs": "600/600",
+     "phase_stamps": {
+      "planM6": 2829.6,
+      "M7": 3511.5,
+      "combine": 272.5,
+      "servicedrain": 3597.9,
+      "m2_to_end": 6613.5,
+      "plan_M3toM5": 373.1,
+      "M6": 2456.5
+     },
+     "hsaco": "61efee2b3a20"
+    }
+   ],
+   "p50_median": 7229.9,
+   "production_p50_same_run": 7697.7,
+   "pf6gm_p50_same_run": 6871.5,
+   "phase_stamps": {
+    "planM6": 2822.1,
+    "M7": 3492.1,
+    "combine": 297.9,
+    "servicedrain": 3589.1,
+    "m2_to_end": 6611.9,
+    "plan_M3toM5": 376.2,
+    "M6": 2445.8
+   },
+   "servicedrain_status": "written",
+   "servicedrain_raw_us": [
+    3580.2,
+    3597.9
+   ],
+   "spin": {
+    "success_max": 0.0,
+    "fail_max": 0.0
+   },
+   "gates_green": true,
+   "n_campaigns": 2,
+   "n_campaigns_attempted": 2,
+   "gate_lines": [
+    "[MARK] control_fails=True",
+    "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008293 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008293 pass=True",
+    "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True",
+    "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+    "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+    "[POISON] post_timing arm=mps_mega survivors=0"
+   ],
+   "ratio_vs_production": 0.9392,
+   "mode12_control_arm_id": "rev28_mode12_C16_g353_ts1",
+   "mode12_control_p50_us": 7229.9,
+   "delta_vs_mode12_control": 0.0,
+   "ratchet_rev26_p50_us": 6499.5,
+   "delta_vs_ratchet_rev26": 730.4
+  },
+  {
+   "arm_id": "rev28_mode12_C16_g65_ts0",
+   "src_rev": 28,
+   "head": "291dfa08",
+   "mode": 12,
+   "C": 16,
+   "g": 65,
+   "g_decode": {
+    "physical_g": 1,
+    "detect_dual": false,
+    "throttle": false,
+    "skip_part_zero": true,
+    "coarse_keep_drain": false,
+    "throttle_depth_sel": 0
+   },
+   "stamps": 0,
+   "status": "OK",
+   "campaigns": [
+    {
+     "tag": "e34d",
+     "run_id": "4_C16g65mode12flush_rows16_20260812T183459Z",
+     "iters": "w500t100p5",
+     "mps_mega_p50_us": 7226.0,
+     "production_p50_us": 7700.4,
+     "pf6gm_mega_p50_us": 6901.1,
+     "ratio_vs_production": 0.9384,
+     "mps_per_run_values_us": [
+      7225.9979248046875,
+      7222.438335418701,
+      7238.618850708008,
+      7215.2581214904785,
+      7227.878570556641
+     ],
+     "production_per_run_values_us": [
+      7716.984033584595,
+      7705.543518066406,
+      7697.783470153809,
+      7700.423717498779,
+      7698.564052581787
+     ],
+     "gates_green": true,
+     "pperr": "0",
+     "soak_epochs": "600/600",
+     "phase_stamps": {
+      "planM6": null,
+      "M7": null,
+      "combine": null,
+      "servicedrain": null,
+      "m2_to_end": null,
+      "plan_M3toM5": null,
+      "M6": null
+     },
+     "hsaco": "61efee2b3a20"
+    }
+   ],
+   "p50_median": 7226.0,
+   "production_p50_same_run": 7700.4,
+   "pf6gm_p50_same_run": 6901.1,
+   "phase_stamps": {
+    "planM6": null,
+    "M7": null,
+    "combine": null,
+    "servicedrain": null,
+    "m2_to_end": null,
+    "plan_M3toM5": null,
+    "M6": null
+   },
+   "servicedrain_status": "stamps off",
+   "servicedrain_raw_us": [
+    null
+   ],
+   "spin": {
+    "success_max": 0.0,
+    "fail_max": 0.0
+   },
+   "gates_green": true,
+   "n_campaigns": 1,
+   "n_campaigns_attempted": 1,
+   "gate_lines": [
+    "[MARK] control_fails=True",
+    "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008293 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008293 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008294 pass=True",
+    "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True",
+    "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+    "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+    "[POISON] post_timing arm=mps_mega survivors=0"
+   ],
+   "ratio_vs_production": 0.9384,
+   "mode12_control_arm_id": "rev28_mode12_C16_g353_ts0",
+   "mode12_control_p50_us": 7224.2,
+   "delta_vs_mode12_control": 1.8,
+   "ratchet_rev26_p50_us": 6497.3,
+   "delta_vs_ratchet_rev26": 728.7
+  },
+  {
+   "arm_id": "rev28_mode12_C16_g65_ts1",
+   "src_rev": 28,
+   "head": "291dfa08",
+   "mode": 12,
+   "C": 16,
+   "g": 65,
+   "g_decode": {
+    "physical_g": 1,
+    "detect_dual": false,
+    "throttle": false,
+    "skip_part_zero": true,
+    "coarse_keep_drain": false,
+    "throttle_depth_sel": 0
+   },
+   "stamps": 1,
+   "status": "OK",
+   "campaigns": [
+    {
+     "tag": "e34e",
+     "run_id": "5_C16g65mode12flush_rows16timestamps1_20260812T190229Z",
+     "iters": "w500t100p5",
+     "mps_mega_p50_us": 7234.5,
+     "production_p50_us": 7697.3,
+     "pf6gm_mega_p50_us": 6935.4,
+     "ratio_vs_production": 0.9399,
+     "mps_per_run_values_us": [
+      7232.897996902466,
+      7234.477519989014,
+      7233.437538146973,
+      7246.658086776733,
+      7241.5571212768555
+     ],
+     "production_per_run_values_us": [
+      7701.802968978882,
+      7697.301864624023,
+      7697.6025104522705,
+      7687.662124633789,
+      7694.302320480347
+     ],
+     "gates_green": true,
+     "pperr": "0",
+     "soak_epochs": "600/600",
+     "phase_stamps": {
+      "planM6": 2819.5,
+      "M7": 3515.4,
+      "combine": 278.6,
+      "servicedrain": 3603.7,
+      "m2_to_end": 6613.5,
+      "plan_M3toM5": 367.7,
+      "M6": 2451.8
+     },
+     "hsaco": "47abe3062174"
+    }
+   ],
+   "p50_median": 7234.5,
+   "production_p50_same_run": 7697.3,
+   "pf6gm_p50_same_run": 6935.4,
+   "phase_stamps": {
+    "planM6": 2819.5,
+    "M7": 3515.4,
+    "combine": 278.6,
+    "servicedrain": 3603.7,
+    "m2_to_end": 6613.5,
+    "plan_M3toM5": 367.7,
+    "M6": 2451.8
+   },
+   "servicedrain_status": "written",
+   "servicedrain_raw_us": [
+    3603.7
+   ],
+   "spin": {
+    "success_max": 0.0,
+    "fail_max": 0.0
+   },
+   "gates_green": true,
+   "n_campaigns": 1,
+   "n_campaigns_attempted": 1,
+   "gate_lines": [
+    "[MARK] control_fails=True",
+    "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008293 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008293 pass=True",
+    "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True",
+    "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+    "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+    "[POISON] post_timing arm=mps_mega survivors=0"
+   ],
+   "ratio_vs_production": 0.9399,
+   "mode12_control_arm_id": "rev28_mode12_C16_g353_ts1",
+   "mode12_control_p50_us": 7229.9,
+   "delta_vs_mode12_control": 4.6,
+   "ratchet_rev26_p50_us": 6499.5,
+   "delta_vs_ratchet_rev26": 735.0
+  },
+  {
+   "arm_id": "rev28_mode14_C0_g353_ts0",
+   "src_rev": 28,
+   "head": "291dfa08",
+   "mode": 14,
+   "C": 0,
+   "g": 353,
+   "g_decode": {
+    "physical_g": 1,
+    "detect_dual": false,
+    "throttle": true,
+    "skip_part_zero": true,
+    "coarse_keep_drain": false,
+    "throttle_depth_sel": 1
+   },
+   "stamps": 0,
+   "status": "OK",
+   "campaigns": [
+    {
+     "tag": "e34c1",
+     "run_id": "1_C0g353mode14flush_rows16timestamps0_20260812T180017Z",
+     "iters": "w500t100p5",
+     "mps_mega_p50_us": 6653.6,
+     "production_p50_us": 7700.4,
+     "pf6gm_mega_p50_us": 6909.7,
+     "ratio_vs_production": 0.8641,
+     "mps_per_run_values_us": [
+      6653.605937957764,
+      6651.967287063599,
+      6654.468536376953,
+      6656.2089920043945,
+      6650.57110786438
+     ],
+     "production_per_run_values_us": [
+      7700.016021728516,
+      7692.117929458618,
+      7714.099884033203,
+      7700.42085647583,
+      7711.961984634399
+     ],
+     "gates_green": true,
+     "pperr": "0",
+     "soak_epochs": "600/600",
+     "phase_stamps": {
+      "planM6": null,
+      "M7": null,
+      "combine": null,
+      "servicedrain": null,
+      "m2_to_end": null,
+      "plan_M3toM5": null,
+      "M6": null
+     },
+     "hsaco": "61efee2b3a20"
+    },
+    {
+     "tag": "e34c1",
+     "run_id": "4_C0g353mode14flush_rows16timestamps0_20260812T180943Z",
+     "iters": "w500t100p5",
+     "mps_mega_p50_us": 6648.2,
+     "production_p50_us": 7701.6,
+     "pf6gm_mega_p50_us": 6934.8,
+     "ratio_vs_production": 0.8632,
+     "mps_per_run_values_us": [
+      6655.770778656006,
+      6654.710531234741,
+      6646.3305950164795,
+      6648.191213607788,
+      6644.970655441284
+     ],
+     "production_per_run_values_us": [
+      7701.601982116699,
+      7701.021909713745,
+      7703.46212387085,
+      7707.94153213501,
+      7699.641466140747
+     ],
+     "gates_green": true,
+     "pperr": "0",
+     "soak_epochs": "600/600",
+     "phase_stamps": {
+      "planM6": null,
+      "M7": null,
+      "combine": null,
+      "servicedrain": null,
+      "m2_to_end": null,
+      "plan_M3toM5": null,
+      "M6": null
+     },
+     "hsaco": "47abe3062174"
+    },
+    {
+     "tag": "e34f",
+     "run_id": "1_C0g353mode14flush_rows16timestamps0_20260812T191547Z",
+     "iters": "w500t100p5",
+     "mps_mega_p50_us": 6642.3,
+     "production_p50_us": 7701.0,
+     "pf6gm_mega_p50_us": 6934.8,
+     "ratio_vs_production": 0.8625,
+     "mps_per_run_values_us": [
+      6653.910160064697,
+      6637.989521026611,
+      6642.330646514893,
+      6644.150972366333,
+      6634.810924530029
+     ],
+     "production_per_run_values_us": [
+      7700.4804611206055,
+      7704.041004180908,
+      7713.622093200684,
+      7700.962543487549,
+      7698.503017425537
+     ],
+     "gates_green": true,
+     "pperr": "0",
+     "soak_epochs": "600/600",
+     "phase_stamps": {
+      "planM6": null,
+      "M7": null,
+      "combine": null,
+      "servicedrain": null,
+      "m2_to_end": null,
+      "plan_M3toM5": null,
+      "M6": null
+     },
+     "hsaco": "61efee2b3a20"
+    },
+    {
+     "tag": "e34f",
+     "run_id": "4_C0g353mode14flush_rows16timestamps0_20260812T192506Z",
+     "iters": "w500t100p5",
+     "mps_mega_p50_us": 6654.4,
+     "production_p50_us": 7695.0,
+     "pf6gm_mega_p50_us": 6907.9,
+     "ratio_vs_production": 0.8648,
+     "mps_per_run_values_us": [
+      6641.351938247681,
+      6656.551361083984,
+      6634.751558303833,
+      6654.850959777832,
+      6654.431343078613
+     ],
+     "production_per_run_values_us": [
+      7690.422534942627,
+      7689.582824707031,
+      7707.88311958313,
+      7694.962978363037,
+      7697.942495346069
+     ],
+     "gates_green": true,
+     "pperr": "0",
+     "soak_epochs": "600/600",
+     "phase_stamps": {
+      "planM6": null,
+      "M7": null,
+      "combine": null,
+      "servicedrain": null,
+      "m2_to_end": null,
+      "plan_M3toM5": null,
+      "M6": null
+     },
+     "hsaco": "61efee2b3a20"
+    }
+   ],
+   "p50_median": 6650.9,
+   "production_p50_same_run": 7700.7,
+   "pf6gm_p50_same_run": 6922.2,
+   "phase_stamps": {
+    "planM6": null,
+    "M7": null,
+    "combine": null,
+    "servicedrain": null,
+    "m2_to_end": null,
+    "plan_M3toM5": null,
+    "M6": null
+   },
+   "servicedrain_status": "stamps off",
+   "servicedrain_raw_us": [
+    null,
+    null,
+    null,
+    null
+   ],
+   "spin": {
+    "success_max": 0.0,
+    "fail_max": 0.0
+   },
+   "gates_green": true,
+   "n_campaigns": 4,
+   "n_campaigns_attempted": 4,
+   "gate_lines": [
+    "[MARK] control_fails=True",
+    "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008293 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008293 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008294 pass=True",
+    "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True",
+    "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+    "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+    "[POISON] post_timing arm=mps_mega survivors=0"
+   ],
+   "ratio_vs_production": 0.8637,
+   "mode12_control_arm_id": "rev28_mode12_C16_g353_ts0",
+   "mode12_control_p50_us": 7224.2,
+   "delta_vs_mode12_control": -573.3,
+   "ratchet_rev26_p50_us": 6497.3,
+   "delta_vs_ratchet_rev26": 153.6
+  },
+  {
+   "arm_id": "rev28_mode14_C0_g353_ts1",
+   "src_rev": 28,
+   "head": "291dfa08",
+   "mode": 14,
+   "C": 0,
+   "g": 353,
+   "g_decode": {
+    "physical_g": 1,
+    "detect_dual": false,
+    "throttle": true,
+    "skip_part_zero": true,
+    "coarse_keep_drain": false,
+    "throttle_depth_sel": 1
+   },
+   "stamps": 1,
+   "status": "OK",
+   "campaigns": [
+    {
+     "tag": "e34e",
+     "run_id": "1_C0g353mode14flush_rows16timestamps1_20260812T184957Z",
+     "iters": "w500t100p5",
+     "mps_mega_p50_us": 6642.6,
+     "production_p50_us": 7701.3,
+     "pf6gm_mega_p50_us": 6897.7,
+     "ratio_vs_production": 0.8625,
+     "mps_per_run_values_us": [
+      6662.169694900513,
+      6643.549680709839,
+      6638.330459594727,
+      6642.570972442627,
+      6637.951374053955
+     ],
+     "production_per_run_values_us": [
+      7702.980041503906,
+      7701.340675354004,
+      7693.121671676636,
+      7701.683044433594,
+      7696.442604064941
+     ],
+     "gates_green": true,
+     "pperr": "0",
+     "soak_epochs": "600/600",
+     "phase_stamps": {
+      "planM6": 2794.2,
+      "M7": 2859.8,
+      "combine": 396.8,
+      "servicedrain": null,
+      "m2_to_end": 6050.9,
+      "plan_M3toM5": 370.6,
+      "M6": 2423.6
+     },
+     "hsaco": "47abe3062174"
+    },
+    {
+     "tag": "e34e",
+     "run_id": "8_C0g353mode14flush_rows16timestamps1_20260812T191148Z",
+     "iters": "w500t100p5",
+     "mps_mega_p50_us": 6650.5,
+     "production_p50_us": 7696.4,
+     "pf6gm_mega_p50_us": 6901.9,
+     "ratio_vs_production": 0.8641,
+     "mps_per_run_values_us": [
+      6642.310380935669,
+      6642.670154571533,
+      6663.270950317383,
+      6656.651020050049,
+      6650.450944900513
+     ],
+     "production_per_run_values_us": [
+      7684.781551361084,
+      7705.522060394287,
+      7704.642057418823,
+      7686.100959777832,
+      7696.402549743652
+     ],
+     "gates_green": true,
+     "pperr": "0",
+     "soak_epochs": "600/600",
+     "phase_stamps": {
+      "planM6": 2819.8,
+      "M7": 2863.1,
+      "combine": 374.4,
+      "servicedrain": null,
+      "m2_to_end": 6057.4,
+      "plan_M3toM5": 373.8,
+      "M6": 2446.1
+     },
+     "hsaco": "61efee2b3a20"
+    }
+   ],
+   "p50_median": 6646.6,
+   "production_p50_same_run": 7698.9,
+   "pf6gm_p50_same_run": 6899.8,
+   "phase_stamps": {
+    "planM6": 2807.0,
+    "M7": 2861.4,
+    "combine": 385.6,
+    "servicedrain": null,
+    "m2_to_end": 6054.1,
+    "plan_M3toM5": 372.2,
+    "M6": 2434.8
+   },
+   "servicedrain_status": "UNWRITTEN: no CTA entered the drain (mode 14 skips it)",
+   "servicedrain_raw_us": [
+    -1209793343963.1,
+    -1211097613616.4
+   ],
+   "spin": {
+    "success_max": 0.0,
+    "fail_max": 0.0
+   },
+   "gates_green": true,
+   "n_campaigns": 2,
+   "n_campaigns_attempted": 2,
+   "gate_lines": [
+    "[MARK] control_fails=True",
+    "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008293 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008293 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008294 pass=True",
+    "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True",
+    "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+    "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+    "[POISON] post_timing arm=mps_mega survivors=0"
+   ],
+   "ratio_vs_production": 0.8633,
+   "mode12_control_arm_id": "rev28_mode12_C16_g353_ts1",
+   "mode12_control_p50_us": 7229.9,
+   "delta_vs_mode12_control": -583.3,
+   "ratchet_rev26_p50_us": 6499.5,
+   "delta_vs_ratchet_rev26": 147.1
+  },
+  {
+   "arm_id": "rev28_mode14_C0_g481_ts0",
+   "src_rev": 28,
+   "head": "291dfa08",
+   "mode": 14,
+   "C": 0,
+   "g": 481,
+   "g_decode": {
+    "physical_g": 1,
+    "detect_dual": false,
+    "throttle": true,
+    "skip_part_zero": true,
+    "coarse_keep_drain": true,
+    "throttle_depth_sel": 1
+   },
+   "stamps": 0,
+   "status": "OK",
+   "campaigns": [
+    {
+     "tag": "e34c1",
+     "run_id": "3_C0g481mode14flush_rows16timestamps0_20260812T180638Z",
+     "iters": "w500t100p5",
+     "mps_mega_p50_us": 6651.1,
+     "production_p50_us": 7694.0,
+     "pf6gm_mega_p50_us": 6883.5,
+     "ratio_vs_production": 0.8645,
+     "mps_per_run_values_us": [
+      6653.212070465088,
+      6651.071548461914,
+      6646.790981292725,
+      6644.231081008911,
+      6653.831005096436
+     ],
+     "production_per_run_values_us": [
+      7726.0425090789795,
+      7694.043159484863,
+      7707.202434539795,
+      7691.781997680664,
+      7688.282012939453
+     ],
+     "gates_green": true,
+     "pperr": "0",
+     "soak_epochs": "600/600",
+     "phase_stamps": {
+      "planM6": null,
+      "M7": null,
+      "combine": null,
+      "servicedrain": null,
+      "m2_to_end": null,
+      "plan_M3toM5": null,
+      "M6": null
+     },
+     "hsaco": "61efee2b3a20"
+    },
+    {
+     "tag": "e34c1",
+     "run_id": "6_C0g481mode14flush_rows16timestamps0_20260812T181557Z",
+     "iters": "w500t100p5",
+     "mps_mega_p50_us": 6645.9,
+     "production_p50_us": 7698.9,
+     "pf6gm_mega_p50_us": 6880.5,
+     "ratio_vs_production": 0.8632,
+     "mps_per_run_values_us": [
+      6648.352384567261,
+      6651.19194984436,
+      6645.211458206177,
+      6641.551971435547,
+      6645.870923995972
+     ],
+     "production_per_run_values_us": [
+      7701.863527297974,
+      7707.563400268555,
+      7685.603141784668,
+      7687.783002853394,
+      7698.922872543335
+     ],
+     "gates_green": true,
+     "pperr": "0",
+     "soak_epochs": "600/600",
+     "phase_stamps": {
+      "planM6": null,
+      "M7": null,
+      "combine": null,
+      "servicedrain": null,
+      "m2_to_end": null,
+      "plan_M3toM5": null,
+      "M6": null
+     },
+     "hsaco": "61efee2b3a20"
+    },
+    {
+     "tag": "e34f",
+     "run_id": "2_C0g481mode14flush_rows16timestamps0_20260812T191853Z",
+     "iters": "w500t100p5",
+     "mps_mega_p50_us": 6649.5,
+     "production_p50_us": 7700.4,
+     "pf6gm_mega_p50_us": 6892.5,
+     "ratio_vs_production": 0.8635,
+     "mps_per_run_values_us": [
+      6649.951696395874,
+      6643.570899963379,
+      6648.451089859009,
+      6651.231050491333,
+      6649.451017379761
+     ],
+     "production_per_run_values_us": [
+      7699.2621421813965,
+      7701.86185836792,
+      7705.163955688477,
+      7700.382471084595,
+      7696.362018585205
+     ],
+     "gates_green": true,
+     "pperr": "0",
+     "soak_epochs": "600/600",
+     "phase_stamps": {
+      "planM6": null,
+      "M7": null,
+      "combine": null,
+      "servicedrain": null,
+      "m2_to_end": null,
+      "plan_M3toM5": null,
+      "M6": null
+     },
+     "hsaco": "61efee2b3a20"
+    },
+    {
+     "tag": "e34f",
+     "run_id": "5_C0g481mode14flush_rows16timestamps0_20260812T192811Z",
+     "iters": "w500t100p5",
+     "mps_mega_p50_us": 6639.4,
+     "production_p50_us": 7699.8,
+     "pf6gm_mega_p50_us": 6882.8,
+     "ratio_vs_production": 0.8623,
+     "mps_per_run_values_us": [
+      6635.151147842407,
+      6639.831066131592,
+      6635.111570358276,
+      6650.0115394592285,
+      6639.39094543457
+     ],
+     "production_per_run_values_us": [
+      7702.322483062744,
+      7690.541982650757,
+      7699.84245300293,
+      7708.122491836548,
+      7697.742938995361
+     ],
+     "gates_green": true,
+     "pperr": "0",
+     "soak_epochs": "600/600",
+     "phase_stamps": {
+      "planM6": null,
+      "M7": null,
+      "combine": null,
+      "servicedrain": null,
+      "m2_to_end": null,
+      "plan_M3toM5": null,
+      "M6": null
+     },
+     "hsaco": "61efee2b3a20"
+    }
+   ],
+   "p50_median": 6647.7,
+   "production_p50_same_run": 7699.4,
+   "pf6gm_p50_same_run": 6883.1,
+   "phase_stamps": {
+    "planM6": null,
+    "M7": null,
+    "combine": null,
+    "servicedrain": null,
+    "m2_to_end": null,
+    "plan_M3toM5": null,
+    "M6": null
+   },
+   "servicedrain_status": "stamps off",
+   "servicedrain_raw_us": [
+    null,
+    null,
+    null,
+    null
+   ],
+   "spin": {
+    "success_max": 0.0,
+    "fail_max": 0.0
+   },
+   "gates_green": true,
+   "n_campaigns": 4,
+   "n_campaigns_attempted": 4,
+   "gate_lines": [
+    "[MARK] control_fails=True",
+    "[MOK GATE] mps_mega max_abs=0.032471 relative=0.008294 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.033203 relative=0.008293 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008292 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008293 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.037109 relative=0.008294 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008293 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008294 pass=True",
+    "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True",
+    "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+   ],
+   "ratio_vs_production": 0.8634,
+   "mode12_control_arm_id": "rev28_mode12_C16_g353_ts0",
+   "mode12_control_p50_us": 7224.2,
+   "delta_vs_mode12_control": -576.5,
+   "ratchet_rev26_p50_us": 6497.3,
+   "delta_vs_ratchet_rev26": 150.4
+  },
+  {
+   "arm_id": "rev28_mode14_C0_g481_ts1",
+   "src_rev": 28,
+   "head": "291dfa08",
+   "mode": 14,
+   "C": 0,
+   "g": 481,
+   "g_decode": {
+    "physical_g": 1,
+    "detect_dual": false,
+    "throttle": true,
+    "skip_part_zero": true,
+    "coarse_keep_drain": true,
+    "throttle_depth_sel": 1
+   },
+   "stamps": 1,
+   "status": "OK",
+   "campaigns": [
+    {
+     "tag": "e34e",
+     "run_id": "3_C0g481mode14flush_rows16timestamps1_20260812T185615Z",
+     "iters": "w500t100p5",
+     "mps_mega_p50_us": 6650.3,
+     "production_p50_us": 7695.6,
+     "pf6gm_mega_p50_us": 6897.4,
+     "ratio_vs_production": 0.8642,
+     "mps_per_run_values_us": [
+      6641.171455383301,
+      6650.251388549805,
+      6652.031898498535,
+      6660.271883010864,
+      6643.272161483765
+     ],
+     "production_per_run_values_us": [
+      7691.403150558472,
+      7699.943065643311,
+      7695.623159408569,
+      7709.103584289551,
+      7695.4450607299805
+     ],
+     "gates_green": true,
+     "pperr": "0",
+     "soak_epochs": "600/600",
+     "phase_stamps": {
+      "planM6": 2804.9,
+      "M7": 2907.6,
+      "combine": 352.3,
+      "servicedrain": null,
+      "m2_to_end": 6064.8,
+      "plan_M3toM5": 375.4,
+      "M6": 2429.6
+     },
+     "hsaco": "47abe3062174"
+    }
+   ],
+   "p50_median": 6650.3,
+   "production_p50_same_run": 7695.6,
+   "pf6gm_p50_same_run": 6897.4,
+   "phase_stamps": {
+    "planM6": 2804.9,
+    "M7": 2907.6,
+    "combine": 352.3,
+    "servicedrain": null,
+    "m2_to_end": 6064.8,
+    "plan_M3toM5": 375.4,
+    "M6": 2429.6
+   },
+   "servicedrain_status": "UNWRITTEN: no CTA entered the drain (mode 14 skips it)",
+   "servicedrain_raw_us": [
+    -1210169366766.4
+   ],
+   "spin": {
+    "success_max": 0.0,
+    "fail_max": 0.0
+   },
+   "gates_green": true,
+   "n_campaigns": 1,
+   "n_campaigns_attempted": 1,
+   "gate_lines": [
+    "[MARK] control_fails=True",
+    "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008293 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008293 pass=True",
+    "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True",
+    "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+    "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+    "[POISON] post_timing arm=mps_mega survivors=0"
+   ],
+   "ratio_vs_production": 0.8642,
+   "mode12_control_arm_id": "rev28_mode12_C16_g353_ts1",
+   "mode12_control_p50_us": 7229.9,
+   "delta_vs_mode12_control": -579.6,
+   "ratchet_rev26_p50_us": 6499.5,
+   "delta_vs_ratchet_rev26": 150.8
+  },
+  {
+   "arm_id": "rev28_mode14_C0_g65_ts0",
+   "src_rev": 28,
+   "head": "291dfa08",
+   "mode": 14,
+   "C": 0,
+   "g": 65,
+   "g_decode": {
+    "physical_g": 1,
+    "detect_dual": false,
+    "throttle": false,
+    "skip_part_zero": true,
+    "coarse_keep_drain": false,
+    "throttle_depth_sel": 0
+   },
+   "stamps": 0,
+   "status": "OK",
+   "campaigns": [
+    {
+     "tag": "e34f",
+     "run_id": "8_C0g65mode14flush_rows16timestamps0_20260812T193725Z",
+     "iters": "w500t100p5",
+     "mps_mega_p50_us": 6643.7,
+     "production_p50_us": 7704.9,
+     "pf6gm_mega_p50_us": 6904.8,
+     "ratio_vs_production": 0.8623,
+     "mps_per_run_values_us": [
+      6655.81202507019,
+      6639.8115158081055,
+      6637.331485748291,
+      6661.511659622192,
+      6643.651962280273
+     ],
+     "production_per_run_values_us": [
+      7702.863454818726,
+      7709.0630531311035,
+      7704.903364181519,
+      7703.362703323364,
+      7708.842992782593
+     ],
+     "gates_green": true,
+     "pperr": "0",
+     "soak_epochs": "600/600",
+     "phase_stamps": {
+      "planM6": null,
+      "M7": null,
+      "combine": null,
+      "servicedrain": null,
+      "m2_to_end": null,
+      "plan_M3toM5": null,
+      "M6": null
+     },
+     "hsaco": "47abe3062174"
+    }
+   ],
+   "p50_median": 6643.7,
+   "production_p50_same_run": 7704.9,
+   "pf6gm_p50_same_run": 6904.8,
+   "phase_stamps": {
+    "planM6": null,
+    "M7": null,
+    "combine": null,
+    "servicedrain": null,
+    "m2_to_end": null,
+    "plan_M3toM5": null,
+    "M6": null
+   },
+   "servicedrain_status": "stamps off",
+   "servicedrain_raw_us": [
+    null
+   ],
+   "spin": {
+    "success_max": 0.0,
+    "fail_max": 0.0
+   },
+   "gates_green": true,
+   "n_campaigns": 1,
+   "n_campaigns_attempted": 1,
+   "gate_lines": [
+    "[MARK] control_fails=True",
+    "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008293 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008293 pass=True",
+    "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True",
+    "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+    "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+    "[POISON] post_timing arm=mps_mega survivors=0"
+   ],
+   "ratio_vs_production": 0.8623,
+   "mode12_control_arm_id": "rev28_mode12_C16_g353_ts0",
+   "mode12_control_p50_us": 7224.2,
+   "delta_vs_mode12_control": -580.5,
+   "ratchet_rev26_p50_us": 6497.3,
+   "delta_vs_ratchet_rev26": 146.4
+  },
+  {
+   "arm_id": "rev28_mode14_C0_g65_ts1",
+   "src_rev": 28,
+   "head": "291dfa08",
+   "mode": 14,
+   "C": 0,
+   "g": 65,
+   "g_decode": {
+    "physical_g": 1,
+    "detect_dual": false,
+    "throttle": false,
+    "skip_part_zero": true,
+    "coarse_keep_drain": false,
+    "throttle_depth_sel": 0
+   },
+   "stamps": 1,
+   "status": "OK",
+   "campaigns": [
+    {
+     "tag": "e34e",
+     "run_id": "4_C0g65mode14flush_rows16timestamps1_20260812T185924Z",
+     "iters": "w500t100p5",
+     "mps_mega_p50_us": 6652.0,
+     "production_p50_us": 7705.7,
+     "pf6gm_mega_p50_us": 6900.7,
+     "ratio_vs_production": 0.8633,
+     "mps_per_run_values_us": [
+      6659.271478652954,
+      6662.671804428101,
+      6652.011871337891,
+      6651.031970977783,
+      6648.971319198608
+     ],
+     "production_per_run_values_us": [
+      7712.28289604187,
+      7707.304000854492,
+      7695.403575897217,
+      7702.444076538086,
+      7705.662965774536
+     ],
+     "gates_green": true,
+     "pperr": "0",
+     "soak_epochs": "600/600",
+     "phase_stamps": {
+      "planM6": 2811.2,
+      "M7": 2857.5,
+      "combine": 328.5,
+      "servicedrain": null,
+      "m2_to_end": 5997.2,
+      "plan_M3toM5": 380.2,
+      "M6": 2431.1
+     },
+     "hsaco": "47abe3062174"
+    }
+   ],
+   "p50_median": 6652.0,
+   "production_p50_same_run": 7705.7,
+   "pf6gm_p50_same_run": 6900.7,
+   "phase_stamps": {
+    "planM6": 2811.2,
+    "M7": 2857.5,
+    "combine": 328.5,
+    "servicedrain": null,
+    "m2_to_end": 5997.2,
+    "plan_M3toM5": 380.2,
+    "M6": 2431.1
+   },
+   "servicedrain_status": "UNWRITTEN: no CTA entered the drain (mode 14 skips it)",
+   "servicedrain_raw_us": [
+    -1210354510558.4
+   ],
+   "spin": {
+    "success_max": 0.0,
+    "fail_max": 0.0
+   },
+   "gates_green": true,
+   "n_campaigns": 1,
+   "n_campaigns_attempted": 1,
+   "gate_lines": [
+    "[MARK] control_fails=True",
+    "[MOK GATE] mps_mega max_abs=0.033203 relative=0.008294 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008293 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008293 pass=True",
+    "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True",
+    "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+    "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+    "[POISON] post_timing arm=mps_mega survivors=0"
+   ],
+   "ratio_vs_production": 0.8633,
+   "mode12_control_arm_id": "rev28_mode12_C16_g353_ts1",
+   "mode12_control_p50_us": 7229.9,
+   "delta_vs_mode12_control": -577.9,
+   "ratchet_rev26_p50_us": 6499.5,
+   "delta_vs_ratchet_rev26": 152.5
+  },
+  {
+   "arm_id": "rev28_mode14_C16_g353_ts0",
+   "src_rev": 28,
+   "head": "291dfa08",
+   "mode": 14,
+   "C": 16,
+   "g": 353,
+   "g_decode": {
+    "physical_g": 1,
+    "detect_dual": false,
+    "throttle": true,
+    "skip_part_zero": true,
+    "coarse_keep_drain": false,
+    "throttle_depth_sel": 1
+   },
+   "stamps": 0,
+   "status": "OK",
+   "campaigns": [
+    {
+     "tag": "e34c1",
+     "run_id": "8_C16g353mode14flush_rows16timestamps0_20260812T182206Z",
+     "iters": "w500t100p5",
+     "mps_mega_p50_us": 6782.1,
+     "production_p50_us": 7695.4,
+     "pf6gm_mega_p50_us": 6887.4,
+     "ratio_vs_production": 0.8813,
+     "mps_per_run_values_us": [
+      6781.453609466553,
+      6774.253606796265,
+      6788.1739139556885,
+      6788.733005523682,
+      6782.053470611572
+     ],
+     "production_per_run_values_us": [
+      7695.403337478638,
+      7693.763494491577,
+      7691.263437271118,
+      7698.803424835205,
+      7709.00297164917
+     ],
+     "gates_green": true,
+     "pperr": "0",
+     "soak_epochs": "600/600",
+     "phase_stamps": {
+      "planM6": null,
+      "M7": null,
+      "combine": null,
+      "servicedrain": null,
+      "m2_to_end": null,
+      "plan_M3toM5": null,
+      "M6": null
+     },
+     "hsaco": "61efee2b3a20"
+    },
+    {
+     "tag": "e34f",
+     "run_id": "7_C16g353mode14flush_rows16timestamps0_20260812T193419Z",
+     "iters": "w500t100p5",
+     "mps_mega_p50_us": 6778.7,
+     "production_p50_us": 7708.9,
+     "pf6gm_mega_p50_us": 6884.7,
+     "ratio_vs_production": 0.8793,
+     "mps_per_run_values_us": [
+      6781.253099441528,
+      6775.552988052368,
+      6778.7322998046875,
+      6786.013126373291,
+      6775.812864303589
+     ],
+     "production_per_run_values_us": [
+      7702.642917633057,
+      7709.00297164917,
+      7718.302965164185,
+      7706.642866134644,
+      7708.943128585815
+     ],
+     "gates_green": true,
+     "pperr": "0",
+     "soak_epochs": "600/600",
+     "phase_stamps": {
+      "planM6": null,
+      "M7": null,
+      "combine": null,
+      "servicedrain": null,
+      "m2_to_end": null,
+      "plan_M3toM5": null,
+      "M6": null
+     },
+     "hsaco": "61efee2b3a20"
+    }
+   ],
+   "p50_median": 6780.4,
+   "production_p50_same_run": 7702.1,
+   "pf6gm_p50_same_run": 6886.0,
+   "phase_stamps": {
+    "planM6": null,
+    "M7": null,
+    "combine": null,
+    "servicedrain": null,
+    "m2_to_end": null,
+    "plan_M3toM5": null,
+    "M6": null
+   },
+   "servicedrain_status": "stamps off",
+   "servicedrain_raw_us": [
+    null,
+    null
+   ],
+   "spin": {
+    "success_max": 0.0,
+    "fail_max": 0.0
+   },
+   "gates_green": true,
+   "n_campaigns": 2,
+   "n_campaigns_attempted": 2,
+   "gate_lines": [
+    "[MARK] control_fails=True",
+    "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008293 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008293 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008294 pass=True",
+    "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True",
+    "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+    "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+    "[POISON] post_timing arm=mps_mega survivors=0"
+   ],
+   "ratio_vs_production": 0.8803,
+   "mode12_control_arm_id": "rev28_mode12_C16_g353_ts0",
+   "mode12_control_p50_us": 7224.2,
+   "delta_vs_mode12_control": -443.8,
+   "ratchet_rev26_p50_us": 6497.3,
+   "delta_vs_ratchet_rev26": 283.1
+  },
+  {
+   "arm_id": "rev28_mode14_C16_g353_ts1",
+   "src_rev": 28,
+   "head": "291dfa08",
+   "mode": 14,
+   "C": 16,
+   "g": 353,
+   "g_decode": {
+    "physical_g": 1,
+    "detect_dual": false,
+    "throttle": true,
+    "skip_part_zero": true,
+    "coarse_keep_drain": false,
+    "throttle_depth_sel": 1
+   },
+   "stamps": 1,
+   "status": "OK",
+   "campaigns": [
+    {
+     "tag": "e34e",
+     "run_id": "7_C16g353mode14flush_rows16timestamps1_20260812T190842Z",
+     "iters": "w500t100p5",
+     "mps_mega_p50_us": 6780.0,
+     "production_p50_us": 7696.2,
+     "pf6gm_mega_p50_us": 6890.0,
+     "ratio_vs_production": 0.881,
+     "mps_per_run_values_us": [
+      6789.413928985596,
+      6779.733657836914,
+      6777.412891387939,
+      6781.533002853394,
+      6779.951095581055
+     ],
+     "production_per_run_values_us": [
+      7690.1233196258545,
+      7696.183204650879,
+      7697.582960128784,
+      7713.262557983398,
+      7691.362142562866
+     ],
+     "gates_green": true,
+     "pperr": "0",
+     "soak_epochs": "600/600",
+     "phase_stamps": {
+      "planM6": 2828.3,
+      "M7": 3050.5,
+      "combine": 274.5,
+      "servicedrain": null,
+      "m2_to_end": 6153.3,
+      "plan_M3toM5": 376.4,
+      "M6": 2451.9
+     },
+     "hsaco": "47abe3062174"
+    }
+   ],
+   "p50_median": 6780.0,
+   "production_p50_same_run": 7696.2,
+   "pf6gm_p50_same_run": 6890.0,
+   "phase_stamps": {
+    "planM6": 2828.3,
+    "M7": 3050.5,
+    "combine": 274.5,
+    "servicedrain": null,
+    "m2_to_end": 6153.3,
+    "plan_M3toM5": 376.4,
+    "M6": 2451.9
+   },
+   "servicedrain_status": "UNWRITTEN: no CTA entered the drain (mode 14 skips it)",
+   "servicedrain_raw_us": [
+    -1210912901988.4
+   ],
+   "spin": {
+    "success_max": 0.0,
+    "fail_max": 0.0
+   },
+   "gates_green": true,
+   "n_campaigns": 1,
+   "n_campaigns_attempted": 1,
+   "gate_lines": [
+    "[MARK] control_fails=True",
+    "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008293 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008294 pass=True",
+    "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True",
+    "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+    "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+    "[POISON] post_timing arm=mps_mega survivors=0"
+   ],
+   "ratio_vs_production": 0.881,
+   "mode12_control_arm_id": "rev28_mode12_C16_g353_ts1",
+   "mode12_control_p50_us": 7229.9,
+   "delta_vs_mode12_control": -449.9,
+   "ratchet_rev26_p50_us": 6499.5,
+   "delta_vs_ratchet_rev26": 280.5
+  },
+  {
+   "arm_id": "rev28_mode14_C8_g353_ts0",
+   "src_rev": 28,
+   "head": "291dfa08",
+   "mode": 14,
+   "C": 8,
+   "g": 353,
+   "g_decode": {
+    "physical_g": 1,
+    "detect_dual": false,
+    "throttle": true,
+    "skip_part_zero": true,
+    "coarse_keep_drain": false,
+    "throttle_depth_sel": 1
+   },
+   "stamps": 0,
+   "status": "OK",
+   "campaigns": [
+    {
+     "tag": "e34c1",
+     "run_id": "7_C8g353mode14flush_rows16timestamps0_20260812T181902Z",
+     "iters": "w500t100p5",
+     "mps_mega_p50_us": 6722.1,
+     "production_p50_us": 7705.6,
+     "pf6gm_mega_p50_us": 6902.3,
+     "ratio_vs_production": 0.8724,
+     "mps_per_run_values_us": [
+      6717.152118682861,
+      6730.512619018555,
+      6719.631910324097,
+      6749.613046646118,
+      6722.092628479004
+     ],
+     "production_per_run_values_us": [
+      7704.262495040894,
+      7706.001996994019,
+      7705.602407455444,
+      7701.9031047821045,
+      7709.343910217285
+     ],
+     "gates_green": true,
+     "pperr": "0",
+     "soak_epochs": "600/600",
+     "phase_stamps": {
+      "planM6": null,
+      "M7": null,
+      "combine": null,
+      "servicedrain": null,
+      "m2_to_end": null,
+      "plan_M3toM5": null,
+      "M6": null
+     },
+     "hsaco": "61efee2b3a20"
+    },
+    {
+     "tag": "e34f",
+     "run_id": "6_C8g353mode14flush_rows16timestamps0_20260812T193115Z",
+     "iters": "w500t100p5",
+     "mps_mega_p50_us": 6729.2,
+     "production_p50_us": 7700.4,
+     "pf6gm_mega_p50_us": 6902.8,
+     "ratio_vs_production": 0.8739,
+     "mps_per_run_values_us": [
+      6725.373029708862,
+      6714.752912521362,
+      6729.172945022583,
+      6744.772434234619,
+      6733.752489089966
+     ],
+     "production_per_run_values_us": [
+      7703.003168106079,
+      7689.543008804321,
+      7700.50311088562,
+      7699.023962020874,
+      7700.4430294036865
+     ],
+     "gates_green": true,
+     "pperr": "0",
+     "soak_epochs": "600/600",
+     "phase_stamps": {
+      "planM6": null,
+      "M7": null,
+      "combine": null,
+      "servicedrain": null,
+      "m2_to_end": null,
+      "plan_M3toM5": null,
+      "M6": null
+     },
+     "hsaco": "47abe3062174"
+    }
+   ],
+   "p50_median": 6725.6,
+   "production_p50_same_run": 7703.0,
+   "pf6gm_p50_same_run": 6902.6,
+   "phase_stamps": {
+    "planM6": null,
+    "M7": null,
+    "combine": null,
+    "servicedrain": null,
+    "m2_to_end": null,
+    "plan_M3toM5": null,
+    "M6": null
+   },
+   "servicedrain_status": "stamps off",
+   "servicedrain_raw_us": [
+    null,
+    null
+   ],
+   "spin": {
+    "success_max": 0.0,
+    "fail_max": 0.0
+   },
+   "gates_green": true,
+   "n_campaigns": 2,
+   "n_campaigns_attempted": 2,
+   "gate_lines": [
+    "[MARK] control_fails=True",
+    "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008293 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.037109 relative=0.008294 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008293 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008294 pass=True",
+    "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True",
+    "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+    "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+    "[POISON] post_timing arm=mps_mega survivors=0"
+   ],
+   "ratio_vs_production": 0.8731,
+   "mode12_control_arm_id": "rev28_mode12_C16_g353_ts0",
+   "mode12_control_p50_us": 7224.2,
+   "delta_vs_mode12_control": -498.6,
+   "ratchet_rev26_p50_us": 6497.3,
+   "delta_vs_ratchet_rev26": 228.3
+  },
+  {
+   "arm_id": "rev28_mode14_C8_g353_ts1",
+   "src_rev": 28,
+   "head": "291dfa08",
+   "mode": 14,
+   "C": 8,
+   "g": 353,
+   "g_decode": {
+    "physical_g": 1,
+    "detect_dual": false,
+    "throttle": true,
+    "skip_part_zero": true,
+    "coarse_keep_drain": false,
+    "throttle_depth_sel": 1
+   },
+   "stamps": 1,
+   "status": "OK",
+   "campaigns": [
+    {
+     "tag": "e34e",
+     "run_id": "6_C8g353mode14flush_rows16timestamps1_20260812T190537Z",
+     "iters": "w500t100p5",
+     "mps_mega_p50_us": 6729.8,
+     "production_p50_us": 7705.8,
+     "pf6gm_mega_p50_us": 6897.8,
+     "ratio_vs_production": 0.8733,
+     "mps_per_run_values_us": [
+      6735.612392425537,
+      6726.373195648193,
+      6728.873014450073,
+      6729.813098907471,
+      6734.152555465698
+     ],
+     "production_per_run_values_us": [
+      7705.602407455444,
+      7715.582847595215,
+      7705.76286315918,
+      7697.784185409546,
+      7705.763101577759
+     ],
+     "gates_green": true,
+     "pperr": "0",
+     "soak_epochs": "600/600",
+     "phase_stamps": {
+      "planM6": 2812.0,
+      "M7": 3021.8,
+      "combine": 287.7,
+      "servicedrain": null,
+      "m2_to_end": 6121.5,
+      "plan_M3toM5": 372.3,
+      "M6": 2439.7
+     },
+     "hsaco": "47abe3062174"
+    }
+   ],
+   "p50_median": 6729.8,
+   "production_p50_same_run": 7705.8,
+   "pf6gm_p50_same_run": 6897.8,
+   "phase_stamps": {
+    "planM6": 2812.0,
+    "M7": 3021.8,
+    "combine": 287.7,
+    "servicedrain": null,
+    "m2_to_end": 6121.5,
+    "plan_M3toM5": 372.3,
+    "M6": 2439.7
+   },
+   "servicedrain_status": "UNWRITTEN: no CTA entered the drain (mode 14 skips it)",
+   "servicedrain_raw_us": [
+    -1210727314893.0
+   ],
+   "spin": {
+    "success_max": 1.0,
+    "fail_max": 0.0
+   },
+   "gates_green": true,
+   "n_campaigns": 1,
+   "n_campaigns_attempted": 1,
+   "gate_lines": [
+    "[MARK] control_fails=True",
+    "[MOK GATE] mps_mega max_abs=0.032227 relative=0.008294 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008293 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008293 pass=True",
+    "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008294 pass=True",
+    "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True",
+    "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+    "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+    "[POISON] post_timing arm=mps_mega survivors=0"
+   ],
+   "ratio_vs_production": 0.8733,
+   "mode12_control_arm_id": "rev28_mode12_C16_g353_ts1",
+   "mode12_control_p50_us": 7229.9,
+   "delta_vs_mode12_control": -500.1,
+   "ratchet_rev26_p50_us": 6499.5,
+   "delta_vs_ratchet_rev26": 230.3
+  }
+ ]
+}

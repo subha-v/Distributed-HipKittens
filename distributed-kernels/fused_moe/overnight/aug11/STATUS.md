@@ -6,9 +6,48 @@ tonight is **`LESSONS.md` in this folder** (aug10's remains at
 this folder — that is the morning read**; per-experiment detail is in
 `exp_N_*/result.md`.
 
-**Read the two OPEN sections below before quoting any number from this file.**
+**Read the three OPEN sections below before quoting any number from this file.**
 Every timing result in this document is a **T=4096** result — that is now known to
 be the only shape at which either megakernel is correct.
+
+## OPEN REGRESSION — `291dfa08` costs the mode-12 ratchet **+726.9 µs** (exp_34)
+
+**The ratchet config does not reproduce at `HEAD`.** Measured in one session, same
+config, same `production` denominator, 5-rotation campaigns:
+
+| revision | `C=16,g=353,mode=12,flush_rows=16` | M7 stamp | planM6 |
+|---|---:|---:|---:|
+| `f113d73f` (rev 26) | **6,497.3 µs** (0.8437×) | 2,673.9 | 2,813.0 |
+| `291dfa08` (rev 28, mode 14) | **7,224.2 µs** (0.9382×, n=5) | 3,492.1 | 2,822.1 |
+
+`production` (7,700) and `pf6gm_mega` (6,905) are unchanged to <5 µs, so the
+session is not slow — the `mps_mega` arm is. The whole delta is in **M7**.
+
+**Mechanism, as far as it can be taken without editing the source:** every
+mode-12 line is byte-identical across the commit (all mode-14 branches are gated
+on `m == 14`), `n2_phase2_gm_mps.cpp` is not in the diffstat, and the throttle's
+four compile-time instantiations are still in the ISA at identical counts
+(`vmcnt(4)/(8)/(16)/(32)`, 96 each). What *is* observable is that the exp_24
+injection bound has **gone inert**: `g=353` vs `g=65` (throttle+depth vs neither)
+is −613.5 µs at rev 26 and **−1.8 µs at the pin** for mode 12, **+7.2 µs** for
+mode 14. So this is a codegen/allocation effect in the shared function — visible
+trace `SGPR 104 → 106`, `LDS +68 B` — and it needs a source owner. exp_34 was
+measuring, not editing.
+
+**Consequences, all live:**
+
+- Any mode-12 denominator taken at `291dfa08` or later is a broken-transport
+  number. That includes Q1 waterfall rungs (d)/(e), which therefore cannot be
+  plotted against (a)–(c).
+- **The resource-tuple gate is not sufficient.** It passed on every gated field
+  while the arm lost 11 %. Add "re-time the ratchet config" to every commit that
+  touches the shared kernel.
+- Fixing this is the highest-EV item in the tree: **+727 µs**, more than the rest
+  of the optimisation queue combined, and it is a regression rather than a new
+  mechanism.
+
+Full evidence, including the ISA census and the four-batch campaign set:
+`exp_34_mode14/result.md` §1.
 
 ## Where we start
 
@@ -149,11 +188,56 @@ touching only those five lines plus a `SCRIPT_DIR` override). At T=4096 the
 generated defaults reproduce the hard-wired values exactly and the control screen
 read **0.8420×** against the known 0.8408× — **the driver is not a confound.**
 
-## exp_34 — mode 14 REVIEWED and CPU-GATED; no GPU number exists
+## exp_34 — mode 14 MEASURED. Rung **FALSIFIED** at 6,650.9 µs; the granularity mechanism is real but does not beat the true ratchet
 
-**Committed at `291dfa08`. Protocol review: APPROVE-WITH-CONDITIONS, and every
-condition is now cleared.** Still owed: correctness, negative control, 600-epoch
-soak, campaign. **Do not quote a number — there is none.**
+**Committed at `291dfa08`, `K0P6_MPS_SRC_REV 28`. Full ladder green; 26 campaigns
+across 4 interleaved batches; every number below is a 5-rotation campaign median
+with `production` as the same-run denominator.** Detail:
+`exp_34_mode14/result.md`; plot-ready `exp_34_mode14/mode14_arms.json`.
+
+| arm (stamps-off) | cfg | p50 µs | n | ratio | vs pin mode-12 | vs true ratchet |
+|---|---|---:|---:|---:|---:|---:|
+| true ratchet, in-session at rev 26 | `C=16,g=353,mode=12` | 6,497.3 | 1 | 0.8437 | −726.9 | — |
+| mode-12 control **at the pin** | `C=16,g=353,mode=12` | 7,224.2 | 5 | 0.9382 | — | +726.9 |
+| **mode 14, granularity alone** | `C=0,g=481,mode=14` | **6,647.7** | 4 | 0.8634 | −576.5 | +150.4 |
+| **mode 14, + drain deletion** | `C=0,g=353,mode=14` | **6,650.9** | 4 | 0.8637 | −573.3 | +153.6 |
+| mode 14, C=8 | `C=8,g=353,mode=14` | 6,725.6 | 2 | 0.8731 | −498.6 | +228.3 |
+| mode 14, C=16 | `C=16,g=353,mode=14` | 6,780.4 | 2 | 0.8803 | −443.8 | +283.1 |
+
+**Verdicts:**
+
+1. **Band FALSIFIED.** Pre-registered 5,990–6,440 with 6,568 as the falsification
+   threshold; measured **6,650.9**. Reported as a falsification, not
+   re-interpreted. The family's optimism bias held again.
+2. **The mechanism is nonetheless large and real:** deleting the per-row readiness
+   protocol is worth **−573.3 µs (7.4 % of production)** against the same
+   transport. It just does not clear the *working* ratchet, which is 150 µs faster.
+3. **The drain deletion is a null: +3.2 µs** (`g=481` → `g=353`, n=4 either side).
+   The `kCoarseKeepDrainBit` selector earned its keep by proving this; the
+   six-rung waterfall can collapse back to five.
+4. **The C sweep is NOT flat — it is monotone at 8.1–9.3 µs per reserved CTA**, and
+   because mode 14's pool provably has no work (bit 26 never set in 4,032 `pperr`
+   readings, `DRAIN=0`, `[MPS SPIN] 0/0`), this is **capacity loss with contention
+   excluded by construction**. That is a stronger placement result than exp_37 was
+   going to get, and it supplies paper Q2's previously impossible C=0 point.
+5. **Service pool degenerated as predicted** — banked, not ratcheted: at C=0 mode
+   14 is a homogeneous megakernel and cannot be a role-split ratchet.
+6. **Open question worth the paper's attention:** the injection bound (−613.5 µs at
+   rev 26) and the coarse signal (−573.3 µs with the bound inert) may be
+   **substitutes, not complements** — both bound in-flight remote writes. Untestable
+   at this pin; needs the §OPEN REGRESSION fix, then a rung-(d) re-run.
+
+**Ladder, all green:** `[MOK GATE] … pass=True` with `pass_all_ranks` on all 8
+ranks · `[MARK] control_fails=True` · **protocol negative control failed exactly as
+pre-registered** — `rank 7: pperr=33554432` (bit 25) with ranks 0–6 clean and
+29,360,128 poisoned survivors on rank 7, so the rendezvous **is** load-bearing ·
+**bit 26 never set, 4,032 readings** · `[MPS SOAK] completed=600/600 pperr=0
+poison=0 pass=True` · `[POISON SELFTEST] one_row_poisoned_fails=True
+nonfinite=57344` · `[POISON] survivors=0`.
+
+*(Historical note: the pre-GPU version of this section said "no GPU number
+exists". Superseded, not deleted — the CPU-gate and protocol-review record it
+described is retained in `exp_34_mode14/result.md` under "Pre-GPU record".)*
 
 Review findings, all SOUND: happens-before on both the local and remote paths;
 the **tid-0 observation** is sound because the code decomposes `cta_acquire` into
@@ -223,8 +307,8 @@ real tuple is **155,496 / 106**.
 | **exp_33** attribution (Q3) | **DONE** — `phase_stamps.json` |
 | **exp_22** saturation (Q4a) | **DONE** — `saturation.json`, 250/250 points |
 | **exp_36** sensitivity (Q5) | **DONE as far as the harness allows** — `sensitivity_grid.json`; T=4096 only, skew axis absent |
-| **exp_35** waterfall (Q1) | **PARTIAL, 3 rungs of 6** (the mode-14 rung split in two) |
-| **exp_34** mode 14 | **BUILT + REVIEWED + CPU-GATED, NOT MEASURED.** Committed `291dfa08`, `K0P6_MPS_SRC_REV 28`. Next: correctness → negative control → soak → campaign |
+| **exp_35** waterfall (Q1) | **PARTIAL, 3 plottable rungs of 6.** exp_34 measured (d) and (e) but at the regressed pin, so they are not commensurable with (a)–(c) and are held out of the figure pending a rung-(d)/(e) re-run; (f) never built |
+| **exp_34** mode 14 | **DONE — rung FALSIFIED.** 6,650.9 µs (n=4, stamps-off) vs the 6,568 threshold. Mechanism real (−573.3 µs vs the pin's mode 12) but +153.6 vs the true ratchet; drain deletion a null (+3.2); C sweep monotone, not flat. **Surfaced §OPEN REGRESSION.** `mode14_arms.json` feeds rungs (d)/(e) and Q2's C=0 point |
 | **exp_23** timeline (Q4b) | **SPEC READY** — patch spec + tooling done and self-tested; needs the ~20-min apply, the 4-TU CPU parity gate, then ~45–55 min GPU |
 | **exp_37** placement (Q2) | **CAMPAIGN RUNNING**, pinned at `b5215081`; also carries the C=8 paired confirmation |
 | C=8 ratchet candidate | **OPEN** — see the open-ratchet section; do not move the ratchet without a paired same-run result |
@@ -311,13 +395,30 @@ confounded with the mechanism.
 | **a** | homogeneous baseline (`pf6gm_mega`) | — | 6,900.2 | 15.5 | 0.8950 | — |
 | **b** | + epilogue-carried payload, **throttle OFF** | `C=16,g=65,mode=12,flush_rows=16` | 7,110.8 | 13.7 | 0.9226 | **+210.6** |
 | **c** | + **injection bound** (depth 4) — the ratchet | `C=16,g=353,mode=12,flush_rows=16` | 6,495.8 | 6.9 | 0.8422 | **−615.0** |
-| d | + coarse arrival signals (mode 14) | — | `null` | | | `pending_exp_34` |
-| e | + nc-major producer task order | — | `null` | | | `not_built` |
+| d | + coarse arrival signals (mode 14, drain retained) | `C=0,g=481,mode=14` | (6,647.7) | 5.4 | (0.8634) | **not plottable — see below** |
+| e | + per-task drain deletion | `C=0,g=353,mode=14` | (6,650.9) | 5.4 | (0.8637) | **+3.2 — a null** |
+| f | + nc-major producer task order | — | `null` | | | `not_built` |
 
-> **Rung count updated to 6 by exp_34.** The mode-14 rung splits in two now that
-> the per-task VMEM drain deletion is selectable: (d) `g=481,mode=14` = coarse
-> readiness with the drain retained, (e) `g=353,mode=14` = + drain deletion,
-> (f) nc-major. See §"exp_34".
+> **Rung count updated to 6 by exp_34, then back toward 5.** The mode-14 rung split
+> in two because the per-task VMEM drain deletion is selectable via
+> `kCoarseKeepDrainBit`; exp_34 then measured (d)→(e) at **+3.2 µs, a null**, so the
+> two collapse into one rung with the drain-deletion arm reported as free.
+>
+> **(d) and (e) are parenthesised because they are NOT commensurable with (a)–(c).**
+> exp_34 measured them at `291dfa08`, where the mode-12 transport they ride on is
+> **+726.9 µs slower** than at rung (c)'s commit and the rung-(c) injection bound is
+> **inert** (see §OPEN REGRESSION). Against their own session's mode-12 control they
+> are −573.3 µs; against rung (c)'s working ratchet they are **+153.6 µs**. Plotting
+> the raw values next to (a)–(c) would show a rung going the wrong way for a reason
+> that has nothing to do with granularity. **The figure needs a rung-(d)/(e) re-run
+> once the regression is fixed**; the JSON carries both deltas so the re-run is a
+> substitution, not a rebuild.
+>
+> One consequence worth stating in the paper rather than hiding: rung (c)'s
+> injection bound (−613.5 µs) and rung (d)'s coarse signal (−573.3 µs, measured
+> with the bound inert) may be **substitutes** — both bound in-flight remote writes
+> — in which case the rungs are not additive and the waterfall's cumulative
+> framing is wrong as drawn. Untestable until the regression is fixed.
 
 **With `C` held fixed at 16, one scheduling bit moves end-to-end by −615.0 µs —
 1.52× the entire (a)→(c) gap of −404.4 µs — while relocating the payload into
@@ -348,7 +449,10 @@ signature, and a fail-closed negative control that raised
   `mode_is_stream` includes 12/13). The waterfall therefore **cannot** drive CTA
   dedication to zero inside a single arm; the only C=0 point available is rung
   (a), a different kernel. **Driving that axis to zero requires mode 14** — which
-  makes exp_34 a blocker for exp_37 / paper Q2 as well as for rung (d).
+  made exp_34 a blocker for exp_37 / paper Q2 as well as for rung (d).
+  **Cleared:** exp_34 ran C=0 legally in mode 14 and, better, ran C ∈ {0, 8, 16} in
+  the same arm with the pool provably idle, so Q2 now has a C=0 point *and* a
+  contention-free measurement of what reserving a CTA costs (8.1–9.3 µs each).
 
 Honest weakness, recorded: **step (a)→(b) is not single-variable and cannot be
 made one** — rung (a) is a different kernel with no MPS protocol, so that step

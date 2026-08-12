@@ -12,10 +12,18 @@ gated, data not yet collected), **NOT STARTED** (no instrument).
 | status | figures |
 |---|---|
 | DATA LANDED | **Q4a saturation** · Q3 attribution · §3.2 Finding-1 · PAPER Figure 4 (worked example) |
-| PARTIAL | **Q5 sensitivity** (T=4096 only) · PAPER Figure 1 (comm fraction) · Q1 waterfall (3 rungs of **6**) · task-order/readiness |
+| PARTIAL | **Q5 sensitivity** (T=4096 only) · PAPER Figure 1 (comm fraction) · Q1 waterfall (5 rungs of **6**, but two of them on a **broken baseline**) · **Q2 placement** (mode-14 C ∈ {0,8,16} landed, C=0 blocker cleared) · task-order/readiness |
 | SPEC READY | Q4b timeline |
 | PENDING | — |
-| NOT STARTED | Q2 placement (exp_37 campaign running) · Q6 external ladders |
+| NOT STARTED | Q6 external ladders |
+
+> **READ THIS BEFORE PLOTTING ANYTHING MEASURED AT `291dfa08` OR LATER.**
+> exp_34 established that commit `291dfa08` (mode 14) **regresses the mode-12
+> ratchet by +726.9 µs**, entirely in M7, and that the exp_24 injection throttle
+> is **inert at that pin for both mode 12 and mode 14** (`g=353` ≡ `g=65` to
+> within 2–7 µs, against −613.5 µs at rev 26). Every mode-12 denominator taken at
+> `291dfa08` or later is a broken-transport number until that is fixed. exp_34
+> §1 has the attribution, the phase localisation and the ISA census.
 
 **Two numbering schemes are in play and they disagree.** `PAPER.md` explicitly
 numbers only **Figure 1** (§1, the comm-fraction motivation) and **Figure 4**
@@ -36,8 +44,8 @@ brackets.
 | §2.1 token/expert flow | — | schematic: two GPUs, a token routed to experts, the output tile coming home (COMET Fig-2 style) | none — diagram | — | **NOT STARTED** (schematic, needs no campaign) |
 | §3.2 **Finding 1** — "the paper's pivotal measurement, gets its own figure" | — | pool interference is coordination, not bytes: concurrent-GEMM inflation vs capacity tax; deleting the payload copy moves the GEMM +5.7 µs while 831 µs of inflation remains; inflation tracks atomic/fence count, and coarsening transfers *increases* it | aug10 `exp_20`, `exp_03`, `exp_05`–`exp_07` result files | aug10 (prior sessions) | **DATA LANDED** |
 | **Figure 4** — §4.2 worked example | — | operation count on one cross-GPU edge: ~30 coordination ops across three CTAs (pool design) → amortized ~10⁻⁴ ops and no third CTA (final design); fabric byte-limit 52.8 GB/s coalesced 4 B atomics vs 54.9 GB/s 16 B stores | counts derived in §4.2; fabric numbers from aug10 `exp_21` ubench | aug10 exp_21 + design analysis | **DATA LANDED** (diagram + counts, not a campaign) |
-| §6 **Q1** — the waterfall (the money figure) | **Fig 4** | homogeneous → +epilogue-carried payload → +injection bound → +arrival-sized signals → +task reorder, each rung's p50 and ratio vs `production`, paired same-run | `exp_35_waterfall/waterfall.json` (schema `exp35.waterfall.1`) | exp_35 (+ exp_34 for the mode-14 rungs) | **PARTIAL — 3 rungs of 6.** The rung count **grew from 5 to 6**: exp_34's confound fix split the mode-14 rung in two, because mode 14 also deleted the per-task VMEM drain and that deletion is now selectable (`g \|= 0x80`, `kCoarseKeepDrainBit`). Measured: (a) `pf6gm_mega` 6,900.2 sd 15.5 / 0.8950; (b) payload, throttle OFF `g=65` 7,110.8 sd 13.7 / 0.9226; (c) + injection bound depth 4 `g=353` 6,495.8 sd 6.9 / 0.8422. Owed: (d) `g=481,mode=14` — coarse readiness with the drain retained; (e) `g=353,mode=14` — + drain deletion; (f) nc-major task order, `status: not_built`. (d)/(e) are built and CPU-gated, not measured. Both `null` rows carry `blocked_by`, so the figure completes in place without re-running (a)–(c). |
-| §6 **Q2** — do dedicated communication blocks ever win? | Fig 5 | paired best-vs-best (mode 2 pool at C=64 g=1 vs mode 12 at C=16 vs mode 14 at C ∈ {0, 8, 16}), plus the pool-size sweep at the final design (predicted flat→degenerate) and the reducer-count sweep | — (exp_36's C sweep is a usable stand-in for the mode-12 half) | exp_37 (**campaign running**, pinned at `b5215081`) | **NOT STARTED as specified**, but the answer is already visible: exp_36's C sweep at T=4096 is **monotonically harmful in C** and the dedicated-pool arm (mode 2, C=64) is the worst point at +331.5 µs. The C=0 arm remains hard-blocked — `C = 0` is illegal in mode 12 (`moe_mps_adapter.cuh:373`) — so the flat→degenerate half of this figure still needs exp_34's mode 14 on GPU. |
+| §6 **Q1** — the waterfall (the money figure) | **Fig 4** | homogeneous → +epilogue-carried payload → +injection bound → +arrival-sized signals → +task reorder, each rung's p50 and ratio vs `production`, paired same-run | `exp_35_waterfall/waterfall.json` (schema `exp35.waterfall.1`) + `exp_34_mode14/mode14_arms.json` for (d)/(e) | exp_35 (+ exp_34 for the mode-14 rungs) | **PARTIAL — 5 rungs measured of 6, but (d)/(e) DO NOT SHARE (a)–(c)'s BASELINE and must not be plotted with them yet.** exp_34 measured (d) `g=481,mode=14` = **6,647.7** (n=4) and (e) `g=353,mode=14` = **6,650.9** (n=4), stamps-off, at pin `291dfa08` — where **mode 12 itself regressed to 7,224.2 from 6,497.3** (exp_34 §1, attributed to that very commit, +726.9 µs, all in M7). So at this pin rung (c) is broken and the (c)→(d) step reads −576.5 µs against a baseline no other rung shares. **Action: re-run (d)/(e) after the regression is fixed, then the figure is complete but for (f).** Also note the (d)→(e) step — deleting the per-task VMEM drain — measured **+3.2 µs, a null**, so the six-rung split can collapse back to five with the drain deletion reported as free. (f) nc-major task order, `status: not_built`. Prior text for (a)–(c) retained: **3 rungs of 6.** The rung count **grew from 5 to 6**: exp_34's confound fix split the mode-14 rung in two, because mode 14 also deleted the per-task VMEM drain and that deletion is now selectable (`g \|= 0x80`, `kCoarseKeepDrainBit`). Measured: (a) `pf6gm_mega` 6,900.2 sd 15.5 / 0.8950; (b) payload, throttle OFF `g=65` 7,110.8 sd 13.7 / 0.9226; (c) + injection bound depth 4 `g=353` 6,495.8 sd 6.9 / 0.8422. Owed: (d) `g=481,mode=14` — coarse readiness with the drain retained; (e) `g=353,mode=14` — + drain deletion; (f) nc-major task order, `status: not_built`. (d)/(e) are built and CPU-gated, not measured. Both `null` rows carry `blocked_by`, so the figure completes in place without re-running (a)–(c). |
+| §6 **Q2** — do dedicated communication blocks ever win? | Fig 5 | paired best-vs-best (mode 2 pool at C=64 g=1 vs mode 12 at C=16 vs mode 14 at C ∈ {0, 8, 16}), plus the pool-size sweep at the final design (predicted flat→degenerate) and the reducer-count sweep | `exp_34_mode14/mode14_arms.json` for the C ∈ {0, 8, 16} mode-14 series; exp_36's C sweep is the mode-12 half | exp_37 (**campaign running**, pinned at `b5215081`) + exp_34 (mode-14 series) | **PARTIAL, and the C=0 blocker is now cleared.** exp_36's C sweep at T=4096 is **monotonically harmful in C** and the dedicated-pool arm (mode 2, C=64) is the worst point at +331.5 µs. exp_34 supplies the previously impossible **C=0** point (legal only in mode 14; `C = 0` is rejected in mode 12 at `moe_mps_adapter.cuh:373`) and the series is **monotone, not flat**: C=0 **6,650.9** (n=4) → C=8 **6,725.6** (n=2) → C=16 **6,780.4** (n=2), i.e. **8.1–9.3 µs per reserved CTA**. The prediction of flatness is **falsified**, and in the strongest possible way for the paper's claim: in mode 14 the pool provably has **no work at all** (bit 26 never set across 4,032 `pperr` readings; `[MPS TS] DRAIN=0`; `[MPS SPIN] 0/0`), so the penalty is **pure CTA-capacity loss with contention excluded by construction** — no placement policy can be rescued by giving the pool less to do. Caption caveat: this series sits at pin `291dfa08`, so it may be compared *within itself* but not against mode-12 numbers from other pins (exp_34 §1). |
 | §6 **Q3** — where does the time go now? | — | phase attribution at the ratchet: stacked bar over plan M3–M5 / M6 GEMM-1 / M7 GEMM-2 (GEMM proper vs epilogue surcharge) / combine M8–M9, for `mps_mega`, plus the `production` three-stage split | `exp_33_attribution/phase_stamps.json` (schema `exp33-phase-stamps-1`; `arms.mps_mega.phases.stacked_bar_phases` is the partition to plot) | exp_33 | **DATA LANDED.** n=10, all gates green. M7 2,701.8 ±23.74 (46.2 % of interior) > M6 2,453.3 ±2.51 (41.9 %); the two GEMMs are 88.1 %. plan 372.8 ±0.67, combine 324.2 ±21.12, interior 5,852.1 ±9.56. |
 | §6 **Q4a** — resource saturation vs CTA count (NanoFlow Fig-7 analog) | Fig 2 | per-resource throughput vs CTA count (MFMA TFLOPS / HBM GB/s / xGMI GB/s), each curve **isolated** and **concurrent**, knee annotated; the gap between the two curve families *is* Finding 1 as a figure | **`exp_22_fig7_saturation/saturation.json`** (schema `exp22-saturation-1`; raw `saturation_plan.jsonl`) | exp_22, `E22_SRC_REV 10`, 250/250 plan points, 2026-08-12T10:45Z | **DATA LANDED.** Knees: single xGMI link **8 CTAs** (plateau 56.9 GB/s = 74.1 % of 76.8); 7-link fabric **32 CTAs** at mlp4 (355.0 GB/s = 66.0 % of 537.6); HBM **128 CTAs** (4,151.9 GB/s = 51.9 %); **MFMA has no knee** — linear to 256 CTAs, R² ≥ 0.99989. Communication saturates at 8–32 CTAs against 256 CTAs of compute capacity. H4 SUPPORTED ×3; H3 `REFUTED_PAYLOAD_RIDES_FREE` (concurrent/isolated median **0.9951**, n=42, vs **0.878** with the protocol compiled in and −42 % at g=16); H1 falsifier fired, reported unsoftened. |
 | §6 **Q4b** — per-layer utilization timelines (NanoFlow-v2 Fig-10 analog) | Fig 3 | per-CTA phase occupancy over time for three arms on one routing seed | `exp_23_fig10_timeline/rank0_events.json` (schema `exp23-events-1`) + `timeline_bins.csv` (`exp23-bins-1`) — **not collected** | exp_23 | **SPEC READY.** `patch_spec.md` done (Tier A = five one-line `ts_last`→`ts_mark` swaps at sites that already decode the config and read the clock, plus a one-line host buffer resize, **no ABI change**); `parse_events.py` / `bin_timeline.py` / `xcheck.py` / `selftest.py` all built and self-tested (8 mutation classes, every verdict proven to flip). **Verdict GO at Tier A**, ~15 % parity risk, ~45–55 min of GPU for all three arms. **Two plan corrections:** the homogeneous panel must be `mps_mega C=0,mode=0` labelled "bulk, no overlap" — `pf6gm_mega` cannot be instrumented (55-word descriptor, no MPS state slot); and the promised amd-smi bandwidth cross-check is replaced by a UMC duty-cycle check ±15 pp plus a 52.8 GB/s fabric-ceiling bound, because this node exposes no live xGMI throughput counter. |
@@ -108,13 +116,34 @@ brackets.
 12. **Every number in Q5 is a T=4096 number** and every figure caption that
    implies a batch/seqlen sweep must say so. There is no second shape: T ≤ 512
    is refused and T = 1024 / 2048 are incorrect on both megakernel arms.
+13. **Rungs and series must carry their PIN, not just their config.** exp_34 §1
+   is the reason: the same `C=16,g=353,mode=12` config measures 6,497.3 µs at
+   `f113d73f` and 7,224.2 µs at `291dfa08` in the *same session*, with
+   `production` and `pf6gm_mega` unchanged to <5 µs. Two rungs of the Q1
+   waterfall now sit either side of that step. Any figure mixing pins is
+   plotting a compiler artifact as a mechanism.
+14. **`servicedrain` is not a number for mode 14 and must never be plotted as
+   one.** No CTA enters the drain, so `K0P6_MPS_TS_DRAIN` is never stored and the
+   cell reads as its never-written sentinel (`DRAIN=0`, and the derived delta
+   comes out as a large negative). `mode14_arms.json` carries
+   `servicedrain_status` for exactly this reason; the *absence* is the evidence,
+   and it belongs in the caption as text, not on an axis.
 
 ## Highest-value unblocking actions, in order
 
-1. **exp_34 mode 14 on GPU** — it is the last blocker for Q1 rungs (d) and (e)
-   *and* the only legal C=0 point for Q2. Built, protocol-reviewed with all
-   conditions cleared, CPU-gated; owes correctness, negative control, soak and
-   campaign.
+1. **Fix the `291dfa08` mode-12 regression (exp_34 §1).** It is worth **+726.9 µs**
+   — more than every remaining item on this list combined — it is live on `HEAD`,
+   and it silently rebases the Q1 waterfall and every future mode-12 denominator.
+   The mode-12 source path is byte-identical across the commit and the throttle's
+   four `vmcnt` instantiations are still in the ISA, so this is a codegen /
+   allocation effect in the shared function and it needs a source owner. **Then
+   re-run Q1 rungs (d)/(e)** (~30 min of GPU) and the waterfall is complete but
+   for (f).
+2. ~~**exp_34 mode 14 on GPU**~~ — **DONE.** Full ladder green (world-8
+   correctness, both negative controls, bit 26 never set, 600-epoch soak, poison
+   selftest), 26 campaigns across 4 interleaved batches. Rung **falsified**
+   against its 5,990–6,440 band at 6,650.9 µs; Q2's C=0 point landed; the drain
+   deletion priced at a null. See `exp_34_mode14/result.md`.
 2. **One-line harness edit: add `K0_PF6GM_DECOMP` to `run_campaign.sh`'s `-e`
    forwarding list.** It converts every M7 surcharge proxy into a same-run
    measurement and it is the single highest-value change outstanding for the Q1
