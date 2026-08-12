@@ -1,5 +1,74 @@
 # aug11 GEMM-RS — STATUS (the two-minute morning read)
 
+## ===== MORNING READ: what landed, in one screen =====
+
+**Tonight was a figure night and the figures landed.** Six of seven queue items are
+complete with plot-ready data on disk; the seventh (exp_24, external ladders) got
+through one shape and is restarting. No ratchet change: the shipped kernel is
+untouched, so the gap to rank-1 is still **1.098× graded** — but see the caveat,
+because that number is now known to flatter us.
+
+| paper figure | experiment | headline number | data |
+|---|---|---|---|
+| Q3 attribution | exp_20 | shape 6: GEMM **992.2 µs (60.8%)**, of which only **421.2 µs is MFMA** → **~571 µs, 35% of the operation, is schedule** | `exp_20_attribution/ablation.json`, `counters.json` |
+| **Fig 2** saturation | exp_21 | the emit saturates at **C=16 of 304 CTAs = 5.3% of the machine** (single link at C=2); **protocol costs 0.440×** of egress at identical payload bytes | `exp_21_saturation/saturation.json` |
+| **Fig 3** timeline | exp_22 | RCCL baseline is **strictly serialized, zero overlap**: 243.2 GEMM / 43.4 bias / **241.3 RCCL = 45.7% comm share** | `exp_22_timeline/events_b0_reference.json` |
+| **Fig 4** waterfall | exp_23 | **1.113×** cumulative = **1.082× task order × 1.028× granularity**; 192/192 arms correct at both tolerances | `exp_23_waterfall/waterfall.json`, `stats.json` |
+| Q1 rung validity | exp_23 | four rungs are four binaries, distinguished at the sites their mechanisms predict | `exp_23_waterfall/fingerprints.json` |
+| Q5 sensitivity | exp_25 | **premise falsified in sign, then shown NOT IDENTIFIABLE** (mask ⟂ comm share confounded at ρ=±1.00) | `exp_25_sensitivity/knob_by_shape.json` |
+| Q6 ladders | exp_24 | **INCOMPLETE** — shape 2 done, restarting with a fixed drain check | `exp_24_ladders/ladders_quick.json` |
+
+### What died tonight (negatives are results)
+
+- **Q5's premise.** Deltas are largest where comm share is *lowest*, and the
+  confound makes the question untestable on the graded shape family at any n.
+- **"NR placement is flat everywhere."** Flat on the **32-56 plateau**, cliff below
+  (NR=8 is 1.392× slower). Q2 still answers *no*, for the better reason that the
+  reducers are the **owner-side reduce**, not a communication pool.
+- **`S=1, BK=64` (free LDS to halve k-iterations).** Closed twice over: identical
+  barriers per tile (2×58 = 1×116) **and** identical bytes. `256/256/32` is already
+  the argmax of MFMA-work-per-barrier under the joint caps.
+- **My own bandwidth re-ranking of the mainloop.** exp_27 refuted it with measured
+  counters: below-L2 reads are only **9.0%/9.6%** of the memory-path plateau, so
+  shapes 5-6 are **latency/schedule-bound**. A cache-resident ubench cannot
+  establish an HBM bound for the production kernel.
+- **XCD-aware tile order**, priced and retired as small: perfect locality saves
+  316 MB ≈ 319 GB/s of a plateau we use 9.6% of.
+
+### The three rules that changed, and they affect all future work
+
+1. **One null twin is not enough, and cross-order consistency does not rescue you.**
+   Two *identically configured* arms differed by up to **4.44%** on shape 6,
+   consistently in both construction orders — which the disjointness rule would
+   have certified as a real win. Score against the **union of all identical pairs**.
+2. **Compare like statistic to like.** The recorded per-shape vector is
+   **best**-of-arm; `m7_bench.py` prints **means**. Mixing them spuriously failed a
+   node gate tonight (my instruction caused it).
+3. **A dead pid (`wchan=exit_mm`) is not a tenant.** It holds its KFD entry forever,
+   cannot dispatch, and cannot be signalled. The predicate lived wrong in **eleven
+   files**; use `tools/kfd_live.sh`.
+
+### Where Track B stands
+
+No landed optimization, so **no ratchet movement** — and that is the honest
+statement. What tonight bought Track B is a *correct* target list: the mainloop is
+latency-bound and worth a realistic **−5.15% geomean** (≈250 µs on shape 6, 90 µs on
+shape 5), which would take the graded gap **1.098× → ~1.046×**; every individual
+mechanism is ≤1% of geomean, so it is a grind, not a win. The cheapest µs on the
+board is **release granularity** (exp_21: protocol costs 0.440× of egress at
+identical bytes), which exp_26 owns and which is **blocked on a real
+`VM_L2_PROTECTION_FAULT`** — a correctness bug, caught before it could ship because
+its macro was forced to default 0.
+
+> **Caveat on the headline ratio.** exp_24 measured the evaluator's harness
+> constant at **90.38 µs**, added identically to both arms, which compresses every
+> graded ratio toward 1. On shape 2 the graded ratio is 1.0496 while the
+> **pipelined ratio is 1.2207** — the graded protocol *flatters* us. Graded remains
+> the competition's ranking statistic; **pipelined is the honest kernel-to-kernel
+> comparison**, and part of the 1.098× is protocol dilution rather than parity.
+
+---
+
 Updated after every experiment. Newest first.
 
 ## The refreshed profile (exp_20) — read this before picking any target
