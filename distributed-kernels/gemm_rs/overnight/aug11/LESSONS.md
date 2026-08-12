@@ -266,6 +266,65 @@ except `release`, which fell **−88.9%** and structurally disappeared.
   because `push.ps1` rewrites them. `reattribute.sh`'s force-remove and its
   freshness assertion are load-bearing, not belt-and-braces.
 
+## exp_24 — `tools/run_rank1_bench3.sh` could not run rank-1 AT ALL
+
+Found by dry-run inspection before any GPU time was spent, which is the only
+reason it is cheap. Four defects, each independently fatal, and the script had
+been sitting in `tools/` presenting as the canonical rank-1 driver while
+`experiments/exp_10_rank1/r1_eval.sh` quietly did the real work:
+
+1. **`AMDGCN_USE_BUFFER_OPS=0` absent** — so the arm faults (Triton 3.6.0
+   lowers rank-1's peer stores to `buffer_store_dwordx2`, whose 32-bit voffset
+   truncates a −4.4-billion-element offset). Worse, the env was assembled as one
+   `ENVS` string interpolated into `bash -c`, so the knob could not be injected
+   from outside either. Now passed as `docker exec -e` flags.
+2. **`PYTHONPATH=$ON/compat`** — that path does not exist; the tree is
+   `$ON/tools/compat`. Repair #3's `sitecustomize` was therefore silently
+   absent on every run.
+3. **`$ON/patch_rank1.py`** does not exist either (it is `$ON/tools/`), and the
+   `if [ $? -ne 0 ]` guard beneath the call tested the wrong command's status,
+   because the `run` wrapper had already returned.
+4. **It ran in `dhk-eval`**, which holds the sudo shim at `/usr/local/shim` but
+   runs as **root**, so every artifact it writes under the repo comes out
+   root-owned and breaks later `sed`/`scp` steps — a trap HANDOFF already warns
+   about. `dhk-gemmrs` runs as uid 15523, and its own `sudo` fails with "you do
+   not exist in the passwd database", which is precisely why the PATH shim is
+   needed there.
+
+Repaired to mirror `r1_eval.sh`, the driver that actually produced exp_10's
+measured comparison. Verified on the node: `tools/compat/bin/sudo` and
+`tools/compat/sitecustomize.py` exist and import, `iris`/`iris.hip` import in
+**both** containers, and **the frozen submission's sha256 still matches**
+`7940fcb8…f0dc5`.
+
+**The general lesson, and it is the third instance tonight:** a tool that is
+never exercised end-to-end decays silently, and the decay is invisible because
+nothing fails loudly — `exp_ablation.py`'s anchors, `gemm_rs_mi300x_static_checks.py`'s
+first-assertion abort, and now this. **A gate or driver that has not been run
+since the code moved underneath it is not evidence.**
+
+## exp_24 — the evaluator cannot produce the statistics the protocol requires
+
+`eval.py` offers **no median, no raw samples, no fixed 3×50** (its loop is
+adaptive), **no pipelined region and no warmup**, and its
+`from submission import custom_kernel` makes a two-module-name null arm
+impossible. So the ladder cannot be built out of the evaluator alone. exp_24
+therefore runs **two instruments**: `ladder_mp.py` (five arms — `ours`,
+`ours_null`, `reference`, `rank1`, and a `harness_floor` arm that **measures**
+the ~92 µs graded constant in-run rather than quoting it — in one 8-process
+pool per shape, both protocols, arm order rotated so each arm is first exactly
+once), with the three `tools/` evaluator drivers kept as the cross-check.
+Measuring the harness constant instead of quoting it is an improvement on the
+dispatch and should be carried into any future ladder.
+
+Parser validation, done against **saved historical output rather than a fresh
+run**: `ours` and `reference` parsed 6/6 shapes; the `rank1` fixture — exp_10's
+run that hit its 1500 s wall after three shapes while still emitting
+`benchmark-count: 6` — was **refused with a named error**, which is exactly the
+silent-null hazard the parser exists to catch. Reference-arm RSDs measured
+75/47/68/60/115% , confirming and slightly exceeding the "12-93%" caveat: quote
+its ratios, never its absolutes.
+
 ## Measurement discipline carried into the figure work
 
 - **The harness bias is per-allocation AND partly allocation-ORDER, not
