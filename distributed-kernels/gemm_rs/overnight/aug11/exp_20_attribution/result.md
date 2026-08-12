@@ -10,7 +10,9 @@ annihilated on shape 6 — 134.9 µs → 15.0 µs, which is *below that shape's
 allocation-noise floor* — but it is still 65.4 µs (10.2%) on shape 5, because
 `RELEASE_GROUP_FULL_ONLY=1` refuses a partial group and shape 5's producers own
 only 2 tiles each. That is the cheapest unclaimed win on a shape that carries
-the gap.**
+the gap. And the counter pass shows the mainloop is not an MFMA pool: only
+421.2 µs of that 992.2 µs is MFMA occupancy, so ~571 µs — 35% of the entire
+operation — is mainloop schedule rather than math (§4.1).**
 
 Freshness: shape 6 `full` = **1632.5 µs**, +1.0% over the known best-of-arm
 1616.63 and independently confirmed by a same-config M7 run at 1614.54 µs
@@ -139,11 +141,15 @@ would target this; it is a one-constant change with a measured pool behind it.
 
 One `rocprofv3` 1.1.0 pass at the same config, **all six graded shapes** (the
 plan called for shape 6 plus one mid shape), three counter groups per shape plus
-two shape-6 controls. Twenty cells, and **every one reported `correct=1
-tight=1 errors=none` under instrumentation** — the validity gate that matters,
-because profiler serialization can starve the bounded credit/ready spins, make
-the kernel return early on its sticky error bit, and silently deflate every
-traffic counter.
+two shape-6 controls, and two further groups on shapes 6 and 5 (§4.1).
+Twenty-four cells, and **every one reported `errors=none` under
+instrumentation** — the validity gate that matters, because profiler
+serialization can starve the bounded credit/ready spins, make the kernel return
+early on its sticky error bit, and silently deflate every traffic counter.
+Every cell also reported `correct=1 tight=1` except `s6_emitlocal_g1`, which is
+the known-answer control and is numerically wrong *by construction*: it routes
+the payload to the local rank's own slot, so it cannot verify, and that is the
+point of it.
 
 | # | fabric MB | useful MB | amp | 64 B share | EA wr latency (cyc) | GB/s over `full` | wb by capacity | wb by release | flags % of fabric reqs |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -194,9 +200,55 @@ not a pure serial egress time but a partly-overlapped one. Treat pool-relative
 bandwidth as a lower bound on the instantaneous rate, never as a measurement of
 it.
 
-`TCC_EA0_WRREQ_STALL` was deliberately **not** collected: it reads ~81 M cycles
-on this ASIC while every `*_CREDIT_STALL` sub-counter reads ~0, so it cannot
-support an argument either way.
+### 4.1 Two further groups: MFMA occupancy, and fabric backpressure
+
+Groups g4 and g5 were added after the table above, on shapes 6 and 5, under new
+tags (`run()` skips on the tag alone, so re-using `_g2` for a different counter
+set would silently mislabel it). Both cells on both shapes report `correct=1
+tight=1 errors=none`.
+
+**g4 settles what kind of pool the mainloop is, and it is not an MFMA pool.**
+`SQ_VALU_MFMA_BUSY_CYCLES` is summed over SIMDs, so dividing by 304 CU × 4 SIMD
+and by the pinned 1900 MHz gives the wall time the MFMA pipes are occupied —
+directly comparable against the `gemm` pool of §1:
+
+| # | MFMA instrs | cycles/instr | MFMA busy µs | `gemm` pool µs | MFMA share of the pool | **non-MFMA mainloop** |
+|---|---:|---:|---:|---:|---:|---:|
+| 6 | 60,817,408 | 16.0 | **421.2** | 992.2 | 42.5% | **571.0 µs** |
+| 5 | 14,680,064 | 16.0 | **101.7** | 305.2 | 33.3% | **203.5 µs** |
+
+The instruction counts are an exact arithmetic check on the atom rather than an
+estimate. Shape 5 needs `M·N·K_local / 4096 = 8192·4096·1792/4096 =
+14,680,064` MFMAs if and only if the atom is `16×16×16` (4096 MACs), and that
+is the measured count **exactly**; a `32×32×8` atom would read half. Shape 6
+predicts 60,555,264 and measures 60,817,408, and the +0.43% is also exact: its
+`K_local = 3696` is not a multiple of `BK = 32`, so the k-loop runs 116
+iterations for 115.5 iterations of work (3712/3696 = 1.00433).
+
+So **~571 µs of shape 6 — 35% of the whole operation — is mainloop that is not
+MFMA occupancy**, and ~204 µs of shape 5. This is the headroom behind §7's #1,
+measured rather than argued, and it independently confirms `HANDOFF.md`'s
+"~640 µs of non-MFMA mainloop on shape 6" from the `waves × k_iters` model.
+
+**g5 — correction to an earlier statement in this section.**
+`TCC_EA0_WRREQ_STALL` *was* collected, and it is informative. The unusable
+counters on this ASIC are the three `*_CREDIT_STALL` sub-counters, which read
+~0 and cannot attribute the stall to a specific interface; the aggregate is the
+counter exp_08 itself fell back on, and comparing it against exp_08's own
+readings of the same counter on the same ASIC is a like-for-like config
+comparison:
+
+| counter, shape 6 | exp_08 `WGM=4` | exp_08 column-major | **now** |
+|---|---:|---:|---:|
+| `TCC_EA0_WRREQ_STALL` | 81,159,385 (16% of `TCC_CYCLE`) | 54,220,335 | **31,992,482 (10.0%)** |
+| `TCC_TAG_STALL` | 64,029,595 | 44,963,870 | **18,778,185 (5.9%)** |
+
+Write-request stall has fallen to 39% of the `WGM=4` reading and tag stall to
+29%, with the request count unchanged — the same queueing signature as the EA
+latency drop in item 3 above, from a third counter. **Shape 5 is the outlier
+and the more contended shape: 20.6% `WRREQ_STALL` and 17.1% `TAG_STALL`, both
+roughly double shape 6's**, which is consistent with egress being a larger
+share of shape 5 (28.0%) than of shape 6 (23.0%).
 
 ### Schema of `counters.json`
 
@@ -283,7 +335,11 @@ shows `errors` other than `none`. None of these occurred.
    the two shapes that carry the entire graded gap. `waves × k_iters` is 464 and
    112 and cannot be cut by retiling: rows 4/5/6 are pinned at the 64 KB LDS cap
    by double buffering (`2·(BM+BN)·BK·2 ≤ 65536`). The open lever is the
-   double-buffer LDS cost itself, per `HANDOFF.md`.
+   double-buffer LDS cost itself, per `HANDOFF.md`. **§4.1 sizes the prize:
+   only 421.2 µs of shape 6's 992.2 µs pool is MFMA occupancy, so ~571 µs —
+   35% of the whole operation — is mainloop that the MFMA pipes are not busy
+   for, and ~204 µs on shape 5.** That is the ceiling on this axis, and it is
+   larger than every other pool on every other shape combined.
 2. **`release` on shape 5** — 65.4 µs, 10.2%, above floor, one constant
    (`RELEASE_GROUP=2`, or allow a partial group). Cheapest item on the list;
    needs protocol-review.
@@ -302,7 +358,7 @@ shows `errors` other than `none`. None of these occurred.
 | file | contents |
 |---|---|
 | `ablation.json` | the table of §1 + geometry, ×SOL, M7 cross-check. Schema in §2 |
-| `counters.json` | 20 cells + 6 per-shape rollups. Schema in §4 |
+| `counters.json` | 24 cells + 6 per-shape rollups. Schema in §4; the g4/g5 cells in §4.1 |
 | `m7_results.json` | same-config M7 gate, 3 rotations × 50 iters, all shapes correct, geomean 215.44 µs (208.4 µs using shape 2's median instead of its outlier-contaminated mean) |
 | `reattribute_run.log`, `counters_run.log`, `m7_run.log` | raw runs |
 | `prof/` (node) | per-cell rocprofv3 CSVs |

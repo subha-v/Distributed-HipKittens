@@ -88,6 +88,53 @@
 #define HK_GEMM_RS_MI300X_RELEASE_GROUP_FULL_ONLY 1
 #endif
 
+// exp_26. FULL_ONLY as written above is a step function of tiles_per_cta: a CTA
+// that owns 4 tiles groups all four, and a CTA that owns 3, 2 or 1 groups none.
+// The cliff is not a property of the mechanism, only of comparing against a
+// single constant, and it costs exactly one shape. exp_20's attribution:
+// release collapsed 134.9 -> 15.0 us on 8192x8192x29568 (4 tiles per CTA, which
+// groups) and is still 65.4 us, 10.2% of 641.9, on 8192x4096x14336 (2 tiles per
+// CTA, which does not) -- corroborated by the writeback-origin counters, where
+// the release pushes 13.1% of L2 writebacks on the first and 56.4% on the
+// second.
+//
+// So take the group size to be min(RELEASE_GROUP, tiles_per_cta) instead. Both
+// terms are already computed; the cap and every invariant of the group loop are
+// untouched. Per graded shape the effective group goes 1/1/1/1/1/4 -> 1/1/1/1/
+// 2/4: only 8192x4096x14336 moves, and the four one-tile rows are arithmetically
+// pinned to 1 either way, which makes them controls rather than collateral.
+//
+// What this rule does NOT do is revive the arm E3 rejected. rgroup <= the tile
+// count of the CTA that owns the most, so no CTA ever waits on a tile that does
+// not exist, and `emitted = min(left, rgroup)` still truncates the last group of
+// a short-changed CTA to what it actually owns. The unconditional arm's defect
+// was different in kind: at RELEASE_GROUP = 4 it made a 2-tile CTA's loop stride
+// 4 CTAs' worth of tiles, so the group could only ever be half full and the
+// publication of the first tile was deferred behind a mainloop that had no
+// second tile to amortize it.
+//
+// The honest residual risk is publication delay, not fullness, and it is not
+// removed by anything above: on 8192x4096x14336 the first of the two tiles is
+// now published one mainloop later than before. That is the same trade E3
+// measured as a 3.75% LOSS on the then-2-tile 512x4096x12288 (an 88 us shape
+// whose reducers got 2 rounds of work) and as inside its own noise on
+// 8192x4096x14336 itself, before WGM and the NR retune moved both. It is a
+// measurement, and exp_26 makes it against a paired null arm.
+// DEFAULT 0 UNTIL GATED. This is a candidate, not a landed change: nothing may
+// alter the shipped kernel's behaviour before it has been through the full gate
+// ladder (M3 at both 1e-2 and 2e-3, M4, M5, and -- because this moves
+// publication order -- M9, which is not part of gate_ladder.sh and whose golden
+// needs re-golding at RG=1 after the exp_14 retile), and then a paired timing
+// win against a null arm in both construction orders. It shipped here briefly
+// as 1, which would have silently redefined the production binary for every
+// other experiment building from this file tonight, including the waterfall's
+// rung (c) "shipped binary" reference arm. exp_26 turns it on explicitly with
+// -DHK_GEMM_RS_MI300X_RELEASE_GROUP_PERSHAPE=1; the default stays 0 until its
+// result.md says otherwise.
+#ifndef HK_GEMM_RS_MI300X_RELEASE_GROUP_PERSHAPE
+#define HK_GEMM_RS_MI300X_RELEASE_GROUP_PERSHAPE 0
+#endif
+
 // exp_14 (E4b) tile screening. BM/BN/BK are template parameters, so unlike the
 // reducer split they cannot be swept from the host without an instantiation per
 // candidate. Off by default: the extra rows exist only in the sweep module, so
@@ -334,7 +381,19 @@ void gemm_rs_mi300x_kernel(const mi300x_globals g) {
         // special-cased per config row.
         const int tiles_per_cta = (tiles + stride - 1) / stride;
 #if HK_GEMM_RS_MI300X_RELEASE_GROUP_FULL_ONLY
+#if HK_GEMM_RS_MI300X_RELEASE_GROUP_PERSHAPE
+        // min(cap, tiles_per_cta), floored at 1. The floor is not defensive
+        // decoration: rgroup == 0 makes `t0 += rgroup * stride` an infinite
+        // loop, and it is the only value of this expression that does not
+        // terminate. tiles >= 1 and stride >= 1 already give tiles_per_cta >= 1,
+        // so the clamp costs one scalar op and removes the failure mode from
+        // the reader's proof obligations entirely.
+        const int rcap = tiles_per_cta < RELEASE_GROUP ? tiles_per_cta
+                                                       : RELEASE_GROUP;
+        const int rgroup = rcap > 1 ? rcap : 1;
+#else
         const int rgroup = tiles_per_cta >= RELEASE_GROUP ? RELEASE_GROUP : 1;
+#endif
 #else
         const int rgroup = RELEASE_GROUP;
 #endif

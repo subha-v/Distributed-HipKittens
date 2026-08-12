@@ -134,6 +134,40 @@ here", not "the mainloop is free".
 4. **`sync` (168.7 µs, 10.3%) has overtaken both reduce and release on shape 6**
    and is now the second-largest non-GEMM term.
 
+### The counter pass, and the number Phase 2 should be aimed at
+
+**Only 421.2 µs of shape 6's 992.2 µs GEMM pool is MFMA occupancy.** So roughly
+**571 µs — 35% of the entire operation — is mainloop schedule rather than math**,
+and about 204 µs of shape 5's 305 µs is the same. That is the single largest
+addressable quantity in the kernel and it is *not* a math-throughput problem.
+The MFMA instruction count matches a 16×16×16 atom exactly, including the
++0.43% from `K_local = 3696` not dividing `BK = 32`, so the count is trusted.
+
+Two axes close on the counter evidence:
+
+- **Egress width is closed.** Fabric amplification is **1.0007× at 99.9% full-64 B**
+  on every large shape. Whatever egress still costs, it is not bytes and not
+  coalescing.
+- **The WGM fix is visible in the stall counter**, not just in wall time:
+  `WRREQ_STALL` fell to **10.0%** of `TCC_CYCLE` from exp_08's 16% at `WGM=4`.
+
+**The labels were validated by collapse, not asserted.** The emit-local control
+took off-die requests from **1,836,800 to 1,792** — a 1000× collapse — which is
+the same discipline the paper's methodology section demands ("the emit-local arm
+must zero the fabric counter, and does"). 24 counter cells, all `errors=none`.
+
+### Correction to the release reading above, and it matters
+
+Shape 6's release delta of 15.0 µs is **inside that shape's 69.9 µs
+allocation-noise floor**, so the honest statement is that release on shape 6 is
+now **unmeasurable**, not that it is precisely 15 µs. The floors this run
+measured are much larger than the per-shape percentages suggest in absolute
+terms: **2.3 / 0.6 / 1.4 / 4.9 / 13.9 / 69.9 µs** for shapes 1-6. Re-reading the
+shape-6 ranking against them: GEMM (992.2), egress (376.0) and sync (168.6) are
+comfortably resolvable; **reduce at 79.8 µs is only 1.14× its floor and is
+marginal**; release is not resolvable at all. Any figure using these deltas must
+carry the floor beside the value.
+
 **Release grouping is active on exactly ONE of the six shapes, and the
 attribution proves the other five are paying for it.** The rule is
 `rgroup = tiles_per_cta >= RELEASE_GROUP ? RELEASE_GROUP : 1` with
@@ -383,6 +417,53 @@ claim is about *vector* spills.
 Correction to an earlier note: **`HK_GEMM_RS_MI300X_TILE_SWEEP` is not dead.**
 Its dispatch rows (`gemm_rs_mi300x.cpp:101-107`) are live for exp_14's screening
 module; it is simply not passed by the production build.
+
+## PROCESS FAILURE — an ungated kernel change shipped as the DEFAULT
+
+Caught by inspection, not by a failing test, which is the only reason it cost
+nothing. An `exp_26` release-grouping candidate was written directly into
+`gemm_rs_mi300x.cpp` with
+
+```
+#define HK_GEMM_RS_MI300X_RELEASE_GROUP_PERSHAPE 1   // default ON
+```
+
+**A candidate must never be the default before it is gated.** Defaulted to 1, it
+silently redefines the production binary for *every* experiment that compiles
+from that file — including the waterfall's rung (c), whose entire job is to be
+the "shipped binary" reference arm. The figure would have compared three honest
+rungs against a fourth that was quietly a different kernel, and nothing would
+have failed; the waterfall would simply have been wrong. Forced to **0**, with
+the reasoning written at the definition site.
+
+Damage assessment, done before touching anything: exp_23's four rung binaries
+were built at 04:19-04:20 and the source was edited at 04:43, and all four `.so`
+sha256 values still match `fingerprints.json` on disk. **The waterfall is
+uncontaminated** — which is precisely what the fingerprint gate was built to be
+able to answer, and it answered it in one command. That is the strongest
+argument for keeping the gate on every future arm.
+
+The mechanism itself is good and is adopted as a Phase 2 candidate rather than
+discarded: take `rgroup = max(1, min(RELEASE_GROUP, tiles_per_cta))` instead of
+the step function, so the effective group goes `1/1/1/1/1/4 → 1/1/1/1/2/4` and
+only shape 5 moves, with the four one-tile rows arithmetically pinned to 1 and
+therefore acting as controls. The distinction from E3's rejected unconditional
+arm is real and worth preserving: that arm's defect was that at
+`RELEASE_GROUP = 4` a 2-tile CTA's loop strided **four CTAs' worth of tiles**, so
+the group could only ever be half full and the first tile's publication was
+deferred behind a mainloop with no second tile to amortize it. Capping by
+`tiles_per_cta` never does that. The honest residual risk is **publication
+delay, not fullness**, and it must be measured against a paired null arm.
+
+Rules reasserted for the rest of the night:
+- **New macros default to 0.** The shipped binary changes only after the full
+  ladder plus a paired timing win.
+- This one moves publication order, so it needs **M9**, which is not part of
+  `gate_ladder.sh`, whose golden is stale after the exp_14 retile, and whose
+  `CASES` do not include shape 5 — the very shape it targets.
+- Agents own their experiment directory. Kernel-source edits happen only through
+  an explicit gate, because several experiments compile from that one file
+  concurrently.
 
 ## Measurement discipline carried into the figure work
 

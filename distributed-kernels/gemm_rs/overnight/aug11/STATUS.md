@@ -19,6 +19,19 @@ overlap and need not sum to `full`.
 Shapes 1-2 are `HOST`-bound; their deltas are at or below the allocation-noise
 floor and several are negative. No device pool is resolvable there.
 
+**Allocation-noise floors measured in this run — carry them beside every
+delta:** `2.3 / 0.6 / 1.4 / 4.9 / 13.9 / 69.9` µs for shapes 1-6. Against them,
+shape 6's GEMM, egress and sync are comfortably resolvable; **reduce (79.8) is
+only 1.14× its floor and is marginal**; and **release (15.0) is not resolvable
+at all** — the correct statement is that release on shape 6 is now unmeasurable,
+not that it is 15 µs.
+
+**Counter cross-checks** (24 cells, no error bits): the emit-local control
+collapsed off-die requests **1,836,800 → 1,792**, which validates the stage
+labels by collapse rather than by assertion; fabric amplification is **1.0007×
+at 99.9% full-64 B**, closing the egress-width axis; and `WRREQ_STALL` fell to
+**10.0%** of `TCC_CYCLE` from 16% at `WGM=4`.
+
 **The ranking that matters** (shapes 5 and 6 carry the whole graded gap):
 GEMM mainloop **992 µs** on shape 6 and **305 µs** on shape 5 — dominant, 60.8%
 and 47.5%. Then XGMI (376 / 180), then sync (169 / 53). Release has collapsed to
@@ -125,7 +138,7 @@ Then **Phase 2**: the optimization loop resumes against the refreshed profile.
 
 | # | target | pool it attacks | expected | risk |
 |---|---|---|---|---|
-| 1 | **GEMM mainloop non-MFMA time** | **992 µs** (shape 6), **305 µs** (shape 5) | the only pool big enough to close the rank-1 gap | high — rows 4/5/6 pinned at the 64 KB LDS cap, so `waves × k_iters` (16/112/464) is unreachable by retiling; needs single-buffered `BK` or an async pipeline |
+| 1 | **GEMM mainloop non-MFMA time** | **~571 µs** of shape 6's 992 µs GEMM pool is NOT MFMA occupancy (counter pass: only 421.2 µs is) — **35% of the whole operation**; ~204 µs on shape 5 | the only pool big enough to close the rank-1 gap, and it is a schedule problem, not a math-throughput one | high — rows 4/5/6 pinned at the 64 KB LDS cap, so `waves × k_iters` (16/112/464) is unreachable by retiling; needs single-buffered `BK` or an async pipeline |
 | 2 | `sync` — cross-rank waits/credits/publishes | 168.7 µs (shape 6), now 2nd-largest non-GEMM | untouched axis | medium |
 | 3 | **exp_26: `RELEASE_GROUP_FULL_ONLY=0`** | 65.4 µs on shape 5 | ~32 µs ≈ 5% of shape 5, ~0.8% geomean | low — one build flag; but needs M9 re-golding and shape 5 added to M9's `CASES` |
 | 4 | XGMI on shape 4 specifically | **86.2 µs = 42.4%** of shape 4 | shape-specific; the profile is not uniform | medium |

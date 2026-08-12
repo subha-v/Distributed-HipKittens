@@ -1,13 +1,14 @@
 {
   "experiment": "aug11/exp_20_attribution",
   "what": "one rocprofv3 1.1.0 counter pass at the current best config, gfx942, ALL SIX graded shapes, plus two shape-6 controls",
-  "generated_utc": "2026-08-12T09:16:21Z",
+  "generated_utc": "2026-08-12T09:31:58Z",
   "warm": 2,
   "meas": 4,
   "schema": {
     "cells[tag].counters_per_rank_per_launch": "each counter summed over the measured dispatch window and divided by agents x dispatches, i.e. one rank, one launch",
     "cells[tag].usable": "the driver reported correct=1 and errors=none UNDER instrumentation. Counter collection can serialize dispatches until the bounded credit/ready spins time out; a kernel that returned early on the sticky error bit reports deflated traffic, so an unusable cell must not be read.",
     "cells[tag].derived.fabric_bytes_MB_bounds": "the 32/64 B split is known only in aggregate, so off-die bytes are bounded rather than assumed",
+    "cells[tag].derived.mfma_busy_us_at_1900MHz": "SQ_VALU_MFMA_BUSY_CYCLES / (304 CU x 4 SIMD) / 1900 MHz: the wall time the MFMA pipes are occupied, comparable directly against ablation.json's gemm pool for the same shape",
     "tags": "s<shape>_<arm>_g<group>; s6_emitlocal_g1 is the known-answer control (off-die writes must collapse) and s6_prod_g1 is the production-vs-scratch cross-check",
     "shapes[]": "per-shape rollup merged from that shape's three counter groups; `cells` remains the provenance",
     "shapes[].useful_bytes_mb": "7/8 * M*N*2 -- of the eight output slices a rank produces it keeps one locally and sends seven off-rank, so 7/8 of the bf16 output crosses the fabric",
@@ -23,6 +24,10 @@
     "TCC_EA0_WRREQ_DRAM_CREDIT_STALL"
   ],
   "counters_seen": [
+    "SQ_BUSY_CYCLES",
+    "SQ_INSTS_MFMA",
+    "SQ_VALU_MFMA_BUSY_CYCLES",
+    "SQ_WAIT_ANY",
     "TCC_ALL_TC_OP_WB_WRITEBACK",
     "TCC_CYCLE",
     "TCC_EA0_RDREQ",
@@ -30,8 +35,10 @@
     "TCC_EA0_WRREQ_64B",
     "TCC_EA0_WRREQ_DRAM",
     "TCC_EA0_WRREQ_LEVEL",
+    "TCC_EA0_WRREQ_STALL",
     "TCC_NC_REQ",
     "TCC_NORMAL_WRITEBACK",
+    "TCC_TAG_STALL",
     "TCC_WRITE",
     "TCC_WRITEBACK"
   ],
@@ -292,6 +299,44 @@
       "usable": true,
       "derived": {}
     },
+    "s5_full_g4": {
+      "agents": 8,
+      "dispatches_per_agent": 4,
+      "counters_per_rank_per_launch": {
+        "SQ_BUSY_CYCLES": 29405483.4,
+        "SQ_INSTS_MFMA": 14680064.0,
+        "SQ_VALU_MFMA_BUSY_CYCLES": 234881024.0,
+        "SQ_WAIT_ANY": 327559808.5
+      },
+      "prof_line": "PROF module=gemm_rs_abl_full shape=8192x4096x14336 warm=2 meas=4 correct=1 tight=1 maxdiff=4.883e-04 errors=none tiles_per_cta=512/272 eb=256 nr=32",
+      "usable": true,
+      "derived": {
+        "mfma_instructions": 14680064.0,
+        "mfma_busy_cycles_summed_over_simds": 234881024.0,
+        "mfma_busy_cycles_per_simd": 193158.7,
+        "mfma_busy_us_at_1900MHz": 101.7,
+        "cycles_per_mfma_instruction": 16.0,
+        "sq_busy_cycles_raw": 29405483.4,
+        "sq_busy_note": "raw only: SQ_BUSY_CYCLES reads below SQ_VALU_MFMA_BUSY_CYCLES here, so the two do not share a normalization and no ratio of them is reported",
+        "sq_wait_any_raw": 327559808.5
+      }
+    },
+    "s5_full_g5": {
+      "agents": 8,
+      "dispatches_per_agent": 4,
+      "counters_per_rank_per_launch": {
+        "TCC_CYCLE": 147486018.0,
+        "TCC_EA0_WRREQ": 1180976.0,
+        "TCC_EA0_WRREQ_STALL": 30305851.3,
+        "TCC_TAG_STALL": 25198717.2
+      },
+      "prof_line": "PROF module=gemm_rs_abl_full shape=8192x4096x14336 warm=2 meas=4 correct=1 tight=1 maxdiff=4.883e-04 errors=none tiles_per_cta=512/272 eb=256 nr=32",
+      "usable": true,
+      "derived": {
+        "wrreq_stall_frac_of_cycle": 0.2055,
+        "tag_stall_frac_of_cycle": 0.1709
+      }
+    },
     "s6_emitlocal_g1": {
       "agents": 8,
       "dispatches_per_agent": 4,
@@ -365,6 +410,44 @@
       "prof_line": "PROF module=gemm_rs_abl_full shape=8192x8192x29568 warm=2 meas=4 correct=1 tight=1 maxdiff=1.221e-04 errors=none tiles_per_cta=1024/256 eb=256 nr=48",
       "usable": true,
       "derived": {}
+    },
+    "s6_full_g4": {
+      "agents": 8,
+      "dispatches_per_agent": 4,
+      "counters_per_rank_per_launch": {
+        "SQ_BUSY_CYCLES": 85008342.3,
+        "SQ_INSTS_MFMA": 60817408.0,
+        "SQ_VALU_MFMA_BUSY_CYCLES": 973078528.0,
+        "SQ_WAIT_ANY": 714648951.8
+      },
+      "prof_line": "PROF module=gemm_rs_abl_full shape=8192x8192x29568 warm=2 meas=4 correct=1 tight=1 maxdiff=1.221e-04 errors=none tiles_per_cta=1024/256 eb=256 nr=48",
+      "usable": true,
+      "derived": {
+        "mfma_instructions": 60817408.0,
+        "mfma_busy_cycles_summed_over_simds": 973078528.0,
+        "mfma_busy_cycles_per_simd": 800229.1,
+        "mfma_busy_us_at_1900MHz": 421.2,
+        "cycles_per_mfma_instruction": 16.0,
+        "sq_busy_cycles_raw": 85008342.3,
+        "sq_busy_note": "raw only: SQ_BUSY_CYCLES reads below SQ_VALU_MFMA_BUSY_CYCLES here, so the two do not share a normalization and no ratio of them is reported",
+        "sq_wait_any_raw": 714648951.8
+      }
+    },
+    "s6_full_g5": {
+      "agents": 8,
+      "dispatches_per_agent": 4,
+      "counters_per_rank_per_launch": {
+        "TCC_CYCLE": 319832363.0,
+        "TCC_EA0_WRREQ": 2361648.0,
+        "TCC_EA0_WRREQ_STALL": 31992481.7,
+        "TCC_TAG_STALL": 18778185.4
+      },
+      "prof_line": "PROF module=gemm_rs_abl_full shape=8192x8192x29568 warm=2 meas=4 correct=1 tight=1 maxdiff=1.221e-04 errors=none tiles_per_cta=1024/256 eb=256 nr=48",
+      "usable": true,
+      "derived": {
+        "wrreq_stall_frac_of_cycle": 0.1,
+        "tag_stall_frac_of_cycle": 0.0587
+      }
     },
     "s6_prod_g1": {
       "agents": 8,
