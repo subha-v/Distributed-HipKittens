@@ -405,7 +405,7 @@ __device__ __forceinline__ void k0p6_mps_task_done_maybe_defer(
 // mori's JIT cache key hashes .hip/.cpp CONTENT and not compile flags, so
 // flipping the mask with -D would silently reuse the previous hsaco. A runtime
 // K0_MPS_CFG bit is impossible -- sched_group_barrier takes immediates.
-#define N2GM_P1_SCHED_GSCALE 0
+#define N2GM_P1_SCHED_GSCALE 4
 #include "n2_phase1_gm_mps.cpp"
 #undef N2GM_P1_SCHED_GSCALE
 #undef N2GM_TASK_DONE_HOOK
