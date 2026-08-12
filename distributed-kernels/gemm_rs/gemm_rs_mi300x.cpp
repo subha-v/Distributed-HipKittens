@@ -145,9 +145,81 @@
 #define HK_GEMM_RS_MI300X_TILE_SWEEP 0
 #endif
 
+// aug11/exp_22 phase-event ring: the per-CTA timestamps behind the paper's
+// Fig 3 (per-layer resource-utilization timeline). DIAGNOSTIC ONLY.
+//
+// DEFAULT 0, AND IT MUST STAY 0. Everything under this flag exists to picture
+// the kernel, not to be the kernel: it adds one scalar clock read and one
+// relaxed store per phase boundary by tid 0. A default of 1 would silently
+// redefine the production binary for every experiment that compiles this file
+// -- including the waterfall's shipped-binary reference rung -- and the
+// timeline would then be a picture of an instrumented kernel nobody ships.
+// The resource-tuple parity gate (exp_22_timeline/parity_gate.sh) exists to
+// prove flag-present-and-0 is byte-identical to flag-absent.
+#ifndef HK_GEMM_RS_MI300X_TRACE
+#define HK_GEMM_RS_MI300X_TRACE 0
+#endif
+
 using namespace kittens;
 namespace m3 = hk_gemm_rs_mi300x;
 using G = kittens::group<m3::NUM_WARPS>;
+
+#if HK_GEMM_RS_MI300X_TRACE
+// ================================================================================================
+// exp_22 phase-event ring. One u64 per phase boundary crossed:
+//     (phase_id << 56) | (s_memrealtime() & 0x00FFFFFFFFFFFFFF)
+// written by tid 0 of each CTA with a PLAIN RELAXED STORE. No new fences and
+// no new atomics: an instrument that adds ordering to the paths it pictures
+// measures itself. The host reads the ring after the launch completes; nothing
+// reads it in flight.
+//
+// Depth is derived from this kernel's own worst case, not inherited from the
+// gfx950 sibling's 24. Events per CTA per epoch are
+//     producer = 1 + groups*(6*tiles_in_group + 3) + 1
+//     reducer  = 1 + 5*red_tiles_per_cta + 1
+// which over the six graded rows peaks at 29 (shape 6; shape 5 is 20). 64 is
+// 2.17x that at 304*64*8 = 155,648 B per rank. Overflow DROPS and counts in
+// the last slot -- it never wraps, because a wrapped ring produces a
+// plausible-looking but wrong timeline. See exp_22_timeline/design.md.
+// ================================================================================================
+namespace hk_trace {
+
+inline constexpr int DEPTH  = 64;          // slots per CTA
+inline constexpr int USABLE = DEPTH - 1;   // [DEPTH-1] is the drop counter
+
+// Fixed and ordered by lifecycle. Write order within a CTA is monotone in
+// timestamp but NOT in id -- a producer cycles MAINLOOP_BEG..PUBLISH_END once
+// per tile group. Absence of an id means that CTA did not run that phase:
+// producers and reducers run disjoint subsets.
+enum : int {
+    CTA_BEG = 0, MAINLOOP_BEG, MAINLOOP_END, CREDIT_WAIT_BEG, CREDIT_WAIT_END,
+    EMIT_BEG, EMIT_END, RELEASE_BEG, RELEASE_END, PUBLISH_END,
+    READY_WAIT_BEG, READY_WAIT_END, REDUCE_BEG, REDUCE_END, CREDIT_PUB_END,
+    CTA_END
+};
+
+__device__ __forceinline__ void stamp(std::uint64_t* ring, int cta, int& n,
+                                      int id) {
+    if (ring == nullptr || threadIdx.x != 0u) return;
+    std::uint64_t* const base = ring + (std::size_t)cta * DEPTH;
+    const std::uint64_t t = __builtin_amdgcn_s_memrealtime();
+    if (n < USABLE) {
+        base[n++] = ((std::uint64_t)id << 56) |
+                    (t & 0x00FFFFFFFFFFFFFFull);
+    } else {
+        // Non-atomic RMW is correct: exactly one thread in the process writes
+        // this word.
+        base[USABLE] += 1ull;
+    }
+}
+
+}  // namespace hk_trace
+
+#define HK_TRACE_STAMP(id) \
+    ::hk_trace::stamp(trace_ring, pid, trace_n, ::hk_trace::id)
+#else
+#define HK_TRACE_STAMP(id) do {} while (0)
+#endif
 
 using _gl_A = gl<bf16, -1, -1, -1, -1>;   // [M, K_local]
 using _gl_B = gl<bf16, -1, -1, -1, -1>;   // [N, K_local] (row-major weight shard)
@@ -184,6 +256,13 @@ struct mi300x_globals {
     int ctrl_rank, ctrl_arg0;
     int config_row;              // 0 = generic; [1..6] = scored table rows
     int even_k;                  // K_local % BK == 0 for the resolved config
+#if HK_GEMM_RS_MI300X_TRACE
+    // exp_22 diagnostic ring, u64[CU_COUNT][hk_trace::DEPTH], or 0 for "do not
+    // trace". LAST member on purpose: prebound::configure's aggregate
+    // initializer stops at even_k, so this member is value-initialized to 0
+    // there and the prebound launch path compiles unchanged and never traces.
+    std::uintptr_t trace;
+#endif
     dim3 grid() const  { return dim3(m3::CU_COUNT); }
     dim3 block() const { return dim3(m3::CTA_THREADS); }
     size_t dynamic_shared_memory() const { return kittens::MAX_SHARED_MEMORY; }
@@ -273,6 +352,12 @@ void gemm_rs_mi300x_kernel(const mi300x_globals g) {
     static_assert(STAGE_BYTES_MAX <= LDS_BYTES);
 
     const int pid = blockIdx.x;
+#if HK_GEMM_RS_MI300X_TRACE
+    std::uint64_t* const trace_ring =
+        reinterpret_cast<std::uint64_t*>(g.trace);
+    int trace_n = 0;
+#endif
+    HK_TRACE_STAMP(CTA_BEG);
     const int me = g.me;
     const int M = g.M, N = g.N, K = g.K;
     const int slice = M / m3::WORLD_SIZE;
@@ -424,6 +509,7 @@ void gemm_rs_mi300x_kernel(const mi300x_globals g) {
                 const int tm = id.tm;
                 const int tn = id.tn;
 
+                HK_TRACE_STAMP(MAINLOOP_BEG);
                 zero(C_accum);
                 // ---- double-buffered mainloop, issue/commit split ----------------
                 // Buffer lifetime, unchanged from the fused version: iteration k
@@ -539,6 +625,7 @@ void gemm_rs_mi300x_kernel(const mi300x_globals g) {
                     m3::load_commit<NT>(Bs[(k + 1) & 1], bbuf);
                     __syncthreads();
                 }
+                HK_TRACE_STAMP(MAINLOOP_END);
 
                 // ---- egress: per-band credit wait, then emit ---------------
                 // The credit wait STAYS PER TILE and stays before that tile's
@@ -553,6 +640,7 @@ void gemm_rs_mi300x_kernel(const mi300x_globals g) {
                 // Every band of this tile must be reusable before ANY payload
                 // store of epoch ep: waits on leader lanes only, result broadcast
                 // by the CTA barrier + shared error bit (fail-closed).
+                HK_TRACE_STAMP(CREDIT_WAIT_BEG);
                 if (threadIdx.x < (unsigned)bands) {
                     const int b = (int)threadIdx.x;
                     const int row0 = tm * BM + b * EB;
@@ -566,11 +654,13 @@ void gemm_rs_mi300x_kernel(const mi300x_globals g) {
                 }
                 __syncthreads();
                 if (m3::error_bit_set(errp, m3::ERR_PRODUCER_CREDIT)) return;
+                HK_TRACE_STAMP(CREDIT_WAIT_END);
 
                 const bf16* biasp = reinterpret_cast<const bf16*>(g.bias);
                 const int win_rows = EB < 32 ? EB : 32;      // EB % win_rows == 0
                 const int vt = N - tn * BN < BN ? N - tn * BN : BN;   // <= BN
 
+                HK_TRACE_STAMP(EMIT_BEG);
                 for (int b = 0; b < bands; ++b) {
                     const int row0 = tm * BM + b * EB;
                     const int dest = m3::owner_of_row(row0, slice);
@@ -622,6 +712,7 @@ void gemm_rs_mi300x_kernel(const mi300x_globals g) {
                         __syncthreads();
                     }
                 }
+                HK_TRACE_STAMP(EMIT_END);
 
             }   // end of the group's tile loop
 
@@ -641,6 +732,7 @@ void gemm_rs_mi300x_kernel(const mi300x_globals g) {
             // release dominates them, which is why coarsening the release
             // without coarsening the publication is a protocol error rather
             // than a smaller version of this change.
+            HK_TRACE_STAMP(RELEASE_BEG);
 #if HK_GEMM_RS_MI300X_NEGATIVE_CONTROLS
             // PUBLISH-EARLY control: announce readiness BEFORE the release that
             // covers the payload. A reducer may then acquire a slot whose bytes
@@ -660,6 +752,7 @@ void gemm_rs_mi300x_kernel(const mi300x_globals g) {
 #else
             m3::release_payload_system();
 #endif
+            HK_TRACE_STAMP(RELEASE_END);
 
             // ALL of the group's publications, after that single release: the
             // leader publishes each (tile, band)'s cheap completion cell on its
@@ -692,10 +785,12 @@ void gemm_rs_mi300x_kernel(const mi300x_globals g) {
                     }
                 }
             }
+            HK_TRACE_STAMP(PUBLISH_END);
 #if HK_GEMM_RS_MI300X_NEGATIVE_CONTROLS
             if (publish_early) m3::release_payload_system();
 #endif
         }
+        HK_TRACE_STAMP(CTA_END);
         return;
     }
 
@@ -723,6 +818,7 @@ void gemm_rs_mi300x_kernel(const mi300x_globals g) {
         // Bounded ready wait on exactly the eight source contributions of this
         // output tile (gate 6). Any lane's timeout is fail-closed: the bit is
         // set, the CTA converges, and NO payload read follows (gate 12).
+        HK_TRACE_STAMP(READY_WAIT_BEG);
         if (threadIdx.x < m3::WORLD_SIZE) {
             const bool ok = m3::wait_band_epoch(
                 sig + m3::SIGNAL_GUARD_U32 +
@@ -732,7 +828,9 @@ void gemm_rs_mi300x_kernel(const mi300x_globals g) {
         }
         __syncthreads();
         if (m3::error_bit_set(errp, m3::ERR_REDUCER_READY)) return;
+        HK_TRACE_STAMP(READY_WAIT_END);
         m3::acquire_payload_system();
+        HK_TRACE_STAMP(REDUCE_BEG);
 
         const hk_gemm_rs::bf16_sources8 srcs{
             heap + slot_stride * 0u, heap + slot_stride * 1u,
@@ -747,6 +845,7 @@ void gemm_rs_mi300x_kernel(const mi300x_globals g) {
             /*rows=*/EB, /*cols=*/BN,
             /*packet_ok=*/g.packet_fast_path != 0,
             threadIdx.x, m3::CTA_THREADS);
+        HK_TRACE_STAMP(REDUCE_END);
 
         // All consumer reads must drain before any retirement credit is
         // published (gate 13); the credit is what unblocks the epoch-(e+1)
@@ -769,7 +868,9 @@ void gemm_rs_mi300x_kernel(const mi300x_globals g) {
                     ep);
             }
         }
+        HK_TRACE_STAMP(CREDIT_PUB_END);
     }
+    HK_TRACE_STAMP(CTA_END);
 }
 
 // ================================================================================================
@@ -938,7 +1039,15 @@ PYBIND11_MODULE(TK_MODNAME, m) {
         &mi300x_globals::ready_words, &mi300x_globals::packet_fast_path,
         &mi300x_globals::ctrl_flags, &mi300x_globals::ctrl_rank,
         &mi300x_globals::ctrl_arg0, &mi300x_globals::config_row,
+#if HK_GEMM_RS_MI300X_TRACE
+        // exp_22 diagnostic: ONE extra trailing argument, so the flag-ON
+        // module takes 28 where production takes 27. The exported symbol name
+        // is deliberately unchanged, so the harness's calling convention is
+        // otherwise untouched and the driver only appends a pointer.
+        &mi300x_globals::even_k, &mi300x_globals::trace);
+#else
         &mi300x_globals::even_k);
+#endif
     // The prebound pair. Still exactly one kernel launch per call (gate 16),
     // still the same dispatch table and the same POD; see the comment above
     // namespace prebound for why the duck-typed path is too expensive to keep

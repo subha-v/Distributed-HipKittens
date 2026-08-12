@@ -17,6 +17,9 @@ rewritten with numbers when Phase 2 lands.
 | `bin_timeline.py` | done — owns the whole traffic model for both arms; 10 µs bins; ±10% integral gate |
 | `plot_timeline.py` | done — the 3×N grid |
 | `c_rank1_probe.sh` | done — arm (c) feasibility probe, read-only, no GPU |
+| the patch itself | **applied** — 21 sites, +109 lines, 0 deletions, flag default 0 |
+| `parity.json` | **PASS** — see the gate section below |
+| `go_gpu.sh` | done — the whole GPU phase under `gpu_lease.sh`, release trapped |
 
 ## Why the phase enum carries a credit-wait pair — preserved reasoning
 
@@ -44,7 +47,50 @@ Ring depth is derived the same way — from this kernel's own per-row worst case
 The sibling's depth 24 is a gfx950 MoE fact about a different phase taxonomy
 (M0-M9 plus service stripes) and was not inherited.
 
-## Phase 2 — patch APPLIED, parity gate is the next deliverable
+## GATE 1 — resource-tuple parity: **PASS**
+
+Data: `parity.json` (`exp22.parity.v1`). Three TUs from one source, identical
+options apart from the flag: `off_absent` (flag not defined), `off_present`
+(`-DHK_GEMM_RS_MI300X_TRACE=0`), `on` (`=1`).
+
+**Flag-present-and-0 is byte-identical to flag-absent.** Same object size to
+the byte (612,896 B both; the ON object is 633,528 B), and identical
+VGPR/AGPR/SGPR/scratch/spill/LDS tuples on all 7 instantiations, each matching
+the post-exp_14 M2 table: `32/64/128`→98, `64/128/64`→104,
+`128/192/32+tail`→136, `256/256/32`→246, `256/256/32+tail`→248, generic
+`32/64/64`→91 and 92, with zero AGPRs, zero scratch and zero VGPR spills.
+The instrumented code shape has not leaked into the production build.
+
+**Flag-ON cost, disclosed.** The diagnostic arm is cheap enough that the
+static-slot fallback is not needed:
+
+| BM/BN/BK/tail | OFF VGPR | ON VGPR | Δ | ON AGPR | ON scratch | ON VGPR spill |
+|---|---:|---:|---:|---:|---:|---:|
+| 32/64/64 | 91 | 93 | +2 | 0 | 0 | 0 |
+| 32/64/64 tail | 92 | 94 | +2 | 0 | 0 | 0 |
+| 32/64/128 | 98 | 101 | +3 | 0 | 0 | 0 |
+| 64/128/64 | 104 | 105 | +1 | 0 | 0 | 0 |
+| 128/192/32 tail | 136 | 139 | +3 | 0 | 0 | 0 |
+| **256/256/32** | **246** | **247** | **+1** | 0 | 0 | 0 |
+| **256/256/32 tail** | **248** | **250** | **+2** | 0 | 0 | 0 |
+
+The two rows that were the real risk — shapes 5 and 6 sit at 246 and 248 of the
+256 arch-VGPR cap — absorb the ring pointer and the event counter in +1 and +2
+registers and stay under the cap with 9 and 6 to spare. No scratch, no VGPR
+spills, no AGPRs anywhere.
+
+**One correction to this experiment's own gate, worth recording.** The first
+run failed all 14 rows on `SGPRs Spill != 0` — including the untouched baseline
+build, which reports 54-88 SGPR spills on every instantiation. That is a
+pre-existing property of the kernel, not of the patch: the M2 contract is "zero
+AGPRs, zero scratch, zero **VGPR** spills", and `ScratchSize` is 0 on every
+row, so those scalar spills go to VGPR lanes and never to memory. The gate now
+requires zero on `agpr`/`scratch`/`vgpr_spill` only, and requires SGPR spills to
+be *identical between the two flag-OFF arms* rather than zero — which is the
+question parity actually asks. Flag-ON raises SGPR spills by 11-18 per row,
+still with zero scratch.
+
+## Phase 2 — patch APPLIED, parity gate PASSED, waiting on the GPU
 
 The kernel-edit gate was opened and the patch landed: **21 sites, +109 lines,
 0 deletions**, all inside `#if HK_GEMM_RS_MI300X_TRACE`, **default 0**.
@@ -57,7 +103,10 @@ new trailing member to 0.
 
 Still blocked on the **GPU lease** (exp_23 and exp_21 are ahead). Arm (a)
 capture, the tick calibration and arm (b) all need the node; nothing has been
-launched.
+launched. When the lease is granted, every GPU step runs inside
+`tools/gpu_lease.sh acquire exp_22 5400` … `release exp_22`, with the release
+trapped on exit, because a dirty-node check alone lets two agents observe a
+clean node in the same second and both launch.
 
 ## Policy, stated up front and binding on everything below
 
