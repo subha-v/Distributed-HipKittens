@@ -53,11 +53,23 @@ namespace hk_moe::mps {
 
 // ---- packed config word (K0P6_D_MPS_CFG) --------------------------------------
 // [0:8)   C    reserved minimum-progress service CTAs (finish order)
-// [8:16)  g    adjacent N-chunks grouped per push (1, 2, 4, 16)
+// [8:16)  g    adjacent N-chunks grouped per push (1, 2, 4, 16), LOW byte
 // [16:24) mode 0 reserve-only | 1 bulk-push-after-M7 | 2 stream
 // [24:32) flush_rows  completed-row flags per system release (1..64)
 // [32]    pull_fallback: stream flags, but M8 pulls remote part (diagnostic)
 // [33]    timestamps_enable
+// [34:42) g    HIGH byte (exp_24). See the widening note below.
+//
+// exp_24 -- WHY THE `g` FIELD IS SPLIT. `g`'s byte at [8:16) was fully spoken
+// for (0x0F physical | 0x10 detect | 0x20 throttle) with two bits left, and
+// exp_24 needs three: one mechanism bit plus a two-bit depth selector. Passing
+// `g > 0xFF` into the OLD encoder silently corrupted the word -- `g = 0x121`
+// became `0x121 << 8 = 0x12100`, whose bit 16 lands in the MODE field, and the
+// decode then read back `g = 0x21`. So the field is widened to 16 bits, with
+// the high byte parked in the packed word's first free bits [34:42).
+// This is bit-identical for every `g <= 0xFF`: the high byte is zero, so the
+// extra term vanishes and `decode_config` returns exactly the old struct. No
+// host-bridge signature, descriptor slot, or `K0_MPS_CFG` grammar changes.
 struct config {
     std::uint32_t reserved_comm_ctas;
     std::uint32_t group_slices;
@@ -72,17 +84,19 @@ __host__ __device__ __forceinline__ std::uint64_t encode_config(
         std::uint32_t mode, std::uint32_t flush_rows, bool pull_fallback,
         bool timestamps) {
     return (std::uint64_t)reserved_comm_ctas
-           | ((std::uint64_t)group_slices << 8)
+           | ((std::uint64_t)(group_slices & 0xFFu) << 8)
            | ((std::uint64_t)mode << 16)
            | ((std::uint64_t)flush_rows << 24)
            | ((std::uint64_t)(pull_fallback ? 1u : 0u) << 32)
-           | ((std::uint64_t)(timestamps ? 1u : 0u) << 33);
+           | ((std::uint64_t)(timestamps ? 1u : 0u) << 33)
+           | ((std::uint64_t)((group_slices >> 8) & 0xFFu) << 34);
 }
 
 __host__ __device__ __forceinline__ config decode_config(std::uint64_t word) {
     config c;
     c.reserved_comm_ctas = (std::uint32_t)(word & 0xFFu);
-    c.group_slices = (std::uint32_t)((word >> 8) & 0xFFu);
+    c.group_slices = (std::uint32_t)((word >> 8) & 0xFFu)
+                     | ((std::uint32_t)((word >> 34) & 0xFFu) << 8);
     c.mode = (std::uint32_t)((word >> 16) & 0xFFu);
     c.flush_rows = (std::uint32_t)((word >> 24) & 0xFFu);
     c.pull_fallback = ((word >> 32) & 1u) != 0u;
@@ -206,6 +220,29 @@ inline constexpr std::uint32_t kRemoteAccumGMask = 0xFu;   // physical g bits
 inline constexpr std::uint32_t kRemoteAccumDetectBit = 0x10u;
 #define K0P6_MPS_ERR_DUAL 134217728    // 1<<27: dual-write detector mismatch
 
+// ---- exp_24: two more `g`-field bits, one per independent mechanism ----------
+// The throttle ENABLE bit predates this experiment (exp_21 read it raw from the
+// packed word in the phase-2 body); it is given a named constant and an
+// accessor here so the whole `g` encoding is single-sourced. Bit table:
+//
+//   0x000F  physical g                       (must be 1 in modes 12/13)
+//   0x0010  dual-write lost-update detector
+//   0x0020  epilogue remote-RMW throttle ENABLE
+//   0x0040  exp_24 A: skip the DEAD `part` zero-fill in M5
+//   0x0080  reserved (rejected)
+//   0x0300  exp_24 B: throttle DEPTH select, 00->8 (today) 01->4 10->16 11->32
+//   0xFC00  reserved (rejected)
+//
+// `00 -> 8` is deliberate: the all-zero selector reproduces exp_21's ratchet
+// exactly, so `g = 33` stays the same kernel path it has always been.
+inline constexpr std::uint32_t kRemoteAccumThrottleBit = 0x20u;
+inline constexpr std::uint32_t kRemoteAccumSkipPartZeroBit = 0x40u;
+inline constexpr std::uint32_t kRemoteAccumThrottleDepthMask = 0x300u;
+inline constexpr std::uint32_t kRemoteAccumThrottleDepthShift = 8u;
+inline constexpr std::uint32_t kRemoteAccumGLegalBits =
+        kRemoteAccumGMask | kRemoteAccumDetectBit | kRemoteAccumThrottleBit |
+        kRemoteAccumSkipPartZeroBit | kRemoteAccumThrottleDepthMask;
+
 __host__ __device__ __forceinline__ bool mode_is_direct_accum(config c) {
     return c.mode == kModeRemoteAccum || c.mode == kModeDirectRows;
 }
@@ -213,6 +250,58 @@ __host__ __device__ __forceinline__ bool mode_is_direct_accum(config c) {
 __host__ __device__ __forceinline__ bool detect_dual(config c) {
     return mode_is_direct_accum(c) &&
            (c.group_slices & kRemoteAccumDetectBit) != 0u;
+}
+
+__host__ __device__ __forceinline__ bool throttle_enabled(config c) {
+    return mode_is_direct_accum(c) &&
+           (c.group_slices & kRemoteAccumThrottleBit) != 0u;
+}
+
+// 0..3. The phase-2 epilogue turns this into one of four compile-time
+// `s_waitcnt vmcnt(N)` instantiations; it is never a runtime vmcnt.
+__host__ __device__ __forceinline__ std::uint32_t throttle_depth_sel(config c) {
+    return (c.group_slices & kRemoteAccumThrottleDepthMask) >>
+           kRemoteAccumThrottleDepthShift;
+}
+
+// exp_24 A. In mode 12 the `part` buffer (slot 21, 560 MiB) is neither read nor
+// written: M7's epilogue targets the owner's `slots` through `peer_tab`, M8
+// takes `part = nullptr`, and the service pool's only `part` use sits behind an
+// unreachable `continue`. See exp_24_dead_plan_work/design.md §1.2 for the
+// line-cited enumeration. The M5 zero of all T_ext rows is therefore 448 MiB of
+// stores per rank per epoch that nothing consumes.
+//
+// The guard is deliberately narrow and FAIL-CLOSED rather than best-effort:
+// `config_is_valid` REJECTS the bit outside mode 12 and rejects it together
+// with the dual-write detector (whose local `part` tower needs the zero), so a
+// wrong config is refused instead of silently keeping or silently dropping the
+// zero. Mode 13 satisfies the same deadness proof but stays out of scope until
+// a mode-13 run re-derives it.
+__host__ __device__ __forceinline__ bool skip_dead_part_zero(config c) {
+    return c.mode == kModeRemoteAccum &&
+           (c.group_slices & kRemoteAccumSkipPartZeroBit) != 0u &&
+           !detect_dual(c) && !c.pull_fallback;
+}
+
+// exp_24 A, the surviving half. `hkp::zero_part_scale_transpose<Chunks1K>`
+// (hkp_quant.hpp:130-143, OUTSIDE this repo and read-only to us) fuses two
+// unrelated jobs into one per-row body: 14 KiB of `part` zero stores, and the
+// row-major -> group-major scale transpose that writes `sc_dst`. Mode 12 needs
+// the second and provably not the first, so this is the second on its own,
+// byte-identical to hkp_quant.hpp:142 including the `lane < ng` predicate and
+// the `sc_dst[lane * T_loc + t]` addressing that M6 reads (KRN:1321).
+//
+// It lives here rather than in hkp_quant.hpp because that header is not ours to
+// edit. In hindsight the primitive should have been two composable pieces --
+// `zero_row` and `scale_transpose_row` -- with the fused form as their
+// composition; see exp_24_dead_plan_work/result.md `## Primitives`.
+__device__ __forceinline__ void scale_transpose_row(float* sc_dst,
+                                                    const float* sc_stage_row,
+                                                    int t, int T_loc, int ng,
+                                                    int lane) {
+    if (lane < ng) {
+        sc_dst[(std::size_t)lane * (std::size_t)T_loc + t] = sc_stage_row[lane];
+    }
 }
 
 __host__ __device__ __forceinline__ std::uint32_t physical_g(config c) {
@@ -258,14 +347,24 @@ __host__ __device__ __forceinline__ bool config_is_valid(config c) {
     if (c.reserved_comm_ctas >= 256u) return false;
     if (mode_is_direct_accum(c)) {
         // exp_21 modes 12/13: physical g must be 1 (there are no push groups)
-        // and the only legal extra bit is the 0x10 dual-write detector.
+        // and every extra bit must be one this build knows how to honour.
         if ((c.group_slices & kRemoteAccumGMask) != 1u) return false;
-        if ((c.group_slices &
-             ~(kRemoteAccumGMask | kRemoteAccumDetectBit | 0x20u)) != 0u)
-            return false;
+        if ((c.group_slices & ~kRemoteAccumGLegalBits) != 0u) return false;
         // Part is never written in modes 12/13, so a remote-part pull has
         // nothing to read: forbid rather than silently corrupt.
         if (c.pull_fallback) return false;
+        // exp_24 B: a depth selector without the throttle enabled selects
+        // nothing. Reject instead of accepting a config that reads as swept.
+        if ((c.group_slices & kRemoteAccumThrottleDepthMask) != 0u &&
+            (c.group_slices & kRemoteAccumThrottleBit) == 0u) return false;
+        // exp_24 A: the skip bit is honoured ONLY by mode 12's M5, and the
+        // dual-write detector accumulates into `part` and needs the zero. Both
+        // are rejections, so a config either engages the mechanism or fails --
+        // it is never silently ignored.
+        if ((c.group_slices & kRemoteAccumSkipPartZeroBit) != 0u) {
+            if (c.mode != kModeRemoteAccum) return false;
+            if ((c.group_slices & kRemoteAccumDetectBit) != 0u) return false;
+        }
     } else if (c.group_slices != 1u && c.group_slices != 2u &&
                c.group_slices != 4u && c.group_slices != 16u) return false;
     if (c.mode > 13u) return false;

@@ -90,6 +90,93 @@ static_assert(kAChunks * kAChunkBytes == 128, "one K128 group per A2 tile row");
 // the legacy local-part write -- the review-mandated lost-update DETECTOR
 // (M8 compares the two towers row-by-row). When peer_tab == null the whole
 // construct folds away and the donor's addressing is byte-identical.
+// exp_24 B (MPS-DELTA (5)) — the throttle DEPTH becomes a swept axis.
+//
+// `s_waitcnt vmcnt(N)` encodes N in the instruction's simm16 and has no
+// register form, so the depth must be a compile-time literal selected at run
+// time. Two shapes were built and measured (see exp_24_dead_plan_work/build.md):
+//
+//   REJECTED — template the whole 16-iteration accumulate loop on the depth and
+//   switch between four instantiations. Correct, and every literal reached the
+//   ISA, but the four-way join at peak epilogue pressure made the allocator
+//   spill one value and reload it from scratch ONCE PER ATOMIC: scratch_load
+//   went 9 -> 436 with 389 reloads of a single 4 B slot, and the regression hit
+//   the depth-8 (control) path too. A measurement contaminated in the control
+//   arm is worse than no measurement.
+//
+//   SHIPPED — one copy of the loop; the throttle guard becomes four mutually
+//   exclusive SGPR lane masks (`throttle_plan`) decided before the loop, and the
+//   64-bit `slot_off` is folded into the peer table (MPS-DELTA (6)) to pay for
+//   them. Measured tuple against the exp_21 build, same compiler and flags:
+//   SGPR 106 / VGPR 256 / AGPR 256 unchanged, scratch 144 -> 128 B/lane, LDS
+//   unchanged, v_mfma 180 unchanged, flat_atomic_pk_add_bf16 282 unchanged, zero
+//   scratch ops inside either MFMA span, and zero scratch ops within 24
+//   instructions of any remote atomic (the accidental-spill gate above).
+template <int VmCnt>
+__device__ __forceinline__ void throttle_vmcnt();
+
+#if defined(__HIP_DEVICE_COMPILE__)
+#define K0P6_MPS_THROTTLE_VMCNT(N)                                    \
+  template <>                                                         \
+  __device__ __forceinline__ void throttle_vmcnt<N>() {               \
+    asm volatile("s_waitcnt vmcnt(" #N ")" ::: "memory");             \
+  }
+#else
+#define K0P6_MPS_THROTTLE_VMCNT(N)                                    \
+  template <>                                                         \
+  __device__ __forceinline__ void throttle_vmcnt<N>() {}
+#endif
+K0P6_MPS_THROTTLE_VMCNT(4)
+K0P6_MPS_THROTTLE_VMCNT(8)
+K0P6_MPS_THROTTLE_VMCNT(16)
+K0P6_MPS_THROTTLE_VMCNT(32)
+#undef K0P6_MPS_THROTTLE_VMCNT
+
+// 0 = throttle off; 1..4 = cap outstanding remote RMWs at 8 / 4 / 16 / 32.
+// Mode 1 (depth 8) is exp_21's shipped behaviour and is deliberately the value
+// the hot compare tests for.
+inline constexpr unsigned int kThrModeOff = 0u;
+inline constexpr unsigned int kThrMode8 = 1u;
+inline constexpr unsigned int kThrMode4 = 2u;
+inline constexpr unsigned int kThrMode16 = 3u;
+inline constexpr unsigned int kThrMode32 = 4u;
+
+// The four depths as MUTUALLY EXCLUSIVE booleans, decided once before the
+// accumulate loop. This shape is load-bearing and was arrived at by measurement
+// (build.md): carrying the 5-valued `thr_mode` itself into the loop cost ONE
+// EXTRA LIVE VGPR, which at the epilogue's 256-VGPR ceiling evicted the peer
+// table's LDS base address to scratch and put a `scratch_load_dword` 5
+// instructions ahead of EVERY remote atomic -- 96 static sites, on the shipped
+// depth-8 path too. As four booleans the compiler materialises four SGPR lane
+// masks instead (SGPR spills go to v255 lanes via readlane, not to memory), the
+// integer dies before the loop, and the hot arm costs exactly what exp_21's
+// `if (throttle)` cost: one mask test plus one branch.
+struct throttle_plan {
+  bool at8;    // exp_21's shipped depth
+  bool at4;
+  bool at16;
+  bool at32;
+};
+
+__device__ __forceinline__ throttle_plan make_throttle_plan(
+    unsigned int thr_mode) {
+  return throttle_plan{thr_mode == kThrMode8, thr_mode == kThrMode4,
+                       thr_mode == kThrMode16, thr_mode == kThrMode32};
+}
+
+__device__ __forceinline__ void throttle_epilogue_rmw(const throttle_plan& p) {
+  if (p.at8) {
+    // g-bit 0x20 at depth 8: exp_21's winning lever, verbatim.
+    throttle_vmcnt<8>();
+  } else if (p.at4) {
+    throttle_vmcnt<4>();
+  } else if (p.at16) {
+    throttle_vmcnt<16>();
+  } else if (p.at32) {
+    throttle_vmcnt<32>();
+  }
+}
+
 template <int JMAX>
 __device__ __forceinline__ void epilogue_write(
     std::uint32_t (&xp)[kBlockM][32], racc (&acc)[JMAX][2],
@@ -97,8 +184,8 @@ __device__ __forceinline__ void epilogue_write(
     int q, int r, int rowh, int dcol, std::size_t col_base,
     __hip_bfloat16* __restrict__ OUT,
     const unsigned long long* __restrict__ peer_tab,
-    unsigned long long slot_off, int maxtok_sh, unsigned int tok_mask,
-    bool dual, bool throttle) {
+    int maxtok_sh, unsigned int tok_mask,
+    bool dual, const throttle_plan& thr) {
   // PHASE 1 (write, MFMA layout): lane 16q+r holds sorted rows {r, 16+r}.
 #pragma unroll
   for (int m = 0; m < 2; ++m) {
@@ -141,22 +228,16 @@ __device__ __forceinline__ void epilogue_write(
         const std::uint32_t d = xp[row][dcol ^ (2 * (row & 15))];
         if (xtok[i] < T) {
           const unsigned int xr = (unsigned int)xtok[i];
+          // peer_tab already carries slot_off (MPS-DELTA (6)).
           const std::uintptr_t a =
-              (std::uintptr_t)peer_tab[xr >> maxtok_sh] + slot_off +
+              (std::uintptr_t)peer_tab[xr >> maxtok_sh] +
               ((std::size_t)(xr & tok_mask) * kHidden + col_base + 2 * dcol) *
                   2u;
           kittens::distributed::accumulate_peer_bf162(
               reinterpret_cast<void*>(a), d);
-          if (throttle) {
-            // g-bit 0x20: cap the epilogue's outstanding remote RMWs at 8 per
-            // thread per JMAX group -- tests whether the +313 us M7 cost of the
-            // remote-atomic stream is RATE-shaped (recovers at lower depth) or
-            // a fixed per-op price (no recovery at any depth). exp_20's §2b
-            // predicts the former for an unthrottled stream.
-#if defined(__HIP_DEVICE_COMPILE__)
-            asm volatile("s_waitcnt vmcnt(8)" ::: "memory");
-#endif
-          }
+          // exp_24 B: was `if (throttle) asm("s_waitcnt vmcnt(8)")`. Same one
+          // mask test on the shipped path; three more depths behind it.
+          throttle_epilogue_rmw(thr);
           if (dual) {   // detector: keep the local tower in exact lock-step
             __hip_bfloat162* pl = reinterpret_cast<__hip_bfloat162*>(
                 OUT + static_cast<std::size_t>(xtok[i]) * kHidden + col_base +
@@ -237,11 +318,10 @@ N2_P2_QUAL void N2_P2_NAME(
   // near the MFMA peak, which is the resource discipline the donor demands.
   __shared__ unsigned long long m7tab[8];
   const unsigned long long* m7_peer_tab = nullptr;
-  unsigned long long m7_slot_off = 0ull;
   int m7_sh = 0;
   unsigned int m7_tok_mask = 0u;
   bool m7_dual = false;
-  bool m7_throttle = false;
+  throttle_plan m7_thr = make_throttle_plan(kThrModeOff);
 #ifdef N2GM_TASK_DONE_HOOK
   {
     const unsigned long long m7cfg =
@@ -254,22 +334,53 @@ N2_P2_QUAL void N2_P2_NAME(
       const int m7_cur = (int)k0p6_dread(k0p6_desc, K0P6_D_CUR);
       const unsigned int m7_mtok =
           (unsigned int)k0p6_dread(k0p6_desc, K0P6_D_MAXTOK);
+      // exp_24 (MPS-DELTA (6)) — `slot_off` is PRE-ADDED into the peer table
+      // instead of being carried into the epilogue as a live 64-bit value.
+      // It is uniform across owners, so `tab[i] + slot_off` is exact, and the
+      // epilogue's address collapses from
+      //   tab[owner] + slot_off + (pos*kHidden + col)*2
+      // to
+      //   tab'[owner] + (pos*kHidden + col)*2.
+      // This is a REGISTER-PRESSURE ENABLER, not a free lunch we took on the
+      // side: the epilogue sits at 256 VGPR / 256 AGPR, and exp_24 B's four
+      // depth masks could not be added without evicting something. With
+      // `slot_off` still live the allocator evicted the peer table's LDS base
+      // and reloaded it from scratch once per remote atomic (96 static sites).
+      // Folding it frees the AGPR pair that held it and removes two
+      // `v_accvgpr_read` plus one `v_lshl_add_u64` from every atomic. Measured
+      // in build.md; it also means exp_24's control arm is exp_21's protocol
+      // with a slightly lighter address computation, which is why the batch
+      // carries its own in-batch control at first AND last position.
+      const unsigned long long m7_slot_off =
+          (m7_slots - (unsigned long long)(std::uintptr_t)m7sym->local_heap_base)
+          + (unsigned long long)m7_cur * (unsigned long long)m7_mtok *
+                ((unsigned long long)kHidden * 2ull);
       if (tid < 8) {
         const void* pb = (tid == m7_cur)
             ? (const void*)m7sym->local_heap_base
             : (const void*)m7sym->heap_bases.select<8>(tid);
-        m7tab[tid] = (unsigned long long)(std::uintptr_t)pb;
+        m7tab[tid] = (unsigned long long)(std::uintptr_t)pb + m7_slot_off;
       }
       m7_sh = 31 - __clz((unsigned int)m7_mtok);  // MAXTOK = 2^m7_sh (guard)
       m7_tok_mask = m7_mtok - 1u;
-      m7_slot_off =
-          (m7_slots - (unsigned long long)(std::uintptr_t)m7sym->local_heap_base)
-          + (unsigned long long)m7_cur * (unsigned long long)m7_mtok *
-                ((unsigned long long)kHidden * 2ull);
       m7_peer_tab = m7tab;
-      m7_dual = hk_moe::mps::detect_dual(
-          hk_moe::mps::decode_config(m7cfg));
-      m7_throttle = ((m7cfg >> 8) & 0x20ull) != 0ull;
+      // exp_24: the throttle enable and its new depth selector both come from
+      // the adapter's accessors now, so the `g` bit table has exactly one
+      // definition (moe_mps_adapter.cuh). `throttle_enabled` is the same bit
+      // test exp_21 open-coded here as `((m7cfg >> 8) & 0x20) != 0`, and the
+      // depth selector's 0 (today's depth 8) maps to kThrMode8, so `g = 33`
+      // still lands on exp_21's depth.
+      const hk_moe::mps::config m7dec = hk_moe::mps::decode_config(m7cfg);
+      m7_dual = hk_moe::mps::detect_dual(m7dec);
+      // readfirstlane is load-bearing, not decoration: the mode arrives through
+      // a volatile descriptor read, so the compiler cannot prove it uniform and
+      // would park it in a VGPR, extending a VECTOR live range across the
+      // epilogue. make_throttle_plan then turns it into four SGPR lane masks
+      // whose spills go to v255 lanes rather than to memory.
+      m7_thr = make_throttle_plan((unsigned int)__builtin_amdgcn_readfirstlane(
+          (int)(hk_moe::mps::throttle_enabled(m7dec)
+                    ? (kThrMode8 + hk_moe::mps::throttle_depth_sel(m7dec))
+                    : kThrModeOff)));
       // The first epilogue reads the table at the END of task 0; the task
       // loop's own LDS-fill __syncthreads() orders the fill before it, so no
       // extra barrier is spent here.
@@ -528,15 +639,15 @@ N2_P2_QUAL void N2_P2_NAME(
                         *reinterpret_cast<racc(*)[4][2]>(&acc[sb][0]), sw2, lv2,
                         xtok, T, q, r, rowh, dcol,
                         static_cast<std::size_t>(kChunkN) * nc + kWaveCols2 * wv,
-                        OUT, m7_peer_tab, m7_slot_off, m7_sh, m7_tok_mask,
-                        m7_dual, m7_throttle);
+                        OUT, m7_peer_tab, m7_sh, m7_tok_mask,
+                        m7_dual, m7_thr);
       epilogue_write<3>(xp_lds[wv],
                         *reinterpret_cast<racc(*)[3][2]>(&acc[sb][4]), sw2, lv2,
                         xtok, T, q, r, rowh, dcol,
                         static_cast<std::size_t>(kChunkN) * nc +
                             kWaveCols2 * wv + 64,
-                        OUT, m7_peer_tab, m7_slot_off, m7_sh, m7_tok_mask,
-                        m7_dual, m7_throttle);
+                        OUT, m7_peer_tab, m7_sh, m7_tok_mask,
+                        m7_dual, m7_thr);
     }
     // MPS-DELTA (2): per-thread VMEM drain BEFORE the task-end barrier. The
     // epilogue's global_atomic_pk_add_bf16 stores are asynchronous;

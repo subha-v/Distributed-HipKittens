@@ -101,7 +101,7 @@
 // .cuh-only change, then confirm a new hsaco mtime under
 // ~/.cache/k0-mok-synthetic-prefill/mori/jit/gfx950_mlx5/*/ before believing
 // any number. The value is never read; only its presence in the hash matters.
-#define K0P6_MPS_SRC_REV 23
+#define K0P6_MPS_SRC_REV 24
 
 // exp_56 (Option C): per-source SEGMENTED receive layout + chunk-counted release.
 //  * Row index = source*MAXTOK + fetch_add(dest_counter[source] on dest, 1)  (waitless).
@@ -1279,12 +1279,38 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
       const int lane2 = tid & 63;
       const int w = (bid - 2) * (blockDim.x >> 6) + (tid >> 6);
       const int nw2 = (nct - 2) * (blockDim.x >> 6);
+      // exp_24 A: in mode 12 `part` is DEAD -- M7 accumulates into the owner's
+      // `slots` through peer_tab (n2_phase2_gm_mps.cpp:144-149), M8 takes
+      // `part = nullptr` (line 1694-1696 below), and the service pool's only
+      // `part` reader sits behind an unreachable `continue`
+      // (moe_mps_adapter.cuh:798). The exp_56 warning below is about the
+      // `part` -> combine PULL path (base_pull, line 1714-1718), which mode 12
+      // does not take: its combine reads `base_slot` (line 1719-1725), and
+      // `slots` hole-safety comes from setup-zero plus M8's consume-and-zero
+      // (line 579-587), not from this loop. So the 448 MiB of zero stores per
+      // rank per epoch (T_ext * 7168 * 2 B) buys mode 12 nothing.
+      //
+      // The scale transpose is a DIFFERENT job that hkp_quant.hpp happens to
+      // fuse into the same body, and it IS live: it writes sc_dst, which M6
+      // reads (line 1321). Only the zero half is dropped, and only when the
+      // fail-closed guard holds (mode 12, no dual-write detector, no pull).
+      //
       // exp_56: zero/transpose over the segmented EXTENT (holes must be zeroed too, else stale
       // part rows corrupt combine). T_ext, not the live count.
-      for (int t = w; t < T_ext; t += nw2) {
-        hkp::zero_part_scale_transpose<14>(part + (std::size_t)t * K0P6_H, sc_dst,
-                                           sc_stage + (std::size_t)t * K0P6_NG, t, T_ext,
-                                           K0P6_NG, lane2);
+      const hk_moe::mps::config cfg4 = hk_moe::mps::decode_config(
+          (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
+      if (hk_moe::mps::skip_dead_part_zero(cfg4)) {
+        for (int t = w; t < T_ext; t += nw2) {
+          hk_moe::mps::scale_transpose_row(sc_dst,
+                                           sc_stage + (std::size_t)t * K0P6_NG, t,
+                                           T_ext, K0P6_NG, lane2);
+        }
+      } else {
+        for (int t = w; t < T_ext; t += nw2) {
+          hkp::zero_part_scale_transpose<14>(part + (std::size_t)t * K0P6_H, sc_dst,
+                                             sc_stage + (std::size_t)t * K0P6_NG, t, T_ext,
+                                             K0P6_NG, lane2);
+        }
       }
     }
 
