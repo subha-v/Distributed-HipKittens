@@ -1,0 +1,20 @@
+########## building gemm_rs_mi300x ##########
+/home/subvadla/dhk/include/pyutils/pyutils.cuh:59:13: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+/home/subvadla/dhk/include/pyutils/pyutils.cuh:59:13: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+OK   gemm_rs_mi300x.so (396000 bytes)
+########## building gemm_rs_mi300x_control ##########
+/home/subvadla/dhk/include/pyutils/pyutils.cuh:59:13: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+/home/subvadla/dhk/include/pyutils/pyutils.cuh:59:13: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+OK   gemm_rs_mi300x_control.so (384128 bytes)
+########## building dhk_rt ##########
+OK   dhk_rt.so (323480 bytes)
+
+########## exported symbols ##########
+-- gemm_rs_mi300x --
+  entry points: ['gemm_rs_mi300x', 'gemm_rs_mi300x_configure', 'gemm_rs_mi300x_run']
+-- gemm_rs_mi300x_control --
+  entry points: ['gemm_rs_mi300x_control']
+-- dhk_rt --
+  entry points: ['CTA_THREADS', 'CTRL_DROP_CREDIT', 'CTRL_DROP_PUBLICATION', 'CTRL_REROUTE_SLOT', 'CU_COUNT', 'EP_GEMM_U32', 'EP_RED_U32', 'EP_U32', 'ERR_PRODUCER_CREDIT', 'ERR_REDUCER_READY', 'SIGNAL_GUARD_U32', 'WORLD_SIZE', 'describe_descriptors', 'device_count', 'device_synchronize', 'device_to_host', 'enable_peer_access', 'fill_bytes', 'fine_alloc', 'free_device', 'host_to_device', 'ipc_close_handle', 'ipc_get_handle', 'ipc_open_handle', 'ipc_probe', 'make_descriptors', 'make_descriptors_split', 'plain_alloc', 'resolve_shape', 'resolve_shape_with_split']
+
+ALL MODULES BUILT

@@ -2,6 +2,84 @@
 
 ## Session 2 — 2026-08-11 overnight (optimization session)
 
+- **WIN, exp_13 / E4 re-opened: `NUM_REDUCER_CTAS` was NOT settled. Two rows
+  moved — shape 1 32 → 56 (−15.4%) and shape 6 32 → 48 (−4.9%) — for a paired
+  geomean of −3.6%.** Graded, same run against frozen rank-1: ours 353.59 →
+  **348.64 µs** against an anchor that reproduced to 0.6% (306.60 vs
+  306.23–308.80), so the ratio goes **1.145–1.158× → 1.137×**. Full ladder
+  passed: M3 17/17 at both tolerances, M4 3/3, M5 600 epochs, M2 resource tuples
+  unchanged (the split is a host plan constant, no device code changes). Full
+  detail in `exp_13_cta_split/result.md`.
+
+  **The split does not buy CTAs, it buys ROUNDS, and the function is a plateau
+  with cliffs.** Producer critical path is `ceil(gemm_tiles / (304 − NR))` whole
+  tile waves, reducer path is `ceil(red_tiles / NR)`; both are flat over wide
+  ranges of `NR` and then step. So the optimum is always **the largest `NR` that
+  does not add a producer wave**, and the whole axis is predictable from the tile
+  counts before running anything. The pre-registered table in
+  `exp_13_cta_split/plan.md` called every cliff correctly: `NR=56` costs one
+  extra producer wave on shapes 2/4/5/6 and measured +23.3 / +45.3 / +11.5 /
+  +9.6%.
+  **Corollary that kills the obvious hypothesis:** lowering `NR` to give the GEMM
+  more CTAs cannot work here. 1024 shape-6 tiles over 272 *or* 288 producers is
+  4 waves either way, so `NR=16` buys **zero** GEMM and doubles reduce rounds —
+  measured **+3.6%**, against a naive prediction of −3.5% from linear scaling.
+  Never reason about a persistent strided loop as if its cost were proportional
+  to CTA count.
+
+  **Both moved rows were created by earlier landed wins, which is the general
+  lesson: a landed optimization can silently invalidate a settled constant.**
+  exp_04a's retile of shape 1 (`32/256/32 → 32/64/64`) took `red_tiles` 28 → 112
+  and so took its reduce side from 1 round to 4 at `NR=32` — it quadrupled the
+  reducer critical path and nobody re-swept the split. exp_08 cutting the egress
+  pool 1149.9 → 412.4 µs is what made shape 6's fourth reduce round visible.
+  **`(BN, NR)` is a joint optimum** (`red_tiles = lrow · ceil(N/BN)`) and neither
+  sweep knew about the other; that is the next experiment.
+  Also revised: **the "~66 µs shape-1 floor that no stage cut explains" was
+  partly reduce rounds.** Shape 1 now runs 63.2 µs *with* the mainloop, below the
+  66.0 µs that removing the entire mainloop left at `NR=32`.
+
+- **TRAP, and the most important measurement finding of the session: the
+  pipelined harness's bias is PER-ALLOCATION, not positional, and rotating arm
+  order does not remove it. On shape 6 it is 4.28%.** Two arms with an identical
+  split, identical shared operand tensors and identical code, interleaved under
+  *complete* positional rotation (`passes = len(arms)`, so every arm occupies
+  every slot exactly once), separated by **4.28% on shape 6 and 2.41% on shape
+  4** — while the measured position residual never exceeded **±0.47%** on any
+  shape in any run. The only thing that differs between the twins is which
+  `hipMalloc` returned their 134 MB payload heap. The previously recorded 3.9%
+  null-arm figure was therefore attributed to the wrong cause, and order
+  rotation — the defence it motivated — is close to useless against it.
+  Two consequences. (1) **Every arm-identity comparison on this node must carry
+  a duplicate arm**; several past sub-5% verdicts were taken with an instrument
+  whose floor was never measured on that shape. (2) The way to beat it is to
+  **pool over independent allocations** and look for *disjoint ranges* rather
+  than percentages: shapes 1 and 6 each had three candidate allocations that
+  were all faster than all six `NR=32` allocations (`p = 1/C(9,3) = 1.2%`), which
+  is why they landed, while shapes 4 and 5 showed 2–3% "wins" in single runs that
+  sat entirely inside the same-configuration range and were correctly rejected.
+
+- **TRAP: the recorded per-shape denominator vector is BEST-of-arm, while gate M7
+  prints MEANS.** `77.47 / 88.28 / 91.79 / 199.43 / 613.70 / 1716.76` (geomean
+  225.62) are bests; exp_05's own table records shape 5 as `613.70 / 645.93` =
+  best / median. Comparing an M7 mean geomean to it manufactured a phantom "+7.3%
+  regression on shape 5" for a row whose configuration and device code had not
+  changed — shape 5 measured 644.71–669.39 across seven independent allocations
+  today, i.e. exactly its recorded *median*. **State the statistic with the
+  vector**, and prefer the same-run paired comparison: best-vs-best across
+  sessions is fragile for any shape with a fat lower tail, which shape 5 has.
+
+- **NEGATIVE, by arithmetic and with zero GPU time: the dual-role /
+  work-stealing reducer CTA cannot pay on any scored shape.** Reducer CTAs are
+  idle >90% of a shape-6 kernel, which makes stealing GEMM tiles sound
+  compelling. But the producer critical path is quantized in whole tile waves,
+  and going from the landed producer count to all 304 CTAs removes a wave on
+  **none** of the six shapes (1/2/1/1/2/4 waves either way) — the stolen work
+  would land in slack that is already free. It only pays where tiles-per-CTA is
+  large, i.e. the unscored generic row (118 tiles per CTA). Closed before writing
+  code, and before spending a protocol review on an epoch-lifetime argument for a
+  CTA that changes role mid-kernel.
+
 - **BLOCKER B IS DEAD: rank-1 RUNS ON THIS NODE, and we are 1.78× behind it.**
   Correct on all six graded shapes at both `1e-2` and `2e-3`, all 8 ranks, and
   measured **same-run interleaved against our kernel** (one pool, same inputs,
@@ -386,6 +464,65 @@
   before/after comparison at all.
   Shape 1 was subject to the same bug but did not move: at m=64 it is
   latency-bound at ~181 µs, so tile geometry is not what sets its time.
+
+- **WIN: E4 re-opened and the boundary DID move — but on only two shapes, and
+  for a reason opposite to the one that motivated re-opening.** Landed table:
+  shape 1 `NR=32 → 56` (**−15.4%**), shape 6 `NR=32 → 48` (**−4.9%**), shapes
+  2–5 keep 32. Paired geomean **−3.6%**. Full ladder passed (M3 17/17 both
+  tolerances, M4 3/3, M5 600 epochs, M2 tuples unchanged, `.so` md5-identical
+  since this is a host-side constant). Graded against frozen rank-1 in one
+  pool: ours **353.59 → 348.64 µs** with the anchor reproducing to 0.6%, so the
+  ratio goes **1.145-1.158× → 1.137×**. Shape 1's graded best fell 11.52 µs
+  against a pipelined device saving of 11.45 µs — **the two instruments agree
+  to within a microsecond**, which is the best cross-validation we have.
+
+- **THE MECHANISM, and it corrects the reasoning that motivated the sweep: the
+  split buys ROUNDS, not CTAs.** Both roles are strided persistent loops, so
+  what matters is `ceil(tiles / count)`, not the count itself. Shape 6's 1024
+  tiles over 272 or 288 producers is **4 waves either way**, so the
+  "reduce is only 86.5 µs but holds 32 CTAs for 1717 µs, therefore fewer
+  reducers" argument was **backwards**: `NR=16` buys zero GEMM waves and
+  doubles the reduce rounds, measured **+3.6%** against a naive prediction of
+  −3.5%. The wins are at the **last split before the producer wave count
+  steps**, where reduce rounds fall for free.
+  Both moved rows were *created by earlier landed wins*: exp_04a's retile took
+  shape 1's `red_tiles` from 28 to 112 and quadrupled its reduce rounds, and
+  exp_08 cutting egress is what made shape 6's fourth round visible. **Landing a
+  win can re-open an axis that was correctly closed before it.**
+
+- **NEGATIVE by arithmetic, not run: the dual-role / work-stealing reducer.**
+  Going from the landed producer count to all 304 CTAs removes a producer wave
+  on **none** of the six scored shapes, so the stolen work would land in slack
+  that is already free. It pays only on the unscored generic row. Killed before
+  it cost GPU time, by the same round-counting that explains the sweep.
+
+- **TRAP CORRECTED — the harness bias is PER-ALLOCATION, not positional, and
+  rotation does not defend against it.** Position was controlled completely
+  (`passes = len(arms)` with a one-step rotation, so every arm sat in every slot
+  exactly once) and the positional residual **never exceeded ±0.47%** anywhere.
+  Yet two arms with **identical splits, identical shared operand tensors and
+  identical code** separated by **4.28% on shape 6**. The only difference is
+  which `hipMalloc` returned their 134 MB payload heap.
+  Null-arm floors, worst across four runs: `1.34 / 0.56 / 0.61 / 2.41 / 2.17 /
+  4.28 %` for shapes 1–6. **Shape 6's floor is 4.28%** — larger than most
+  effects we have chased.
+  So the earlier "positional bias up to 3.9%" was attributed to the wrong
+  cause. **The only defence is pooling over several independent allocations of
+  each arm and requiring disjoint ranges.** That is how both landed rows were
+  cleared: every `NR=48` allocation beat every `NR=32` allocation on shape 6
+  across four runs (`p = 1/C(9,3) = 1.2%`), and likewise for shape 1.
+  Shapes 4 and 5 were correctly *rejected* by this: shape 4 showed a 1.9% "win"
+  at `NR=40` while its own null twin beat it by 2.1%.
+
+- **Two ledger corrections from this experiment.**
+  1. **The recorded denominator vector is best-of-arm, while M7 prints means.**
+     That mismatch is the entire explanation of a phantom 7.3% regression on
+     shape 5. Compare like with like.
+  2. The **"~66 µs shape-1 floor that no stage cut explains"** was **partly
+     reduce rounds**. Shape 1 now runs **63.2 µs with the mainloop included**,
+     so the floor was never as irreducible as it looked — it was the
+     producer/consumer split, visible only after the retile changed
+     `red_tiles`.
 
 - **WIN (narrow): E3 release grouping ships as `RELEASE_GROUP = 4` with a
   full-group condition. Shape 6 graded 1955.46 → 1877.9 µs (−4.0%), its gap to

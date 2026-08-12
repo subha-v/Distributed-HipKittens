@@ -1,0 +1,169 @@
+E4 re-open: splits=[None, 32] twin=32 arms=3 passes=12 shapes=[1, 2, 3, 4, 5, 6] scale=1.0
+
+===== shape 1: 64x7168x18432 bias=0  row=1 32/64/64  gemm_tiles=224 red_tiles=112  iters=300 passes=12 arms=3 =====
+  NR=T   ( 56) NG=248  waves=1 rounds=2   WGM=4   max|diff|=6.10e-05 OK
+  NR=32  ( 32) NG=272  waves=1 rounds=4   WGM=4   max|diff|=6.10e-05 OK
+  NR=32* ( 32) NG=272  waves=1 rounds=4   WGM=4   max|diff|=6.10e-05 OK
+  pass 0: order ['T', '32', '32*']
+  pass 1: order ['32', '32*', 'T']
+  pass 2: order ['32*', 'T', '32']
+  pass 3: order ['T', '32', '32*']
+  pass 4: order ['32', '32*', 'T']
+  pass 5: order ['32*', 'T', '32']
+  pass 6: order ['T', '32', '32*']
+  pass 7: order ['32', '32*', 'T']
+  pass 8: order ['32*', 'T', '32']
+  pass 9: order ['T', '32', '32*']
+  pass 10: order ['32', '32*', 'T']
+  pass 11: order ['32*', 'T', '32']
+  --------------------------------------------------------------------------------------------
+     NR   NG  wav  rnd  WGM      best    median  spread%    d_best     d_med  vs32_b%  vs32_m%
+      T  248    1    2    4     63.16     63.80     2.57     62.97     63.64   -15.34   -15.36
+     32  272    1    4    4     74.61     75.38     1.67     74.41     75.20     0.00     0.00
+    32*  272    1    4    4     74.85     75.24     1.70     74.69     75.01     0.32    -0.19
+  NULL ARM FLOOR (NR=32 vs its twin): best 0.32%  median 0.19%   <-- believe nothing below this
+  position residual %% (mean of sample/arm_median-1): 0:+0.02 1:+0.09 2:+0.18
+
+===== shape 2: 512x4096x12288 bias=1  row=2 64/64/64  gemm_tiles=512 red_tiles=64  iters=250 passes=12 arms=3 =====
+  NR=T   ( 32) NG=272  waves=2 rounds=2   WGM=8   max|diff|=4.88e-04 OK
+  NR=32  ( 32) NG=272  waves=2 rounds=2   WGM=8   max|diff|=4.88e-04 OK
+  NR=32* ( 32) NG=272  waves=2 rounds=2   WGM=8   max|diff|=4.88e-04 OK
+  pass 0: order ['T', '32', '32*']
+  pass 1: order ['32', '32*', 'T']
+  pass 2: order ['32*', 'T', '32']
+  pass 3: order ['T', '32', '32*']
+  pass 4: order ['32', '32*', 'T']
+  pass 5: order ['32*', 'T', '32']
+  pass 6: order ['T', '32', '32*']
+  pass 7: order ['32', '32*', 'T']
+  pass 8: order ['32*', 'T', '32']
+  pass 9: order ['T', '32', '32*']
+  pass 10: order ['32', '32*', 'T']
+  pass 11: order ['32*', 'T', '32']
+  --------------------------------------------------------------------------------------------
+     NR   NG  wav  rnd  WGM      best    median  spread%    d_best     d_med  vs32_b%  vs32_m%
+      T  272    2    2    8     85.58     85.74     0.37     85.28     85.51    -0.07     0.07
+     32  272    2    2    8     85.63     85.68     0.39     85.37     85.47     0.00     0.00
+    32*  272    2    2    8     85.49     85.62     0.31     85.22     85.37    -0.16    -0.07
+  NULL ARM FLOOR (NR=32 vs its twin): best 0.16%  median 0.07%   <-- believe nothing below this
+  position residual %% (mean of sample/arm_median-1): 0:+0.04 1:+0.00 2:+0.02
+
+===== shape 3: 2048x2880x2880 bias=1  row=3 128/256/32  gemm_tiles=192 red_tiles=24  iters=250 passes=12 arms=3 =====
+  NR=T   ( 32) NG=272  waves=1 rounds=1   WGM=4   max|diff|=4.88e-04 OK
+  NR=32  ( 32) NG=272  waves=1 rounds=1   WGM=4   max|diff|=4.88e-04 OK
+  NR=32* ( 32) NG=272  waves=1 rounds=1   WGM=4   max|diff|=4.88e-04 OK
+  pass 0: order ['T', '32', '32*']
+  pass 1: order ['32', '32*', 'T']
+  pass 2: order ['32*', 'T', '32']
+  pass 3: order ['T', '32', '32*']
+  pass 4: order ['32', '32*', 'T']
+  pass 5: order ['32*', 'T', '32']
+  pass 6: order ['T', '32', '32*']
+  pass 7: order ['32', '32*', 'T']
+  pass 8: order ['32*', 'T', '32']
+  pass 9: order ['T', '32', '32*']
+  pass 10: order ['32', '32*', 'T']
+  pass 11: order ['32*', 'T', '32']
+  --------------------------------------------------------------------------------------------
+     NR   NG  wav  rnd  WGM      best    median  spread%    d_best     d_med  vs32_b%  vs32_m%
+      T  272    1    1    4     88.80     89.00     0.32     88.57     88.72    -0.57    -0.61
+     32  272    1    1    4     89.32     89.55     0.43     89.01     89.26     0.00     0.00
+    32*  272    1    1    4     88.97     89.13     0.33     88.73     88.84    -0.39    -0.47
+  NULL ARM FLOOR (NR=32 vs its twin): best 0.39%  median 0.47%   <-- believe nothing below this
+  position residual %% (mean of sample/arm_median-1): 0:-0.02 1:-0.00 2:+0.01
+
+===== shape 4: 4096x4096x4096 bias=0  row=4 256/256/32  gemm_tiles=256 red_tiles=32  iters=120 passes=12 arms=3 =====
+  NR=T   ( 32) NG=272  waves=1 rounds=1   WGM=4   max|diff|=3.05e-05 OK
+  NR=32  ( 32) NG=272  waves=1 rounds=1   WGM=4   max|diff|=3.05e-05 OK
+  NR=32* ( 32) NG=272  waves=1 rounds=1   WGM=4   max|diff|=3.05e-05 OK
+  pass 0: order ['T', '32', '32*']
+  pass 1: order ['32', '32*', 'T']
+  pass 2: order ['32*', 'T', '32']
+  pass 3: order ['T', '32', '32*']
+  pass 4: order ['32', '32*', 'T']
+  pass 5: order ['32*', 'T', '32']
+  pass 6: order ['T', '32', '32*']
+  pass 7: order ['32', '32*', 'T']
+  pass 8: order ['32*', 'T', '32']
+  pass 9: order ['T', '32', '32*']
+  pass 10: order ['32', '32*', 'T']
+  pass 11: order ['32*', 'T', '32']
+  --------------------------------------------------------------------------------------------
+     NR   NG  wav  rnd  WGM      best    median  spread%    d_best     d_med  vs32_b%  vs32_m%
+      T  272    1    1    4    197.40    198.02     0.68    196.84    197.36    -2.64    -2.75
+     32  272    1    1    4    202.76    203.61     0.58    202.14    203.06     0.00     0.00
+    32*  272    1    1    4    197.98    198.70     0.49    197.40    198.07    -2.36    -2.41
+  NULL ARM FLOOR (NR=32 vs its twin): best 2.41%  median 2.47%   <-- believe nothing below this
+  position residual %% (mean of sample/arm_median-1): 0:-0.06 1:+0.03 2:-0.05
+
+===== shape 5: 8192x4096x14336 bias=1  row=5 256/256/32  gemm_tiles=512 red_tiles=64  iters=50 passes=12 arms=3 =====
+  NR=T   ( 32) NG=272  waves=2 rounds=2   WGM=32  max|diff|=4.88e-04 OK
+  NR=32  ( 32) NG=272  waves=2 rounds=2   WGM=32  max|diff|=4.88e-04 OK
+  NR=32* ( 32) NG=272  waves=2 rounds=2   WGM=32  max|diff|=4.88e-04 OK
+  pass 0: order ['T', '32', '32*']
+  pass 1: order ['32', '32*', 'T']
+  pass 2: order ['32*', 'T', '32']
+  pass 3: order ['T', '32', '32*']
+  pass 4: order ['32', '32*', 'T']
+  pass 5: order ['32*', 'T', '32']
+  pass 6: order ['T', '32', '32*']
+  pass 7: order ['32', '32*', 'T']
+  pass 8: order ['32*', 'T', '32']
+  pass 9: order ['T', '32', '32*']
+  pass 10: order ['32', '32*', 'T']
+  pass 11: order ['32*', 'T', '32']
+  --------------------------------------------------------------------------------------------
+     NR   NG  wav  rnd  WGM      best    median  spread%    d_best     d_med  vs32_b%  vs32_m%
+      T  272    2    2   32    655.29    658.77     1.09    653.96    657.17     0.24     0.52
+     32  272    2    2   32    653.70    655.35     0.73    652.44    653.85     0.00     0.00
+    32*  272    2    2   32    653.57    657.51     0.77    652.20    656.07    -0.02     0.33
+  NULL ARM FLOOR (NR=32 vs its twin): best 0.02%  median 0.33%   <-- believe nothing below this
+  position residual %% (mean of sample/arm_median-1): 0:-0.10 1:-0.01 2:+0.10
+
+===== shape 6: 8192x8192x29568 bias=0  row=6 256/256/32  gemm_tiles=1024 red_tiles=128  iters=25 passes=12 arms=3 =====
+  NR=T   ( 48) NG=256  waves=4 rounds=3   WGM=32  max|diff|=1.22e-04 OK
+  NR=32  ( 32) NG=272  waves=4 rounds=4   WGM=32  max|diff|=1.22e-04 OK
+  NR=32* ( 32) NG=272  waves=4 rounds=4   WGM=32  max|diff|=1.22e-04 OK
+  pass 0: order ['T', '32', '32*']
+  pass 1: order ['32', '32*', 'T']
+  pass 2: order ['32*', 'T', '32']
+  pass 3: order ['T', '32', '32*']
+  pass 4: order ['32', '32*', 'T']
+  pass 5: order ['32*', 'T', '32']
+  pass 6: order ['T', '32', '32*']
+  pass 7: order ['32', '32*', 'T']
+  pass 8: order ['32*', 'T', '32']
+  pass 9: order ['T', '32', '32*']
+  pass 10: order ['32', '32*', 'T']
+  pass 11: order ['32*', 'T', '32']
+  --------------------------------------------------------------------------------------------
+     NR   NG  wav  rnd  WGM      best    median  spread%    d_best     d_med  vs32_b%  vs32_m%
+      T  256    4    3   32   1649.38   1667.22     1.92   1647.10   1663.73    -4.53    -4.33
+     32  272    4    4   32   1727.71   1742.73     2.43   1724.91   1739.73     0.00     0.00
+    32*  272    4    4   32   1656.85   1673.63     1.95   1653.83   1670.86    -4.10    -3.96
+  NULL ARM FLOOR (NR=32 vs its twin): best 4.28%  median 4.13%   <-- believe nothing below this
+  position residual %% (mean of sample/arm_median-1): 0:+0.02 1:+0.35 2:-0.26
+
+================================================================================================================
+UNIFORM-NR CURVE: per-shape best (and median), geomean over the measured shapes
+================================================================================================================
+    NR      shape1      shape2      shape3      shape4      shape5      shape6    geomean  vs NR=32
+---------------------------------------------------------------------------------------------------
+  [best_us]
+     T       63.16       85.58       88.80      197.40      655.29     1649.38     216.30      nan%
+    32       74.61       85.63       89.32      202.76      653.70     1727.71     225.27     0.00%
+   32*       74.85       85.49       88.97      197.98      653.57     1656.85     222.72    -1.13%
+  [median_us]
+     T       63.80       85.74       89.00      198.02      658.77     1667.22     217.51      nan%
+    32       75.38       85.68       89.55      203.61      655.35     1742.73     226.35     0.00%
+   32*       75.24       85.62       89.13      198.70      657.51     1673.63     223.77    -1.14%
+
+PER-SHAPE ARGMIN (screening only, and only trust a pick whose margin exceeds that shape's null floor)
+  shape 1 64x7168x18432        best NR=T    (+18.12% vs 32)   median NR=T    (+18.15%)   null floor 0.32/0.19%  MOVED
+  shape 2 512x4096x12288       best NR=T    (+ 0.07% vs 32)   median NR=32   (+ 0.00%)   null floor 0.16/0.07%  inside floor -> keep 32
+  shape 3 2048x2880x2880       best NR=T    (+ 0.58% vs 32)   median NR=T    (+ 0.62%)   null floor 0.39/0.47%  MOVED
+  shape 4 4096x4096x4096       best NR=T    (+ 2.71% vs 32)   median NR=T    (+ 2.83%)   null floor 2.41/2.47%  MOVED
+  shape 5 8192x4096x14336      best NR=32   (+ 0.00% vs 32)   median NR=32   (+ 0.00%)   null floor 0.02/0.33%  inside floor -> keep 32
+  shape 6 8192x8192x29568      best NR=T    (+ 4.75% vs 32)   median NR=T    (+ 4.53%)   null floor 4.28/4.13%  MOVED
+
+wrote /home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/experiments/exp_13_cta_split/sweep_050614.json

@@ -32,11 +32,27 @@ inline constexpr int cta_threads = CTA_THREADS;
 // at construction and again statically.
 //
 // Reducer-CTA counts were originally carried over verbatim from RadeonFlow's
-// submitted scored values (32/48/48/48/32/8). Sweeping {8,16,24,32,40,48} per
-// shape on this node showed a uniform NR=32 is optimal or within noise on all
-// six, and beats the inherited table by 8.3% on the largest shape
-// (2850.2 -> 2632.1 us at 8192x8192x29568, where the donor value of 8 starves
-// the reduce side). Carrying over a donor's constants was not free.
+// submitted scored values (32/48/48/48/32/8); exp_02 replaced them with a
+// uniform NR=32, worth 8.3% on the largest shape. exp_13 re-swept the axis
+// {4..80} after the retile, the mainloop overlap, the WGM tile order and the
+// release grouping had all moved the balance, and two rows moved.
+//
+// Both roles are strided persistent loops, so what the split buys is not CTAs
+// but ROUNDS: the producer critical path is ceil(gemm_tiles / (304 - NR)) tile
+// waves and the reducer's is ceil(red_tiles / NR). Waves are flat in NR over a
+// wide plateau and then step, which makes the optimum the largest NR that does
+// not add a producer wave:
+//   row 1 (224 tiles, 112 red tiles): 1 wave for all NR <= 80, so producers are
+//     free above 32 while reduce rounds fall 4 -> 2 at NR=56 (112/56 = exactly
+//     2 each). Measured -15.4%. exp_04a is what created this: retiling to
+//     32/64/64 took red_tiles 28 -> 112 and quadrupled the reduce rounds at
+//     NR=32, and the split was never re-swept.
+//   row 6 (1024 tiles, 128 red tiles): NG=256 is exactly 4 balanced waves and
+//     is the LAST split with 4; reduce rounds fall 4 -> 3. Measured -4.9%.
+//     NR=56 costs a fifth wave and is 11% worse.
+// Rows 2-5 are flat: every candidate is inside the null-arm floor of the
+// measuring instrument, so they keep 32. Do not read the flatness as "the axis
+// does not matter" -- it means those rows sit mid-plateau in both roles.
 // ---------------------------------------------------------------------------
 struct shape_key {
     int m, n, k_local;
@@ -51,12 +67,12 @@ struct shape_config {
 struct shape_entry { shape_key key; shape_config cfg; };
 
 inline constexpr std::array<shape_entry, 6> scored_shapes{{
-    {{  64, 7168, 2304, false}, { 32,  64, 64, 32, 1}},
+    {{  64, 7168, 2304, false}, { 32,  64, 64, 56, 1}},
     {{ 512, 4096, 1536,  true}, { 64,  64, 64, 32, 2}},
     {{2048, 2880,  360,  true}, {128, 256, 32, 32, 3}},
     {{4096, 4096,  512, false}, {256, 256, 32, 32, 4}},
     {{8192, 4096, 1792,  true}, {256, 256, 32, 32, 5}},
-    {{8192, 8192, 3696, false}, {256, 256, 32, 32, 6}},
+    {{8192, 8192, 3696, false}, {256, 256, 32, 48, 6}},
 }};
 
 // Generic fallback row (correctness path for every other evaluator-legal

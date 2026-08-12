@@ -1,0 +1,169 @@
+{
+  "splits": [
+    32,
+    48
+  ],
+  "passes": 3,
+  "scale": 0.2,
+  "twin": 32,
+  "curve": {
+    "best_us": {
+      "32": 92.89674460887912,
+      "48": 92.79593825340267,
+      "32*": 91.90335869789124
+    },
+    "median_us": {
+      "32": 93.10781955718996,
+      "48": 93.0897146463394,
+      "32*": 92.62576699256894
+    }
+  },
+  "picks": {
+    "2": {
+      "argmin_best": "48",
+      "gain_best_pct": 0.10863229293625043,
+      "argmin_median": "48",
+      "gain_median_pct": 0.0194488842503171,
+      "null_floor_best_pct": 1.0809027276721799,
+      "null_floor_median_pct": 0.5204303081880499
+    }
+  },
+  "shapes": {
+    "2": {
+      "shape": "2048x2880x2880",
+      "index": 2,
+      "bias": true,
+      "iters": 50,
+      "passes": 3,
+      "plan": {
+        "config_row": 3,
+        "bm": 128,
+        "bn": 256,
+        "bk": 32,
+        "eb": 128,
+        "lrow_count": 2,
+        "col_count": 12,
+        "gemm_tiles": 192,
+        "red_tiles": 24
+      },
+      "arms": {
+        "32": {
+          "nr": 32,
+          "dead": null,
+          "geometry": {
+            "ng": 272,
+            "waves": 1,
+            "rounds": 1,
+            "wgm": 4
+          },
+          "max_abs_diff": 0.00048828125,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 0,
+              "wall_us": 92.89674460887909,
+              "device_us": 91.19751930236816
+            },
+            {
+              "pass": 1,
+              "pos": 2,
+              "wall_us": 94.07341480255127,
+              "device_us": 90.7717227935791
+            },
+            {
+              "pass": 2,
+              "pos": 1,
+              "wall_us": 93.10781955718994,
+              "device_us": 91.17905616760254
+            }
+          ],
+          "best_us": 92.89674460887909,
+          "median_us": 93.10781955718994,
+          "spread_pct": 1.2666430870385028,
+          "device_best_us": 90.7717227935791,
+          "device_median_us": 91.17905616760254
+        },
+        "48": {
+          "nr": 48,
+          "dead": null,
+          "geometry": {
+            "ng": 256,
+            "waves": 1,
+            "rounds": 1,
+            "wgm": 4
+          },
+          "max_abs_diff": 0.00048828125,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 1,
+              "wall_us": 92.79593825340271,
+              "device_us": 91.1935043334961
+            },
+            {
+              "pass": 1,
+              "pos": 0,
+              "wall_us": 93.42007339000702,
+              "device_us": 91.66580200195312
+            },
+            {
+              "pass": 2,
+              "pos": 2,
+              "wall_us": 93.08971464633942,
+              "device_us": 91.21033668518066
+            }
+          ],
+          "best_us": 92.79593825340271,
+          "median_us": 93.08971464633942,
+          "spread_pct": 0.6725888528654678,
+          "device_best_us": 91.1935043334961,
+          "device_median_us": 91.21033668518066
+        },
+        "32*": {
+          "nr": 32,
+          "dead": null,
+          "geometry": {
+            "ng": 272,
+            "waves": 1,
+            "rounds": 1,
+            "wgm": 4
+          },
+          "max_abs_diff": 0.00048828125,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 2,
+              "wall_us": 92.62576699256897,
+              "device_us": 90.52798271179199
+            },
+            {
+              "pass": 1,
+              "pos": 1,
+              "wall_us": 91.90335869789124,
+              "device_us": 90.38204193115234
+            },
+            {
+              "pass": 2,
+              "pos": 0,
+              "wall_us": 92.7569717168808,
+              "device_us": 91.04915618896484
+            }
+          ],
+          "best_us": 91.90335869789124,
+          "median_us": 92.62576699256897,
+          "spread_pct": 0.9288159117183054,
+          "device_best_us": 90.38204193115234,
+          "device_median_us": 90.52798271179199
+        }
+      },
+      "null_floor_best_pct": 1.0809027276721799,
+      "null_floor_median_pct": 0.5204303081880499
+    }
+  }
+}

@@ -1,0 +1,35 @@
+E4 re-open: splits=[32, 48] twin=32 arms=3 passes=3 shapes=[3] scale=0.2
+
+===== shape 3: 2048x2880x2880 bias=1  row=3 128/256/32  gemm_tiles=192 red_tiles=24  iters=50 passes=3 arms=3 =====
+  NR=32   NG=272  waves=1 rounds=1   WGM=4   max|diff|=4.88e-04 OK
+  NR=48   NG=256  waves=1 rounds=1   WGM=4   max|diff|=4.88e-04 OK
+  NR=32*  NG=272  waves=1 rounds=1   WGM=4   max|diff|=4.88e-04 OK
+  pass 0: order ['32', '48', '32*']
+  pass 1: order ['48', '32*', '32']
+  pass 2: order ['32*', '32', '48']
+  --------------------------------------------------------------------------------------------
+     NR   NG  wav  rnd  WGM      best    median  spread%    d_best     d_med  vs32_b%  vs32_m%
+     32  272    1    1    4     92.90     93.11     1.27     90.77     91.18     0.00     0.00
+     48  256    1    1    4     92.80     93.09     0.67     91.19     91.21    -0.11    -0.02
+    32*  272    1    1    4     91.90     92.63     0.93     90.38     90.53    -1.07    -0.52
+  NULL ARM FLOOR (NR=32 vs its twin): best 1.08%  median 0.52%   <-- believe nothing below this
+  position residual %% (mean of sample/arm_median-1): 0:+0.09 1:-0.37 2:+0.35
+
+================================================================================================================
+UNIFORM-NR CURVE: per-shape best (and median), geomean over the measured shapes
+================================================================================================================
+    NR      shape3    geomean  vs NR=32
+---------------------------------------
+  [best_us]
+    32       92.90      92.90     0.00%
+    48       92.80      92.80    -0.11%
+   32*       91.90      91.90    -1.07%
+  [median_us]
+    32       93.11      93.11     0.00%
+    48       93.09      93.09    -0.02%
+   32*       92.63      92.63    -0.52%
+
+PER-SHAPE ARGMIN (screening only, and only trust a pick whose margin exceeds that shape's null floor)
+  shape 3 2048x2880x2880       best NR=48   (+ 0.11% vs 32)   median NR=48   (+ 0.02%)   null floor 1.08/0.52%  inside floor -> keep 32
+
+wrote /home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/experiments/exp_13_cta_split/sweep_045135.json
