@@ -5,7 +5,7 @@
 set -uo pipefail
 cd "$HOME/overnight-scratch" || exit 1
 # Control FIRST. Edit as batches land (nsh.ps1 forwards no arguments).
-TAGS="e26_m0a e26_m4 e26_m1"
+TAGS="e26_m0a e26_m4 e26_m1 e26_m1b e26_m5 e26_m0b"
 python3 - $TAGS <<'PY'
 import csv, math, sys
 
@@ -67,9 +67,16 @@ COLS = ["ts_M6_us", "ts_M7_us", "ts_combine_us", "ts_planM3toM5_us",
         "ts_servicedrain_us", "ts_m2_to_end_us", "mps_us", "ratio_vs_prod"]
 tags = sys.argv[1:]
 data, meta = {}, {}
+present = []
 for tag in tags:
     rows, bad = [], []
-    with open(f"screen_{tag}.csv") as fh:
+    try:
+        fh = open(f"screen_{tag}.csv")
+    except FileNotFoundError:
+        print(f"(skipping {tag}: no CSV yet)")
+        continue
+    present.append(tag)
+    with fh:
         for r in csv.DictReader(fh):
             if r["status"] != "OK":
                 bad.append(r["status"]); continue
@@ -77,6 +84,7 @@ for tag in tags:
     data[tag] = rows
     meta[tag] = (len(rows), bad, sorted({r["head"] for r in rows}),
                  sorted({r["mps_hsaco"] for r in rows}))
+tags = present
 
 print("=" * 96)
 for tag in tags:
