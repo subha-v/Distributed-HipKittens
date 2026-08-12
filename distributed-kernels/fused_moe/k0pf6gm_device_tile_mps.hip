@@ -117,7 +117,7 @@
 // flipping the arm with -D would silently reuse the previous hsaco. The #ifndef
 // exists only so an out-of-tree genco ISA build can force an arm.
 #ifndef K0P6_MPS_ASCALE_TM
-#define K0P6_MPS_ASCALE_TM 0
+#define K0P6_MPS_ASCALE_TM 1
 #endif
 
 // exp_56 (Option C): per-source SEGMENTED receive layout + chunk-counted release.
