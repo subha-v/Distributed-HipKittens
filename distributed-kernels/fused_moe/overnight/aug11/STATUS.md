@@ -247,6 +247,80 @@ the readiness curve into a 16-step staircase with **15/16 of the combine
 unblocked before M7 ends**, lifting the ceiling from ~17 % to ~85 %. That is
 M-series **M8 / COMET layer-1**, and it is now `exp_30`.
 
+## exp_28 — M6's intensity axis is CLOSED, and it is empty rather than expensive
+
+Three independently measured walls, two of them new tonight:
+
+| wall | constraint | how established |
+|---|---|---|
+| accumulator footprint | `M·N ≤ 59,392` | 256 AGPR; exp_65's durable finding that the wall is *accumulator footprint*, not tile width |
+| **LDS ceiling** | **exactly 163,840 B** on gfx950 (the compiler rejects 163,841); fused law `1,092·M + 50,596` ⇒ **`M ≤ 103.5`** | five-point `N2GM_G` sweep, CPU-only, tonight — **this wall is independent of registers and nobody had recorded it** |
+| `DQ2`/amax group | `N ∈ {256, 512, 1024}` | the 128-column quantization group |
+
+Under all three, **the shipped `(96, 512)` tile is already the
+intensity-maximizing legal shape.** `G=4` needs 190,372 B of LDS — 26,532 B over
+the ceiling — on top of ~88 registers/lane.
+
+### The finding with the widest blast radius
+
+**Time is not proportional to request bytes.** exp_65's paired same-run points:
+a 26 % byte cut bought 9.4 %; a +11 % byte increase cost +27 %. Measured
+marginal rates:
+
+| stream | cycles per byte | why |
+|---|---:|---|
+| weights (B) | **0.0826** | straight to registers |
+| **activations (A)** | **0.407** | global→register→LDS→register with a loop-carried `vmcnt` and two CTA barriers |
+
+**The A stream costs 4.9× per byte.** Any future traffic argument must be
+weighted by stream, not counted in bytes. This retroactively explains exp_65's
+`nc=16` kill (**+866.6 µs of A re-pass tax against −376.4 µs of G
+amortization**, net 1.0023×) and it is now the central risk in exp_30.
+
+### History corrected
+
+- **`G=4` was never built and never timed.** It died on a *standalone* register
+  probe; `exp_63/design.md:136` says literally "G=4: dead … Not attempted."
+  `CLAUDE.md`'s "G3/chunk/K-split" shorthand had been read as a kill on the
+  whole axis.
+- **`G=3` was itself twice a build-gate kill** (512V/256A/7–9 spills, fused) —
+  and shipped later and won. A build-gate kill is not a mechanism kill.
+- **`nc=16` is a genuine measured kill** (exp_65: built, gated, timed).
+- The `M=128, N=384` register-neutral variant: **the register arithmetic was
+  right** — it is −8 registers, not merely neutral, at +18.7 % intensity — but
+  it is refuted three other ways. `kChunks = 2048/192 = 10.67` is not an
+  integer; LDS is 17,860 B over; and fatally, a 192-column chunk **straddles
+  1.5 of M7's 128-column K-groups**, so the straddling group's `amax` would be
+  computed from half its columns in each of two tasks on two CTAs and quantized
+  by two different scales, while M7 applies one `DQ2[row][k]` scalar to all 128.
+  Numerically wrong, not merely awkward.
+
+### The recommendation: exp_27 is a deletion, and its gate is bit-exactness
+
+M6's prologue gathers 96 × 56 FP32 scales from a group-major array with a
+131,072 B stride — **5,376 distinct 64 B lines to deliver 21,504 B**, 344 KB per
+task, 977 MB per epoch, sitting between two `__syncthreads()` where no MFMA can
+cover it. **That layout is manufactured by us, in M5, from `sc_stage`, which is
+already token-major, for a consumer set of exactly one: M6.**
+
+So the fix is a **deletion, not a second transpose** — the one thing exp_27 must
+not get wrong. Point M6 at `sc_stage` and delete M5's transpose. A token-major
+row is 224 B and `224·t mod 64 ∈ {0, 32}` for every `t`, so a row always touches
+exactly 4 lines: **384 lines against 5,376 — 14.0× exactly, 907 MB/epoch
+deleted.** Three independent models agree: **−132 / −134 / −186 µs**, plus
+≈ −17 µs in M5. Zero registers, zero LDS, no protocol.
+
+`sc_dst[k·T_ext + t] ≡ sc_stage[t·56 + k]` **by construction**, so the output
+must be **bit-identical** — a far stronger gate than any tolerance. ~6 build
+hours. Note it composes with exp_24: once exp_24 deletes the `part`-zero half of
+`zero_part_scale_transpose`, exp_27 deletes the other half and the whole loop
+goes.
+
+Also from exp_28: **O2 (task-order swizzle) is predicted 0** and should be
+settled with one `rocprofv3` PMC pass rather than a build; and `num_tiles[0]` /
+`nvi[0]` are unprinted, carrying **±4 % of uncertainty on every M6 number** —
+a 0.5 h instrument worth adding before the M6 experiments are judged.
+
 ## THE MEASUREMENT-INTEGRITY BUG — applies to every number tonight
 
 **`out` is never cleared between epochs, and the campaign feeds identical inputs
