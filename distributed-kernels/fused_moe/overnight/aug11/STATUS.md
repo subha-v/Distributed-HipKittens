@@ -203,6 +203,73 @@ and `ts_combine_us` are predicted to move in **opposite** directions and one
 total cannot separate them. If M6 drops and the combine rises by more, the
 response is to chase the epilogue's register allocation — not to close the axis.
 
+## exp_25 rev2 — the interleave's ceiling is +211 µs. DEMOTED to a wash.
+
+I proposed promoting the M6/M7 interleave over the static split on the grounds
+that the 976 µs epilogue surcharge is irreducible fabric time (392 MiB / 976 µs
+= 421 GB/s = **78.3 % of the 537.6 GB/s ceiling** — both numbers confirmed
+exactly, and the wire time for 392 MiB at 78 % efficiency is 980 µs, matching
+the surcharge almost perfectly). **The arithmetic is right and it refutes the
+conclusion I drew from it.**
+
+**421 GB/s is not a utilization.** The 976 µs is the per-CTA *sum* of epilogue
+phases, not a wall-clock window; a CTA is in an epilogue 36.7 % of the time
+(41.2 of 112.4 µs per task). The bursts are **aligned by construction** — all
+240 CTAs enter M7 within a few µs of each other and every M7 task costs the
+same, so they march in lockstep. That alignment is exactly why exp_21's throttle
+recovered 500 µs. But if the aligned bursts already drive the fabric at 78 % of
+ceiling, then de-aligning them or hiding them under M6 recovers **at most the
+78→100 % gap = +211 µs**, and zero at the efficiency the surcharge already
+implies. **"Irreducible" is an argument against the mechanism, not for it:
+exp_21 already took the reducible part.**
+
+My four claims, adjudicated:
+
+| claim | verdict |
+|---|---|
+| no work-conservation loss | **confirmed as stated, implication refuted.** `A6/256 + A7/240 = 5,248 µs` is exactly today's makespan, so the interleave is 173 µs better than the static split — but no penalty is a **tie at first order**, not a gain. Every µs must come from second-order terms. |
+| F1 becomes irrelevant | **confirmed, with an unpriced cost.** The gate is genuinely gone — but F1's favourable branch was the *static split's* upside (up to −535 µs), and the interleave wins zero first-order regardless. **If M6 is CTA-insensitive, the static split beats the interleave.** Keep F1, demoted from gate to option-pricing. |
+| zero register risk | **confirmed, better-founded than the rev-1 hedge** — `k0p6_dread` is a volatile load whose memory clobber exists precisely to stop descriptors being hoisted into kernel-long registers. New risk is **I-cache**: both MFMA bodies inlined into one hot loop against a 32 KB L1I shared by two CUs. Read it out of the resource report. |
+| still on-mandate | **compliant but hollow.** The pool survives, so the arm is compliant — but under the interleave every compute CTA runs the same mixture, so M6/M7 is a *schedule*, not a role partition. It adds nothing to the mandate's research question; the static split does. |
+
+**Stage 0 turned out to be an identity, and needed no build.** M6's round `m`
+completes exactly tiles `32m…32m+31`, so readiness is linear in M6 progress; CTA
+`bid`'s `i`-th M7 task needs tile `bid/16 + 15i`, giving available `2.133m`
+against required `2.133` — **equal identically**, for any routing. Availability
+is *not* the limiter, so the mechanism is not dead on arrival. But there is
+**exactly zero slack**: the M7 front rides precisely on M6's production front,
+every `a2_done` poll by a CTA slightly ahead of its peers is a real stall, and
+the steady state is both phases finishing together at 5,248 µs — the
+work-conservation answer, re-derived independently.
+
+**L2 does not kill it; the fabric arithmetic demotes it.** Interleaved per-XCD
+footprint is 6.7 MB against 4 MB (M6 improves 10.6 → 5.3, M7's resident 2.64 MB
+`W2` is destroyed), but aggregate demand is 3.67 TB/s — 25 % *below* the
+4.91 TB/s M6 already sustains — so the damage is latency-bounded at
+**−0 to −222 µs**: same magnitude as W1's ceiling, opposite sign.
+
+**Predicted 6,713 µs central (0.870×), band 6,481–6,944 — the 6,685 ratchet sits
+inside the band.** Roughly 60/40 that `k = ∞` (do not interleave) wins the
+sweep. Inverted falsifier worth keeping: **any `k` beating `k = ∞` by more than
+211 µs exceeds the arithmetic ceiling and is a defect signature, not a result.**
+
+Two coordination facts went our way: the interleave's protocol is bit-identical
+to mode 12, so **no new mode number is needed** and none of the seven predicates
+is touched (`k` lives in free config bits, `k = 0` ≡ today); and exp_26's
+`f9bfb4be` already landed both the task start/stride hooks and the
+epilogue-done hook where the `a2_done` fix belongs. Revised build **4–6 h + 2 h
+GPU**, down from 14–19 h. Signoff conditions if it is ever built: the
+`vmcnt(0)` hook ships in the same commit as the fused loop, and **the
+DQ2-NaN-poison arm must be shown to fire on the hook-removed control before any
+sweep number goes upward** — on this harness the most likely way this experiment
+produces a headline number is by being broken.
+
+**Decision: do not build the interleave tonight.** A predicted wash with a hard
++211 µs ceiling loses to exp_27 (−130…−190 µs, bit-exact gate, same 6 h) and to
+exp_30's Stage 0 (~2 h to price a 700–1,000 µs mechanism). **F1 survives as a
+cheap 2-screen measurement** — the task start/stride macros are already live, so
+it now costs ~30 minutes and prices a −535 µs option.
+
 ## exp_29 design verdict — SAFE but readiness-limited; KILLED as specified
 
 The pipelined combine is **provably safe** — the consume-and-zero proof survives
