@@ -333,6 +333,15 @@ only thing the CTA axis is allowed to mean — does not.
 No GPU was touched: `--dry-run` and `--list` both return before any HIP call,
 and nothing in the gate path launches a kernel.
 
+The counts above are the rev-8 grid, kept as the historical record. Rev 10 (the
+revision that produced the data) adds the shape-16 MFMA series — the compute-only
+denominator for the `reserved_only` arm — and drops the two overlay points where
+C equals the grid, which leaves no CTA for the compute role: plan **250**, full
+**309**, still zero duplicate keys. The rev-9 attempt at those C == grid points
+is what surfaced the bug: `tile_rate()` was asked for a zero-CTA probe launch and
+the sweep aborted with `invalid configuration argument` after 40 points. It is now
+refused at grid-build time and guarded loudly inside `tile_rate()`.
+
 ## 9. What runs when the lease arrives, and how long it takes
 
 One command, on the node, after `bash build.sh`:
@@ -352,7 +361,8 @@ bash run_saturation.sh --tier quick        # 9 points, exercises all 3 modes,
 ```
 
 **GPU wall-clock estimate.** Point counts are exact (`--list`): **quick 9, plan
-244, full 303**. Per point: 2 warmup + 5 timed launches at a ~25–40 ms target,
+250, full 309** (E22_SRC_REV 10; C == grid overlay points are not
+measurable and are dropped by uild_grid). Per point: 2 warmup + 5 timed launches at a ~25–40 ms target,
 so ~0.2–0.3 s of kernel time, plus a ~10 µs stamp read-back per rotation. Add
 one-time setup (≈45 GiB allocated + filled across 8 devices, `--tier plan`) and
 13 verify passes.
@@ -360,8 +370,8 @@ one-time setup (≈45 GiB allocated + filled across 8 devices, `--tier plan`) an
 | tier | points | kernel time | + setup/verify | **total** |
 |---|---:|---:|---:|---:|
 | quick | 9 | ~3 s | ~70 s | **~1.5 min** |
-| plan | 244 | ~70 s | ~80 s | **~3 min** |
-| full | 303 | ~95 s | ~85 s | **~3.5 min** |
+| plan | 250 | ~70 s | ~80 s | **~3 min** (measured: 90 s wall, one attempt) |
+| full | 309 | ~95 s | ~85 s | **~3.5 min** |
 
 That is the same order as one 5-rotation MoE campaign (~3.5 min), so no reduced
 grid is needed; the sweep is not the expensive part of the night. The estimate's
@@ -370,9 +380,176 @@ than ~1.3 GB/s, C=1 stretches past 35 ms per launch and the sweep grows by a few
 minutes — bounded, and `--slice`/`--max-seconds` keep every attempt inside its
 timeout either way.
 
-## 10. Verdict
+## 10. Verdict — MEASURED
 
-Deferred. Nothing is measured yet. When the data lands, this section states the
-knee of each curve, the concurrent/isolated ratio at the knee, the four H
-verdicts as computed by `summarize.py` (not re-derived by hand), whether the
-falsifier fired, and the row for `aug11/PLOTS.md`.
+**Provenance.** `2026-08-12T10:45:11Z`, `gbt350-odcdh2-c05-1`, 8× MI350X
+(gfx950), exclusive lease, `rocm-smi --showpids` clean apart from `gpuagent`.
+`E22_SRC_REV 10`, `src_sha256=e3af5f1b…`, `bin_sha256=21fa0039…`, tier `plan`,
+**250/250 points**, 5 rotations + 2 warmup each, one attempt, `rc=0`. Artifacts:
+`saturation.json` (schema `exp22-saturation-1`), `saturation_plan.jsonl` (raw,
+one record per point), `audit.txt` (per-point roofline audit), `run_plan.log`,
+`plan_wrap.log`.
+
+**Data hygiene, checked before anything was interpreted.** 0/250 points above
+device peak. 0/250 with `rel_iqr_pct` above 1% (median 0.05%). All 75
+concurrent/`reserved_only` pairs `cmp_tiles_matched=true`.
+
+### 10.1 The knee of each curve (the figure's deliverable)
+
+Isolated, payload-only (`protocol=0`), per-CTA work. "Rising at C=64" is the
+honest saturation test — `last/prev` is the ratio of the C=64 point to the C=32
+point, and where it is far above 1 the series has **no knee inside the swept
+range** and the 90%-of-plateau number is an artifact of the plateau definition.
+
+| series | knee C | plateau | % of nominal peak | last/prev | reading |
+|---|---:|---:|---:|---:|---|
+| xgmi single mlp4 | **8** | 56.9 GB/s | 74.1% of 76.8 | 1.000 | saturated |
+| xgmi single mlp1 | **16** | 55.5 | 72.2% | 0.993 | saturated |
+| xgmi single mlp8 | **16** | 55.7 | 72.6% | 1.022 | saturated |
+| xgmi rr7 mlp4 | **32** | 355.0 | 66.0% of 537.6 | 1.071 | saturated |
+| xgmi rr7 mlp1 | (64) | — | 61.2% at C=64 | **1.870** | no knee in range |
+| xgmi rr7 mlp8 | (64) | — | 61.3% at C=64 | **1.726** | no knee in range |
+| hbm | **128** | 4,151.9 GB/s | 51.9% of 8,000 | 1.102 | saturated |
+| mfma shape 4 | none | 119.9 TFLOPS | 5.2% of 2,300 | 1.140 | linear to 256 |
+| mfma shape 16 | none | 352.0 | 15.3% | 1.140 | linear to 256 |
+| mfma shape 256 | none | 910.2 | 39.6% | 1.129 | linear to 256 |
+
+The single-link curve, which is the one the megakernel's push path lives on:
+C1=13.4, C2=23.9, C4=42.6, **C8=55.2**, C16=57.3, C32=56.5, C64=56.5 GB/s
+(mlp4). It is linear to 4 CTAs, at 96% of its ceiling by 8, and going from 8 to
+64 pushers — 8× the CTAs — buys **+2.4%** and then nothing.
+
+MFMA has no knee at all: `TFLOPS = k·CTAs` with R² ≥ 0.99989 at all three
+intensities and per-CTA efficiency 0.987–0.998 from 32 to 256 CTAs. This is the
+one-block-per-CU prediction confirmed directly — there is no oversubscription
+regime, so there is no issue-slot contention for a dedicated pool to relieve.
+
+### 10.2 H1–H4 as `summarize.py` computed them (not re-derived by hand)
+
+| hypothesis | verdict | numbers |
+|---|---|---|
+| H1_mlp4 | **REFUTED_NEVER_REACHED**, `falsifier_triggered=true` | best 57.30 GB/s = **74.6%**; gate was 75% |
+| H1_mlp8 | **REFUTED_NEVER_REACHED**, `falsifier_triggered=true` | best 56.33 = 73.3% |
+| H2_mlp4 | **PLATEAU_BELOW_75PCT** | knee 32 CTAs; best 367.2 = 68.3% of 537.6 |
+| H2_mlp1 / H2_mlp8 | PLATEAU_BELOW_75PCT | 61.2% / 61.3%; still rising at C=64 |
+| H3 | **REFUTED_PAYLOAD_RIDES_FREE** | payload-only concurrent/isolated median **0.9951** (n=42); protocol/payload median 0.878 |
+| H4 shape 4 / 16 / 256 | **SUPPORTED** ×3 | R² = 0.99997 / 0.99997 / 0.99989 |
+
+### 10.3 THE FALSIFIER FIRED — reported plainly
+
+The pre-registered falsifier is armed on H1 and **it is set in the artifact**:
+`H1_mlp4.falsifier_triggered = true`, `H1_mlp8.falsifier_triggered = true`.
+The pre-registered text is not satisfiable by this hardware: the gate asks for
+75% of the 76.8 GB/s nominal link = **57.6 GB/s**, and the measured achievable
+ceiling of the single-link push is **56.9–57.3 GB/s (74.1–74.6%)** at *every*
+CTA count from 8 to 64. No CTA count could have passed it. That is a threshold
+I calibrated against a spec number instead of a measured ceiling, and the fired
+falsifier stands in the record as written.
+
+The falsifier's substantive claim is separable and is **answered by the same
+data**: it says that if the pusher needs ≥32 CTAs to saturate, the pool is
+bandwidth-limited rather than protocol-limited and a tiny topology-sized pool
+is the wrong story. Measured, the curve is at 96% of ceiling by **C=8** and
+flat from 8 to 64. So the mechanism claim survives while the numeric gate as
+written fails. Both facts belong in the paper; the honest form is "achievable
+single-link egress is 74% of nominal, and it is reached at 8 CTAs", not a
+restated 75% threshold.
+
+### 10.4 The concurrent arms really were concurrent
+
+Two independent checks, both in the artifact:
+
+1. `overlap_pct_median = 100.0` at **all 75** concurrent points (min = max =
+ 100.0, 0 below 90). This is 100% *by construction* — `cmp_tiles` is fitted so
+ the compute role outlasts the resource role — so on its own it only proves the
+ resource span is contained in the compute span, not that time was shared.
+2. The independent check: `wall < res_span + cmp_span` at **75/75** points, with
+ `(res_span + cmp_span) / wall` = **1.62 min, 1.65 median, 1.82 max**. A
+ sequential execution cannot produce a sum of role spans 1.6–1.8× the wall
+ clock. Concurrency is proven per point, not assumed.
+
+### 10.5 Isolated vs concurrent, and achieved fraction of peak
+
+Payload-only pairs (n=47): **median concurrent/isolated = 0.9951**. Carrying
+the payload alongside a full compute pool costs the payload half a percent.
+Extremes: 0.8158 (`xgmi c4 mlp8 single`, in the pre-knee rising region where
+the curve is also non-monotone) and 1.0344 (`xgmi c4 mlp4 single`). With the
+protocol compiled in, the same ratio falls to a median of 0.878, and the g=16
+probe costs up to 42% (`rr7 c16`: 193.3 → 113.1 GB/s). **exp_20's
+"interference is protocol, not payload" reproduces as a curve.**
+
+Achieved fraction of device peak, best point per mode: single link **74.6%** of
+76.8 GB/s, aggregate egress **68.3%** of 537.6 GB/s, HBM **54.4%** of 8,000
+GB/s (4,353.7 at C=256), MFMA **39.6%** of 2,300 dense bf16 TFLOPS (910.2 at
+shape 256). The MFMA fraction is an LDS-fed occupancy-1 loop, not a peak-seeking
+GEMM; it is the shape the megakernel's compute phases run, which is the point.
+
+### 10.6 Q2 — does dedicating CTAs to communication ever win? No, with one honest caveat
+
+The `reserved_only` arm holds C CTAs idle while the same compute pool runs, so
+it measures the reservation's cost with no payload moving. Decomposition, both
+terms in the same launch family:
+
+- **Reservation cost** — what dedicating C CTAs costs before a byte moves. By
+ H4's measured linearity (R² ≥ 0.99989) this is exactly C/grid: 3.1% at C=8,
+ **6.25% at C=16**, 25% at C=64.
+- **Interference cost** — what letting those same CTAs carry payload costs the
+ co-resident compute pool, against the C-matched idle twin (`cmp_tiles`
+ identical, verified): **median 0.073%** over 75 pairs, and ≤0.23% at every
+ `rr7` point at every C — the fanout the real combine uses.
+
+So at C=16 the choice is 6.25% of the machine for an idle pool versus 0.07% for
+a co-resident one. `reserved_only` delivers 0 GB/s by construction and never
+wins on throughput; on cost it loses by ~90×.
+
+**The honest caveat, and it is a real one.** In 13 of 75 pairs the interference
+term (7.4–14.6%) exceeds the reservation term. Every one is `xgmi` **single**
+fanout at C ∈ {4, 8, 16} — the saturated-single-link corner. The mechanism is
+not fabric contention. Per-CTA compute rate in this dataset is **bimodal**:
+1.607 TF/CTA (n=43) or 1.379 TF/CTA (n=107), a **14.2%** step, and *every*
+nonzero interference number equals that step. In all 13 pairs the idle twin sits
+on the fast side and the traffic-live arm on the slow side; in the 62 pairs
+where both arms sit on the same side, the cost is −0.20% to +10.10% with median
+0.073%. The reading: remote-write traffic can flip a cache-resident compute
+phase into a memory-bound one, and that transition — not the fabric — is the
+14%. It only appears where the target link is already at its ceiling, which is
+the paper's throttle argument restated: past the knee, extra pushers stop
+buying bandwidth and start costing compute.
+
+One same-regime exception is a genuine shared-resource cost and should be quoted
+as such: `hbm c128` (half the grid streaming at 3.9 TB/s) costs the compute pool
+**10.1%**. HBM is the one resource in this ubench where a large payload pool
+measurably taxes compute.
+
+**Known confound, named for the follow-up.** `cmp_tiles` is fitted per point so
+the compute role outlasts the resource role, so the compute footprint grows with
+C and with fanout. Each pair is internally exact, but the interference curve is
+**not comparable across C**. The fix is a fixed-footprint rerun (constant
+`cmp_tiles`, compute role sized by iteration count instead of the resource span),
+which would settle eviction-vs-fabric outright. Until then, quote the per-pair
+numbers and the bimodal step, not the shape of the curve in C.
+
+### 10.7 What this figure supports for the paper
+
+1. Communication resources saturate at a **tiny** CTA count: 8 for one link,
+ 32 for the whole 7-link fabric, versus 256 CTAs of compute capacity. A
+ topology-sized pool is sufficient; a large one is waste.
+2. Compute has **no knee** — linear to 256 CTAs, R² ≥ 0.9999. One block per CU
+ means there is no issue-slot contention for a dedicated communication pool to
+ relieve, which is the AMD-specific premise stated at the top of the plan.
+3. A compute CTA can carry payload for **~0.07%** (≤0.23% on the real fanout),
+ while reserving the same CTAs costs C/grid outright. That is the quantitative
+ basis for "scheduling, not CTA dedication".
+4. The cost that does exist is **protocol** (up to 42% at g=16), not payload —
+ exp_20 reproduced as a curve.
+5. Two named regimes where a payload pool does tax compute: HBM at half the grid
+ (10.1%), and pushing past a saturated link's knee (14.2% cache-regime flip).
+
+### 10.8 Row for `aug11/PLOTS.md`
+
+Not written from here (this agent owns only `exp_22_fig7_saturation/**`); the
+paste-ready row is in `plots_row.md`.
+
+| figure | data file | generating experiment | status |
+|---|---|---|---|
+| Fig 2 (NanoFlow-Fig-7 analog) | `exp_22_fig7_saturation/saturation.json` | exp_22, `E22_SRC_REV 10`, 250 pts | **DONE** |

@@ -148,54 +148,62 @@ def main():
     #                       (concurrent vs its own C-matched reserved_only twin)
     # A dedicated pool is only defensible where the interference term is the
     # larger one; the reservation term is the part a fused design never pays.
-    anchor = [p for p in pts if p["mode"] == "mfma" and p["mlp"] == 16
-              and p["ctas"] == 256]
-    full_rate = (anchor[0].get("cmp_tflops_median") or anchor[0]["value"]) \
-        if anchor else None
+    # The interference term is the only cross-arm ratio that is exactly
+    # tile-matched and same-launch (concurrent vs its own C-matched
+    # reserved_only twin), so it is the primary number. The reservation term is
+    # taken from H4's measured linearity instead of a cross-series ratio: with
+    # TFLOPS linear in CTAs, C reserved CTAs cost exactly C/grid of compute.
+    # The compute-only twin at (grid - C) CTAs is reported as a diagnostic only
+    # -- it runs a different tile footprint than the overlay's compute role, so
+    # twin/reserved != 1 is a footprint artefact, not a reservation cost.
     by_shape16_ctas = {p["ctas"]: (p.get("cmp_tflops_median") or p["value"])
                        for p in pts if p["mode"] == "mfma" and p["mlp"] == 16}
     q2 = derived["q2_dedicated_pool"] = {}
     for pk, arms in sorted(by_pair.items()):
         con, resv = arms.get("concurrent"), arms.get("reserved_only")
-        if not (con and resv and full_rate):
+        if not (con and resv):
             continue
         r_rate = resv.get("cmp_tflops_median") or 0.0
         x_rate = con.get("cmp_tflops_median") or 0.0
         if r_rate <= 0 or x_rate <= 0:
             continue
-        c = resv["ctas"]
-        grid = resv["grid"]
-        reservation = 1.0 - r_rate / full_rate
-        interference = (r_rate - x_rate) / full_rate
+        c, grid = resv["ctas"], resv["grid"]
+        interference = (r_rate - x_rate) / r_rate
+        reservation = c / float(grid)
         twin = by_shape16_ctas.get(grid - c)
         q2[pk] = {
             "ctas_reserved": c,
             "grid": grid,
-            "cmp_tflops_full_grid": round(full_rate, 2),
             "cmp_tflops_reserved_idle": round(r_rate, 2),
             "cmp_tflops_traffic_live": round(x_rate, 2),
-            "reservation_cost_frac": round(reservation, 4),
+            "cmp_tiles_matched": con["cmp_tiles"] == resv["cmp_tiles"],
             "interference_cost_frac": round(interference, 4),
-            "total_dedicated_cost_frac": round(1.0 - x_rate / full_rate, 4),
-            "cta_share_of_grid": round(c / float(grid), 4),
-            # a same-shape compute-only launch at (grid - C) CTAs; if the idle
-            # reservation is honest this should match reserved_only closely
-            "compute_only_twin_tflops": None if twin is None else round(twin, 2),
-            "twin_over_reserved": None if twin is None or r_rate <= 0
-            else round(twin / r_rate, 4),
+            "reservation_cost_frac_from_H4_linearity": round(reservation, 4),
             "interference_exceeds_reservation": interference > reservation,
             "payload_delivered_GBps": con["value"],
+            "payload_per_pct_compute_lost":
+                round(con["value"] / (100.0 * max(interference, 1e-9)), 2),
+            "compute_only_twin_tflops_diagnostic":
+                None if twin is None else round(twin, 2),
+            "twin_over_reserved_diagnostic":
+                None if twin is None else round(twin / r_rate, 4),
         }
     if q2:
         wins = [k for k, v in q2.items() if v["interference_exceeds_reservation"]]
+        matched = [k for k, v in q2.items() if not v["cmp_tiles_matched"]]
         derived["q2_summary"] = {
             "n_pairs": len(q2),
             "n_where_interference_exceeds_reservation": len(wins),
             "pairs_where_dedicating_could_pay": sorted(wins),
-            "median_reservation_cost_frac":
-                round(st.median([v["reservation_cost_frac"] for v in q2.values()]), 4),
+            "pairs_with_unmatched_cmp_tiles": sorted(matched),
             "median_interference_cost_frac":
-                round(st.median([v["interference_cost_frac"] for v in q2.values()]), 4),
+                round(st.median([v["interference_cost_frac"]
+                                 for v in q2.values()]), 4),
+            "reading": ("interference is what a co-resident payload costs the "
+                        "compute pool; reservation (C/grid) is what dedicating "
+                        "the same CTAs costs before any payload moves. "
+                        "Dedicating can only pay where interference exceeds "
+                        "reservation."),
         }
 
     # ---------------- protocol vs payload at the same (ctas, mlp, fanout)
@@ -277,7 +285,7 @@ def main():
                         "verdict reproduces as a curve, and a compute CTA can "
                         "carry payload for free"),
         }
-    for shape in (4, 256):
+    for shape in (4, 16, 256):
         s = series(pts, mode="mfma", mlp=shape, concurrency="isolated")
         if len(s) < 3:
             continue
@@ -350,13 +358,12 @@ def main():
         if derived.get("q2_summary"):
             print("\n--- Q2: dedicated pool cost decomposition ---")
             for k, v in sorted(derived["q2_dedicated_pool"].items()):
-                print("  %-46s C=%-4s reserve=%6.1f%% interfere=%6.1f%% "
-                      "total=%6.1f%% twin/res=%s%s"
+                print("  %-46s C=%-4s interfere=%6.2f%% reserve=%6.2f%% "
+                      "payload=%8.1f tiles_matched=%s%s"
                       % (k, v["ctas_reserved"],
-                         100 * v["reservation_cost_frac"],
                          100 * v["interference_cost_frac"],
-                         100 * v["total_dedicated_cost_frac"],
-                         v["twin_over_reserved"],
+                         100 * v["reservation_cost_frac_from_H4_linearity"],
+                         v["payload_delivered_GBps"], v["cmp_tiles_matched"],
                          "  <<< interference dominates"
                          if v["interference_exceeds_reservation"] else ""))
             print("  summary: %s" % derived["q2_summary"])

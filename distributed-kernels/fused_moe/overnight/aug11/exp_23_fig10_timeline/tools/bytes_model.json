@@ -1,0 +1,77 @@
+{
+  "schema": "exp23-bytes-1",
+  "note": "Per-rank, per-epoch byte totals attributed to each timeline phase. The binner spreads each phase's bytes uniformly over that phase's MEASURED per-CTA intervals, so the strip integral reproduces these totals exactly. Every entry carries a confidence: 'exact_from_shape' means the loop bounds are shape-determined and the number cannot be otherwise; 'estimated' means it depends on routing and needs a device counter to become exact. A plotter MUST hatch or otherwise mark every 'estimated' series. 'null' bytes make the binner leave that phase's GB/s blank rather than invent a number.",
+  "arm": "mps_mega mode 12 (C=16, g=353, flush_rows=16)",
+  "shape": {
+    "T": 4096,
+    "H": 7168,
+    "world": 8,
+    "topk": 8,
+    "bf16_bytes": 2,
+    "row_bytes_bf16": 14336,
+    "T_ext": 32768,
+    "grid_ctas": 256
+  },
+  "routing": {
+    "live_receive_rows": 21504,
+    "live_receive_rows_provenance": "estimated. STATUS.md exp_34 itemises M8's per-row polls at >= 21,504 and the per-row row_ready publishes at ~19,600 for this shape at routing std = 0, which brackets the live receive extent. Replace with sum(s_ns[s]) or the row_remaining popcount from a K0_MPS_DESC_DUMP run to make it exact.",
+    "remote_fraction": 0.875,
+    "remote_fraction_provenance": "estimated. (world-1)/world under uniform ownership; exact only at routing std = 0. At skew this is wrong and the xGMI strip must be re-derived from pushed_count."
+  },
+  "phases": {
+    "dispatch": {
+      "xgmi_bytes": null,
+      "hbm_bytes": null,
+      "confidence": "absent",
+      "provenance": "NOT MODELLED. M1 sends fp8-quantised rows through ProtoLL128 with K0P5_ROW_STRIDE padding and a per-packet flag word; the stride is defined outside the files read for this spec, and the per-peer row counts live in pushed_count. Leaving this null is deliberate: the binner blanks the dispatch GB/s cells instead of publishing a guess. Harvest pushed_count + K0P5_ROW_STRIDE and fill both fields to complete the strip."
+    },
+    "plan": {
+      "xgmi_bytes": 0,
+      "hbm_bytes": null,
+      "confidence": "partial",
+      "provenance": "xGMI is exactly zero: M3-M5 are local sort/scatter/pad plus (in mode 12) the scale transpose with the part zero elided by exp_24-A. HBM is dominated by the scatter and the sc_dst transpose and is not modelled."
+    },
+    "M6": {
+      "xgmi_bytes": 0,
+      "hbm_bytes": null,
+      "confidence": "partial",
+      "provenance": "xGMI exactly zero (GEMM-1 is local). HBM is the A/W streams; exp_28 measured A-stream bytes at 4.9x B-stream cost but the absolute per-tile byte count is not restated here."
+    },
+    "M7": {
+      "xgmi_bytes": 269484032,
+      "hbm_bytes": null,
+      "confidence": "estimated",
+      "provenance": "live_receive_rows * remote_fraction * row_bytes_bf16 = 21504 * 0.875 * 14336. This is the epilogue-carried payload: mode 12's flat_atomic_pk_add_bf16 remote accumulate into the owner's landing slot. Bytes on the wire are the 4-byte packed-add operands, so the payload byte count equals the row bytes; fabric protocol overhead is NOT included, which is one reason the amd-smi cross-check tolerance is +/-20 %."
+    },
+    "service": {
+      "xgmi_bytes": 0,
+      "hbm_bytes": null,
+      "confidence": "exact_from_shape",
+      "provenance": "In mode 12 the service pool moves NO payload: the epilogue carries it. The pool only does readiness bookkeeping (nc_arr arrivals, pushed counts, flush publishes), which is coordination traffic, not payload. Its xGMI payload is exactly zero and that is the whole point of the figure. Coordination bytes are counted separately below."
+    },
+    "m75": {
+      "xgmi_bytes": 0,
+      "hbm_bytes": 0,
+      "confidence": "exact_from_shape",
+      "provenance": "Mode 12 does not enter the M7.5 block at all (mode_is_parity_publish is false and mode_is_coarse is false), so this phase is absent from the mode-12 timeline. It is nonzero only for the mode 0 and mode 14 panels."
+    },
+    "combine": {
+      "xgmi_bytes": 0,
+      "hbm_bytes": 528482304,
+      "confidence": "exact_from_shape",
+      "provenance": "T * (world + 1) * row_bytes_bf16 = 4096 * 9 * 14336. M8 reads one landing-slot row per producer rank per local token (the p loop in k0p6_mps_m8_batch runs over world unconditionally in the slot-address form) and writes one output row. xGMI is exactly zero because mode 12's slot reads are owner-LOCAL -- that substitution is the mechanism the paper claims, so this zero is a load-bearing number, not a placeholder."
+    },
+    "tail": {
+      "xgmi_bytes": 448,
+      "hbm_bytes": 0,
+      "confidence": "exact_from_shape",
+      "provenance": "M9's retired pokes: 7 remote 8-byte publishes by one elected CTA, plus the 7 remote pushed_count/qpush resets are local. 7 * 8 = 56 B of payload; 448 B is the 8-rank total across the epoch as seen by one rank's links in both directions. Negligible; present so the tail strip is not blank."
+    }
+  },
+  "coordination_bytes": {
+    "note": "Counted separately from payload because Finding 1 is that these dominate interference despite being a rounding error in bytes. Do NOT add them into the payload strips; plot them as a separate annotation if wanted.",
+    "mode12_per_rank_per_epoch_ops": 926000,
+    "provenance": "STATUS.md exp_34 itemisation: nc_arr arrivals 535,040 + pushed ~314,000 + per-row row_ready ~19,600 + row_rem self-clean ~19,600 + M8 per-row polls >= 21,504 + event queue with ev_next ~16,720.",
+    "bytes_if_4B_each": 3704000
+  }
+}

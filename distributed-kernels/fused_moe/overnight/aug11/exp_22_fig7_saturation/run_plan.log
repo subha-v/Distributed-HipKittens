@@ -1,0 +1,271 @@
+--- attempt 1/6 (points so far: 0) ---
+[e22] rev=10 world=8 heap=uncached per-device alloc=6.84 GiB threads=256 lds=98304
+[e22] tier=plan points=250 already_done=0 out=/home/subvadla/e22/out/saturation_plan.jsonl rotations=5 warmup=2
+[e22] mfma|c32|m4|na|isolated|p0|g0|n1|rb14336|per_cta|u1      15.02 TFLOPS peak=  0.7% wall= 30521.5us span=     0.0us ovl=  0.0% cmp=   15.0TF
+[e22] mfma|c64|m4|na|isolated|p0|g0|n1|rb14336|per_cta|u1      30.21 TFLOPS peak=  1.3% wall= 30513.6us span=     0.0us ovl=  0.0% cmp=   30.2TF
+[e22] mfma|c96|m4|na|isolated|p0|g0|n1|rb14336|per_cta|u1      45.29 TFLOPS peak=  2.0% wall= 30665.8us span=     0.0us ovl=  0.0% cmp=   45.3TF
+[e22] mfma|c128|m4|na|isolated|p0|g0|n1|rb14336|per_cta|u1     60.32 TFLOPS peak=  2.6% wall= 30502.9us span=     0.0us ovl=  0.0% cmp=   60.3TF
+[e22] mfma|c160|m4|na|isolated|p0|g0|n1|rb14336|per_cta|u1     75.19 TFLOPS peak=  3.3% wall= 30626.5us span=     0.0us ovl=  0.0% cmp=   75.2TF
+[e22] mfma|c192|m4|na|isolated|p0|g0|n1|rb14336|per_cta|u1     90.24 TFLOPS peak=  3.9% wall= 30514.2us span=     0.0us ovl=  0.0% cmp=   90.3TF
+[e22] mfma|c224|m4|na|isolated|p0|g0|n1|rb14336|per_cta|u1    105.10 TFLOPS peak=  4.6% wall= 30315.7us span=     0.0us ovl=  0.0% cmp=  105.1TF
+[e22] mfma|c256|m4|na|isolated|p0|g0|n1|rb14336|per_cta|u1    119.87 TFLOPS peak=  5.2% wall= 30558.8us span=     0.0us ovl=  0.0% cmp=  119.9TF
+[e22] mfma|c32|m16|na|isolated|p0|g0|n1|rb14336|per_cta|u1     44.11 TFLOPS peak=  1.9% wall= 28985.1us span=     0.0us ovl=  0.0% cmp=   44.1TF
+[e22] mfma|c64|m16|na|isolated|p0|g0|n1|rb14336|per_cta|u1     88.53 TFLOPS peak=  3.8% wall= 28909.4us span=     0.0us ovl=  0.0% cmp=   88.5TF
+[e22] mfma|c96|m16|na|isolated|p0|g0|n1|rb14336|per_cta|u1    132.88 TFLOPS peak=  5.8% wall= 28819.5us span=     0.0us ovl=  0.0% cmp=  132.9TF
+[e22] mfma|c128|m16|na|isolated|p0|g0|n1|rb14336|per_cta|u1    177.02 TFLOPS peak=  7.7% wall= 28869.6us span=     0.0us ovl=  0.0% cmp=  177.0TF
+[e22] mfma|c160|m16|na|isolated|p0|g0|n1|rb14336|per_cta|u1    221.27 TFLOPS peak=  9.6% wall= 29039.5us span=     0.0us ovl=  0.0% cmp=  221.3TF
+[e22] mfma|c192|m16|na|isolated|p0|g0|n1|rb14336|per_cta|u1    265.15 TFLOPS peak= 11.5% wall= 28921.9us span=     0.0us ovl=  0.0% cmp=  265.2TF
+[e22] mfma|c224|m16|na|isolated|p0|g0|n1|rb14336|per_cta|u1    308.73 TFLOPS peak= 13.4% wall= 29006.1us span=     0.0us ovl=  0.0% cmp=  308.8TF
+[e22] mfma|c256|m16|na|isolated|p0|g0|n1|rb14336|per_cta|u1    351.98 TFLOPS peak= 15.3% wall= 29076.8us span=     0.0us ovl=  0.0% cmp=  352.0TF
+[e22] mfma|c32|m256|na|isolated|p0|g0|n1|rb14336|per_cta|u1    115.24 TFLOPS peak=  5.0% wall= 25025.6us span=     0.0us ovl=  0.0% cmp=  115.3TF
+[e22] mfma|c64|m256|na|isolated|p0|g0|n1|rb14336|per_cta|u1    229.49 TFLOPS peak= 10.0% wall= 24984.6us span=     0.0us ovl=  0.0% cmp=  229.5TF
+[e22] mfma|c96|m256|na|isolated|p0|g0|n1|rb14336|per_cta|u1    344.18 TFLOPS peak= 15.0% wall= 25045.4us span=     0.0us ovl=  0.0% cmp=  344.3TF
+[e22] mfma|c128|m256|na|isolated|p0|g0|n1|rb14336|per_cta|u1    457.63 TFLOPS peak= 19.9% wall= 25030.6us span=     0.0us ovl=  0.0% cmp=  457.7TF
+[e22] mfma|c160|m256|na|isolated|p0|g0|n1|rb14336|per_cta|u1    573.36 TFLOPS peak= 24.9% wall= 24991.4us span=     0.0us ovl=  0.0% cmp=  573.4TF
+[e22] mfma|c192|m256|na|isolated|p0|g0|n1|rb14336|per_cta|u1    689.70 TFLOPS peak= 30.0% wall= 24931.0us span=     0.0us ovl=  0.0% cmp=  689.8TF
+[e22] mfma|c224|m256|na|isolated|p0|g0|n1|rb14336|per_cta|u1    806.02 TFLOPS peak= 35.0% wall= 24963.1us span=     0.0us ovl=  0.0% cmp=  806.1TF
+[e22] mfma|c256|m256|na|isolated|p0|g0|n1|rb14336|per_cta|u1    910.23 TFLOPS peak= 39.6% wall= 24951.6us span=     0.0us ovl=  0.0% cmp=  910.4TF
+[e22][verify] hbm rows=1024 wrong_elems=0 -> PASS
+[e22] hbm|c8|m0|na|isolated|p0|g0|n1|rb14336|per_cta|u1       351.02 GBps   peak=  4.4% wall= 10315.3us span= 10308.1us ovl=  0.0% cmp=    0.0TF
+[e22] hbm|c16|m0|na|isolated|p0|g0|n1|rb14336|per_cta|u1      701.77 GBps   peak=  8.8% wall= 10319.4us span= 10307.8us ovl=  0.0% cmp=    0.0TF
+[e22] hbm|c32|m0|na|isolated|p0|g0|n1|rb14336|per_cta|u1     1366.67 GBps   peak= 17.1% wall= 10597.8us span= 10589.6us ovl=  0.0% cmp=    0.0TF
+[e22] hbm|c64|m0|na|isolated|p0|g0|n1|rb14336|per_cta|u1     2588.16 GBps   peak= 32.4% wall= 11192.3us span= 11184.8us ovl=  0.0% cmp=    0.0TF
+[e22] hbm|c128|m0|na|isolated|p0|g0|n1|rb14336|per_cta|u1    3950.04 GBps   peak= 49.4% wall= 14666.9us span= 14655.5us ovl=  0.0% cmp=    0.0TF
+[e22] hbm|c256|m0|na|isolated|p0|g0|n1|rb14336|per_cta|u1    4353.66 GBps   peak= 54.4% wall= 26614.3us span= 26605.1us ovl=  0.0% cmp=    0.0TF
+[e22] hbm|c8|m0|na|concurrent|p0|g0|n1|rb14336|per_cta|u1     353.24 GBps   peak=  4.4% wall= 13638.1us span= 10250.6us ovl=100.0% cmp=  397.1TF
+[e22] hbm|c8|m0|na|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 13642.7us span=     0.8us ovl=100.0% cmp=  396.9TF
+[e22] hbm|c16|m0|na|concurrent|p0|g0|n1|rb14336|per_cta|u1    698.12 GBps   peak=  8.7% wall= 13893.3us span= 10373.4us ovl=100.0% cmp=  384.6TF
+[e22] hbm|c16|m0|na|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 13886.3us span=     0.8us ovl=100.0% cmp=  384.7TF
+[e22] hbm|c32|m0|na|concurrent|p0|g0|n1|rb14336|per_cta|u1   1367.26 GBps   peak= 17.1% wall= 14284.0us span= 10593.3us ovl=100.0% cmp=  358.9TF
+[e22] hbm|c32|m0|na|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 14251.4us span=     0.8us ovl= 98.5% cmp=  359.7TF
+[e22] hbm|c64|m0|na|concurrent|p0|g0|n1|rb14336|per_cta|u1   2539.72 GBps   peak= 31.7% wall= 15516.4us span= 11405.7us ovl=100.0% cmp=  298.8TF
+[e22] hbm|c64|m0|na|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 15008.6us span=     0.9us ovl=100.0% cmp=  308.9TF
+[e22] hbm|c128|m0|na|concurrent|p0|g0|n1|rb14336|per_cta|u1   3913.75 GBps   peak= 48.9% wall= 23722.2us span= 14802.9us ovl=100.0% cmp=  170.6TF
+[e22] hbm|c128|m0|na|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 21325.8us span=     0.9us ovl= 95.7% cmp=  189.8TF
+[e22][verify] xgmi mlp=1 fanout=single rb=14336 rows=448 fold=MATCH poison_words=0 -> PASS
+[e22] xgmi|c1|m1|single|isolated|p0|g0|n1|rb14336|per_cta|u1      6.63 GBps   peak=  8.6% wall=  7115.4us span=  7110.5us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c2|m1|single|isolated|p0|g0|n1|rb14336|per_cta|u1     11.00 GBps   peak= 14.3% wall=  8579.1us span=  8574.2us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c4|m1|single|isolated|p0|g0|n1|rb14336|per_cta|u1     21.39 GBps   peak= 27.9% wall=  8819.1us span=  8814.5us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c8|m1|single|isolated|p0|g0|n1|rb14336|per_cta|u1     40.77 GBps   peak= 53.1% wall=  9255.1us span=  9251.0us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c16|m1|single|isolated|p0|g0|n1|rb14336|per_cta|u1     55.14 GBps   peak= 71.8% wall= 13686.0us span= 13682.2us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c32|m1|single|isolated|p0|g0|n1|rb14336|per_cta|u1     55.69 GBps   peak= 72.5% wall= 27102.8us span= 27098.6us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c64|m1|single|isolated|p0|g0|n1|rb14336|per_cta|u1     55.28 GBps   peak= 72.0% wall= 54604.7us span= 54600.7us ovl=  0.0% cmp=    0.0TF
+[e22][verify] xgmi mlp=4 fanout=single rb=14336 rows=1792 fold=MATCH poison_words=0 -> PASS
+[e22] xgmi|c1|m4|single|isolated|p0|g0|n1|rb14336|per_cta|u1     13.44 GBps   peak= 17.5% wall=  3494.3us span=  3490.4us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c2|m4|single|isolated|p0|g0|n1|rb14336|per_cta|u1     23.90 GBps   peak= 31.1% wall=  3930.6us span=  3927.0us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c4|m4|single|isolated|p0|g0|n1|rb14336|per_cta|u1     42.60 GBps   peak= 55.5% wall=  4409.6us span=  4406.0us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c8|m4|single|isolated|p0|g0|n1|rb14336|per_cta|u1     55.20 GBps   peak= 71.9% wall=  6806.9us span=  6793.2us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c16|m4|single|isolated|p0|g0|n1|rb14336|per_cta|u1     57.30 GBps   peak= 74.6% wall= 13113.0us span= 13108.1us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c32|m4|single|isolated|p0|g0|n1|rb14336|per_cta|u1     56.48 GBps   peak= 73.5% wall= 26610.5us span= 26606.3us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c64|m4|single|isolated|p0|g0|n1|rb14336|per_cta|u1     56.49 GBps   peak= 73.6% wall= 53204.0us span= 53191.9us ovl=  0.0% cmp=    0.0TF
+[e22][verify] xgmi mlp=8 fanout=single rb=14336 rows=3584 fold=MATCH poison_words=0 -> PASS
+[e22] xgmi|c1|m8|single|isolated|p0|g0|n1|rb14336|per_cta|u1      8.42 GBps   peak= 11.0% wall=  5532.7us span=  5512.3us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c2|m8|single|isolated|p0|g0|n1|rb14336|per_cta|u1     14.99 GBps   peak= 19.5% wall=  6210.5us span=  6183.9us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c4|m8|single|isolated|p0|g0|n1|rb14336|per_cta|u1     29.14 GBps   peak= 37.9% wall=  6392.3us span=  6388.7us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c8|m8|single|isolated|p0|g0|n1|rb14336|per_cta|u1     41.35 GBps   peak= 53.8% wall=  9008.4us span=  9001.9us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c16|m8|single|isolated|p0|g0|n1|rb14336|per_cta|u1     52.87 GBps   peak= 68.8% wall= 14092.5us span= 14064.2us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c32|m8|single|isolated|p0|g0|n1|rb14336|per_cta|u1     55.13 GBps   peak= 71.8% wall= 27029.2us span= 27022.2us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c64|m8|single|isolated|p0|g0|n1|rb14336|per_cta|u1     56.33 GBps   peak= 73.3% wall= 52905.7us span= 52897.7us ovl=  0.0% cmp=    0.0TF
+[e22][verify] xgmi mlp=1 fanout=rr7 rb=14336 rows=448 fold=MATCH poison_words=0 -> PASS
+[e22] xgmi|c1|m1|rr7|isolated|p0|g0|n1|rb14336|per_cta|u1       5.78 GBps   peak=  1.1% wall= 57144.9us span= 57136.5us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c2|m1|rr7|isolated|p0|g0|n1|rb14336|per_cta|u1      11.22 GBps   peak=  2.1% wall= 58893.8us span= 58889.5us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c4|m1|rr7|isolated|p0|g0|n1|rb14336|per_cta|u1      22.49 GBps   peak=  4.2% wall= 58738.6us span= 58734.4us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c8|m1|rr7|isolated|p0|g0|n1|rb14336|per_cta|u1      44.82 GBps   peak=  8.3% wall= 58953.9us span= 58949.8us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c16|m1|rr7|isolated|p0|g0|n1|rb14336|per_cta|u1     89.23 GBps   peak= 16.6% wall= 59217.9us span= 59212.6us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c32|m1|rr7|isolated|p0|g0|n1|rb14336|per_cta|u1    175.98 GBps   peak= 32.7% wall= 60052.9us span= 60030.0us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c64|m1|rr7|isolated|p0|g0|n1|rb14336|per_cta|u1    329.08 GBps   peak= 61.2% wall= 64228.6us span= 64222.3us ovl=  0.0% cmp=    0.0TF
+[e22][verify] xgmi mlp=4 fanout=rr7 rb=14336 rows=1792 fold=MATCH poison_words=0 -> PASS
+[e22] xgmi|c1|m4|rr7|isolated|p0|g0|n1|rb14336|per_cta|u1      12.49 GBps   peak=  2.3% wall= 26427.3us span= 26423.0us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c2|m4|rr7|isolated|p0|g0|n1|rb14336|per_cta|u1      24.50 GBps   peak=  4.6% wall= 26937.3us span= 26933.3us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c4|m4|rr7|isolated|p0|g0|n1|rb14336|per_cta|u1      48.98 GBps   peak=  9.1% wall= 26944.7us span= 26920.8us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c8|m4|rr7|isolated|p0|g0|n1|rb14336|per_cta|u1      97.95 GBps   peak= 18.2% wall= 26947.7us span= 26943.8us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c16|m4|rr7|isolated|p0|g0|n1|rb14336|per_cta|u1    193.31 GBps   peak= 36.0% wall= 27310.7us span= 27268.6us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c32|m4|rr7|isolated|p0|g0|n1|rb14336|per_cta|u1    342.71 GBps   peak= 63.7% wall= 30809.6us span= 30805.7us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c64|m4|rr7|isolated|p0|g0|n1|rb14336|per_cta|u1    367.21 GBps   peak= 68.3% wall= 57507.6us span= 57501.9us ovl=  0.0% cmp=    0.0TF
+[e22][verify] xgmi mlp=8 fanout=rr7 rb=14336 rows=3584 fold=MATCH poison_words=0 -> PASS
+[e22] xgmi|c1|m8|rr7|isolated|p0|g0|n1|rb14336|per_cta|u1       6.22 GBps   peak=  1.2% wall= 53007.0us span= 52886.0us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c2|m8|rr7|isolated|p0|g0|n1|rb14336|per_cta|u1      11.98 GBps   peak=  2.2% wall= 55086.1us span= 55081.8us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c4|m8|rr7|isolated|p0|g0|n1|rb14336|per_cta|u1      24.20 GBps   peak=  4.5% wall= 54537.0us span= 54410.5us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c8|m8|rr7|isolated|p0|g0|n1|rb14336|per_cta|u1      48.30 GBps   peak=  9.0% wall= 54654.8us span= 54548.1us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c16|m8|rr7|isolated|p0|g0|n1|rb14336|per_cta|u1     95.88 GBps   peak= 17.8% wall= 55059.7us span= 54993.7us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c32|m8|rr7|isolated|p0|g0|n1|rb14336|per_cta|u1    191.02 GBps   peak= 35.5% wall= 55276.0us span= 55230.5us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c64|m8|rr7|isolated|p0|g0|n1|rb14336|per_cta|u1    329.74 GBps   peak= 61.3% wall= 64042.2us span= 64038.0us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c1|m1|single|concurrent|p0|g0|n1|rb14336|per_cta|u1      6.52 GBps   peak=  8.5% wall=  9370.9us span=  7234.3us ovl=100.0% cmp=  408.2TF
+[e22] xgmi|c1|m1|single|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall=  9371.8us span=     0.3us ovl=100.0% cmp=  408.1TF
+[e22] xgmi|c2|m1|single|concurrent|p0|g0|n1|rb14336|per_cta|u1     10.86 GBps   peak= 14.1% wall= 11643.6us span=  8689.2us ovl=100.0% cmp=  403.3TF
+[e22] xgmi|c2|m1|single|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 11537.8us span=     0.6us ovl=100.0% cmp=  407.0TF
+[e22] xgmi|c4|m1|single|concurrent|p0|g0|n1|rb14336|per_cta|u1     21.03 GBps   peak= 27.4% wall= 13786.1us span=  8973.2us ovl=100.0% cmp=  347.5TF
+[e22] xgmi|c4|m1|single|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 11867.9us span=     0.7us ovl=100.0% cmp=  403.7TF
+[e22] xgmi|c8|m1|single|concurrent|p0|g0|n1|rb14336|per_cta|u1     40.51 GBps   peak= 52.7% wall= 14241.1us span=  9314.7us ovl=100.0% cmp=  341.2TF
+[e22] xgmi|c8|m1|single|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 12232.2us span=     0.8us ovl=100.0% cmp=  397.2TF
+[e22] xgmi|c16|m1|single|concurrent|p0|g0|n1|rb14336|per_cta|u1     55.08 GBps   peak= 71.7% wall= 21463.5us span= 13701.4us ovl=100.0% cmp=  330.1TF
+[e22] xgmi|c16|m1|single|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 18426.4us span=     0.9us ovl=100.0% cmp=  384.5TF
+[e22] xgmi|c32|m1|single|concurrent|p0|g0|n1|rb14336|per_cta|u1     55.67 GBps   peak= 72.5% wall= 42474.2us span= 27113.7us ovl=100.0% cmp=  308.6TF
+[e22] xgmi|c32|m1|single|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 42460.8us span=     0.9us ovl=100.0% cmp=  308.7TF
+[e22] xgmi|c64|m1|single|concurrent|p0|g0|n1|rb14336|per_cta|u1     55.37 GBps   peak= 72.1% wall= 85502.4us span= 54520.3us ovl=100.0% cmp=  264.5TF
+[e22] xgmi|c64|m1|single|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 85475.5us span=     0.9us ovl=100.0% cmp=  264.6TF
+[e22] xgmi|c1|m4|single|concurrent|p0|g0|n1|rb14336|per_cta|u1     13.22 GBps   peak= 17.2% wall=  4588.6us span=  3552.5us ovl=100.0% cmp=  409.5TF
+[e22] xgmi|c1|m4|single|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall=  4586.3us span=     0.3us ovl=100.0% cmp=  409.7TF
+[e22] xgmi|c2|m4|single|concurrent|p0|g0|n1|rb14336|per_cta|u1     23.74 GBps   peak= 30.9% wall=  5272.3us span=  3956.3us ovl=100.0% cmp=  408.1TF
+[e22] xgmi|c2|m4|single|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall=  5271.3us span=     0.6us ovl=100.0% cmp=  408.2TF
+[e22] xgmi|c4|m4|single|concurrent|p0|g0|n1|rb14336|per_cta|u1     44.07 GBps   peak= 57.4% wall=  6102.3us span=  4262.9us ovl=100.0% cmp=  392.6TF
+[e22] xgmi|c4|m4|single|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall=  5918.6us span=     0.8us ovl=100.0% cmp=  404.8TF
+[e22] xgmi|c8|m4|single|concurrent|p0|g0|n1|rb14336|per_cta|u1     55.04 GBps   peak= 71.7% wall= 10446.7us span=  6826.6us ovl=100.0% cmp=  342.1TF
+[e22] xgmi|c8|m4|single|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall=  8963.6us span=     0.8us ovl=100.0% cmp=  398.7TF
+[e22] xgmi|c16|m4|single|concurrent|p0|g0|n1|rb14336|per_cta|u1     57.31 GBps   peak= 74.6% wall= 20520.8us span= 13110.9us ovl=100.0% cmp=  330.8TF
+[e22] xgmi|c16|m4|single|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 17590.9us span=     0.8us ovl=100.0% cmp=  385.9TF
+[e22] xgmi|c32|m4|single|concurrent|p0|g0|n1|rb14336|per_cta|u1     56.44 GBps   peak= 73.5% wall= 41594.1us span= 26628.2us ovl=100.0% cmp=  309.4TF
+[e22] xgmi|c32|m4|single|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 41627.4us span=     0.8us ovl=100.0% cmp=  309.2TF
+[e22] xgmi|c64|m4|single|concurrent|p0|g0|n1|rb14336|per_cta|u1     56.52 GBps   peak= 73.6% wall= 83126.1us span= 53184.9us ovl=100.0% cmp=  265.1TF
+[e22] xgmi|c64|m4|single|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 83127.7us span=     0.9us ovl= 96.4% cmp=  265.0TF
+[e22] xgmi|c1|m8|single|concurrent|p0|g0|n1|rb14336|per_cta|u1      8.26 GBps   peak= 10.7% wall=  7257.6us span=  5640.2us ovl=100.0% cmp=  409.9TF
+[e22] xgmi|c1|m8|single|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall=  7255.4us span=     0.4us ovl=100.0% cmp=  410.0TF
+[e22] xgmi|c2|m8|single|concurrent|p0|g0|n1|rb14336|per_cta|u1     15.04 GBps   peak= 19.6% wall=  8324.9us span=  6191.7us ovl=100.0% cmp=  408.3TF
+[e22] xgmi|c2|m8|single|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall=  8327.7us span=     0.6us ovl=100.0% cmp=  408.2TF
+[e22] xgmi|c4|m8|single|concurrent|p0|g0|n1|rb14336|per_cta|u1     23.77 GBps   peak= 31.0% wall=  9555.8us span=  7835.8us ovl=100.0% cmp=  363.4TF
+[e22] xgmi|c4|m8|single|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall=  8570.0us span=     0.7us ovl=100.0% cmp=  405.2TF
+[e22] xgmi|c8|m8|single|concurrent|p0|g0|n1|rb14336|per_cta|u1     41.01 GBps   peak= 53.4% wall= 13837.9us span=  9082.4us ovl=100.0% cmp=  341.7TF
+[e22] xgmi|c8|m8|single|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 11860.6us span=     0.8us ovl=100.0% cmp=  398.7TF
+[e22] xgmi|c16|m8|single|concurrent|p0|g0|n1|rb14336|per_cta|u1     52.84 GBps   peak= 68.8% wall= 22078.4us span= 14100.0us ovl=100.0% cmp=  330.4TF
+[e22] xgmi|c16|m8|single|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 19161.4us span=     0.8us ovl=100.0% cmp=  380.7TF
+[e22] xgmi|c32|m8|single|concurrent|p0|g0|n1|rb14336|per_cta|u1     55.05 GBps   peak= 71.7% wall= 42354.9us span= 27066.3us ovl=100.0% cmp=  308.6TF
+[e22] xgmi|c32|m8|single|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 42319.7us span=     0.8us ovl=100.0% cmp=  308.9TF
+[e22] xgmi|c64|m8|single|concurrent|p0|g0|n1|rb14336|per_cta|u1     56.32 GBps   peak= 73.3% wall= 82624.1us span= 52911.9us ovl=100.0% cmp=  265.2TF
+[e22] xgmi|c64|m8|single|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 82599.9us span=     0.9us ovl= 95.8% cmp=  265.2TF
+[e22] xgmi|c1|m1|rr7|concurrent|p0|g0|n1|rb14336|per_cta|u1      5.72 GBps   peak=  1.1% wall= 87520.9us span= 57727.9us ovl=100.0% cmp=  350.9TF
+[e22] xgmi|c1|m1|rr7|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 87535.7us span=     0.4us ovl=100.0% cmp=  350.9TF
+[e22] xgmi|c2|m1|rr7|concurrent|p0|g0|n1|rb14336|per_cta|u1     11.19 GBps   peak=  2.1% wall= 92054.6us span= 59020.0us ovl=100.0% cmp=  350.1TF
+[e22] xgmi|c2|m1|rr7|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 91980.0us span=     0.6us ovl=100.0% cmp=  350.4TF
+[e22] xgmi|c4|m1|rr7|concurrent|p0|g0|n1|rb14336|per_cta|u1     22.27 GBps   peak=  4.1% wall= 91991.5us span= 59314.1us ovl=100.0% cmp=  346.8TF
+[e22] xgmi|c4|m1|rr7|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 92089.1us span=     0.7us ovl=100.0% cmp=  346.4TF
+[e22] xgmi|c8|m1|rr7|concurrent|p0|g0|n1|rb14336|per_cta|u1     44.45 GBps   peak=  8.3% wall= 90938.6us span= 59433.6us ovl=100.0% cmp=  340.3TF
+[e22] xgmi|c8|m1|rr7|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 90767.3us span=     0.8us ovl=100.0% cmp=  340.9TF
+[e22] xgmi|c16|m1|rr7|concurrent|p0|g0|n1|rb14336|per_cta|u1     88.66 GBps   peak= 16.5% wall= 92782.3us span= 59597.1us ovl=100.0% cmp=  330.4TF
+[e22] xgmi|c16|m1|rr7|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 92764.5us span=     0.8us ovl=100.0% cmp=  330.4TF
+[e22] xgmi|c32|m1|rr7|concurrent|p0|g0|n1|rb14336|per_cta|u1    175.10 GBps   peak= 32.6% wall= 94081.0us span= 60355.1us ovl=100.0% cmp=  308.7TF
+[e22] xgmi|c32|m1|rr7|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 94101.4us span=     0.8us ovl=100.0% cmp=  308.6TF
+[e22] xgmi|c64|m1|rr7|concurrent|p0|g0|n1|rb14336|per_cta|u1    328.34 GBps   peak= 61.1% wall=100326.4us span= 64374.8us ovl=100.0% cmp=  265.1TF
+[e22] xgmi|c64|m1|rr7|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall=100320.8us span=     0.9us ovl=100.0% cmp=  265.1TF
+[e22] xgmi|c1|m4|rr7|concurrent|p0|g0|n1|rb14336|per_cta|u1     12.33 GBps   peak=  2.3% wall= 40468.4us span= 26765.2us ovl=100.0% cmp=  351.0TF
+[e22] xgmi|c1|m4|rr7|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 40414.5us span=     0.3us ovl=100.0% cmp=  351.5TF
+[e22] xgmi|c2|m4|rr7|concurrent|p0|g0|n1|rb14336|per_cta|u1     24.40 GBps   peak=  4.5% wall= 42093.2us span= 27044.5us ovl=100.0% cmp=  350.2TF
+[e22] xgmi|c2|m4|rr7|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 42093.8us span=     0.6us ovl=100.0% cmp=  350.2TF
+[e22] xgmi|c4|m4|rr7|concurrent|p0|g0|n1|rb14336|per_cta|u1     48.71 GBps   peak=  9.1% wall= 42131.7us span= 27095.0us ovl=100.0% cmp=  347.3TF
+[e22] xgmi|c4|m4|rr7|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 42094.7us span=     0.8us ovl=100.0% cmp=  347.6TF
+[e22] xgmi|c8|m4|rr7|concurrent|p0|g0|n1|rb14336|per_cta|u1     97.18 GBps   peak= 18.1% wall= 41348.5us span= 27163.3us ovl=100.0% cmp=  342.1TF
+[e22] xgmi|c8|m4|rr7|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 41352.4us span=     0.9us ovl=100.0% cmp=  342.1TF
+[e22] xgmi|c16|m4|rr7|concurrent|p0|g0|n1|rb14336|per_cta|u1    192.37 GBps   peak= 35.8% wall= 42746.6us span= 27443.1us ovl=100.0% cmp=  330.7TF
+[e22] xgmi|c16|m4|rr7|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 42772.1us span=     0.8us ovl=100.0% cmp=  330.5TF
+[e22] xgmi|c32|m4|rr7|concurrent|p0|g0|n1|rb14336|per_cta|u1    342.20 GBps   peak= 63.7% wall= 48184.2us span= 30855.5us ovl=100.0% cmp=  309.2TF
+[e22] xgmi|c32|m4|rr7|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 48148.9us span=     0.8us ovl=100.0% cmp=  309.5TF
+[e22] xgmi|c64|m4|rr7|concurrent|p0|g0|n1|rb14336|per_cta|u1    367.44 GBps   peak= 68.3% wall= 89743.2us span= 57471.3us ovl=100.0% cmp=  265.4TF
+[e22] xgmi|c64|m4|rr7|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 89662.8us span=     0.8us ovl= 96.2% cmp=  265.6TF
+[e22] xgmi|c1|m8|rr7|concurrent|p0|g0|n1|rb14336|per_cta|u1      6.15 GBps   peak=  1.1% wall= 81146.2us span= 53685.0us ovl=100.0% cmp=  351.1TF
+[e22] xgmi|c1|m8|rr7|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 81180.8us span=     0.3us ovl=100.0% cmp=  350.9TF
+[e22] xgmi|c2|m8|rr7|concurrent|p0|g0|n1|rb14336|per_cta|u1     11.94 GBps   peak=  2.2% wall= 86206.8us span= 55265.5us ovl=100.0% cmp=  349.7TF
+[e22] xgmi|c2|m8|rr7|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 86212.8us span=     0.8us ovl=100.0% cmp=  349.6TF
+[e22] xgmi|c4|m8|rr7|concurrent|p0|g0|n1|rb14336|per_cta|u1     23.81 GBps   peak=  4.4% wall= 85269.2us span= 55440.7us ovl=100.0% cmp=  347.3TF
+[e22] xgmi|c4|m8|rr7|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 85265.4us span=     0.8us ovl= 98.8% cmp=  347.4TF
+[e22] xgmi|c8|m8|rr7|concurrent|p0|g0|n1|rb14336|per_cta|u1     47.69 GBps   peak=  8.9% wall= 83875.5us span= 55355.9us ovl=100.0% cmp=  342.0TF
+[e22] xgmi|c8|m8|rr7|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 83890.9us span=     0.8us ovl=100.0% cmp=  342.0TF
+[e22] xgmi|c16|m8|rr7|concurrent|p0|g0|n1|rb14336|per_cta|u1     95.40 GBps   peak= 17.7% wall= 86168.1us span= 55336.2us ovl=100.0% cmp=  330.7TF
+[e22] xgmi|c16|m8|rr7|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 86114.8us span=     0.7us ovl= 98.6% cmp=  330.9TF
+[e22] xgmi|c32|m8|rr7|concurrent|p0|g0|n1|rb14336|per_cta|u1    190.34 GBps   peak= 35.4% wall= 86577.4us span= 55471.4us ovl=100.0% cmp=  308.8TF
+[e22] xgmi|c32|m8|rr7|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 86468.7us span=     0.8us ovl=100.0% cmp=  309.1TF
+[e22] xgmi|c64|m8|rr7|concurrent|p0|g0|n1|rb14336|per_cta|u1    330.04 GBps   peak= 61.4% wall=100005.8us span= 63984.5us ovl=100.0% cmp=  265.2TF
+[e22] xgmi|c64|m8|rr7|reserved_only|p0|g0|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 99780.1us span=     0.8us ovl= 96.7% cmp=  265.8TF
+[e22][verify] xgmi mlp=4 fanout=single rb=14336 rows=1792 fold=MATCH poison_words=0 -> PASS
+[e22] xgmi|c1|m4|single|isolated|p1|g2|n1|rb14336|per_cta|u1     12.12 GBps   peak= 15.8% wall=  3875.7us span=  3871.7us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c1|m4|single|concurrent|p1|g2|n1|rb14336|per_cta|u1     11.92 GBps   peak= 15.5% wall=  5083.8us span=  3938.4us ovl=100.0% cmp=  410.0TF
+[e22] xgmi|c1|m4|single|reserved_only|p1|g2|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall=  5083.1us span=     0.3us ovl=100.0% cmp=  410.1TF
+[e22] xgmi|c1|m4|single|isolated|p1|g16|n1|rb14336|per_cta|u1      8.00 GBps   peak= 10.4% wall=  5867.5us span=  5863.4us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c1|m4|single|concurrent|p1|g16|n1|rb14336|per_cta|u1      7.76 GBps   peak= 10.1% wall=  7697.8us span=  6051.6us ovl=100.0% cmp=  409.8TF
+[e22] xgmi|c1|m4|single|reserved_only|p1|g16|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall=  7690.0us span=     0.4us ovl=100.0% cmp=  410.2TF
+[e22] xgmi|c2|m4|single|isolated|p1|g2|n1|rb14336|per_cta|u1     21.83 GBps   peak= 28.4% wall=  4302.0us span=  4298.3us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c2|m4|single|concurrent|p1|g2|n1|rb14336|per_cta|u1     21.49 GBps   peak= 28.0% wall=  5768.0us span=  4371.6us ovl=100.0% cmp=  408.4TF
+[e22] xgmi|c2|m4|single|reserved_only|p1|g2|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall=  5762.2us span=     0.7us ovl=100.0% cmp=  408.8TF
+[e22] xgmi|c2|m4|single|isolated|p1|g16|n1|rb14336|per_cta|u1     14.95 GBps   peak= 19.5% wall=  6282.5us span=  6278.8us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c2|m4|single|concurrent|p1|g16|n1|rb14336|per_cta|u1     14.49 GBps   peak= 18.9% wall=  8463.8us span=  6481.5us ovl=100.0% cmp=  406.3TF
+[e22] xgmi|c2|m4|single|reserved_only|p1|g16|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall=  8413.2us span=     0.6us ovl=100.0% cmp=  408.7TF
+[e22] xgmi|c4|m4|single|isolated|p1|g2|n1|rb14336|per_cta|u1     40.08 GBps   peak= 52.2% wall=  4686.7us span=  4683.1us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c4|m4|single|concurrent|p1|g2|n1|rb14336|per_cta|u1     40.29 GBps   peak= 52.5% wall=  6784.3us span=  4662.4us ovl=100.0% cmp=  375.3TF
+[e22] xgmi|c4|m4|single|reserved_only|p1|g2|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall=  6279.3us span=     0.8us ovl=100.0% cmp=  405.5TF
+[e22] xgmi|c4|m4|single|isolated|p1|g16|n1|rb14336|per_cta|u1     28.75 GBps   peak= 37.4% wall=  6535.2us span=  6531.5us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c4|m4|single|concurrent|p1|g16|n1|rb14336|per_cta|u1     27.13 GBps   peak= 35.3% wall=  9868.7us span=  6924.4us ovl=100.0% cmp=  359.7TF
+[e22] xgmi|c4|m4|single|reserved_only|p1|g16|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall=  8749.4us span=     0.7us ovl=100.0% cmp=  405.8TF
+[e22] xgmi|c8|m4|single|isolated|p1|g2|n1|rb14336|per_cta|u1     52.88 GBps   peak= 68.8% wall=  7105.7us span=  7102.1us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c8|m4|single|concurrent|p1|g2|n1|rb14336|per_cta|u1     52.78 GBps   peak= 68.7% wall= 10937.4us span=  7118.5us ovl=100.0% cmp=  341.1TF
+[e22] xgmi|c8|m4|single|reserved_only|p1|g2|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall=  9355.3us span=     0.9us ovl=100.0% cmp=  398.8TF
+[e22] xgmi|c8|m4|single|isolated|p1|g16|n1|rb14336|per_cta|u1     43.74 GBps   peak= 57.0% wall=  8589.8us span=  8586.2us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c8|m4|single|concurrent|p1|g16|n1|rb14336|per_cta|u1     42.80 GBps   peak= 55.7% wall= 13233.0us span=  8778.3us ovl=100.0% cmp=  340.8TF
+[e22] xgmi|c8|m4|single|reserved_only|p1|g16|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 11303.0us span=     0.9us ovl=100.0% cmp=  399.0TF
+[e22] xgmi|c16|m4|single|isolated|p1|g2|n1|rb14336|per_cta|u1     55.66 GBps   peak= 72.5% wall= 13500.2us span= 13496.6us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c16|m4|single|concurrent|p1|g2|n1|rb14336|per_cta|u1     55.57 GBps   peak= 72.4% wall= 21086.8us span= 13521.9us ovl=100.0% cmp=  331.4TF
+[e22] xgmi|c16|m4|single|reserved_only|p1|g2|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 18105.7us span=     0.8us ovl=100.0% cmp=  386.0TF
+[e22] xgmi|c16|m4|single|isolated|p1|g16|n1|rb14336|per_cta|u1     51.39 GBps   peak= 66.9% wall= 14621.8us span= 14618.3us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c16|m4|single|concurrent|p1|g16|n1|rb14336|per_cta|u1     50.57 GBps   peak= 65.8% wall= 22885.4us span= 14860.7us ovl=100.0% cmp=  330.8TF
+[e22] xgmi|c16|m4|single|reserved_only|p1|g16|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 21340.2us span=     0.8us ovl=100.0% cmp=  354.7TF
+[e22] xgmi|c32|m4|single|isolated|p1|g2|n1|rb14336|per_cta|u1     55.76 GBps   peak= 72.6% wall= 26951.0us span= 26947.3us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c32|m4|single|concurrent|p1|g2|n1|rb14336|per_cta|u1     55.68 GBps   peak= 72.5% wall= 42068.2us span= 26991.1us ovl=100.0% cmp=  309.8TF
+[e22] xgmi|c32|m4|single|reserved_only|p1|g2|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 42099.0us span=     0.8us ovl=100.0% cmp=  309.6TF
+[e22] xgmi|c32|m4|single|isolated|p1|g16|n1|rb14336|per_cta|u1     54.40 GBps   peak= 70.8% wall= 27624.1us span= 27620.4us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c32|m4|single|concurrent|p1|g16|n1|rb14336|per_cta|u1     53.83 GBps   peak= 70.1% wall= 43233.1us span= 27921.2us ovl=100.0% cmp=  309.0TF
+[e22] xgmi|c32|m4|single|reserved_only|p1|g16|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 43153.3us span=     0.8us ovl= 98.5% cmp=  309.6TF
+[e22] xgmi|c64|m4|single|isolated|p1|g2|n1|rb14336|per_cta|u1     56.08 GBps   peak= 73.0% wall= 53600.5us span= 53596.6us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c64|m4|single|concurrent|p1|g2|n1|rb14336|per_cta|u1     56.03 GBps   peak= 73.0% wall= 83651.0us span= 53642.2us ovl=100.0% cmp=  265.4TF
+[e22] xgmi|c64|m4|single|reserved_only|p1|g2|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 83550.9us span=     0.9us ovl= 95.8% cmp=  265.7TF
+[e22] xgmi|c64|m4|single|isolated|p1|g16|n1|rb14336|per_cta|u1     55.80 GBps   peak= 72.7% wall= 53863.9us span= 53859.9us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c64|m4|single|concurrent|p1|g16|n1|rb14336|per_cta|u1     55.44 GBps   peak= 72.2% wall= 84111.6us span= 54213.1us ovl=100.0% cmp=  265.2TF
+[e22] xgmi|c64|m4|single|reserved_only|p1|g16|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 83956.0us span=     0.8us ovl= 98.8% cmp=  265.7TF
+[e22][verify] xgmi mlp=4 fanout=rr7 rb=14336 rows=1792 fold=MATCH poison_words=0 -> PASS
+[e22] xgmi|c1|m4|rr7|isolated|p1|g2|n1|rb14336|per_cta|u1      10.93 GBps   peak=  2.0% wall= 30182.0us span= 30177.8us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c1|m4|rr7|concurrent|p1|g2|n1|rb14336|per_cta|u1     10.79 GBps   peak=  2.0% wall= 46073.2us span= 30592.2us ovl=100.0% cmp=  352.1TF
+[e22] xgmi|c1|m4|rr7|reserved_only|p1|g2|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 46056.0us span=     0.3us ovl=100.0% cmp=  352.2TF
+[e22] xgmi|c1|m4|rr7|isolated|p1|g16|n1|rb14336|per_cta|u1      7.25 GBps   peak=  1.3% wall= 45508.8us span= 45501.7us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c1|m4|rr7|concurrent|p1|g16|n1|rb14336|per_cta|u1      6.79 GBps   peak=  1.3% wall= 69073.8us span= 48625.4us ovl=100.0% cmp=  354.1TF
+[e22] xgmi|c1|m4|rr7|reserved_only|p1|g16|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 66348.9us span=     0.4us ovl=100.0% cmp=  368.6TF
+[e22] xgmi|c2|m4|rr7|isolated|p1|g2|n1|rb14336|per_cta|u1      21.56 GBps   peak=  4.0% wall= 30604.3us span= 30600.4us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c2|m4|rr7|concurrent|p1|g2|n1|rb14336|per_cta|u1     21.34 GBps   peak=  4.0% wall= 47764.6us span= 30923.2us ovl=100.0% cmp=  350.6TF
+[e22] xgmi|c2|m4|rr7|reserved_only|p1|g2|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 47854.9us span=     0.8us ovl=100.0% cmp=  349.9TF
+[e22] xgmi|c2|m4|rr7|isolated|p1|g16|n1|rb14336|per_cta|u1     14.55 GBps   peak=  2.7% wall= 45351.5us span= 45347.8us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c2|m4|rr7|concurrent|p1|g16|n1|rb14336|per_cta|u1     13.47 GBps   peak=  2.5% wall= 70802.1us span= 48973.7us ovl=100.0% cmp=  350.5TF
+[e22] xgmi|c2|m4|rr7|reserved_only|p1|g16|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 67519.8us span=     0.6us ovl=100.0% cmp=  367.5TF
+[e22] xgmi|c4|m4|rr7|isolated|p1|g2|n1|rb14336|per_cta|u1      43.24 GBps   peak=  8.0% wall= 30526.2us span= 30522.4us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c4|m4|rr7|concurrent|p1|g2|n1|rb14336|per_cta|u1     42.52 GBps   peak=  7.9% wall= 47755.7us span= 31037.5us ovl=100.0% cmp=  347.1TF
+[e22] xgmi|c4|m4|rr7|reserved_only|p1|g2|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 47850.0us span=     0.8us ovl=100.0% cmp=  346.5TF
+[e22] xgmi|c4|m4|rr7|isolated|p1|g16|n1|rb14336|per_cta|u1     29.33 GBps   peak=  5.5% wall= 45006.7us span= 45002.7us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c4|m4|rr7|concurrent|p1|g16|n1|rb14336|per_cta|u1     27.32 GBps   peak=  5.1% wall= 70408.7us span= 48312.6us ovl=100.0% cmp=  347.1TF
+[e22] xgmi|c4|m4|rr7|reserved_only|p1|g16|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 67108.7us span=     0.7us ovl=100.0% cmp=  364.2TF
+[e22] xgmi|c8|m4|rr7|isolated|p1|g2|n1|rb14336|per_cta|u1      86.26 GBps   peak= 16.0% wall= 30601.0us span= 30597.1us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c8|m4|rr7|concurrent|p1|g2|n1|rb14336|per_cta|u1     85.12 GBps   peak= 15.8% wall= 47004.7us span= 31012.1us ovl=100.0% cmp=  341.7TF
+[e22] xgmi|c8|m4|rr7|reserved_only|p1|g2|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 46981.1us span=     0.8us ovl=100.0% cmp=  341.9TF
+[e22] xgmi|c8|m4|rr7|isolated|p1|g16|n1|rb14336|per_cta|u1     57.07 GBps   peak= 10.6% wall= 46253.9us span= 46247.8us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c8|m4|rr7|concurrent|p1|g16|n1|rb14336|per_cta|u1     53.45 GBps   peak=  9.9% wall= 71051.6us span= 49386.6us ovl=100.0% cmp=  341.7TF
+[e22] xgmi|c8|m4|rr7|reserved_only|p1|g16|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 67631.2us span=     0.9us ovl=100.0% cmp=  359.0TF
+[e22] xgmi|c16|m4|rr7|isolated|p1|g2|n1|rb14336|per_cta|u1    170.65 GBps   peak= 31.7% wall= 30937.1us span= 30933.2us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c16|m4|rr7|concurrent|p1|g2|n1|rb14336|per_cta|u1    167.19 GBps   peak= 31.1% wall= 48397.4us span= 31577.5us ovl=100.0% cmp=  330.9TF
+[e22] xgmi|c16|m4|rr7|reserved_only|p1|g2|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 48317.6us span=     0.8us ovl=100.0% cmp=  331.4TF
+[e22] xgmi|c16|m4|rr7|isolated|p1|g16|n1|rb14336|per_cta|u1    113.10 GBps   peak= 21.0% wall= 46679.2us span= 46675.2us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c16|m4|rr7|concurrent|p1|g16|n1|rb14336|per_cta|u1    105.04 GBps   peak= 19.5% wall= 73092.6us span= 50259.9us ovl=100.0% cmp=  330.6TF
+[e22] xgmi|c16|m4|rr7|reserved_only|p1|g16|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 71392.7us span=     0.8us ovl=100.0% cmp=  338.4TF
+[e22] xgmi|c32|m4|rr7|isolated|p1|g2|n1|rb14336|per_cta|u1    314.78 GBps   peak= 58.6% wall= 33542.8us span= 33538.8us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c32|m4|rr7|concurrent|p1|g2|n1|rb14336|per_cta|u1    307.80 GBps   peak= 57.3% wall= 52426.2us span= 34303.8us ovl=100.0% cmp=  309.4TF
+[e22] xgmi|c32|m4|rr7|reserved_only|p1|g2|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 52019.3us span=     0.8us ovl= 98.7% cmp=  311.8TF
+[e22] xgmi|c32|m4|rr7|isolated|p1|g16|n1|rb14336|per_cta|u1    217.91 GBps   peak= 40.5% wall= 48455.1us span= 48451.1us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c32|m4|rr7|concurrent|p1|g16|n1|rb14336|per_cta|u1    197.59 GBps   peak= 36.8% wall= 76174.9us span= 53436.9us ovl=100.0% cmp=  307.6TF
+[e22] xgmi|c32|m4|rr7|reserved_only|p1|g16|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 75709.8us span=     0.8us ovl= 98.6% cmp=  309.5TF
+[e22] xgmi|c64|m4|rr7|isolated|p1|g2|n1|rb14336|per_cta|u1    357.21 GBps   peak= 66.4% wall= 59116.9us span= 59112.7us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c64|m4|rr7|concurrent|p1|g2|n1|rb14336|per_cta|u1    355.00 GBps   peak= 66.0% wall= 92518.6us span= 59485.4us ovl=100.0% cmp=  264.6TF
+[e22] xgmi|c64|m4|rr7|reserved_only|p1|g2|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall= 92058.6us span=     0.9us ovl=100.0% cmp=  265.9TF
+[e22] xgmi|c64|m4|rr7|isolated|p1|g16|n1|rb14336|per_cta|u1    301.65 GBps   peak= 56.1% wall= 70007.0us span= 70002.7us ovl=  0.0% cmp=    0.0TF
+[e22] xgmi|c64|m4|rr7|concurrent|p1|g16|n1|rb14336|per_cta|u1    286.87 GBps   peak= 53.4% wall=110323.8us span= 73612.3us ovl=100.0% cmp=  262.8TF
+[e22] xgmi|c64|m4|rr7|reserved_only|p1|g16|n1|rb14336|per_cta|u1      0.00 GBps   peak=  0.0% wall=107811.5us span=     0.8us ovl= 95.7% cmp=  268.9TF
+[e22] done: ran 250 point(s), 0 verify failure(s), 70.5 s
+attempt 1 rc=0 points 0 -> 250
+wrote /home/subvadla/e22/out/saturation.json (250 points)
+--- attempt 2/6 (points so far: 250) ---
+[e22] rev=10 world=8 heap=uncached per-device alloc=6.84 GiB threads=256 lds=98304
+[e22] tier=plan points=250 already_done=250 out=/home/subvadla/e22/out/saturation_plan.jsonl rotations=5 warmup=2
+[e22] done: ran 0 point(s), 0 verify failure(s), 0.0 s
+attempt 2 rc=0 points 250 -> 250
+wrote /home/subvadla/e22/out/saturation.json (250 points)

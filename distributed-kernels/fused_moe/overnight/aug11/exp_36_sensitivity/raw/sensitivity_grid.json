@@ -1,0 +1,3715 @@
+{
+ "schema_version": "exp36.1",
+ "generated_utc": "2026-08-12T12:34:41Z",
+ "experiment": "exp_36 sensitivity sweep (paper Fig 7 / Q5)",
+ "commit": "b5215081b87cf6ba0619255cef87288e081903d3",
+ "node": "gbt350-odcdh2-c05-1 (8x MI350X, gfx950)",
+ "harness": "k0_fused_moe/benchmarks/mok_synthetic_prefill, arms production,pf6gm_mega,mps_mega",
+ "driver": "$HOME/e36/rc_T.sh -- a sed-derived copy of run_campaign.sh whose ONLY delta is that the five shape env vars (K0_T, K0_T_LOC_MAX, K0_PADMAX, K0_MAXTOK, K0_MAXTOK_PROD) are parameterised. At T=4096 its defaults reproduce the hard-wired values exactly, so the T=4096 rows are directly comparable to every other measurement tonight.",
+ "units": {
+  "p50_us": "microseconds, summary.json arm_p50_us[arm].median (median over processes of the rank-max p50)",
+  "phase_stamps": "microseconds, device stamps from the FINAL SOAK EPOCH (1 tick = 0.01 us); they do not sum to p50_us",
+  "route_std_measured": "coefficient of variation of the number of (token,expert) assignments landing on each destination rank, summed over all 8 source ranks -- the load skew the transport sees"
+ },
+ "caveats": [
+  "The requested routing-std axis (0 / 0.032 / 0.05) is not a knob that exists in this harness at prefill. Rows for it carry status=unreachable_by_harness with the exact refusal.",
+  "The requested T axis collapses to a single feasible point. T<=512 is refused by a host guard; T=1024 and T=2048 run but BOTH megakernel arms produce wrong output (mps_mega writes nothing on 7 of 8 ranks), so no timing from those shapes is admissible. T=4096 is the only shape where the kernel is correct.",
+  "Screens (1 warmup / 1 timed / 1 process) rank against production only; 1 sigma on ratio_vs_production is 0.52% and the smallest callable single-screen delta is 2%. Only campaign rows (measurement=campaign, 5 processes, 500 warmup / 100 timed) are headline numbers.",
+  "Every point carries timestamps=1 in K0_MPS_CFG so that all rows are internally paired; the ratchet numbers quoted elsewhere tonight were taken the same way.",
+  "K0_MPS_SOAK_ITERS was left at 600 everywhere; no tolerance, shape, iteration count or warmup was altered to make a number look better."
+ ],
+ "points": [
+  {
+   "T": 1024,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 1234,
+   "route_std_requested": null,
+   "route_std_measured": 0.008615474983821475,
+   "route_dest_load": [
+    8270,
+    8110,
+    8132,
+    8186,
+    8146,
+    8301,
+    8127,
+    8264
+   ],
+   "config": "C=16,g=353,mode=12,flush_rows=16,timestamps=1",
+   "C": 16,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "throttle_enabled": true,
+   "throttle_depth": 4,
+   "capacity_mode": "pinned_at_T4096",
+   "shape": {
+    "T": 1024,
+    "T_LOC_MAX": 40960,
+    "PADMAX": 263136,
+    "MAXTOK": 4096,
+    "MAXTOK_PROD": 4096
+   },
+   "status": "failed",
+   "error": "both megakernel arms fail the numeric output gate: mps_mega leaves 7 of 8 ranks' outputs entirely unwritten (7,340,032 = T*H poison survivors per rank), pf6gm_mega returns wrong values (max_abs=1.71, relative=0.846). production passes (max_abs=0.023). pperr=0 throughout.",
+   "measurement": "screen",
+   "n_campaigns": 0,
+   "n_processes": null,
+   "p50_us": null,
+   "production_p50_us_same_run": null,
+   "pf6gm_p50_us_same_run": null,
+   "ratio_vs_production": null,
+   "ratio_vs_pf6gm": null,
+   "spin_success_max": null,
+   "spin_fail_max": null,
+   "phase_stamps": null,
+   "gates_green": false,
+   "gates": {
+    "mok_gate": {
+     "production": {
+      "max_abs": 0.023438,
+      "relative": 0.005669,
+      "passed": true
+     },
+     "pf6gm_mega": {
+      "max_abs": 1.710938,
+      "relative": 0.846196,
+      "passed": false
+     }
+    },
+    "control_fails": true,
+    "soak": null,
+    "pperr_max": 0,
+    "poison_survivors_max": 0,
+    "poison_selftest": {
+     "pf6gm_mega": true,
+     "mps_mega": true
+    },
+    "eager": {
+     "status": "blocked_pre_timing_mok_correctness",
+     "gate_ok": false
+    }
+   },
+   "raw": {
+    "tag": "e36T1024",
+    "outdir": "1_C16g353mode12flush_rows16timestamps1_20260812T111515Z",
+    "log": "e36T1024_1_C16g353mode12flush_rows16timestamps1_20260812T111515Z.log"
+   }
+  },
+  {
+   "T": 1024,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 1234,
+   "route_std_requested": null,
+   "route_std_measured": 0.008618717337941334,
+   "route_dest_load": [
+    8270,
+    8110,
+    8131,
+    8186,
+    8147,
+    8301,
+    8127,
+    8264
+   ],
+   "config": "C=16,g=97,mode=12,flush_rows=16,timestamps=1",
+   "C": 16,
+   "g": 97,
+   "mode": 12,
+   "flush_rows": 16,
+   "throttle_enabled": true,
+   "throttle_depth": 8,
+   "capacity_mode": "pinned_at_T4096",
+   "shape": {
+    "T": 1024,
+    "T_LOC_MAX": 40960,
+    "PADMAX": 263136,
+    "MAXTOK": 4096,
+    "MAXTOK_PROD": 4096
+   },
+   "status": "failed",
+   "error": "both megakernel arms fail the numeric output gate: mps_mega leaves 7 of 8 ranks' outputs entirely unwritten (7,340,032 = T*H poison survivors per rank), pf6gm_mega returns wrong values (max_abs=1.71, relative=0.846). production passes (max_abs=0.023). pperr=0 throughout.",
+   "measurement": "screen",
+   "n_campaigns": 0,
+   "n_processes": null,
+   "p50_us": null,
+   "production_p50_us_same_run": null,
+   "pf6gm_p50_us_same_run": null,
+   "ratio_vs_production": null,
+   "ratio_vs_pf6gm": null,
+   "spin_success_max": null,
+   "spin_fail_max": null,
+   "phase_stamps": null,
+   "gates_green": false,
+   "gates": {
+    "mok_gate": {
+     "production": {
+      "max_abs": 0.023438,
+      "relative": 0.005793,
+      "passed": true
+     },
+     "pf6gm_mega": {
+      "max_abs": 1.71875,
+      "relative": 0.844912,
+      "passed": false
+     }
+    },
+    "control_fails": true,
+    "soak": null,
+    "pperr_max": 0,
+    "poison_survivors_max": 0,
+    "poison_selftest": {
+     "pf6gm_mega": true,
+     "mps_mega": true
+    },
+    "eager": {
+     "status": "blocked_pre_timing_mok_correctness",
+     "gate_ok": false
+    }
+   },
+   "raw": {
+    "tag": "e36T1024",
+    "outdir": "2_C16g97mode12flush_rows16timestamps1_20260812T111535Z",
+    "log": "e36T1024_2_C16g97mode12flush_rows16timestamps1_20260812T111535Z.log"
+   }
+  },
+  {
+   "T": 1024,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 1234,
+   "route_std_requested": null,
+   "route_std_measured": 0.008615474983821475,
+   "route_dest_load": [
+    8270,
+    8110,
+    8132,
+    8186,
+    8146,
+    8301,
+    8127,
+    8264
+   ],
+   "config": "C=16,g=65,mode=12,flush_rows=16,timestamps=1",
+   "C": 16,
+   "g": 65,
+   "mode": 12,
+   "flush_rows": 16,
+   "throttle_enabled": false,
+   "throttle_depth": null,
+   "capacity_mode": "pinned_at_T4096",
+   "shape": {
+    "T": 1024,
+    "T_LOC_MAX": 40960,
+    "PADMAX": 263136,
+    "MAXTOK": 4096,
+    "MAXTOK_PROD": 4096
+   },
+   "status": "failed",
+   "error": "both megakernel arms fail the numeric output gate: mps_mega leaves 7 of 8 ranks' outputs entirely unwritten (7,340,032 = T*H poison survivors per rank), pf6gm_mega returns wrong values (max_abs=1.71, relative=0.846). production passes (max_abs=0.023). pperr=0 throughout.",
+   "measurement": "screen",
+   "n_campaigns": 0,
+   "n_processes": null,
+   "p50_us": null,
+   "production_p50_us_same_run": null,
+   "pf6gm_p50_us_same_run": null,
+   "ratio_vs_production": null,
+   "ratio_vs_pf6gm": null,
+   "spin_success_max": null,
+   "spin_fail_max": null,
+   "phase_stamps": null,
+   "gates_green": false,
+   "gates": {
+    "mok_gate": {
+     "production": {
+      "max_abs": 0.027344,
+      "relative": 0.005694,
+      "passed": true
+     },
+     "pf6gm_mega": {
+      "max_abs": 1.71875,
+      "relative": 0.849481,
+      "passed": false
+     }
+    },
+    "control_fails": true,
+    "soak": null,
+    "pperr_max": 0,
+    "poison_survivors_max": 0,
+    "poison_selftest": {
+     "pf6gm_mega": true,
+     "mps_mega": true
+    },
+    "eager": {
+     "status": "blocked_pre_timing_mok_correctness",
+     "gate_ok": false
+    }
+   },
+   "raw": {
+    "tag": "e36T1024",
+    "outdir": "3_C16g65mode12flush_rows16timestamps1_20260812T111556Z",
+    "log": "e36T1024_3_C16g65mode12flush_rows16timestamps1_20260812T111556Z.log"
+   }
+  },
+  {
+   "T": 1024,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 1234,
+   "route_std_requested": null,
+   "route_std_measured": 0.008618717337941334,
+   "route_dest_load": [
+    8270,
+    8110,
+    8131,
+    8186,
+    8147,
+    8301,
+    8127,
+    8264
+   ],
+   "config": "C=8,g=353,mode=12,flush_rows=16,timestamps=1",
+   "C": 8,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "throttle_enabled": true,
+   "throttle_depth": 4,
+   "capacity_mode": "pinned_at_T4096",
+   "shape": {
+    "T": 1024,
+    "T_LOC_MAX": 40960,
+    "PADMAX": 263136,
+    "MAXTOK": 4096,
+    "MAXTOK_PROD": 4096
+   },
+   "status": "failed",
+   "error": "both megakernel arms fail the numeric output gate: mps_mega leaves 7 of 8 ranks' outputs entirely unwritten (7,340,032 = T*H poison survivors per rank), pf6gm_mega returns wrong values (max_abs=1.71, relative=0.846). production passes (max_abs=0.023). pperr=0 throughout.",
+   "measurement": "screen",
+   "n_campaigns": 0,
+   "n_processes": null,
+   "p50_us": null,
+   "production_p50_us_same_run": null,
+   "pf6gm_p50_us_same_run": null,
+   "ratio_vs_production": null,
+   "ratio_vs_pf6gm": null,
+   "spin_success_max": null,
+   "spin_fail_max": null,
+   "phase_stamps": null,
+   "gates_green": false,
+   "gates": {
+    "mok_gate": {
+     "production": {
+      "max_abs": 0.023438,
+      "relative": 0.005764,
+      "passed": true
+     },
+     "pf6gm_mega": {
+      "max_abs": 1.710938,
+      "relative": 0.850686,
+      "passed": false
+     }
+    },
+    "control_fails": true,
+    "soak": null,
+    "pperr_max": 0,
+    "poison_survivors_max": 0,
+    "poison_selftest": {
+     "pf6gm_mega": true,
+     "mps_mega": true
+    },
+    "eager": {
+     "status": "blocked_pre_timing_mok_correctness",
+     "gate_ok": false
+    }
+   },
+   "raw": {
+    "tag": "e36T1024",
+    "outdir": "4_C8g353mode12flush_rows16timestamps1_20260812T111618Z",
+    "log": "e36T1024_4_C8g353mode12flush_rows16timestamps1_20260812T111618Z.log"
+   }
+  },
+  {
+   "T": 1024,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 1234,
+   "route_std_requested": null,
+   "route_std_measured": 0.008618717337941334,
+   "route_dest_load": [
+    8270,
+    8110,
+    8131,
+    8186,
+    8147,
+    8301,
+    8127,
+    8264
+   ],
+   "config": "C=32,g=353,mode=12,flush_rows=16,timestamps=1",
+   "C": 32,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "throttle_enabled": true,
+   "throttle_depth": 4,
+   "capacity_mode": "pinned_at_T4096",
+   "shape": {
+    "T": 1024,
+    "T_LOC_MAX": 40960,
+    "PADMAX": 263136,
+    "MAXTOK": 4096,
+    "MAXTOK_PROD": 4096
+   },
+   "status": "failed",
+   "error": "both megakernel arms fail the numeric output gate: mps_mega leaves 7 of 8 ranks' outputs entirely unwritten (7,340,032 = T*H poison survivors per rank), pf6gm_mega returns wrong values (max_abs=1.71, relative=0.846). production passes (max_abs=0.023). pperr=0 throughout.",
+   "measurement": "screen",
+   "n_campaigns": 0,
+   "n_processes": null,
+   "p50_us": null,
+   "production_p50_us_same_run": null,
+   "pf6gm_p50_us_same_run": null,
+   "ratio_vs_production": null,
+   "ratio_vs_pf6gm": null,
+   "spin_success_max": null,
+   "spin_fail_max": null,
+   "phase_stamps": null,
+   "gates_green": false,
+   "gates": {
+    "mok_gate": {
+     "production": {
+      "max_abs": 0.023438,
+      "relative": 0.005711,
+      "passed": true
+     },
+     "pf6gm_mega": {
+      "max_abs": 1.710938,
+      "relative": 0.84476,
+      "passed": false
+     }
+    },
+    "control_fails": true,
+    "soak": null,
+    "pperr_max": 0,
+    "poison_survivors_max": 0,
+    "poison_selftest": {
+     "pf6gm_mega": true,
+     "mps_mega": true
+    },
+    "eager": {
+     "status": "blocked_pre_timing_mok_correctness",
+     "gate_ok": false
+    }
+   },
+   "raw": {
+    "tag": "e36T1024",
+    "outdir": "5_C32g353mode12flush_rows16timestamps1_20260812T111638Z",
+    "log": "e36T1024_5_C32g353mode12flush_rows16timestamps1_20260812T111638Z.log"
+   }
+  },
+  {
+   "T": 1024,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 1234,
+   "route_std_requested": null,
+   "route_std_measured": 0.008615474983821475,
+   "route_dest_load": [
+    8270,
+    8110,
+    8132,
+    8186,
+    8146,
+    8301,
+    8127,
+    8264
+   ],
+   "config": "C=64,g=1,mode=2,flush_rows=16,timestamps=1",
+   "C": 64,
+   "g": 1,
+   "mode": 2,
+   "flush_rows": 16,
+   "throttle_enabled": false,
+   "throttle_depth": null,
+   "capacity_mode": "pinned_at_T4096",
+   "shape": {
+    "T": 1024,
+    "T_LOC_MAX": 40960,
+    "PADMAX": 263136,
+    "MAXTOK": 4096,
+    "MAXTOK_PROD": 4096
+   },
+   "status": "failed",
+   "error": "both megakernel arms fail the numeric output gate: mps_mega leaves 7 of 8 ranks' outputs entirely unwritten (7,340,032 = T*H poison survivors per rank), pf6gm_mega returns wrong values (max_abs=1.71, relative=0.846). production passes (max_abs=0.023). pperr=0 throughout.",
+   "measurement": "screen",
+   "n_campaigns": 0,
+   "n_processes": null,
+   "p50_us": null,
+   "production_p50_us_same_run": null,
+   "pf6gm_p50_us_same_run": null,
+   "ratio_vs_production": null,
+   "ratio_vs_pf6gm": null,
+   "spin_success_max": null,
+   "spin_fail_max": null,
+   "phase_stamps": null,
+   "gates_green": false,
+   "gates": {
+    "mok_gate": {
+     "production": {
+      "max_abs": 0.027344,
+      "relative": 0.005749,
+      "passed": true
+     },
+     "pf6gm_mega": {
+      "max_abs": 1.710938,
+      "relative": 0.850505,
+      "passed": false
+     }
+    },
+    "control_fails": true,
+    "soak": null,
+    "pperr_max": 0,
+    "poison_survivors_max": 0,
+    "poison_selftest": {
+     "pf6gm_mega": true,
+     "mps_mega": true
+    },
+    "eager": {
+     "status": "blocked_pre_timing_mok_correctness",
+     "gate_ok": false
+    }
+   },
+   "raw": {
+    "tag": "e36T1024",
+    "outdir": "6_C64g1mode2flush_rows16timestamps1_20260812T111659Z",
+    "log": "e36T1024_6_C64g1mode2flush_rows16timestamps1_20260812T111659Z.log"
+   }
+  },
+  {
+   "T": 1024,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 1234,
+   "route_std_requested": null,
+   "route_std_measured": 0.008618717337941334,
+   "route_dest_load": [
+    8270,
+    8110,
+    8131,
+    8186,
+    8147,
+    8301,
+    8127,
+    8264
+   ],
+   "config": "C=16,g=353,mode=12,flush_rows=16,timestamps=1",
+   "C": 16,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "throttle_enabled": true,
+   "throttle_depth": 4,
+   "capacity_mode": "scaled",
+   "shape": {
+    "T": 1024,
+    "T_LOC_MAX": 10240,
+    "PADMAX": 66528,
+    "MAXTOK": 1024,
+    "MAXTOK_PROD": 1024
+   },
+   "status": "failed",
+   "error": "both megakernel arms fail the numeric output gate: mps_mega leaves 7 of 8 ranks' outputs entirely unwritten (7,340,032 = T*H poison survivors per rank), pf6gm_mega returns wrong values (max_abs=1.71, relative=0.846). production passes (max_abs=0.023). pperr=0 throughout.",
+   "measurement": "screen",
+   "n_campaigns": 0,
+   "n_processes": null,
+   "p50_us": null,
+   "production_p50_us_same_run": null,
+   "pf6gm_p50_us_same_run": null,
+   "ratio_vs_production": null,
+   "ratio_vs_pf6gm": null,
+   "spin_success_max": null,
+   "spin_fail_max": null,
+   "phase_stamps": null,
+   "gates_green": false,
+   "gates": {
+    "mok_gate": {
+     "production": {
+      "max_abs": 0.023438,
+      "relative": 0.005817,
+      "passed": true
+     }
+    },
+    "control_fails": true,
+    "soak": null,
+    "pperr_max": 0,
+    "poison_survivors_max": 0,
+    "poison_selftest": {
+     "pf6gm_mega": true,
+     "mps_mega": true
+    },
+    "eager": {
+     "status": "blocked_pre_timing_mok_correctness",
+     "gate_ok": false
+    }
+   },
+   "raw": {
+    "tag": "e36T1024s",
+    "outdir": "1_C16g353mode12flush_rows16timestamps1_20260812T111938Z",
+    "log": "e36T1024s_1_C16g353mode12flush_rows16timestamps1_20260812T111938Z.log"
+   }
+  },
+  {
+   "T": 2048,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 1234,
+   "route_std_requested": null,
+   "route_std_measured": 0.008047676879779343,
+   "route_dest_load": [
+    16513,
+    16317,
+    16440,
+    16390,
+    16353,
+    16535,
+    16087,
+    16437
+   ],
+   "config": "C=16,g=353,mode=12,flush_rows=16,timestamps=1",
+   "C": 16,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "throttle_enabled": true,
+   "throttle_depth": 4,
+   "capacity_mode": "scaled",
+   "shape": {
+    "T": 2048,
+    "T_LOC_MAX": 20480,
+    "PADMAX": 132064,
+    "MAXTOK": 2048,
+    "MAXTOK_PROD": 2048
+   },
+   "status": "failed",
+   "error": "identical to T=1024: mps_mega leaves 7 of 8 ranks' outputs unwritten (14,680,064 = T*H survivors), pf6gm_mega max_abs=1.81 relative=0.873, production passes. pperr=0.",
+   "measurement": "screen",
+   "n_campaigns": 0,
+   "n_processes": null,
+   "p50_us": null,
+   "production_p50_us_same_run": null,
+   "pf6gm_p50_us_same_run": null,
+   "ratio_vs_production": null,
+   "ratio_vs_pf6gm": null,
+   "spin_success_max": null,
+   "spin_fail_max": null,
+   "phase_stamps": null,
+   "gates_green": false,
+   "gates": {
+    "mok_gate": {
+     "production": {
+      "max_abs": 0.027344,
+      "relative": 0.00581,
+      "passed": true
+     },
+     "pf6gm_mega": {
+      "max_abs": 1.8125,
+      "relative": 0.873071,
+      "passed": false
+     }
+    },
+    "control_fails": true,
+    "soak": null,
+    "pperr_max": 0,
+    "poison_survivors_max": 0,
+    "poison_selftest": {
+     "pf6gm_mega": true,
+     "mps_mega": true
+    },
+    "eager": {
+     "status": "blocked_pre_timing_mok_correctness",
+     "gate_ok": false
+    }
+   },
+   "raw": {
+    "tag": "e36T2048s",
+    "outdir": "1_C16g353mode12flush_rows16timestamps1_20260812T112231Z",
+    "log": "e36T2048s_1_C16g353mode12flush_rows16timestamps1_20260812T112231Z.log"
+   }
+  },
+  {
+   "T": 4096,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 1234,
+   "route_std_requested": null,
+   "route_std_measured": 0.004692666861900916,
+   "route_dest_load": [
+    32936,
+    32803,
+    32602,
+    32533,
+    32836,
+    32904,
+    32601,
+    32929
+   ],
+   "config": "C=16,g=353,mode=12,flush_rows=16,timestamps=1",
+   "C": 16,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "throttle_enabled": true,
+   "throttle_depth": 4,
+   "capacity_mode": "pinned_at_T4096",
+   "shape": {
+    "T": 4096,
+    "T_LOC_MAX": 40960,
+    "PADMAX": 263136,
+    "MAXTOK": 4096,
+    "MAXTOK_PROD": 4096
+   },
+   "status": "ok",
+   "error": null,
+   "measurement": "screen",
+   "n_campaigns": 0,
+   "n_processes": 1,
+   "p50_us": 6565.184116363525,
+   "production_p50_us_same_run": 7840.71683883667,
+   "pf6gm_p50_us_same_run": 6938.868045806885,
+   "ratio_vs_production": 0.8373193741476327,
+   "ratio_vs_pf6gm": 0.9461462695389957,
+   "spin_success_max": 0,
+   "spin_fail_max": 0,
+   "phase_stamps": {
+    "plan": 373.52,
+    "M6": 2444.6,
+    "M7": 2647.65,
+    "combine": 475.63,
+    "planM6": 2818.12,
+    "servicedrain": 2772.79,
+    "m2_to_end": 5941.4
+   },
+   "gates_green": true,
+   "gates": {
+    "mok_gate": {
+     "production": {
+      "max_abs": 0.023438,
+      "relative": 0.00576,
+      "passed": true
+     },
+     "pf6gm_mega": {
+      "max_abs": 0.035156,
+      "relative": 0.008294,
+      "passed": true
+     },
+     "mps_mega": {
+      "max_abs": 0.035156,
+      "relative": 0.008294,
+      "passed": true
+     }
+    },
+    "control_fails": true,
+    "soak": {
+     "completed": 600,
+     "total": 600,
+     "pperr": 0,
+     "poison": 0,
+     "passed": true
+    },
+    "pperr_max": 0,
+    "poison_survivors_max": 0,
+    "poison_selftest": {
+     "pf6gm_mega": true,
+     "mps_mega": true
+    },
+    "eager": {
+     "status": "valid_diagnostic",
+     "gate_ok": true
+    }
+   },
+   "raw": {
+    "tag": "e36T4096",
+    "outdir": "1_C16g353mode12flush_rows16timestamps1_20260812T112516Z",
+    "log": "e36T4096_1_C16g353mode12flush_rows16timestamps1_20260812T112516Z.log"
+   }
+  },
+  {
+   "T": 4096,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 1234,
+   "route_std_requested": null,
+   "route_std_measured": 0.004686883051326504,
+   "route_dest_load": [
+    32936,
+    32803,
+    32603,
+    32533,
+    32835,
+    32904,
+    32601,
+    32929
+   ],
+   "config": "C=16,g=97,mode=12,flush_rows=16,timestamps=1",
+   "C": 16,
+   "g": 97,
+   "mode": 12,
+   "flush_rows": 16,
+   "throttle_enabled": true,
+   "throttle_depth": 8,
+   "capacity_mode": "pinned_at_T4096",
+   "shape": {
+    "T": 4096,
+    "T_LOC_MAX": 40960,
+    "PADMAX": 263136,
+    "MAXTOK": 4096,
+    "MAXTOK_PROD": 4096
+   },
+   "status": "ok",
+   "error": null,
+   "measurement": "screen",
+   "n_campaigns": 0,
+   "n_processes": 1,
+   "p50_us": 6605.739116668701,
+   "production_p50_us_same_run": 7868.116855621338,
+   "pf6gm_p50_us_same_run": 6956.54821395874,
+   "ratio_vs_production": 0.8395578304037595,
+   "ratio_vs_pf6gm": 0.9495713841835928,
+   "spin_success_max": 0,
+   "spin_fail_max": 0,
+   "phase_stamps": {
+    "plan": 375.2,
+    "M6": 2447.53,
+    "M7": 2758.2,
+    "combine": 364.6,
+    "planM6": 2822.73,
+    "servicedrain": 2853.11,
+    "m2_to_end": 5945.53
+   },
+   "gates_green": true,
+   "gates": {
+    "mok_gate": {
+     "production": {
+      "max_abs": 0.03125,
+      "relative": 0.005777,
+      "passed": true
+     },
+     "pf6gm_mega": {
+      "max_abs": 0.035156,
+      "relative": 0.008293,
+      "passed": true
+     },
+     "mps_mega": {
+      "max_abs": 0.035156,
+      "relative": 0.008293,
+      "passed": true
+     }
+    },
+    "control_fails": true,
+    "soak": {
+     "completed": 600,
+     "total": 600,
+     "pperr": 0,
+     "poison": 0,
+     "passed": true
+    },
+    "pperr_max": 0,
+    "poison_survivors_max": 0,
+    "poison_selftest": {
+     "pf6gm_mega": true,
+     "mps_mega": true
+    },
+    "eager": {
+     "status": "valid_diagnostic",
+     "gate_ok": true
+    }
+   },
+   "raw": {
+    "tag": "e36T4096",
+    "outdir": "2_C16g97mode12flush_rows16timestamps1_20260812T112540Z",
+    "log": "e36T4096_2_C16g97mode12flush_rows16timestamps1_20260812T112540Z.log"
+   }
+  },
+  {
+   "T": 4096,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 1234,
+   "route_std_requested": null,
+   "route_std_measured": 0.004692666861900916,
+   "route_dest_load": [
+    32936,
+    32803,
+    32602,
+    32533,
+    32836,
+    32904,
+    32601,
+    32929
+   ],
+   "config": "C=16,g=65,mode=12,flush_rows=16,timestamps=1",
+   "C": 16,
+   "g": 65,
+   "mode": 12,
+   "flush_rows": 16,
+   "throttle_enabled": false,
+   "throttle_depth": null,
+   "capacity_mode": "pinned_at_T4096",
+   "shape": {
+    "T": 4096,
+    "T_LOC_MAX": 40960,
+    "PADMAX": 263136,
+    "MAXTOK": 4096,
+    "MAXTOK_PROD": 4096
+   },
+   "status": "ok",
+   "error": null,
+   "measurement": "screen",
+   "n_campaigns": 0,
+   "n_processes": 1,
+   "p50_us": 7241.910934448242,
+   "production_p50_us_same_run": 7875.795841217041,
+   "pf6gm_p50_us_same_run": 6944.90909576416,
+   "ratio_vs_production": 0.9195148122744069,
+   "ratio_vs_pf6gm": 1.042765403346349,
+   "spin_success_max": 0,
+   "spin_fail_max": 0,
+   "phase_stamps": {
+    "plan": 375.68,
+    "M6": 2475.52,
+    "M7": 3181.76,
+    "combine": 418.31,
+    "planM6": 2851.2,
+    "servicedrain": 3278.87,
+    "m2_to_end": 6451.27
+   },
+   "gates_green": true,
+   "gates": {
+    "mok_gate": {
+     "production": {
+      "max_abs": 0.03125,
+      "relative": 0.005767,
+      "passed": true
+     },
+     "pf6gm_mega": {
+      "max_abs": 0.039062,
+      "relative": 0.008294,
+      "passed": true
+     },
+     "mps_mega": {
+      "max_abs": 0.039062,
+      "relative": 0.008294,
+      "passed": true
+     }
+    },
+    "control_fails": true,
+    "soak": {
+     "completed": 600,
+     "total": 600,
+     "pperr": 0,
+     "poison": 0,
+     "passed": true
+    },
+    "pperr_max": 0,
+    "poison_survivors_max": 0,
+    "poison_selftest": {
+     "pf6gm_mega": true,
+     "mps_mega": true
+    },
+    "eager": {
+     "status": "valid_diagnostic",
+     "gate_ok": true
+    }
+   },
+   "raw": {
+    "tag": "e36T4096",
+    "outdir": "3_C16g65mode12flush_rows16timestamps1_20260812T112604Z",
+    "log": "e36T4096_3_C16g65mode12flush_rows16timestamps1_20260812T112604Z.log"
+   }
+  },
+  {
+   "T": 4096,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 1234,
+   "route_std_requested": null,
+   "route_std_measured": 0.004692666861900916,
+   "route_dest_load": [
+    32936,
+    32803,
+    32602,
+    32533,
+    32836,
+    32904,
+    32601,
+    32929
+   ],
+   "config": "C=8,g=353,mode=12,flush_rows=16,timestamps=1",
+   "C": 8,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "throttle_enabled": true,
+   "throttle_depth": 4,
+   "capacity_mode": "pinned_at_T4096",
+   "shape": {
+    "T": 4096,
+    "T_LOC_MAX": 40960,
+    "PADMAX": 263136,
+    "MAXTOK": 4096,
+    "MAXTOK_PROD": 4096
+   },
+   "status": "ok",
+   "error": null,
+   "measurement": "screen",
+   "n_campaigns": 0,
+   "n_processes": 1,
+   "p50_us": 6719.1481590271,
+   "production_p50_us_same_run": 7850.199222564697,
+   "pf6gm_p50_us_same_run": 6935.589790344238,
+   "ratio_vs_production": 0.8559207185103669,
+   "ratio_vs_pf6gm": 0.9687926134820618,
+   "spin_success_max": 0,
+   "spin_fail_max": 0,
+   "phase_stamps": {
+    "plan": 377.5,
+    "M6": 2454.35,
+    "M7": 2622.36,
+    "combine": 343.87,
+    "planM6": 2831.85,
+    "servicedrain": 2685.89,
+    "m2_to_end": 5798.08
+   },
+   "gates_green": true,
+   "gates": {
+    "mok_gate": {
+     "production": {
+      "max_abs": 0.027344,
+      "relative": 0.005791,
+      "passed": true
+     },
+     "pf6gm_mega": {
+      "max_abs": 0.035156,
+      "relative": 0.008293,
+      "passed": true
+     },
+     "mps_mega": {
+      "max_abs": 0.035156,
+      "relative": 0.008293,
+      "passed": true
+     }
+    },
+    "control_fails": true,
+    "soak": {
+     "completed": 600,
+     "total": 600,
+     "pperr": 0,
+     "poison": 0,
+     "passed": true
+    },
+    "pperr_max": 0,
+    "poison_survivors_max": 0,
+    "poison_selftest": {
+     "pf6gm_mega": true,
+     "mps_mega": true
+    },
+    "eager": {
+     "status": "valid_diagnostic",
+     "gate_ok": true
+    }
+   },
+   "raw": {
+    "tag": "e36T4096",
+    "outdir": "4_C8g353mode12flush_rows16timestamps1_20260812T112629Z",
+    "log": "e36T4096_4_C8g353mode12flush_rows16timestamps1_20260812T112629Z.log"
+   }
+  },
+  {
+   "T": 4096,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 1234,
+   "route_std_requested": null,
+   "route_std_measured": 0.004686883051326504,
+   "route_dest_load": [
+    32936,
+    32803,
+    32603,
+    32533,
+    32835,
+    32904,
+    32601,
+    32929
+   ],
+   "config": "C=32,g=353,mode=12,flush_rows=16,timestamps=1",
+   "C": 32,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "throttle_enabled": true,
+   "throttle_depth": 4,
+   "capacity_mode": "pinned_at_T4096",
+   "shape": {
+    "T": 4096,
+    "T_LOC_MAX": 40960,
+    "PADMAX": 263136,
+    "MAXTOK": 4096,
+    "MAXTOK_PROD": 4096
+   },
+   "status": "ok",
+   "error": null,
+   "measurement": "screen",
+   "n_campaigns": 0,
+   "n_processes": 1,
+   "p50_us": 6766.708850860596,
+   "production_p50_us_same_run": 7840.518951416016,
+   "pf6gm_p50_us_same_run": 6966.58992767334,
+   "ratio_vs_production": 0.8630434914819654,
+   "ratio_vs_pf6gm": 0.9713086203023437,
+   "spin_success_max": 1,
+   "spin_fail_max": 0,
+   "phase_stamps": {
+    "plan": 367.68,
+    "M6": 2462.92,
+    "M7": 3020.76,
+    "combine": 162.43,
+    "planM6": 2830.6,
+    "servicedrain": 3101.68,
+    "m2_to_end": 6013.79
+   },
+   "gates_green": true,
+   "gates": {
+    "mok_gate": {
+     "production": {
+      "max_abs": 0.03125,
+      "relative": 0.005777,
+      "passed": true
+     },
+     "pf6gm_mega": {
+      "max_abs": 0.035156,
+      "relative": 0.008294,
+      "passed": true
+     },
+     "mps_mega": {
+      "max_abs": 0.035156,
+      "relative": 0.008294,
+      "passed": true
+     }
+    },
+    "control_fails": true,
+    "soak": {
+     "completed": 600,
+     "total": 600,
+     "pperr": 0,
+     "poison": 0,
+     "passed": true
+    },
+    "pperr_max": 0,
+    "poison_survivors_max": 0,
+    "poison_selftest": {
+     "pf6gm_mega": true,
+     "mps_mega": true
+    },
+    "eager": {
+     "status": "valid_diagnostic",
+     "gate_ok": true
+    }
+   },
+   "raw": {
+    "tag": "e36T4096",
+    "outdir": "5_C32g353mode12flush_rows16timestamps1_20260812T112654Z",
+    "log": "e36T4096_5_C32g353mode12flush_rows16timestamps1_20260812T112654Z.log"
+   }
+  },
+  {
+   "T": 4096,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 1234,
+   "route_std_requested": null,
+   "route_std_measured": 0.004692666861900916,
+   "route_dest_load": [
+    32936,
+    32803,
+    32602,
+    32533,
+    32836,
+    32904,
+    32601,
+    32929
+   ],
+   "config": "C=64,g=1,mode=2,flush_rows=16,timestamps=1",
+   "C": 64,
+   "g": 1,
+   "mode": 2,
+   "flush_rows": 16,
+   "throttle_enabled": false,
+   "throttle_depth": null,
+   "capacity_mode": "pinned_at_T4096",
+   "shape": {
+    "T": 4096,
+    "T_LOC_MAX": 40960,
+    "PADMAX": 263136,
+    "MAXTOK": 4096,
+    "MAXTOK_PROD": 4096
+   },
+   "status": "ok",
+   "error": null,
+   "measurement": "screen",
+   "n_campaigns": 0,
+   "n_processes": 1,
+   "p50_us": 6966.111183166504,
+   "production_p50_us_same_run": 7796.198844909668,
+   "pf6gm_p50_us_same_run": 6987.270832061768,
+   "ratio_vs_production": 0.8935266174893488,
+   "ratio_vs_pf6gm": 0.9969716861699176,
+   "spin_success_max": 0,
+   "spin_fail_max": 0,
+   "phase_stamps": {
+    "plan": 418.23,
+    "M6": 2481.41,
+    "M7": 2941.59,
+    "combine": 405.14,
+    "planM6": 2899.64,
+    "servicedrain": 3230.76,
+    "m2_to_end": 6246.37
+   },
+   "gates_green": true,
+   "gates": {
+    "mok_gate": {
+     "production": {
+      "max_abs": 0.03125,
+      "relative": 0.005768,
+      "passed": true
+     },
+     "pf6gm_mega": {
+      "max_abs": 0.035156,
+      "relative": 0.008294,
+      "passed": true
+     },
+     "mps_mega": {
+      "max_abs": 0.035156,
+      "relative": 0.008294,
+      "passed": true
+     }
+    },
+    "control_fails": true,
+    "soak": {
+     "completed": 600,
+     "total": 600,
+     "pperr": 0,
+     "poison": 0,
+     "passed": true
+    },
+    "pperr_max": 0,
+    "poison_survivors_max": 0,
+    "poison_selftest": {
+     "pf6gm_mega": true,
+     "mps_mega": true
+    },
+    "eager": {
+     "status": "valid_diagnostic",
+     "gate_ok": true
+    }
+   },
+   "raw": {
+    "tag": "e36T4096",
+    "outdir": "6_C64g1mode2flush_rows16timestamps1_20260812T112718Z",
+    "log": "e36T4096_6_C64g1mode2flush_rows16timestamps1_20260812T112718Z.log"
+   }
+  },
+  {
+   "T": 512,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 1234,
+   "route_std_requested": null,
+   "route_std_measured": null,
+   "route_dest_load": null,
+   "config": "C=16,g=353,mode=12,flush_rows=16,timestamps=1",
+   "C": 16,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "throttle_enabled": true,
+   "throttle_depth": 4,
+   "capacity_mode": "scaled",
+   "shape": {
+    "T": 512,
+    "T_LOC_MAX": 5120,
+    "PADMAX": 33760,
+    "MAXTOK": 512,
+    "MAXTOK_PROD": 512
+   },
+   "status": "failed",
+   "error": "e004pf_k0pf_ab.py:554 RuntimeError: pf3/pf4h/pf5/pf6 arms are prefill-only; got T=512 (guard is T <= 512)",
+   "measurement": "screen",
+   "n_campaigns": 0,
+   "n_processes": null,
+   "p50_us": null,
+   "production_p50_us_same_run": null,
+   "pf6gm_p50_us_same_run": null,
+   "ratio_vs_production": null,
+   "ratio_vs_pf6gm": null,
+   "spin_success_max": null,
+   "spin_fail_max": null,
+   "phase_stamps": null,
+   "gates_green": false,
+   "gates": {
+    "mok_gate": {},
+    "control_fails": null,
+    "soak": null,
+    "pperr_max": null,
+    "poison_survivors_max": 0,
+    "poison_selftest": {},
+    "eager": null
+   },
+   "raw": {
+    "tag": "e36T512",
+    "outdir": "1_C16g353mode12flush_rows16timestamps1_20260812T111105Z",
+    "log": "e36T512_1_C16g353mode12flush_rows16timestamps1_20260812T111105Z.log"
+   }
+  },
+  {
+   "T": 512,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 1234,
+   "route_std_requested": null,
+   "route_std_measured": null,
+   "route_dest_load": null,
+   "config": "C=16,g=97,mode=12,flush_rows=16,timestamps=1",
+   "C": 16,
+   "g": 97,
+   "mode": 12,
+   "flush_rows": 16,
+   "throttle_enabled": true,
+   "throttle_depth": 8,
+   "capacity_mode": "scaled",
+   "shape": {
+    "T": 512,
+    "T_LOC_MAX": 5120,
+    "PADMAX": 33760,
+    "MAXTOK": 512,
+    "MAXTOK_PROD": 512
+   },
+   "status": "failed",
+   "error": "e004pf_k0pf_ab.py:554 RuntimeError: pf3/pf4h/pf5/pf6 arms are prefill-only; got T=512 (guard is T <= 512)",
+   "measurement": "screen",
+   "n_campaigns": 0,
+   "n_processes": null,
+   "p50_us": null,
+   "production_p50_us_same_run": null,
+   "pf6gm_p50_us_same_run": null,
+   "ratio_vs_production": null,
+   "ratio_vs_pf6gm": null,
+   "spin_success_max": null,
+   "spin_fail_max": null,
+   "phase_stamps": null,
+   "gates_green": false,
+   "gates": {
+    "mok_gate": {},
+    "control_fails": null,
+    "soak": null,
+    "pperr_max": null,
+    "poison_survivors_max": 0,
+    "poison_selftest": {},
+    "eager": null
+   },
+   "raw": {
+    "tag": "e36T512",
+    "outdir": "2_C16g97mode12flush_rows16timestamps1_20260812T111120Z",
+    "log": "e36T512_2_C16g97mode12flush_rows16timestamps1_20260812T111120Z.log"
+   }
+  },
+  {
+   "T": 512,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 1234,
+   "route_std_requested": null,
+   "route_std_measured": null,
+   "route_dest_load": null,
+   "config": "C=16,g=65,mode=12,flush_rows=16,timestamps=1",
+   "C": 16,
+   "g": 65,
+   "mode": 12,
+   "flush_rows": 16,
+   "throttle_enabled": false,
+   "throttle_depth": null,
+   "capacity_mode": "scaled",
+   "shape": {
+    "T": 512,
+    "T_LOC_MAX": 5120,
+    "PADMAX": 33760,
+    "MAXTOK": 512,
+    "MAXTOK_PROD": 512
+   },
+   "status": "failed",
+   "error": "e004pf_k0pf_ab.py:554 RuntimeError: pf3/pf4h/pf5/pf6 arms are prefill-only; got T=512 (guard is T <= 512)",
+   "measurement": "screen",
+   "n_campaigns": 0,
+   "n_processes": null,
+   "p50_us": null,
+   "production_p50_us_same_run": null,
+   "pf6gm_p50_us_same_run": null,
+   "ratio_vs_production": null,
+   "ratio_vs_pf6gm": null,
+   "spin_success_max": null,
+   "spin_fail_max": null,
+   "phase_stamps": null,
+   "gates_green": false,
+   "gates": {
+    "mok_gate": {},
+    "control_fails": null,
+    "soak": null,
+    "pperr_max": null,
+    "poison_survivors_max": 0,
+    "poison_selftest": {},
+    "eager": null
+   },
+   "raw": {
+    "tag": "e36T512",
+    "outdir": "3_C16g65mode12flush_rows16timestamps1_20260812T111134Z",
+    "log": "e36T512_3_C16g65mode12flush_rows16timestamps1_20260812T111134Z.log"
+   }
+  },
+  {
+   "T": 512,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 1234,
+   "route_std_requested": null,
+   "route_std_measured": null,
+   "route_dest_load": null,
+   "config": "C=8,g=353,mode=12,flush_rows=16,timestamps=1",
+   "C": 8,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "throttle_enabled": true,
+   "throttle_depth": 4,
+   "capacity_mode": "scaled",
+   "shape": {
+    "T": 512,
+    "T_LOC_MAX": 5120,
+    "PADMAX": 33760,
+    "MAXTOK": 512,
+    "MAXTOK_PROD": 512
+   },
+   "status": "failed",
+   "error": "e004pf_k0pf_ab.py:554 RuntimeError: pf3/pf4h/pf5/pf6 arms are prefill-only; got T=512 (guard is T <= 512)",
+   "measurement": "screen",
+   "n_campaigns": 0,
+   "n_processes": null,
+   "p50_us": null,
+   "production_p50_us_same_run": null,
+   "pf6gm_p50_us_same_run": null,
+   "ratio_vs_production": null,
+   "ratio_vs_pf6gm": null,
+   "spin_success_max": null,
+   "spin_fail_max": null,
+   "phase_stamps": null,
+   "gates_green": false,
+   "gates": {
+    "mok_gate": {},
+    "control_fails": null,
+    "soak": null,
+    "pperr_max": null,
+    "poison_survivors_max": 0,
+    "poison_selftest": {},
+    "eager": null
+   },
+   "raw": {
+    "tag": "e36T512",
+    "outdir": "4_C8g353mode12flush_rows16timestamps1_20260812T111148Z",
+    "log": "e36T512_4_C8g353mode12flush_rows16timestamps1_20260812T111148Z.log"
+   }
+  },
+  {
+   "T": 512,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 1234,
+   "route_std_requested": null,
+   "route_std_measured": null,
+   "route_dest_load": null,
+   "config": "C=32,g=353,mode=12,flush_rows=16,timestamps=1",
+   "C": 32,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "throttle_enabled": true,
+   "throttle_depth": 4,
+   "capacity_mode": "scaled",
+   "shape": {
+    "T": 512,
+    "T_LOC_MAX": 5120,
+    "PADMAX": 33760,
+    "MAXTOK": 512,
+    "MAXTOK_PROD": 512
+   },
+   "status": "failed",
+   "error": "e004pf_k0pf_ab.py:554 RuntimeError: pf3/pf4h/pf5/pf6 arms are prefill-only; got T=512 (guard is T <= 512)",
+   "measurement": "screen",
+   "n_campaigns": 0,
+   "n_processes": null,
+   "p50_us": null,
+   "production_p50_us_same_run": null,
+   "pf6gm_p50_us_same_run": null,
+   "ratio_vs_production": null,
+   "ratio_vs_pf6gm": null,
+   "spin_success_max": null,
+   "spin_fail_max": null,
+   "phase_stamps": null,
+   "gates_green": false,
+   "gates": {
+    "mok_gate": {},
+    "control_fails": null,
+    "soak": null,
+    "pperr_max": null,
+    "poison_survivors_max": 0,
+    "poison_selftest": {},
+    "eager": null
+   },
+   "raw": {
+    "tag": "e36T512",
+    "outdir": "5_C32g353mode12flush_rows16timestamps1_20260812T111203Z",
+    "log": "e36T512_5_C32g353mode12flush_rows16timestamps1_20260812T111203Z.log"
+   }
+  },
+  {
+   "T": 512,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 1234,
+   "route_std_requested": null,
+   "route_std_measured": null,
+   "route_dest_load": null,
+   "config": "C=64,g=1,mode=2,flush_rows=16,timestamps=1",
+   "C": 64,
+   "g": 1,
+   "mode": 2,
+   "flush_rows": 16,
+   "throttle_enabled": false,
+   "throttle_depth": null,
+   "capacity_mode": "scaled",
+   "shape": {
+    "T": 512,
+    "T_LOC_MAX": 5120,
+    "PADMAX": 33760,
+    "MAXTOK": 512,
+    "MAXTOK_PROD": 512
+   },
+   "status": "failed",
+   "error": "e004pf_k0pf_ab.py:554 RuntimeError: pf3/pf4h/pf5/pf6 arms are prefill-only; got T=512 (guard is T <= 512)",
+   "measurement": "screen",
+   "n_campaigns": 0,
+   "n_processes": null,
+   "p50_us": null,
+   "production_p50_us_same_run": null,
+   "pf6gm_p50_us_same_run": null,
+   "ratio_vs_production": null,
+   "ratio_vs_pf6gm": null,
+   "spin_success_max": null,
+   "spin_fail_max": null,
+   "phase_stamps": null,
+   "gates_green": false,
+   "gates": {
+    "mok_gate": {},
+    "control_fails": null,
+    "soak": null,
+    "pperr_max": null,
+    "poison_survivors_max": 0,
+    "poison_selftest": {},
+    "eager": null
+   },
+   "raw": {
+    "tag": "e36T512",
+    "outdir": "6_C64g1mode2flush_rows16timestamps1_20260812T111217Z",
+    "log": "e36T512_6_C64g1mode2flush_rows16timestamps1_20260812T111217Z.log"
+   }
+  },
+  {
+   "T": 4096,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 1234,
+   "route_std_requested": null,
+   "route_std_measured": 0.004686883051326504,
+   "route_dest_load": [
+    32936,
+    32803,
+    32603,
+    32533,
+    32835,
+    32904,
+    32601,
+    32929
+   ],
+   "config": "C=16,g=353,mode=12,flush_rows=16,timestamps=1",
+   "C": 16,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "throttle_enabled": true,
+   "throttle_depth": 4,
+   "capacity_mode": "pinned_at_T4096",
+   "shape": {
+    "T": 4096,
+    "T_LOC_MAX": 40960,
+    "PADMAX": 263136,
+    "MAXTOK": 4096,
+    "MAXTOK_PROD": 4096
+   },
+   "status": "ok",
+   "error": null,
+   "measurement": "screen",
+   "n_campaigns": 0,
+   "n_processes": 1,
+   "p50_us": 6574.864864349365,
+   "production_p50_us_same_run": 7808.956146240234,
+   "pf6gm_p50_us_same_run": 6954.74910736084,
+   "ratio_vs_production": 0.8419646289747644,
+   "ratio_vs_pf6gm": 0.9453777214465712,
+   "spin_success_max": 0,
+   "spin_fail_max": 0,
+   "phase_stamps": {
+    "plan": 378.25,
+    "M6": 2444.53,
+    "M7": 2686.91,
+    "combine": 357.29,
+    "planM6": 2822.78,
+    "servicedrain": 2734.05,
+    "m2_to_end": 5866.98
+   },
+   "gates_green": true,
+   "gates": {
+    "mok_gate": {
+     "production": {
+      "max_abs": 0.03125,
+      "relative": 0.005794,
+      "passed": true
+     },
+     "pf6gm_mega": {
+      "max_abs": 0.039062,
+      "relative": 0.008294,
+      "passed": true
+     },
+     "mps_mega": {
+      "max_abs": 0.039062,
+      "relative": 0.008294,
+      "passed": true
+     }
+    },
+    "control_fails": true,
+    "soak": {
+     "completed": 600,
+     "total": 600,
+     "pperr": 0,
+     "poison": 0,
+     "passed": true
+    },
+    "pperr_max": 0,
+    "poison_survivors_max": 0,
+    "poison_selftest": {
+     "pf6gm_mega": true,
+     "mps_mega": true
+    },
+    "eager": {
+     "status": "valid_diagnostic",
+     "gate_ok": true
+    }
+   },
+   "raw": {
+    "tag": "e36c1",
+    "outdir": "1_C16g353mode12flush_rows16timestamps1_20260812T110846Z",
+    "log": "e36c1_1_C16g353mode12flush_rows16timestamps1_20260812T110846Z.log"
+   }
+  },
+  {
+   "T": 4096,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 1234,
+   "route_std_requested": null,
+   "route_std_measured": 0.004692666861900916,
+   "route_dest_load": [
+    32936,
+    32803,
+    32602,
+    32533,
+    32836,
+    32904,
+    32601,
+    32929
+   ],
+   "config": "C=16,g=353,mode=12,flush_rows=16,timestamps=1",
+   "C": 16,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "throttle_enabled": true,
+   "throttle_depth": 4,
+   "capacity_mode": "pinned_at_T4096",
+   "shape": {
+    "T": 4096,
+    "T_LOC_MAX": 40960,
+    "PADMAX": 263136,
+    "MAXTOK": 4096,
+    "MAXTOK_PROD": 4096
+   },
+   "status": "ok",
+   "error": null,
+   "measurement": "campaign",
+   "n_campaigns": 1,
+   "n_processes": 5,
+   "p50_us": 6488.708972930908,
+   "production_p50_us_same_run": 7719.603061676025,
+   "pf6gm_p50_us_same_run": 6882.333517074585,
+   "ratio_vs_production": 0.8405495620809972,
+   "ratio_vs_pf6gm": 0.9428065287497152,
+   "spin_success_max": 1,
+   "spin_fail_max": 0,
+   "phase_stamps": {
+    "plan": 376.96,
+    "M6": 2459.87,
+    "M7": 2674.56,
+    "combine": 312.36,
+    "planM6": 2836.83,
+    "servicedrain": 2762.75,
+    "m2_to_end": 5823.75
+   },
+   "gates_green": true,
+   "gates": {
+    "mok_gate": {
+     "production": {
+      "max_abs": 0.027344,
+      "relative": 0.005761,
+      "passed": true
+     },
+     "pf6gm_mega": {
+      "max_abs": 0.039062,
+      "relative": 0.008294,
+      "passed": true
+     },
+     "mps_mega": {
+      "max_abs": 0.039062,
+      "relative": 0.008294,
+      "passed": true
+     }
+    },
+    "control_fails": true,
+    "soak": {
+     "completed": 600,
+     "total": 600,
+     "pperr": 0,
+     "poison": 0,
+     "passed": true
+    },
+    "pperr_max": 0,
+    "poison_survivors_max": 0,
+    "poison_selftest": {
+     "pf6gm_mega": true,
+     "mps_mega": true
+    },
+    "eager": {
+     "status": "valid_diagnostic",
+     "gate_ok": true
+    }
+   },
+   "raw": {
+    "tag": "e36campA",
+    "outdir": "1_C16g353mode12flush_rows16timestamps1_20260812T113214Z",
+    "log": "e36campA_1_C16g353mode12flush_rows16timestamps1_20260812T113214Z.log"
+   }
+  },
+  {
+   "T": 4096,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 1234,
+   "route_std_requested": null,
+   "route_std_measured": 0.004686883051326504,
+   "route_dest_load": [
+    32936,
+    32803,
+    32603,
+    32533,
+    32835,
+    32904,
+    32601,
+    32929
+   ],
+   "config": "C=16,g=97,mode=12,flush_rows=16,timestamps=1",
+   "C": 16,
+   "g": 97,
+   "mode": 12,
+   "flush_rows": 16,
+   "throttle_enabled": true,
+   "throttle_depth": 8,
+   "capacity_mode": "pinned_at_T4096",
+   "shape": {
+    "T": 4096,
+    "T_LOC_MAX": 40960,
+    "PADMAX": 263136,
+    "MAXTOK": 4096,
+    "MAXTOK_PROD": 4096
+   },
+   "status": "ok",
+   "error": null,
+   "measurement": "campaign",
+   "n_campaigns": 1,
+   "n_processes": 5,
+   "p50_us": 6562.565565109253,
+   "production_p50_us_same_run": 7718.082427978516,
+   "pf6gm_p50_us_same_run": 6905.89451789856,
+   "ratio_vs_production": 0.8502844620212342,
+   "ratio_vs_pf6gm": 0.9502846514815028,
+   "spin_success_max": 0,
+   "spin_fail_max": 0,
+   "phase_stamps": {
+    "plan": 375.7,
+    "M6": 2473.5,
+    "M7": 2796.71,
+    "combine": 329.98,
+    "planM6": 2849.2,
+    "servicedrain": 2902.23,
+    "m2_to_end": 5975.89
+   },
+   "gates_green": true,
+   "gates": {
+    "mok_gate": {
+     "production": {
+      "max_abs": 0.03125,
+      "relative": 0.005777,
+      "passed": true
+     },
+     "pf6gm_mega": {
+      "max_abs": 0.035156,
+      "relative": 0.008293,
+      "passed": true
+     },
+     "mps_mega": {
+      "max_abs": 0.035156,
+      "relative": 0.008293,
+      "passed": true
+     }
+    },
+    "control_fails": true,
+    "soak": {
+     "completed": 600,
+     "total": 600,
+     "pperr": 0,
+     "poison": 0,
+     "passed": true
+    },
+    "pperr_max": 0,
+    "poison_survivors_max": 0,
+    "poison_selftest": {
+     "pf6gm_mega": true,
+     "mps_mega": true
+    },
+    "eager": {
+     "status": "valid_diagnostic",
+     "gate_ok": true
+    }
+   },
+   "raw": {
+    "tag": "e36campA",
+    "outdir": "2_C16g97mode12flush_rows16timestamps1_20260812T113518Z",
+    "log": "e36campA_2_C16g97mode12flush_rows16timestamps1_20260812T113518Z.log"
+   }
+  },
+  {
+   "T": 4096,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 1234,
+   "route_std_requested": null,
+   "route_std_measured": 0.004692666861900916,
+   "route_dest_load": [
+    32936,
+    32803,
+    32602,
+    32533,
+    32836,
+    32904,
+    32601,
+    32929
+   ],
+   "config": "C=8,g=353,mode=12,flush_rows=16,timestamps=1",
+   "C": 8,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "throttle_enabled": true,
+   "throttle_depth": 4,
+   "capacity_mode": "pinned_at_T4096",
+   "shape": {
+    "T": 4096,
+    "T_LOC_MAX": 40960,
+    "PADMAX": 263136,
+    "MAXTOK": 4096,
+    "MAXTOK_PROD": 4096
+   },
+   "status": "ok",
+   "error": null,
+   "measurement": "campaign",
+   "n_campaigns": 1,
+   "n_processes": 5,
+   "p50_us": 6464.745998382568,
+   "production_p50_us_same_run": 7716.739177703857,
+   "pf6gm_p50_us_same_run": 6887.871026992798,
+   "ratio_vs_production": 0.8377561881398428,
+   "ratio_vs_pf6gm": 0.9385695482752145,
+   "spin_success_max": 0,
+   "spin_fail_max": 0,
+   "phase_stamps": {
+    "plan": 381.07,
+    "M6": 2444.13,
+    "M7": 2682.45,
+    "combine": 313.68,
+    "planM6": 2825.2,
+    "servicedrain": 2748.16,
+    "m2_to_end": 5821.33
+   },
+   "gates_green": true,
+   "gates": {
+    "mok_gate": {
+     "production": {
+      "max_abs": 0.03125,
+      "relative": 0.005795,
+      "passed": true
+     },
+     "pf6gm_mega": {
+      "max_abs": 0.035156,
+      "relative": 0.008293,
+      "passed": true
+     },
+     "mps_mega": {
+      "max_abs": 0.035156,
+      "relative": 0.008293,
+      "passed": true
+     }
+    },
+    "control_fails": true,
+    "soak": {
+     "completed": 600,
+     "total": 600,
+     "pperr": 0,
+     "poison": 0,
+     "passed": true
+    },
+    "pperr_max": 0,
+    "poison_survivors_max": 0,
+    "poison_selftest": {
+     "pf6gm_mega": true,
+     "mps_mega": true
+    },
+    "eager": {
+     "status": "valid_diagnostic",
+     "gate_ok": true
+    }
+   },
+   "raw": {
+    "tag": "e36campB",
+    "outdir": "1_C8g353mode12flush_rows16timestamps1_20260812T114107Z",
+    "log": "e36campB_1_C8g353mode12flush_rows16timestamps1_20260812T114107Z.log"
+   }
+  },
+  {
+   "T": 4096,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 1234,
+   "route_std_requested": null,
+   "route_std_measured": 0.004686883051326504,
+   "route_dest_load": [
+    32936,
+    32803,
+    32603,
+    32533,
+    32835,
+    32904,
+    32601,
+    32929
+   ],
+   "config": "C=32,g=353,mode=12,flush_rows=16,timestamps=1",
+   "C": 32,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "throttle_enabled": true,
+   "throttle_depth": 4,
+   "capacity_mode": "pinned_at_T4096",
+   "shape": {
+    "T": 4096,
+    "T_LOC_MAX": 40960,
+    "PADMAX": 263136,
+    "MAXTOK": 4096,
+    "MAXTOK_PROD": 4096
+   },
+   "status": "ok",
+   "error": null,
+   "measurement": "campaign",
+   "n_campaigns": 1,
+   "n_processes": 5,
+   "p50_us": 6719.251871109009,
+   "production_p50_us_same_run": 7718.862056732178,
+   "pf6gm_p50_us_same_run": 6905.333518981934,
+   "ratio_vs_production": 0.8704977264425477,
+   "ratio_vs_pf6gm": 0.9730524749657046,
+   "spin_success_max": 0,
+   "spin_fail_max": 0,
+   "phase_stamps": {
+    "plan": 372.95,
+    "M6": 2476.1,
+    "M7": 3003.02,
+    "combine": 176.26,
+    "planM6": 2849.05,
+    "servicedrain": 3088.19,
+    "m2_to_end": 6028.33
+   },
+   "gates_green": true,
+   "gates": {
+    "mok_gate": {
+     "production": {
+      "max_abs": 0.027344,
+      "relative": 0.005773,
+      "passed": true
+     },
+     "pf6gm_mega": {
+      "max_abs": 0.035156,
+      "relative": 0.008294,
+      "passed": true
+     },
+     "mps_mega": {
+      "max_abs": 0.035156,
+      "relative": 0.008294,
+      "passed": true
+     }
+    },
+    "control_fails": true,
+    "soak": {
+     "completed": 600,
+     "total": 600,
+     "pperr": 0,
+     "poison": 0,
+     "passed": true
+    },
+    "pperr_max": 0,
+    "poison_survivors_max": 0,
+    "poison_selftest": {
+     "pf6gm_mega": true,
+     "mps_mega": true
+    },
+    "eager": {
+     "status": "valid_diagnostic",
+     "gate_ok": true
+    }
+   },
+   "raw": {
+    "tag": "e36campB",
+    "outdir": "2_C32g353mode12flush_rows16timestamps1_20260812T114410Z",
+    "log": "e36campB_2_C32g353mode12flush_rows16timestamps1_20260812T114410Z.log"
+   }
+  },
+  {
+   "T": 4096,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 1234,
+   "route_std_requested": null,
+   "route_std_measured": 0.004692666861900916,
+   "route_dest_load": [
+    32936,
+    32803,
+    32602,
+    32533,
+    32836,
+    32904,
+    32601,
+    32929
+   ],
+   "config": "C=64,g=1,mode=2,flush_rows=16,timestamps=1",
+   "C": 64,
+   "g": 1,
+   "mode": 2,
+   "flush_rows": 16,
+   "throttle_enabled": false,
+   "throttle_depth": null,
+   "capacity_mode": "pinned_at_T4096",
+   "shape": {
+    "T": 4096,
+    "T_LOC_MAX": 40960,
+    "PADMAX": 263136,
+    "MAXTOK": 4096,
+    "MAXTOK_PROD": 4096
+   },
+   "status": "ok",
+   "error": null,
+   "measurement": "campaign",
+   "n_campaigns": 1,
+   "n_processes": 5,
+   "p50_us": 6829.572916030884,
+   "production_p50_us_same_run": 7724.46346282959,
+   "pf6gm_p50_us_same_run": 6911.073923110962,
+   "ratio_vs_production": 0.8841485170970187,
+   "ratio_vs_pf6gm": 0.9882071863234547,
+   "spin_success_max": 0,
+   "spin_fail_max": 0,
+   "phase_stamps": {
+    "plan": 423.13,
+    "M6": 2482.49,
+    "M7": 2934.72,
+    "combine": 408.37,
+    "planM6": 2905.62,
+    "servicedrain": 3270.01,
+    "m2_to_end": 6248.71
+   },
+   "gates_green": true,
+   "gates": {
+    "mok_gate": {
+     "production": {
+      "max_abs": 0.027344,
+      "relative": 0.005751,
+      "passed": true
+     },
+     "pf6gm_mega": {
+      "max_abs": 0.039062,
+      "relative": 0.008293,
+      "passed": true
+     },
+     "mps_mega": {
+      "max_abs": 0.039062,
+      "relative": 0.008293,
+      "passed": true
+     }
+    },
+    "control_fails": true,
+    "soak": {
+     "completed": 600,
+     "total": 600,
+     "pperr": 0,
+     "poison": 0,
+     "passed": true
+    },
+    "pperr_max": 0,
+    "poison_survivors_max": 0,
+    "poison_selftest": {
+     "pf6gm_mega": true,
+     "mps_mega": true
+    },
+    "eager": {
+     "status": "valid_diagnostic",
+     "gate_ok": true
+    }
+   },
+   "raw": {
+    "tag": "e36campB",
+    "outdir": "3_C64g1mode2flush_rows16timestamps1_20260812T114715Z",
+    "log": "e36campB_3_C64g1mode2flush_rows16timestamps1_20260812T114715Z.log"
+   }
+  },
+  {
+   "T": 4096,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 1234,
+   "route_std_requested": null,
+   "route_std_measured": 0.004686883051326504,
+   "route_dest_load": [
+    32936,
+    32803,
+    32603,
+    32533,
+    32835,
+    32904,
+    32601,
+    32929
+   ],
+   "config": "C=16,g=65,mode=12,flush_rows=16,timestamps=1",
+   "C": 16,
+   "g": 65,
+   "mode": 12,
+   "flush_rows": 16,
+   "throttle_enabled": false,
+   "throttle_depth": null,
+   "capacity_mode": "pinned_at_T4096",
+   "shape": {
+    "T": 4096,
+    "T_LOC_MAX": 40960,
+    "PADMAX": 263136,
+    "MAXTOK": 4096,
+    "MAXTOK_PROD": 4096
+   },
+   "status": "ok",
+   "error": null,
+   "measurement": "campaign",
+   "n_campaigns": 1,
+   "n_processes": 5,
+   "p50_us": 7124.996662139893,
+   "production_p50_us_same_run": 7715.82293510437,
+   "pf6gm_p50_us_same_run": 6887.734174728394,
+   "ratio_vs_production": 0.923426667779477,
+   "ratio_vs_pf6gm": 1.0344471028341995,
+   "spin_success_max": 0,
+   "spin_fail_max": 0,
+   "phase_stamps": {
+    "plan": 382.47,
+    "M6": 2511.65,
+    "M7": 3295.84,
+    "combine": 352.45,
+    "planM6": 2894.12,
+    "servicedrain": 3408.71,
+    "m2_to_end": 6542.41
+   },
+   "gates_green": true,
+   "gates": {
+    "mok_gate": {
+     "production": {
+      "max_abs": 0.039062,
+      "relative": 0.005787,
+      "passed": true
+     },
+     "pf6gm_mega": {
+      "max_abs": 0.035156,
+      "relative": 0.008293,
+      "passed": true
+     },
+     "mps_mega": {
+      "max_abs": 0.035156,
+      "relative": 0.008293,
+      "passed": true
+     }
+    },
+    "control_fails": true,
+    "soak": {
+     "completed": 600,
+     "total": 600,
+     "pperr": 0,
+     "poison": 0,
+     "passed": true
+    },
+    "pperr_max": 0,
+    "poison_survivors_max": 0,
+    "poison_selftest": {
+     "pf6gm_mega": true,
+     "mps_mega": true
+    },
+    "eager": {
+     "status": "valid_diagnostic",
+     "gate_ok": true
+    }
+   },
+   "raw": {
+    "tag": "e36campB",
+    "outdir": "4_C16g65mode12flush_rows16timestamps1_20260812T115020Z",
+    "log": "e36campB_4_C16g65mode12flush_rows16timestamps1_20260812T115020Z.log"
+   }
+  },
+  {
+   "T": 4096,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 1234,
+   "route_std_requested": null,
+   "route_std_measured": 0.004686883051326504,
+   "route_dest_load": [
+    32936,
+    32803,
+    32603,
+    32533,
+    32835,
+    32904,
+    32601,
+    32929
+   ],
+   "config": "C=16,g=353,mode=12,flush_rows=16,timestamps=1",
+   "C": 16,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "throttle_enabled": true,
+   "throttle_depth": 4,
+   "capacity_mode": "pinned_at_T4096",
+   "shape": {
+    "T": 4096,
+    "T_LOC_MAX": 40960,
+    "PADMAX": 263136,
+    "MAXTOK": 4096,
+    "MAXTOK_PROD": 4096
+   },
+   "status": "ok",
+   "error": null,
+   "measurement": "campaign",
+   "n_campaigns": 1,
+   "n_processes": 5,
+   "p50_us": 6504.630088806152,
+   "production_p50_us_same_run": 7714.360475540161,
+   "pf6gm_p50_us_same_run": 6922.87278175354,
+   "ratio_vs_production": 0.8431846177567554,
+   "ratio_vs_pf6gm": 0.9395853851236815,
+   "spin_success_max": 0,
+   "spin_fail_max": 0,
+   "phase_stamps": {
+    "plan": 380.88,
+    "M6": 2451.05,
+    "M7": 2644.87,
+    "combine": 382.73,
+    "planM6": 2831.93,
+    "servicedrain": 2690.35,
+    "m2_to_end": 5859.53
+   },
+   "gates_green": true,
+   "gates": {
+    "mok_gate": {
+     "production": {
+      "max_abs": 0.039062,
+      "relative": 0.005821,
+      "passed": true
+     },
+     "pf6gm_mega": {
+      "max_abs": 0.035156,
+      "relative": 0.008293,
+      "passed": true
+     },
+     "mps_mega": {
+      "max_abs": 0.035156,
+      "relative": 0.008293,
+      "passed": true
+     }
+    },
+    "control_fails": true,
+    "soak": {
+     "completed": 600,
+     "total": 600,
+     "pperr": 0,
+     "poison": 0,
+     "passed": true
+    },
+    "pperr_max": 0,
+    "poison_survivors_max": 0,
+    "poison_selftest": {
+     "pf6gm_mega": true,
+     "mps_mega": true
+    },
+    "eager": {
+     "status": "valid_diagnostic",
+     "gate_ok": true
+    }
+   },
+   "raw": {
+    "tag": "e36campC",
+    "outdir": "1_C16g353mode12flush_rows16timestamps1_20260812T115516Z",
+    "log": "e36campC_1_C16g353mode12flush_rows16timestamps1_20260812T115516Z.log"
+   }
+  },
+  {
+   "T": 4096,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 1234,
+   "route_std_requested": null,
+   "route_std_measured": 0.004692666861900916,
+   "route_dest_load": [
+    32936,
+    32803,
+    32602,
+    32533,
+    32836,
+    32904,
+    32601,
+    32929
+   ],
+   "config": "C=16,g=97,mode=12,flush_rows=16,timestamps=1",
+   "C": 16,
+   "g": 97,
+   "mode": 12,
+   "flush_rows": 16,
+   "throttle_enabled": true,
+   "throttle_depth": 8,
+   "capacity_mode": "pinned_at_T4096",
+   "shape": {
+    "T": 4096,
+    "T_LOC_MAX": 40960,
+    "PADMAX": 263136,
+    "MAXTOK": 4096,
+    "MAXTOK_PROD": 4096
+   },
+   "status": "ok",
+   "error": null,
+   "measurement": "campaign",
+   "n_campaigns": 1,
+   "n_processes": 5,
+   "p50_us": 6579.131126403809,
+   "production_p50_us_same_run": 7700.103044509888,
+   "pf6gm_p50_us_same_run": 6886.874675750732,
+   "ratio_vs_production": 0.854421179609366,
+   "ratio_vs_pf6gm": 0.955314483878948,
+   "spin_success_max": 0,
+   "spin_fail_max": 0,
+   "phase_stamps": {
+    "plan": 376.15,
+    "M6": 2459.98,
+    "M7": 2846.72,
+    "combine": 265.94,
+    "planM6": 2836.13,
+    "servicedrain": 2936.65,
+    "m2_to_end": 5948.79
+   },
+   "gates_green": true,
+   "gates": {
+    "mok_gate": {
+     "production": {
+      "max_abs": 0.027344,
+      "relative": 0.005766,
+      "passed": true
+     },
+     "pf6gm_mega": {
+      "max_abs": 0.035156,
+      "relative": 0.008294,
+      "passed": true
+     },
+     "mps_mega": {
+      "max_abs": 0.035156,
+      "relative": 0.008294,
+      "passed": true
+     }
+    },
+    "control_fails": true,
+    "soak": {
+     "completed": 600,
+     "total": 600,
+     "pperr": 0,
+     "poison": 0,
+     "passed": true
+    },
+    "pperr_max": 0,
+    "poison_survivors_max": 0,
+    "poison_selftest": {
+     "pf6gm_mega": true,
+     "mps_mega": true
+    },
+    "eager": {
+     "status": "valid_diagnostic",
+     "gate_ok": true
+    }
+   },
+   "raw": {
+    "tag": "e36campC",
+    "outdir": "2_C16g97mode12flush_rows16timestamps1_20260812T115820Z",
+    "log": "e36campC_2_C16g97mode12flush_rows16timestamps1_20260812T115820Z.log"
+   }
+  },
+  {
+   "T": 4096,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 2468,
+   "route_std_requested": null,
+   "route_std_measured": 0.003425555664342849,
+   "route_dest_load": [
+    32791,
+    32623,
+    32722,
+    32941,
+    32847,
+    32801,
+    32581,
+    32838
+   ],
+   "config": "C=16,g=353,mode=12,flush_rows=16,timestamps=1",
+   "C": 16,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "throttle_enabled": true,
+   "throttle_depth": 4,
+   "capacity_mode": "pinned_at_T4096",
+   "shape": {
+    "T": 4096,
+    "T_LOC_MAX": 40960,
+    "PADMAX": 263136,
+    "MAXTOK": 4096,
+    "MAXTOK_PROD": 4096
+   },
+   "status": "ok",
+   "error": null,
+   "measurement": "campaign",
+   "n_campaigns": 1,
+   "n_processes": 5,
+   "p50_us": 6520.869016647339,
+   "production_p50_us_same_run": 7722.840070724487,
+   "pf6gm_p50_us_same_run": 6896.812200546265,
+   "ratio_vs_production": 0.8443615246373488,
+   "ratio_vs_pf6gm": 0.9454902971159416,
+   "spin_success_max": 0,
+   "spin_fail_max": 0,
+   "phase_stamps": {
+    "plan": 378.16,
+    "M6": 2440.15,
+    "M7": 2646.94,
+    "combine": 478.3,
+    "planM6": 2818.31,
+    "servicedrain": 2714.5,
+    "m2_to_end": 5943.55
+   },
+   "gates_green": true,
+   "gates": {
+    "mok_gate": {
+     "production": {
+      "max_abs": 0.027344,
+      "relative": 0.005797,
+      "passed": true
+     },
+     "pf6gm_mega": {
+      "max_abs": 0.039062,
+      "relative": 0.008328,
+      "passed": true
+     },
+     "mps_mega": {
+      "max_abs": 0.039062,
+      "relative": 0.008328,
+      "passed": true
+     }
+    },
+    "control_fails": true,
+    "soak": {
+     "completed": 600,
+     "total": 600,
+     "pperr": 0,
+     "poison": 0,
+     "passed": true
+    },
+    "pperr_max": 0,
+    "poison_survivors_max": 0,
+    "poison_selftest": {
+     "pf6gm_mega": true,
+     "mps_mega": true
+    },
+    "eager": {
+     "status": "valid_diagnostic",
+     "gate_ok": true
+    }
+   },
+   "raw": {
+    "tag": "e36campD",
+    "outdir": "1_C16g353mode12flush_rows16timestamps1_20260812T120402Z",
+    "log": "e36campD_1_C16g353mode12flush_rows16timestamps1_20260812T120402Z.log"
+   }
+  },
+  {
+   "T": 4096,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 2468,
+   "route_std_requested": null,
+   "route_std_measured": 0.003425555664342849,
+   "route_dest_load": [
+    32791,
+    32623,
+    32722,
+    32941,
+    32847,
+    32801,
+    32581,
+    32838
+   ],
+   "config": "C=64,g=1,mode=2,flush_rows=16,timestamps=1",
+   "C": 64,
+   "g": 1,
+   "mode": 2,
+   "flush_rows": 16,
+   "throttle_enabled": false,
+   "throttle_depth": null,
+   "capacity_mode": "pinned_at_T4096",
+   "shape": {
+    "T": 4096,
+    "T_LOC_MAX": 40960,
+    "PADMAX": 263136,
+    "MAXTOK": 4096,
+    "MAXTOK_PROD": 4096
+   },
+   "status": "ok",
+   "error": null,
+   "measurement": "campaign",
+   "n_campaigns": 1,
+   "n_processes": 5,
+   "p50_us": 6818.933010101318,
+   "production_p50_us_same_run": 7733.102560043335,
+   "pf6gm_p50_us_same_run": 6882.133483886719,
+   "ratio_vs_production": 0.8817848925649198,
+   "ratio_vs_pf6gm": 0.990816732350023,
+   "spin_success_max": 0,
+   "spin_fail_max": 0,
+   "phase_stamps": {
+    "plan": 423.16,
+    "M6": 2466.71,
+    "M7": 2864.61,
+    "combine": 470.13,
+    "planM6": 2889.87,
+    "servicedrain": 3230.49,
+    "m2_to_end": 6224.61
+   },
+   "gates_green": true,
+   "gates": {
+    "mok_gate": {
+     "production": {
+      "max_abs": 0.03125,
+      "relative": 0.005802,
+      "passed": true
+     },
+     "pf6gm_mega": {
+      "max_abs": 0.039062,
+      "relative": 0.008328,
+      "passed": true
+     },
+     "mps_mega": {
+      "max_abs": 0.039062,
+      "relative": 0.008328,
+      "passed": true
+     }
+    },
+    "control_fails": true,
+    "soak": {
+     "completed": 600,
+     "total": 600,
+     "pperr": 0,
+     "poison": 0,
+     "passed": true
+    },
+    "pperr_max": 0,
+    "poison_survivors_max": 0,
+    "poison_selftest": {
+     "pf6gm_mega": true,
+     "mps_mega": true
+    },
+    "eager": {
+     "status": "valid_diagnostic",
+     "gate_ok": true
+    }
+   },
+   "raw": {
+    "tag": "e36campD",
+    "outdir": "2_C64g1mode2flush_rows16timestamps1_20260812T120705Z",
+    "log": "e36campD_2_C64g1mode2flush_rows16timestamps1_20260812T120705Z.log"
+   }
+  },
+  {
+   "T": 4096,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 2468,
+   "route_std_requested": null,
+   "route_std_measured": 0.003425555664342849,
+   "route_dest_load": [
+    32791,
+    32623,
+    32722,
+    32941,
+    32847,
+    32801,
+    32581,
+    32838
+   ],
+   "config": "C=16,g=65,mode=12,flush_rows=16,timestamps=1",
+   "C": 16,
+   "g": 65,
+   "mode": 12,
+   "flush_rows": 16,
+   "throttle_enabled": false,
+   "throttle_depth": null,
+   "capacity_mode": "pinned_at_T4096",
+   "shape": {
+    "T": 4096,
+    "T_LOC_MAX": 40960,
+    "PADMAX": 263136,
+    "MAXTOK": 4096,
+    "MAXTOK_PROD": 4096
+   },
+   "status": "ok",
+   "error": null,
+   "measurement": "campaign",
+   "n_campaigns": 1,
+   "n_processes": 5,
+   "p50_us": 7194.236993789673,
+   "production_p50_us_same_run": 7725.822687149048,
+   "pf6gm_p50_us_same_run": 6916.294097900391,
+   "ratio_vs_production": 0.9311936456626682,
+   "ratio_vs_pf6gm": 1.040186679738454,
+   "spin_success_max": 0,
+   "spin_fail_max": 0,
+   "phase_stamps": {
+    "plan": 373.6,
+    "M6": 2493.08,
+    "M7": 3134.11,
+    "combine": 523.48,
+    "planM6": 2866.68,
+    "servicedrain": 3193.08,
+    "m2_to_end": 6524.27
+   },
+   "gates_green": true,
+   "gates": {
+    "mok_gate": {
+     "production": {
+      "max_abs": 0.027344,
+      "relative": 0.005746,
+      "passed": true
+     },
+     "pf6gm_mega": {
+      "max_abs": 0.039062,
+      "relative": 0.008328,
+      "passed": true
+     },
+     "mps_mega": {
+      "max_abs": 0.039062,
+      "relative": 0.008328,
+      "passed": true
+     }
+    },
+    "control_fails": true,
+    "soak": {
+     "completed": 600,
+     "total": 600,
+     "pperr": 0,
+     "poison": 0,
+     "passed": true
+    },
+    "pperr_max": 0,
+    "poison_survivors_max": 0,
+    "poison_selftest": {
+     "pf6gm_mega": true,
+     "mps_mega": true
+    },
+    "eager": {
+     "status": "valid_diagnostic",
+     "gate_ok": true
+    }
+   },
+   "raw": {
+    "tag": "e36campD",
+    "outdir": "3_C16g65mode12flush_rows16timestamps1_20260812T121011Z",
+    "log": "e36campD_3_C16g65mode12flush_rows16timestamps1_20260812T121011Z.log"
+   }
+  },
+  {
+   "T": 4096,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 1234,
+   "route_std_requested": null,
+   "route_std_measured": 0.004692666861900916,
+   "route_dest_load": [
+    32936,
+    32803,
+    32602,
+    32533,
+    32836,
+    32904,
+    32601,
+    32929
+   ],
+   "config": "C=4,g=353,mode=12,flush_rows=16,timestamps=1",
+   "C": 4,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "throttle_enabled": true,
+   "throttle_depth": 4,
+   "capacity_mode": "pinned_at_T4096",
+   "shape": {
+    "T": 4096,
+    "T_LOC_MAX": 40960,
+    "PADMAX": 263136,
+    "MAXTOK": 4096,
+    "MAXTOK_PROD": 4096
+   },
+   "status": "ok",
+   "error": null,
+   "measurement": "campaign",
+   "n_campaigns": 1,
+   "n_processes": 5,
+   "p50_us": 6466.087102890015,
+   "production_p50_us_same_run": 7702.640533447266,
+   "pf6gm_p50_us_same_run": 6895.033359527588,
+   "ratio_vs_production": 0.8394636975219406,
+   "ratio_vs_pf6gm": 0.9377890962565317,
+   "spin_success_max": 0,
+   "spin_fail_max": 0,
+   "phase_stamps": {
+    "plan": 379.41,
+    "M6": 2436.02,
+    "M7": 2683.28,
+    "combine": 342.13,
+    "planM6": 2815.43,
+    "servicedrain": 2754.75,
+    "m2_to_end": 5840.84
+   },
+   "gates_green": true,
+   "gates": {
+    "mok_gate": {
+     "production": {
+      "max_abs": 0.03125,
+      "relative": 0.005838,
+      "passed": true
+     },
+     "pf6gm_mega": {
+      "max_abs": 0.035156,
+      "relative": 0.008294,
+      "passed": true
+     },
+     "mps_mega": {
+      "max_abs": 0.035156,
+      "relative": 0.008294,
+      "passed": true
+     }
+    },
+    "control_fails": true,
+    "soak": {
+     "completed": 600,
+     "total": 600,
+     "pperr": 0,
+     "poison": 0,
+     "passed": true
+    },
+    "pperr_max": 0,
+    "poison_survivors_max": 0,
+    "poison_selftest": {
+     "pf6gm_mega": true,
+     "mps_mega": true
+    },
+    "eager": {
+     "status": "valid_diagnostic",
+     "gate_ok": true
+    }
+   },
+   "raw": {
+    "tag": "e36campE",
+    "outdir": "1_C4g353mode12flush_rows16timestamps1_20260812T121433Z",
+    "log": "e36campE_1_C4g353mode12flush_rows16timestamps1_20260812T121433Z.log"
+   }
+  },
+  {
+   "T": 4096,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 1234,
+   "route_std_requested": null,
+   "route_std_measured": 0.004686883051326504,
+   "route_dest_load": [
+    32936,
+    32803,
+    32603,
+    32533,
+    32835,
+    32904,
+    32601,
+    32929
+   ],
+   "config": "C=8,g=353,mode=12,flush_rows=16,timestamps=1",
+   "C": 8,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "throttle_enabled": true,
+   "throttle_depth": 4,
+   "capacity_mode": "pinned_at_T4096",
+   "shape": {
+    "T": 4096,
+    "T_LOC_MAX": 40960,
+    "PADMAX": 263136,
+    "MAXTOK": 4096,
+    "MAXTOK_PROD": 4096
+   },
+   "status": "ok",
+   "error": null,
+   "measurement": "campaign",
+   "n_campaigns": 1,
+   "n_processes": 5,
+   "p50_us": 6472.2888469696045,
+   "production_p50_us_same_run": 7712.383031845093,
+   "pf6gm_p50_us_same_run": 6889.334440231323,
+   "ratio_vs_production": 0.8392073915733914,
+   "ratio_vs_pf6gm": 0.939465038766834,
+   "spin_success_max": 0,
+   "spin_fail_max": 0,
+   "phase_stamps": {
+    "plan": 379.76,
+    "M6": 2470.87,
+    "M7": 2692.68,
+    "combine": 268.82,
+    "planM6": 2850.63,
+    "servicedrain": 2789.52,
+    "m2_to_end": 5812.13
+   },
+   "gates_green": true,
+   "gates": {
+    "mok_gate": {
+     "production": {
+      "max_abs": 0.03125,
+      "relative": 0.005793,
+      "passed": true
+     },
+     "pf6gm_mega": {
+      "max_abs": 0.035156,
+      "relative": 0.008294,
+      "passed": true
+     },
+     "mps_mega": {
+      "max_abs": 0.035156,
+      "relative": 0.008294,
+      "passed": true
+     }
+    },
+    "control_fails": true,
+    "soak": {
+     "completed": 600,
+     "total": 600,
+     "pperr": 0,
+     "poison": 0,
+     "passed": true
+    },
+    "pperr_max": 0,
+    "poison_survivors_max": 0,
+    "poison_selftest": {
+     "pf6gm_mega": true,
+     "mps_mega": true
+    },
+    "eager": {
+     "status": "valid_diagnostic",
+     "gate_ok": true
+    }
+   },
+   "raw": {
+    "tag": "e36campE",
+    "outdir": "2_C8g353mode12flush_rows16timestamps1_20260812T121737Z",
+    "log": "e36campE_2_C8g353mode12flush_rows16timestamps1_20260812T121737Z.log"
+   }
+  },
+  {
+   "T": 4096,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 1234,
+   "route_std_requested": null,
+   "route_std_measured": 0.004692666861900916,
+   "route_dest_load": [
+    32936,
+    32803,
+    32602,
+    32533,
+    32836,
+    32904,
+    32601,
+    32929
+   ],
+   "config": "C=16,g=353,mode=12,flush_rows=16,timestamps=1",
+   "C": 16,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "throttle_enabled": true,
+   "throttle_depth": 4,
+   "capacity_mode": "pinned_at_T4096",
+   "shape": {
+    "T": 4096,
+    "T_LOC_MAX": 40960,
+    "PADMAX": 263136,
+    "MAXTOK": 4096,
+    "MAXTOK_PROD": 4096
+   },
+   "status": "ok",
+   "error": null,
+   "measurement": "campaign",
+   "n_campaigns": 1,
+   "n_processes": 5,
+   "p50_us": 6500.828981399536,
+   "production_p50_us_same_run": 7699.019908905029,
+   "pf6gm_p50_us_same_run": 6890.792608261108,
+   "ratio_vs_production": 0.8443709794645924,
+   "ratio_vs_pf6gm": 0.943408015734785,
+   "spin_success_max": 0,
+   "spin_fail_max": 0,
+   "phase_stamps": {
+    "plan": 378.97,
+    "M6": 2441.56,
+    "M7": 2809.64,
+    "combine": 228.56,
+    "planM6": 2820.53,
+    "servicedrain": 2923.27,
+    "m2_to_end": 5858.73
+   },
+   "gates_green": true,
+   "gates": {
+    "mok_gate": {
+     "production": {
+      "max_abs": 0.035156,
+      "relative": 0.005691,
+      "passed": true
+     },
+     "pf6gm_mega": {
+      "max_abs": 0.035156,
+      "relative": 0.008293,
+      "passed": true
+     },
+     "mps_mega": {
+      "max_abs": 0.035156,
+      "relative": 0.008293,
+      "passed": true
+     }
+    },
+    "control_fails": true,
+    "soak": {
+     "completed": 600,
+     "total": 600,
+     "pperr": 0,
+     "poison": 0,
+     "passed": true
+    },
+    "pperr_max": 0,
+    "poison_survivors_max": 0,
+    "poison_selftest": {
+     "pf6gm_mega": true,
+     "mps_mega": true
+    },
+    "eager": {
+     "status": "valid_diagnostic",
+     "gate_ok": true
+    }
+   },
+   "raw": {
+    "tag": "e36campF",
+    "outdir": "1_C16g353mode12flush_rows16timestamps1_20260812T122456Z",
+    "log": "e36campF_1_C16g353mode12flush_rows16timestamps1_20260812T122456Z.log"
+   }
+  },
+  {
+   "T": 4096,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 1234,
+   "route_std_requested": null,
+   "route_std_measured": 0.004692666861900916,
+   "route_dest_load": [
+    32936,
+    32803,
+    32602,
+    32533,
+    32836,
+    32904,
+    32601,
+    32929
+   ],
+   "config": "C=8,g=353,mode=12,flush_rows=16,timestamps=1",
+   "C": 8,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "throttle_enabled": true,
+   "throttle_depth": 4,
+   "capacity_mode": "pinned_at_T4096",
+   "shape": {
+    "T": 4096,
+    "T_LOC_MAX": 40960,
+    "PADMAX": 263136,
+    "MAXTOK": 4096,
+    "MAXTOK_PROD": 4096
+   },
+   "status": "ok",
+   "error": null,
+   "measurement": "campaign",
+   "n_campaigns": 1,
+   "n_processes": 5,
+   "p50_us": 6471.5282917022705,
+   "production_p50_us_same_run": 7709.420919418335,
+   "pf6gm_p50_us_same_run": 6908.293008804321,
+   "ratio_vs_production": 0.8394311789880242,
+   "ratio_vs_pf6gm": 0.9367767527310418,
+   "spin_success_max": 1,
+   "spin_fail_max": 0,
+   "phase_stamps": {
+    "plan": 373.59,
+    "M6": 2444.04,
+    "M7": 2675.28,
+    "combine": 336.79,
+    "planM6": 2817.63,
+    "servicedrain": 2750.0,
+    "m2_to_end": 5829.7
+   },
+   "gates_green": true,
+   "gates": {
+    "mok_gate": {
+     "production": {
+      "max_abs": 0.03125,
+      "relative": 0.005744,
+      "passed": true
+     },
+     "pf6gm_mega": {
+      "max_abs": 0.035156,
+      "relative": 0.008293,
+      "passed": true
+     },
+     "mps_mega": {
+      "max_abs": 0.035156,
+      "relative": 0.008293,
+      "passed": true
+     }
+    },
+    "control_fails": true,
+    "soak": {
+     "completed": 600,
+     "total": 600,
+     "pperr": 0,
+     "poison": 0,
+     "passed": true
+    },
+    "pperr_max": 0,
+    "poison_survivors_max": 0,
+    "poison_selftest": {
+     "pf6gm_mega": true,
+     "mps_mega": true
+    },
+    "eager": {
+     "status": "valid_diagnostic",
+     "gate_ok": true
+    }
+   },
+   "raw": {
+    "tag": "e36campF",
+    "outdir": "2_C8g353mode12flush_rows16timestamps1_20260812T122759Z",
+    "log": "e36campF_2_C8g353mode12flush_rows16timestamps1_20260812T122759Z.log"
+   }
+  },
+  {
+   "T": 4096,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 1234,
+   "route_std_requested": null,
+   "route_std_measured": null,
+   "route_dest_load": null,
+   "config": "C=16,g=353,mode=12,flush_rows=16,timestamps=1",
+   "C": 16,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "throttle_enabled": true,
+   "throttle_depth": 4,
+   "capacity_mode": "pinned_at_T4096",
+   "shape": {
+    "T": 4096,
+    "T_LOC_MAX": 40960,
+    "PADMAX": 263136,
+    "MAXTOK": 4096,
+    "MAXTOK_PROD": 4096
+   },
+   "status": "unreachable_by_harness",
+   "error": "K0_SYNTH_ROUTE=skewed_hot raised on all 8 ranks: 'K0_SYNTH_ROUTE cannot be combined with K0_INPUT_MODE=mok_synthetic' (e004pf_k0pf_ab.py:1866)",
+   "measurement": "screen",
+   "n_campaigns": 0,
+   "n_processes": null,
+   "p50_us": null,
+   "production_p50_us_same_run": null,
+   "pf6gm_p50_us_same_run": null,
+   "ratio_vs_production": null,
+   "ratio_vs_pf6gm": null,
+   "spin_success_max": null,
+   "spin_fail_max": null,
+   "phase_stamps": null,
+   "gates_green": false,
+   "gates": {
+    "mok_gate": {},
+    "control_fails": null,
+    "soak": null,
+    "pperr_max": null,
+    "poison_survivors_max": 0,
+    "poison_selftest": {},
+    "eager": null
+   },
+   "raw": {
+    "tag": "e36route",
+    "outdir": "1_C16g353mode12flush_rows16timestamps1_20260812T112357Z",
+    "log": "e36route_1_C16g353mode12flush_rows16timestamps1_20260812T112357Z.log"
+   }
+  },
+  {
+   "T": 4096,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 2468,
+   "route_std_requested": null,
+   "route_std_measured": 0.003425555664342849,
+   "route_dest_load": [
+    32791,
+    32623,
+    32722,
+    32941,
+    32847,
+    32801,
+    32581,
+    32838
+   ],
+   "config": "C=16,g=353,mode=12,flush_rows=16,timestamps=1",
+   "C": 16,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "throttle_enabled": true,
+   "throttle_depth": 4,
+   "capacity_mode": "pinned_at_T4096",
+   "shape": {
+    "T": 4096,
+    "T_LOC_MAX": 40960,
+    "PADMAX": 263136,
+    "MAXTOK": 4096,
+    "MAXTOK_PROD": 4096
+   },
+   "status": "ok",
+   "error": null,
+   "measurement": "screen",
+   "n_campaigns": 0,
+   "n_processes": 1,
+   "p50_us": 6603.906154632568,
+   "production_p50_us_same_run": 7915.4791831970215,
+   "pf6gm_p50_us_same_run": 6908.830165863037,
+   "ratio_vs_production": 0.8343027632049541,
+   "ratio_vs_pf6gm": 0.9558645958997346,
+   "spin_success_max": 0,
+   "spin_fail_max": 0,
+   "phase_stamps": {
+    "plan": 374.93,
+    "M6": 2424.8,
+    "M7": 2603.44,
+    "combine": 377.48,
+    "planM6": 2799.73,
+    "servicedrain": 2672.15,
+    "m2_to_end": 5780.65
+   },
+   "gates_green": true,
+   "gates": {
+    "mok_gate": {
+     "production": {
+      "max_abs": 0.03125,
+      "relative": 0.005821,
+      "passed": true
+     },
+     "pf6gm_mega": {
+      "max_abs": 0.039062,
+      "relative": 0.008328,
+      "passed": true
+     },
+     "mps_mega": {
+      "max_abs": 0.039062,
+      "relative": 0.008328,
+      "passed": true
+     }
+    },
+    "control_fails": true,
+    "soak": {
+     "completed": 600,
+     "total": 600,
+     "pperr": 0,
+     "poison": 0,
+     "passed": true
+    },
+    "pperr_max": 0,
+    "poison_survivors_max": 0,
+    "poison_selftest": {
+     "pf6gm_mega": true,
+     "mps_mega": true
+    },
+    "eager": {
+     "status": "valid_diagnostic",
+     "gate_ok": true
+    }
+   },
+   "raw": {
+    "tag": "e36seedB",
+    "outdir": "1_C16g353mode12flush_rows16timestamps1_20260812T112936Z",
+    "log": "e36seedB_1_C16g353mode12flush_rows16timestamps1_20260812T112936Z.log"
+   }
+  },
+  {
+   "T": 4096,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 2468,
+   "route_std_requested": null,
+   "route_std_measured": 0.003425555664342849,
+   "route_dest_load": [
+    32791,
+    32623,
+    32722,
+    32941,
+    32847,
+    32801,
+    32581,
+    32838
+   ],
+   "config": "C=64,g=1,mode=2,flush_rows=16,timestamps=1",
+   "C": 64,
+   "g": 1,
+   "mode": 2,
+   "flush_rows": 16,
+   "throttle_enabled": false,
+   "throttle_depth": null,
+   "capacity_mode": "pinned_at_T4096",
+   "shape": {
+    "T": 4096,
+    "T_LOC_MAX": 40960,
+    "PADMAX": 263136,
+    "MAXTOK": 4096,
+    "MAXTOK_PROD": 4096
+   },
+   "status": "ok",
+   "error": null,
+   "measurement": "screen",
+   "n_campaigns": 0,
+   "n_processes": 1,
+   "p50_us": 7291.757106781006,
+   "production_p50_us_same_run": 8017.041206359863,
+   "pf6gm_p50_us_same_run": 6989.070892333984,
+   "ratio_vs_production": 0.9095321976138161,
+   "ratio_vs_pf6gm": 1.0433085053950484,
+   "spin_success_max": 1,
+   "spin_fail_max": 0,
+   "phase_stamps": {
+    "plan": 418.6,
+    "M6": 2466.24,
+    "M7": 2959.36,
+    "combine": 411.67,
+    "planM6": 2884.84,
+    "servicedrain": 3260.76,
+    "m2_to_end": 6255.87
+   },
+   "gates_green": true,
+   "gates": {
+    "mok_gate": {
+     "production": {
+      "max_abs": 0.03125,
+      "relative": 0.005787,
+      "passed": true
+     },
+     "pf6gm_mega": {
+      "max_abs": 0.040039,
+      "relative": 0.008328,
+      "passed": true
+     },
+     "mps_mega": {
+      "max_abs": 0.040039,
+      "relative": 0.008328,
+      "passed": true
+     }
+    },
+    "control_fails": true,
+    "soak": {
+     "completed": 600,
+     "total": 600,
+     "pperr": 0,
+     "poison": 0,
+     "passed": true
+    },
+    "pperr_max": 0,
+    "poison_survivors_max": 0,
+    "poison_selftest": {
+     "pf6gm_mega": true,
+     "mps_mega": true
+    },
+    "eager": {
+     "status": "valid_diagnostic",
+     "gate_ok": true
+    }
+   },
+   "raw": {
+    "tag": "e36seedB",
+    "outdir": "2_C64g1mode2flush_rows16timestamps1_20260812T113001Z",
+    "log": "e36seedB_2_C64g1mode2flush_rows16timestamps1_20260812T113001Z.log"
+   }
+  },
+  {
+   "T": 4096,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 2468,
+   "route_std_requested": null,
+   "route_std_measured": 0.003425555664342849,
+   "route_dest_load": [
+    32791,
+    32623,
+    32722,
+    32941,
+    32847,
+    32801,
+    32581,
+    32838
+   ],
+   "config": "C=16,g=65,mode=12,flush_rows=16,timestamps=1",
+   "C": 16,
+   "g": 65,
+   "mode": 12,
+   "flush_rows": 16,
+   "throttle_enabled": false,
+   "throttle_depth": null,
+   "capacity_mode": "pinned_at_T4096",
+   "shape": {
+    "T": 4096,
+    "T_LOC_MAX": 40960,
+    "PADMAX": 263136,
+    "MAXTOK": 4096,
+    "MAXTOK_PROD": 4096
+   },
+   "status": "ok",
+   "error": null,
+   "measurement": "screen",
+   "n_campaigns": 0,
+   "n_processes": 1,
+   "p50_us": 7268.235206604004,
+   "production_p50_us_same_run": 7931.79988861084,
+   "pf6gm_p50_us_same_run": 6971.951961517334,
+   "ratio_vs_production": 0.9163412225061756,
+   "ratio_vs_pf6gm": 1.0424964553287295,
+   "spin_success_max": 0,
+   "spin_fail_max": 0,
+   "phase_stamps": {
+    "plan": 377.52,
+    "M6": 2473.08,
+    "M7": 3336.59,
+    "combine": 314.68,
+    "planM6": 2850.6,
+    "servicedrain": 3424.88,
+    "m2_to_end": 6501.87
+   },
+   "gates_green": true,
+   "gates": {
+    "mok_gate": {
+     "production": {
+      "max_abs": 0.03125,
+      "relative": 0.005799,
+      "passed": true
+     },
+     "pf6gm_mega": {
+      "max_abs": 0.040039,
+      "relative": 0.008328,
+      "passed": true
+     },
+     "mps_mega": {
+      "max_abs": 0.040039,
+      "relative": 0.008328,
+      "passed": true
+     }
+    },
+    "control_fails": true,
+    "soak": {
+     "completed": 600,
+     "total": 600,
+     "pperr": 0,
+     "poison": 0,
+     "passed": true
+    },
+    "pperr_max": 0,
+    "poison_survivors_max": 0,
+    "poison_selftest": {
+     "pf6gm_mega": true,
+     "mps_mega": true
+    },
+    "eager": {
+     "status": "valid_diagnostic",
+     "gate_ok": true
+    }
+   },
+   "raw": {
+    "tag": "e36seedB",
+    "outdir": "3_C16g65mode12flush_rows16timestamps1_20260812T113026Z",
+    "log": "e36seedB_3_C16g65mode12flush_rows16timestamps1_20260812T113026Z.log"
+   }
+  },
+  {
+   "T": 512,
+   "route_family": "skewed_hot (requested)",
+   "route_seed_base": 0,
+   "route_std_requested": 0.032,
+   "route_std_measured": null,
+   "config": null,
+   "C": null,
+   "g": null,
+   "mode": null,
+   "flush_rows": null,
+   "throttle_enabled": null,
+   "throttle_depth": null,
+   "capacity_mode": null,
+   "shape": null,
+   "status": "unreachable_by_harness",
+   "error": "the routing-skew axis does not exist in this harness at prefill: K0_SYNTH_ROUTE is rejected outright under K0_INPUT_MODE=mok_synthetic (ab.py:1866, reproduced on all 8 ranks), the synthetic-route families are decode-only (WORLD=8,T=64,TOPK=8,E=32; ab.py:1948), and synthetic_routes.py exposes no std parameter at all -- skewed_hot is a fixed deterministic pattern, so std=0.032/0.05 are not settable quantities here.",
+   "measurement": null,
+   "n_campaigns": 0,
+   "n_processes": null,
+   "p50_us": null,
+   "production_p50_us_same_run": null,
+   "pf6gm_p50_us_same_run": null,
+   "ratio_vs_production": null,
+   "ratio_vs_pf6gm": null,
+   "spin_success_max": null,
+   "spin_fail_max": null,
+   "phase_stamps": null,
+   "gates_green": false,
+   "gates": null,
+   "raw": {
+    "tag": "e36route",
+    "outdir": null,
+    "log": null
+   }
+  },
+  {
+   "T": 1024,
+   "route_family": "skewed_hot (requested)",
+   "route_seed_base": 0,
+   "route_std_requested": 0.032,
+   "route_std_measured": null,
+   "config": null,
+   "C": null,
+   "g": null,
+   "mode": null,
+   "flush_rows": null,
+   "throttle_enabled": null,
+   "throttle_depth": null,
+   "capacity_mode": null,
+   "shape": null,
+   "status": "unreachable_by_harness",
+   "error": "the routing-skew axis does not exist in this harness at prefill: K0_SYNTH_ROUTE is rejected outright under K0_INPUT_MODE=mok_synthetic (ab.py:1866, reproduced on all 8 ranks), the synthetic-route families are decode-only (WORLD=8,T=64,TOPK=8,E=32; ab.py:1948), and synthetic_routes.py exposes no std parameter at all -- skewed_hot is a fixed deterministic pattern, so std=0.032/0.05 are not settable quantities here.",
+   "measurement": null,
+   "n_campaigns": 0,
+   "n_processes": null,
+   "p50_us": null,
+   "production_p50_us_same_run": null,
+   "pf6gm_p50_us_same_run": null,
+   "ratio_vs_production": null,
+   "ratio_vs_pf6gm": null,
+   "spin_success_max": null,
+   "spin_fail_max": null,
+   "phase_stamps": null,
+   "gates_green": false,
+   "gates": null,
+   "raw": {
+    "tag": "e36route",
+    "outdir": null,
+    "log": null
+   }
+  },
+  {
+   "T": 2048,
+   "route_family": "skewed_hot (requested)",
+   "route_seed_base": 0,
+   "route_std_requested": 0.032,
+   "route_std_measured": null,
+   "config": null,
+   "C": null,
+   "g": null,
+   "mode": null,
+   "flush_rows": null,
+   "throttle_enabled": null,
+   "throttle_depth": null,
+   "capacity_mode": null,
+   "shape": null,
+   "status": "unreachable_by_harness",
+   "error": "the routing-skew axis does not exist in this harness at prefill: K0_SYNTH_ROUTE is rejected outright under K0_INPUT_MODE=mok_synthetic (ab.py:1866, reproduced on all 8 ranks), the synthetic-route families are decode-only (WORLD=8,T=64,TOPK=8,E=32; ab.py:1948), and synthetic_routes.py exposes no std parameter at all -- skewed_hot is a fixed deterministic pattern, so std=0.032/0.05 are not settable quantities here.",
+   "measurement": null,
+   "n_campaigns": 0,
+   "n_processes": null,
+   "p50_us": null,
+   "production_p50_us_same_run": null,
+   "pf6gm_p50_us_same_run": null,
+   "ratio_vs_production": null,
+   "ratio_vs_pf6gm": null,
+   "spin_success_max": null,
+   "spin_fail_max": null,
+   "phase_stamps": null,
+   "gates_green": false,
+   "gates": null,
+   "raw": {
+    "tag": "e36route",
+    "outdir": null,
+    "log": null
+   }
+  },
+  {
+   "T": 4096,
+   "route_family": "skewed_hot (requested)",
+   "route_seed_base": 0,
+   "route_std_requested": 0.032,
+   "route_std_measured": null,
+   "config": null,
+   "C": null,
+   "g": null,
+   "mode": null,
+   "flush_rows": null,
+   "throttle_enabled": null,
+   "throttle_depth": null,
+   "capacity_mode": null,
+   "shape": null,
+   "status": "unreachable_by_harness",
+   "error": "the routing-skew axis does not exist in this harness at prefill: K0_SYNTH_ROUTE is rejected outright under K0_INPUT_MODE=mok_synthetic (ab.py:1866, reproduced on all 8 ranks), the synthetic-route families are decode-only (WORLD=8,T=64,TOPK=8,E=32; ab.py:1948), and synthetic_routes.py exposes no std parameter at all -- skewed_hot is a fixed deterministic pattern, so std=0.032/0.05 are not settable quantities here.",
+   "measurement": null,
+   "n_campaigns": 0,
+   "n_processes": null,
+   "p50_us": null,
+   "production_p50_us_same_run": null,
+   "pf6gm_p50_us_same_run": null,
+   "ratio_vs_production": null,
+   "ratio_vs_pf6gm": null,
+   "spin_success_max": null,
+   "spin_fail_max": null,
+   "phase_stamps": null,
+   "gates_green": false,
+   "gates": null,
+   "raw": {
+    "tag": "e36route",
+    "outdir": null,
+    "log": null
+   }
+  },
+  {
+   "T": 512,
+   "route_family": "skewed_hot (requested)",
+   "route_seed_base": 0,
+   "route_std_requested": 0.05,
+   "route_std_measured": null,
+   "config": null,
+   "C": null,
+   "g": null,
+   "mode": null,
+   "flush_rows": null,
+   "throttle_enabled": null,
+   "throttle_depth": null,
+   "capacity_mode": null,
+   "shape": null,
+   "status": "unreachable_by_harness",
+   "error": "the routing-skew axis does not exist in this harness at prefill: K0_SYNTH_ROUTE is rejected outright under K0_INPUT_MODE=mok_synthetic (ab.py:1866, reproduced on all 8 ranks), the synthetic-route families are decode-only (WORLD=8,T=64,TOPK=8,E=32; ab.py:1948), and synthetic_routes.py exposes no std parameter at all -- skewed_hot is a fixed deterministic pattern, so std=0.032/0.05 are not settable quantities here.",
+   "measurement": null,
+   "n_campaigns": 0,
+   "n_processes": null,
+   "p50_us": null,
+   "production_p50_us_same_run": null,
+   "pf6gm_p50_us_same_run": null,
+   "ratio_vs_production": null,
+   "ratio_vs_pf6gm": null,
+   "spin_success_max": null,
+   "spin_fail_max": null,
+   "phase_stamps": null,
+   "gates_green": false,
+   "gates": null,
+   "raw": {
+    "tag": "e36route",
+    "outdir": null,
+    "log": null
+   }
+  },
+  {
+   "T": 1024,
+   "route_family": "skewed_hot (requested)",
+   "route_seed_base": 0,
+   "route_std_requested": 0.05,
+   "route_std_measured": null,
+   "config": null,
+   "C": null,
+   "g": null,
+   "mode": null,
+   "flush_rows": null,
+   "throttle_enabled": null,
+   "throttle_depth": null,
+   "capacity_mode": null,
+   "shape": null,
+   "status": "unreachable_by_harness",
+   "error": "the routing-skew axis does not exist in this harness at prefill: K0_SYNTH_ROUTE is rejected outright under K0_INPUT_MODE=mok_synthetic (ab.py:1866, reproduced on all 8 ranks), the synthetic-route families are decode-only (WORLD=8,T=64,TOPK=8,E=32; ab.py:1948), and synthetic_routes.py exposes no std parameter at all -- skewed_hot is a fixed deterministic pattern, so std=0.032/0.05 are not settable quantities here.",
+   "measurement": null,
+   "n_campaigns": 0,
+   "n_processes": null,
+   "p50_us": null,
+   "production_p50_us_same_run": null,
+   "pf6gm_p50_us_same_run": null,
+   "ratio_vs_production": null,
+   "ratio_vs_pf6gm": null,
+   "spin_success_max": null,
+   "spin_fail_max": null,
+   "phase_stamps": null,
+   "gates_green": false,
+   "gates": null,
+   "raw": {
+    "tag": "e36route",
+    "outdir": null,
+    "log": null
+   }
+  },
+  {
+   "T": 2048,
+   "route_family": "skewed_hot (requested)",
+   "route_seed_base": 0,
+   "route_std_requested": 0.05,
+   "route_std_measured": null,
+   "config": null,
+   "C": null,
+   "g": null,
+   "mode": null,
+   "flush_rows": null,
+   "throttle_enabled": null,
+   "throttle_depth": null,
+   "capacity_mode": null,
+   "shape": null,
+   "status": "unreachable_by_harness",
+   "error": "the routing-skew axis does not exist in this harness at prefill: K0_SYNTH_ROUTE is rejected outright under K0_INPUT_MODE=mok_synthetic (ab.py:1866, reproduced on all 8 ranks), the synthetic-route families are decode-only (WORLD=8,T=64,TOPK=8,E=32; ab.py:1948), and synthetic_routes.py exposes no std parameter at all -- skewed_hot is a fixed deterministic pattern, so std=0.032/0.05 are not settable quantities here.",
+   "measurement": null,
+   "n_campaigns": 0,
+   "n_processes": null,
+   "p50_us": null,
+   "production_p50_us_same_run": null,
+   "pf6gm_p50_us_same_run": null,
+   "ratio_vs_production": null,
+   "ratio_vs_pf6gm": null,
+   "spin_success_max": null,
+   "spin_fail_max": null,
+   "phase_stamps": null,
+   "gates_green": false,
+   "gates": null,
+   "raw": {
+    "tag": "e36route",
+    "outdir": null,
+    "log": null
+   }
+  },
+  {
+   "T": 4096,
+   "route_family": "skewed_hot (requested)",
+   "route_seed_base": 0,
+   "route_std_requested": 0.05,
+   "route_std_measured": null,
+   "config": null,
+   "C": null,
+   "g": null,
+   "mode": null,
+   "flush_rows": null,
+   "throttle_enabled": null,
+   "throttle_depth": null,
+   "capacity_mode": null,
+   "shape": null,
+   "status": "unreachable_by_harness",
+   "error": "the routing-skew axis does not exist in this harness at prefill: K0_SYNTH_ROUTE is rejected outright under K0_INPUT_MODE=mok_synthetic (ab.py:1866, reproduced on all 8 ranks), the synthetic-route families are decode-only (WORLD=8,T=64,TOPK=8,E=32; ab.py:1948), and synthetic_routes.py exposes no std parameter at all -- skewed_hot is a fixed deterministic pattern, so std=0.032/0.05 are not settable quantities here.",
+   "measurement": null,
+   "n_campaigns": 0,
+   "n_processes": null,
+   "p50_us": null,
+   "production_p50_us_same_run": null,
+   "pf6gm_p50_us_same_run": null,
+   "ratio_vs_production": null,
+   "ratio_vs_pf6gm": null,
+   "spin_success_max": null,
+   "spin_fail_max": null,
+   "phase_stamps": null,
+   "gates_green": false,
+   "gates": null,
+   "raw": {
+    "tag": "e36route",
+    "outdir": null,
+    "log": null
+   }
+  },
+  {
+   "T": 4096,
+   "route_family": "mok_synthetic router logits (torch.randn topk)",
+   "route_seed_base": 1234,
+   "route_std_requested": 0.05,
+   "route_std_measured": null,
+   "config": "C=0,g=353,mode=12,flush_rows=16",
+   "C": 0,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "throttle_enabled": true,
+   "throttle_depth": 4,
+   "capacity_mode": "pinned_at_T4096",
+   "shape": null,
+   "status": "requires_mode_14",
+   "error": "C=0 is illegal in mode 12 (the validator rejects it); driving the CTA-dedication axis to zero needs mode 14, which was being built by another agent while this experiment ran. Not faked with a large-C proxy.",
+   "measurement": null,
+   "n_campaigns": 0,
+   "n_processes": null,
+   "p50_us": null,
+   "production_p50_us_same_run": null,
+   "pf6gm_p50_us_same_run": null,
+   "ratio_vs_production": null,
+   "ratio_vs_pf6gm": null,
+   "spin_success_max": null,
+   "spin_fail_max": null,
+   "phase_stamps": null,
+   "gates_green": false,
+   "gates": null,
+   "raw": {
+    "tag": null,
+    "outdir": null,
+    "log": null
+   }
+  }
+ ]
+}

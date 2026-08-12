@@ -5,7 +5,7 @@ for the orchestrator to merge rather than being written directly.
 
 | figure | what it shows | data file | generating experiment | status |
 |---|---|---|---|---|
-| Fig 2 | per-resource throughput vs CTA count on MI350X (MFMA / HBM / xGMI), each curve isolated and concurrent, with the knee annotated — the NanoFlow-Fig-7 analog | `exp_22_fig7_saturation/saturation.json` (schema `exp22-saturation-1`, documented in that folder's `result.md` §1) | exp_22 | **built, CPU gate green, awaiting GPU lease** — ubench + one-command sweep + summarizer all gated; `saturation.json` not yet produced |
+| Fig 2 | per-resource throughput vs CTA count on MI350X (MFMA / HBM / xGMI), each curve isolated and concurrent, with the knee annotated — the NanoFlow-Fig-7 analog | `exp_22_fig7_saturation/saturation.json` (schema `exp22-saturation-1`, documented in that folder's `result.md` §1) | exp_22, `E22_SRC_REV 10`, 250 points, 2026-08-12T10:45Z | **DONE** — knees: single link 8 CTAs, 7-link fabric 32, HBM 128, MFMA none (linear to 256). H4 supported ×3; H1 falsifier fired (threshold set above the achievable ceiling — see `result.md` §10.3) |
 
 Plot script contract (per plan.md §"Plot spec"), for whoever draws it:
 
@@ -20,4 +20,15 @@ Plot script contract (per plan.md §"Plot spec"), for whoever draws it:
 * drop, or mark, any concurrent point whose
   `derived.concurrent_over_isolated[...].concurrent_is_really_concurrent` is
   false — that flag means the two roles did not overlap enough for the point to
-  mean what the axis label says.
+  mean what the axis label says. In the landed data it is true at all 75
+  concurrent points.
+
+Two things the plotter must not get wrong, both measured:
+
+* `xgmi rr7` at `mlp1` and `mlp8` **has not saturated at C=64** (C=64/C=32 =
+  1.87 and 1.73). Their `knee_ctas=64` is an artifact of the plateau definition
+  on a still-rising curve; annotate them as "no knee in range", not as knees.
+  Same for `mfma`, whose `knee_ctas=224` is just linearity (R² ≥ 0.9999).
+* `reserved_only` points carry `value = 0` **by design** — that arm holds C CTAs
+  idle to price the reservation. Its payload is `cmp_tflops_median`, not `value`;
+  do not plot it on the bandwidth axis.

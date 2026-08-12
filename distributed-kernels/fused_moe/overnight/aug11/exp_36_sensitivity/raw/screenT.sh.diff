@@ -1,0 +1,33 @@
+--- /home/subvadla/e36/screen_src.sh	2026-08-12 11:10:42.247305426 +0000
++++ /home/subvadla/e36/screenT.sh	2026-08-12 11:14:58.257290167 +0000
+@@ -84,15 +84,15 @@
+ SEED="${SCREEN_SEED:-0}"
+ SOAK="${SCREEN_SOAK_ITERS:-}"
+ BRANCH="${SCREEN_BRANCH:-codex/distributed-hipkittens-scaffold}"
+-SYNC="${SCREEN_SYNC:-1}"
++SYNC="${SCREEN_SYNC:-0}"
+ IDLE_WAIT="${SCREEN_IDLE_WAIT:-300}"
+ 
+ DHK="$HOME/Distributed-HipKittens"
+ K0="$HOME/amd-master/auto-gpu-kernel/k0_fused_moe"
+-CAMPAIGN="$K0/benchmarks/mok_synthetic_prefill/run_campaign.sh"
++CAMPAIGN="${SCREEN_CAMPAIGN:-$K0/benchmarks/mok_synthetic_prefill/run_campaign.sh}"
+ MPSSRC="$DHK/distributed-kernels/fused_moe/k0pf6gm_device_tile_mps.hip"
+ JITDIR="$HOME/.cache/k0-mok-synthetic-prefill/mori/jit/gfx950_mlx5"
+-SCRATCH="$HOME/overnight-scratch"
++SCRATCH="${SCREEN_SCRATCH:-$HOME/overnight-scratch}"
+ CSV="$SCRATCH/screen_${TAG}.csv"
+ LOCK="/tmp/k0_mok_synthetic_gpu_lock"
+ ITERS="w${WARMUP}t${TIMED}p${PROCS}"
+@@ -245,6 +245,11 @@
+     K0_MOK_RUN_TIMEOUT="$RUN_TIMEOUT" \
+     K0_MPS_CFG="$CFG" \
+     K0_MPS_TRACE="$TRACE" \
++    K0_T="${SCREEN_T:-4096}" \
++    K0_T_LOC_MAX="${SCREEN_T_LOC_MAX:-}" \
++    K0_PADMAX="${SCREEN_PADMAX:-}" \
++    K0_MAXTOK="${SCREEN_MAXTOK:-}" \
++    K0_MAXTOK_PROD="${SCREEN_MAXTOK_PROD:-}" \
+     K0_MPS_SOAK_ITERS="$SOAK" \
+     K0_SYNTH_ROUTE="$ROUTE" \
+     K0_SYNTH_SEED="$SEED" \

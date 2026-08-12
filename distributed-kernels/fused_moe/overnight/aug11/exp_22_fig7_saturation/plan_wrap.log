@@ -1,0 +1,149 @@
+=== exp_22 saturation sweep: tier=plan rotations=5 ===
+2026-08-12T10:45:11Z
+--- rocm-smi --showpids (must list no processes; --force overrides) ---
+
+
+============================ ROCm System Management Interface ============================
+===================================== KFD Processes ======================================
+KFD process information:
+PID  	PROCESS NAME	GPU(s)	VRAM USED	SDMA USED	CU OCCUPANCY	
+44579	gpuagent    	0     	0        	0        	0           	
+==========================================================================================
+================================== End of ROCm SMI Log ===================================
+utc=2026-08-12T10:45:11Z
+host=gbt350-odcdh2-c05-1
+tier=plan rotations=5 warmup=2
+bin_sha256=21fa003964e499b3d859ac8cf312522bd1053b1ffbbac058a4c5b2d2da3ca308
+src_sha256=e3af5f1b3d65ff31306362e51db35dd56322f33230adde50407f09c578d2b21e
+src_rev=#define E22_SRC_REV 10
+dhk_head=ca5b683f420e4985e8d2a790fe086419ab6730f1
+--- clocks ---
+
+
+============================ ROCm System Management Interface ============================
+=============================== Current clock frequencies ================================
+--- attempt 1/6 (points so far: 0) ---
+attempt 1 rc=0 points 0 -> 250
+--- attempt 2/6 (points so far: 250) ---
+attempt 2 rc=0 points 250 -> 250
+no new points and clean exit: grid complete
+=== summary ===
+wrote /home/subvadla/e22/out/saturation.json (250 points)
+
+--- knees (smallest C reaching 90%% of plateau) ---
+  hbm|mlp0|na|concurrent|p0|g0|n1|rb14336|per_cta      knee=128   plateau=  3226.74 monotone=True
+  hbm|mlp0|na|isolated|p0|g0|n1|rb14336|per_cta        knee=128   plateau=  4151.85 monotone=True
+  mfma|mlp16|na|isolated|p0|g0|n1|rb14336|per_cta      knee=224   plateau=   330.35 monotone=True
+  mfma|mlp256|na|isolated|p0|g0|n1|rb14336|per_cta     knee=224   plateau=   858.13 monotone=True
+  mfma|mlp4|na|isolated|p0|g0|n1|rb14336|per_cta       knee=224   plateau=   112.48 monotone=True
+  xgmi|mlp1|rr7|concurrent|p0|g0|n1|rb14336|per_cta    knee=64    plateau=   251.72 monotone=True
+  xgmi|mlp1|rr7|isolated|p0|g0|n1|rb14336|per_cta      knee=64    plateau=   252.53 monotone=True
+  xgmi|mlp1|single|concurrent|p0|g0|n1|rb14336|per_cta knee=16    plateau=    55.52 monotone=False
+  xgmi|mlp1|single|isolated|p0|g0|n1|rb14336|per_cta   knee=16    plateau=    55.48 monotone=False
+  xgmi|mlp4|rr7|concurrent|p0|g0|n1|rb14336|per_cta    knee=32    plateau=   354.82 monotone=True
+  xgmi|mlp4|rr7|concurrent|p1|g16|n1|rb14336|per_cta   knee=64    plateau=   242.23 monotone=True
+  xgmi|mlp4|rr7|concurrent|p1|g2|n1|rb14336|per_cta    knee=32    plateau=   331.40 monotone=True
+  xgmi|mlp4|rr7|isolated|p0|g0|n1|rb14336|per_cta      knee=32    plateau=   354.96 monotone=True
+  xgmi|mlp4|rr7|isolated|p1|g16|n1|rb14336|per_cta     knee=64    plateau=   259.78 monotone=True
+  xgmi|mlp4|rr7|isolated|p1|g2|n1|rb14336|per_cta      knee=32    plateau=   336.00 monotone=True
+  xgmi|mlp4|single|concurrent|p0|g0|n1|rb14336|per_cta knee=8     plateau=    56.91 monotone=False
+  xgmi|mlp4|single|concurrent|p1|g16|n1|rb14336|per_cta knee=16    plateau=    54.63 monotone=True
+  xgmi|mlp4|single|concurrent|p1|g2|n1|rb14336|per_cta knee=8     plateau=    55.86 monotone=True
+  xgmi|mlp4|single|isolated|p0|g0|n1|rb14336|per_cta   knee=8     plateau=    56.90 monotone=False
+  xgmi|mlp4|single|isolated|p1|g16|n1|rb14336|per_cta  knee=16    plateau=    55.10 monotone=True
+  xgmi|mlp4|single|isolated|p1|g2|n1|rb14336|per_cta   knee=8     plateau=    55.92 monotone=True
+  xgmi|mlp8|rr7|concurrent|p0|g0|n1|rb14336|per_cta    knee=64    plateau=   260.19 monotone=True
+  xgmi|mlp8|rr7|isolated|p0|g0|n1|rb14336|per_cta      knee=64    plateau=   260.38 monotone=True
+  xgmi|mlp8|single|concurrent|p0|g0|n1|rb14336|per_cta knee=16    plateau=    55.69 monotone=True
+  xgmi|mlp8|single|isolated|p0|g0|n1|rb14336|per_cta   knee=16    plateau=    55.73 monotone=True
+
+--- Q2: dedicated pool cost decomposition ---
+  hbm|c128|m0|na|p0|g0|n1|rb14336|per_cta|u1     C=128  interfere= 10.10% reserve= 50.00% payload=  3913.8 tiles_matched=True
+  hbm|c16|m0|na|p0|g0|n1|rb14336|per_cta|u1      C=16   interfere=  0.03% reserve=  6.25% payload=   698.1 tiles_matched=True
+  hbm|c32|m0|na|p0|g0|n1|rb14336|per_cta|u1      C=32   interfere=  0.23% reserve= 12.50% payload=  1367.3 tiles_matched=True
+  hbm|c64|m0|na|p0|g0|n1|rb14336|per_cta|u1      C=64   interfere=  3.27% reserve= 25.00% payload=  2539.7 tiles_matched=True
+  hbm|c8|m0|na|p0|g0|n1|rb14336|per_cta|u1       C=8    interfere= -0.03% reserve=  3.12% payload=   353.2 tiles_matched=True
+  xgmi|c16|m1|rr7|p0|g0|n1|rb14336|per_cta|u1    C=16   interfere=  0.02% reserve=  6.25% payload=    88.7 tiles_matched=True
+  xgmi|c16|m1|single|p0|g0|n1|rb14336|per_cta|u1 C=16   interfere= 14.15% reserve=  6.25% payload=    55.1 tiles_matched=True  <<< interference dominates
+  xgmi|c16|m4|rr7|p0|g0|n1|rb14336|per_cta|u1    C=16   interfere= -0.06% reserve=  6.25% payload=   192.4 tiles_matched=True
+  xgmi|c16|m4|rr7|p1|g16|n1|rb14336|per_cta|u1   C=16   interfere=  2.33% reserve=  6.25% payload=   105.0 tiles_matched=True
+  xgmi|c16|m4|rr7|p1|g2|n1|rb14336|per_cta|u1    C=16   interfere=  0.17% reserve=  6.25% payload=   167.2 tiles_matched=True
+  xgmi|c16|m4|single|p0|g0|n1|rb14336|per_cta|u1 C=16   interfere= 14.28% reserve=  6.25% payload=    57.3 tiles_matched=True  <<< interference dominates
+  xgmi|c16|m4|single|p1|g16|n1|rb14336|per_cta|u1 C=16   interfere=  6.75% reserve=  6.25% payload=    50.6 tiles_matched=True  <<< interference dominates
+  xgmi|c16|m4|single|p1|g2|n1|rb14336|per_cta|u1 C=16   interfere= 14.14% reserve=  6.25% payload=    55.6 tiles_matched=True  <<< interference dominates
+  xgmi|c16|m8|rr7|p0|g0|n1|rb14336|per_cta|u1    C=16   interfere=  0.06% reserve=  6.25% payload=    95.4 tiles_matched=True
+  xgmi|c16|m8|single|p0|g0|n1|rb14336|per_cta|u1 C=16   interfere= 13.21% reserve=  6.25% payload=    52.8 tiles_matched=True  <<< interference dominates
+  xgmi|c1|m1|rr7|p0|g0|n1|rb14336|per_cta|u1     C=1    interfere= -0.02% reserve=  0.39% payload=     5.7 tiles_matched=True
+  xgmi|c1|m1|single|p0|g0|n1|rb14336|per_cta|u1  C=1    interfere= -0.01% reserve=  0.39% payload=     6.5 tiles_matched=True
+  xgmi|c1|m4|rr7|p0|g0|n1|rb14336|per_cta|u1     C=1    interfere=  0.13% reserve=  0.39% payload=    12.3 tiles_matched=True
+  xgmi|c1|m4|rr7|p1|g16|n1|rb14336|per_cta|u1    C=1    interfere=  3.94% reserve=  0.39% payload=     6.8 tiles_matched=True  <<< interference dominates
+  xgmi|c1|m4|rr7|p1|g2|n1|rb14336|per_cta|u1     C=1    interfere=  0.04% reserve=  0.39% payload=    10.8 tiles_matched=True
+  xgmi|c1|m4|single|p0|g0|n1|rb14336|per_cta|u1  C=1    interfere=  0.05% reserve=  0.39% payload=    13.2 tiles_matched=True
+  xgmi|c1|m4|single|p1|g16|n1|rb14336|per_cta|u1 C=1    interfere=  0.10% reserve=  0.39% payload=     7.8 tiles_matched=True
+  xgmi|c1|m4|single|p1|g2|n1|rb14336|per_cta|u1  C=1    interfere=  0.03% reserve=  0.39% payload=    11.9 tiles_matched=True
+  xgmi|c1|m8|rr7|p0|g0|n1|rb14336|per_cta|u1     C=1    interfere= -0.04% reserve=  0.39% payload=     6.1 tiles_matched=True
+  xgmi|c1|m8|single|p0|g0|n1|rb14336|per_cta|u1  C=1    interfere=  0.03% reserve=  0.39% payload=     8.3 tiles_matched=True
+  xgmi|c2|m1|rr7|p0|g0|n1|rb14336|per_cta|u1     C=2    interfere=  0.08% reserve=  0.78% payload=    11.2 tiles_matched=True
+  xgmi|c2|m1|single|p0|g0|n1|rb14336|per_cta|u1  C=2    interfere=  0.91% reserve=  0.78% payload=    10.9 tiles_matched=True  <<< interference dominates
+  xgmi|c2|m4|rr7|p0|g0|n1|rb14336|per_cta|u1     C=2    interfere= -0.00% reserve=  0.78% payload=    24.4 tiles_matched=True
+  xgmi|c2|m4|rr7|p1|g16|n1|rb14336|per_cta|u1    C=2    interfere=  4.64% reserve=  0.78% payload=    13.5 tiles_matched=True  <<< interference dominates
+  xgmi|c2|m4|rr7|p1|g2|n1|rb14336|per_cta|u1     C=2    interfere= -0.19% reserve=  0.78% payload=    21.3 tiles_matched=True
+  xgmi|c2|m4|single|p0|g0|n1|rb14336|per_cta|u1  C=2    interfere=  0.02% reserve=  0.78% payload=    23.7 tiles_matched=True
+  xgmi|c2|m4|single|p1|g16|n1|rb14336|per_cta|u1 C=2    interfere=  0.59% reserve=  0.78% payload=    14.5 tiles_matched=True
+  xgmi|c2|m4|single|p1|g2|n1|rb14336|per_cta|u1  C=2    interfere=  0.10% reserve=  0.78% payload=    21.5 tiles_matched=True
+  xgmi|c2|m8|rr7|p0|g0|n1|rb14336|per_cta|u1     C=2    interfere= -0.01% reserve=  0.78% payload=    11.9 tiles_matched=True
+  xgmi|c2|m8|single|p0|g0|n1|rb14336|per_cta|u1  C=2    interfere= -0.03% reserve=  0.78% payload=    15.0 tiles_matched=True
+  xgmi|c32|m1|rr7|p0|g0|n1|rb14336|per_cta|u1    C=32   interfere= -0.03% reserve= 12.50% payload=   175.1 tiles_matched=True
+  xgmi|c32|m1|single|p0|g0|n1|rb14336|per_cta|u1 C=32   interfere=  0.03% reserve= 12.50% payload=    55.7 tiles_matched=True
+  xgmi|c32|m4|rr7|p0|g0|n1|rb14336|per_cta|u1    C=32   interfere=  0.07% reserve= 12.50% payload=   342.2 tiles_matched=True
+  xgmi|c32|m4|rr7|p1|g16|n1|rb14336|per_cta|u1   C=32   interfere=  0.61% reserve= 12.50% payload=   197.6 tiles_matched=True
+  xgmi|c32|m4|rr7|p1|g2|n1|rb14336|per_cta|u1    C=32   interfere=  0.78% reserve= 12.50% payload=   307.8 tiles_matched=True
+  xgmi|c32|m4|single|p0|g0|n1|rb14336|per_cta|u1 C=32   interfere= -0.09% reserve= 12.50% payload=    56.4 tiles_matched=True
+  xgmi|c32|m4|single|p1|g16|n1|rb14336|per_cta|u1 C=32   interfere=  0.19% reserve= 12.50% payload=    53.8 tiles_matched=True
+  xgmi|c32|m4|single|p1|g2|n1|rb14336|per_cta|u1 C=32   interfere= -0.07% reserve= 12.50% payload=    55.7 tiles_matched=True
+  xgmi|c32|m8|rr7|p0|g0|n1|rb14336|per_cta|u1    C=32   interfere=  0.13% reserve= 12.50% payload=   190.3 tiles_matched=True
+  xgmi|c32|m8|single|p0|g0|n1|rb14336|per_cta|u1 C=32   interfere=  0.08% reserve= 12.50% payload=    55.1 tiles_matched=True
+  xgmi|c4|m1|rr7|p0|g0|n1|rb14336|per_cta|u1     C=4    interfere= -0.11% reserve=  1.56% payload=    22.3 tiles_matched=True
+  xgmi|c4|m1|single|p0|g0|n1|rb14336|per_cta|u1  C=4    interfere= 13.92% reserve=  1.56% payload=    21.0 tiles_matched=True  <<< interference dominates
+  xgmi|c4|m4|rr7|p0|g0|n1|rb14336|per_cta|u1     C=4    interfere=  0.09% reserve=  1.56% payload=    48.7 tiles_matched=True
+  xgmi|c4|m4|rr7|p1|g16|n1|rb14336|per_cta|u1    C=4    interfere=  4.69% reserve=  1.56% payload=    27.3 tiles_matched=True  <<< interference dominates
+  xgmi|c4|m4|rr7|p1|g2|n1|rb14336|per_cta|u1     C=4    interfere= -0.20% reserve=  1.56% payload=    42.5 tiles_matched=True
+  xgmi|c4|m4|single|p0|g0|n1|rb14336|per_cta|u1  C=4    interfere=  3.01% reserve=  1.56% payload=    44.1 tiles_matched=True  <<< interference dominates
+  xgmi|c4|m4|single|p1|g16|n1|rb14336|per_cta|u1 C=4    interfere= 11.35% reserve=  1.56% payload=    27.1 tiles_matched=True  <<< interference dominates
+  xgmi|c4|m4|single|p1|g2|n1|rb14336|per_cta|u1  C=4    interfere=  7.44% reserve=  1.56% payload=    40.3 tiles_matched=True  <<< interference dominates
+  xgmi|c4|m8|rr7|p0|g0|n1|rb14336|per_cta|u1     C=4    interfere=  0.00% reserve=  1.56% payload=    23.8 tiles_matched=True
+  xgmi|c4|m8|single|p0|g0|n1|rb14336|per_cta|u1  C=4    interfere= 10.32% reserve=  1.56% payload=    23.8 tiles_matched=True  <<< interference dominates
+  xgmi|c64|m1|rr7|p0|g0|n1|rb14336|per_cta|u1    C=64   interfere=  0.01% reserve= 25.00% payload=   328.3 tiles_matched=True
+  xgmi|c64|m1|single|p0|g0|n1|rb14336|per_cta|u1 C=64   interfere=  0.03% reserve= 25.00% payload=    55.4 tiles_matched=True
+  xgmi|c64|m4|rr7|p0|g0|n1|rb14336|per_cta|u1    C=64   interfere=  0.09% reserve= 25.00% payload=   367.4 tiles_matched=True
+  xgmi|c64|m4|rr7|p1|g16|n1|rb14336|per_cta|u1   C=64   interfere=  2.28% reserve= 25.00% payload=   286.9 tiles_matched=True
+  xgmi|c64|m4|rr7|p1|g2|n1|rb14336|per_cta|u1    C=64   interfere=  0.50% reserve= 25.00% payload=   355.0 tiles_matched=True
+  xgmi|c64|m4|single|p0|g0|n1|rb14336|per_cta|u1 C=64   interfere= -0.00% reserve= 25.00% payload=    56.5 tiles_matched=True
+  xgmi|c64|m4|single|p1|g16|n1|rb14336|per_cta|u1 C=64   interfere=  0.18% reserve= 25.00% payload=    55.4 tiles_matched=True
+  xgmi|c64|m4|single|p1|g2|n1|rb14336|per_cta|u1 C=64   interfere=  0.12% reserve= 25.00% payload=    56.0 tiles_matched=True
+  xgmi|c64|m8|rr7|p0|g0|n1|rb14336|per_cta|u1    C=64   interfere=  0.23% reserve= 25.00% payload=   330.0 tiles_matched=True
+  xgmi|c64|m8|single|p0|g0|n1|rb14336|per_cta|u1 C=64   interfere=  0.02% reserve= 25.00% payload=    56.3 tiles_matched=True
+  xgmi|c8|m1|rr7|p0|g0|n1|rb14336|per_cta|u1     C=8    interfere=  0.19% reserve=  3.12% payload=    44.5 tiles_matched=True
+  xgmi|c8|m1|single|p0|g0|n1|rb14336|per_cta|u1  C=8    interfere= 14.11% reserve=  3.12% payload=    40.5 tiles_matched=True  <<< interference dominates
+  xgmi|c8|m4|rr7|p0|g0|n1|rb14336|per_cta|u1     C=8    interfere= -0.01% reserve=  3.12% payload=    97.2 tiles_matched=True
+  xgmi|c8|m4|rr7|p1|g16|n1|rb14336|per_cta|u1    C=8    interfere=  4.81% reserve=  3.12% payload=    53.4 tiles_matched=True  <<< interference dominates
+  xgmi|c8|m4|rr7|p1|g2|n1|rb14336|per_cta|u1     C=8    interfere=  0.05% reserve=  3.12% payload=    85.1 tiles_matched=True
+  xgmi|c8|m4|single|p0|g0|n1|rb14336|per_cta|u1  C=8    interfere= 14.20% reserve=  3.12% payload=    55.0 tiles_matched=True  <<< interference dominates
+  xgmi|c8|m4|single|p1|g16|n1|rb14336|per_cta|u1 C=8    interfere= 14.59% reserve=  3.12% payload=    42.8 tiles_matched=True  <<< interference dominates
+  xgmi|c8|m4|single|p1|g2|n1|rb14336|per_cta|u1  C=8    interfere= 14.47% reserve=  3.12% payload=    52.8 tiles_matched=True  <<< interference dominates
+  xgmi|c8|m8|rr7|p0|g0|n1|rb14336|per_cta|u1     C=8    interfere= -0.02% reserve=  3.12% payload=    47.7 tiles_matched=True
+  xgmi|c8|m8|single|p0|g0|n1|rb14336|per_cta|u1  C=8    interfere= 14.29% reserve=  3.12% payload=    41.0 tiles_matched=True  <<< interference dominates
+  summary: {'n_pairs': 75, 'n_where_interference_exceeds_reservation': 20, 'pairs_where_dedicating_could_pay': ['xgmi|c16|m1|single|p0|g0|n1|rb14336|per_cta|u1', 'xgmi|c16|m4|single|p0|g0|n1|rb14336|per_cta|u1', 'xgmi|c16|m4|single|p1|g16|n1|rb14336|per_cta|u1', 'xgmi|c16|m4|single|p1|g2|n1|rb14336|per_cta|u1', 'xgmi|c16|m8|single|p0|g0|n1|rb14336|per_cta|u1', 'xgmi|c1|m4|rr7|p1|g16|n1|rb14336|per_cta|u1', 'xgmi|c2|m1|single|p0|g0|n1|rb14336|per_cta|u1', 'xgmi|c2|m4|rr7|p1|g16|n1|rb14336|per_cta|u1', 'xgmi|c4|m1|single|p0|g0|n1|rb14336|per_cta|u1', 'xgmi|c4|m4|rr7|p1|g16|n1|rb14336|per_cta|u1', 'xgmi|c4|m4|single|p0|g0|n1|rb14336|per_cta|u1', 'xgmi|c4|m4|single|p1|g16|n1|rb14336|per_cta|u1', 'xgmi|c4|m4|single|p1|g2|n1|rb14336|per_cta|u1', 'xgmi|c4|m8|single|p0|g0|n1|rb14336|per_cta|u1', 'xgmi|c8|m1|single|p0|g0|n1|rb14336|per_cta|u1', 'xgmi|c8|m4|rr7|p1|g16|n1|rb14336|per_cta|u1', 'xgmi|c8|m4|single|p0|g0|n1|rb14336|per_cta|u1', 'xgmi|c8|m4|single|p1|g16|n1|rb14336|per_cta|u1', 'xgmi|c8|m4|single|p1|g2|n1|rb14336|per_cta|u1', 'xgmi|c8|m8|single|p0|g0|n1|rb14336|per_cta|u1'], 'pairs_with_unmatched_cmp_tiles': [], 'median_interference_cost_frac': 0.001, 'reading': 'interference is what a co-resident payload costs the compute pool; reservation (C/grid) is what dedicating the same CTAs costs before any payload moves. Dedicating can only pay where interference exceeds reservation.'}
+
+--- hypotheses ---
+  H1_mlp4        REFUTED_NEVER_REACHED    {'ctas_needed': None, 'verdict': 'REFUTED_NEVER_REACHED', 'best_value': 57.3048, 'best_peak_fraction': 0.74616, 'falsifier_triggered': True}
+  H1_mlp8        REFUTED_NEVER_REACHED    {'ctas_needed': None, 'verdict': 'REFUTED_NEVER_REACHED', 'best_value': 56.3276, 'best_peak_fraction': 0.73343, 'falsifier_triggered': True}
+  H2_mlp1        PLATEAU_BELOW_75PCT      {'ctas_needed_for_75pct_of_537.6': None, 'knee_90pct_of_plateau': 64, 'verdict': 'PLATEAU_BELOW_75PCT', 'best_value': 329.0832, 'best_peak_fraction': 0.61213}
+  H2_mlp4        PLATEAU_BELOW_75PCT      {'ctas_needed_for_75pct_of_537.6': None, 'knee_90pct_of_plateau': 32, 'verdict': 'PLATEAU_BELOW_75PCT', 'best_value': 367.2081, 'best_peak_fraction': 0.68305}
+  H2_mlp8        PLATEAU_BELOW_75PCT      {'ctas_needed_for_75pct_of_537.6': None, 'knee_90pct_of_plateau': 64, 'verdict': 'PLATEAU_BELOW_75PCT', 'best_value': 329.74, 'best_peak_fraction': 0.61336}
+  H3             REFUTED_PAYLOAD_RIDES_FREE {'payload_only_concurrent_over_isolated_median': 0.9951, 'n': 42, 'depressed': False, 'protocol_over_payload_median': 0.878, 'verdict': 'REFUTED_PAYLOAD_RIDES_FREE'}
+  H4_shape16     SUPPORTED                {'r2_through_origin': 0.99997, 'verdict': 'SUPPORTED', 'value_at_max_ctas': 351.9767, 'peak_fraction_at_max_ctas': 0.15303, 'per_cta_efficiency_first_vs_last': 0.9975}
+  H4_shape256    SUPPORTED                {'r2_through_origin': 0.99989, 'verdict': 'SUPPORTED', 'value_at_max_ctas': 910.2335, 'peak_fraction_at_max_ctas': 0.39575, 'per_cta_efficiency_first_vs_last': 0.9873}
+  H4_shape4      SUPPORTED                {'r2_through_origin': 0.99997, 'verdict': 'SUPPORTED', 'value_at_max_ctas': 119.8651, 'peak_fraction_at_max_ctas': 0.05212, 'per_cta_efficiency_first_vs_last': 0.9976}
+artifacts: /home/subvadla/e22/out/saturation_plan.jsonl  /home/subvadla/e22/out/saturation.json  /home/subvadla/e22/out/run_plan.log
+2026-08-12T10:46:24Z

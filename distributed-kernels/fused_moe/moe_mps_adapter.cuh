@@ -30,6 +30,12 @@ namespace hk_moe::mps {
 #define K0P6_MPS_ERR_SERVICE 67108864    // 1<<26: service/event poll timeout
 #define K0P6_MPS_ERR_CONFIG 268435456    // 1<<28: MPS config/shape guard
 
+// exp_34 mode 14 REUSES donor bit 25. Its donor meaning is "row_ready combine
+// poll timeout" (see the pperr table in the kernel header) and mode 14 is the
+// one mode that compiles that poll OUT, so the two meanings can never both be
+// reachable in one executed path. Named here so kernel and adapter agree on it.
+#define K0P6_MPS_ERR_M7DONE 33554432     // 1<<25: mode-14 M7-done rendezvous
+
 // ---- K0P6_D_MPS_STATE scalar word lanes -------------------------------------
 #define K0P6_MPS_ST_TICKET 0   // finish-order role tickets (agent monotonic)
 #define K0P6_MPS_ST_TAIL 1     // event tail ticket (monotonic, capacity-bound)
@@ -169,6 +175,12 @@ inline constexpr std::uint32_t kDiagVariantWrite = 4u;
 // 32-bit slots, so ~16 waves share each queue cache line while compute CTAs
 // are concurrently writing those same lines. Unlike push pacing, backing the
 // poll off costs nothing when events ARE available.
+// exp_34 note: mode 14 is deliberately NOT a member. `mode_is_stream` gates
+// three unrelated things -- the drain entry (KRN M7.6), the "a stream mode needs
+// a pool" validator rule, and M8's dynamic-ticket loop -- and mode 14 wants only
+// the last one. Adding 14 here would have required exempting it at the other two
+// sites; instead M8 asks for `mode_is_stream || mode_is_coarse` directly, and
+// this predicate stays byte-identical for every mode that predates exp_34.
 __host__ __device__ __forceinline__ bool mode_is_stream(config c) {
     return c.mode == 2u || c.mode == 3u || c.mode == 4u || c.mode == 7u ||
            c.mode == 8u || c.mode == 9u || c.mode == 12u || c.mode == 13u;
@@ -216,6 +228,31 @@ inline constexpr std::uint32_t kModeFlushAgent = 9u;
 // detector; rel_L1 alone cannot see it.
 inline constexpr std::uint32_t kModeRemoteAccum = 12u;
 inline constexpr std::uint32_t kModeDirectRows = 13u;
+
+// ---- exp_34 mode 14: COARSE READINESS ---------------------------------------
+// Mode 14 rides mode 12's remote-accumulate TRANSPORT verbatim and deletes the
+// entire per-row readiness PROTOCOL. Nothing is enqueued, nothing is drained,
+// no arrival counter is bumped, no per-row flag is published or polled. In its
+// place M7 ends with one rank-local rendezvous (`release_cta_payload_system` +
+// `hkp::grid_barrier`) followed by 8 epoch publishes from a single CTA leader
+// and an 8-word bounded poll on every CTA, after which every slot on this rank
+// is final by construction and M8's per-row poll compiles out.
+//
+// Why it MUST be mode 12's transport and not mode 2's: on mode 2 `nc_arr` is
+// also the producer-side PUSH TRIGGER (`target = row_rem[r]`, then the
+// completing lane pushes the group), so deleting the counting there exposes the
+// whole push behind a local barrier. In mode 12 the payload already arrived in
+// the producer's own epilogue RMWs and `nc_arr` is pure bookkeeping, so the
+// protocol's only consumer disappears with it. See exp_30/design.md §0.
+//
+// STATED PLAINLY, because it is the finding and not a footnote: with the
+// bookkeeping, the push and the flags all gone, the service pool has no job
+// left, so at C == 0 mode 14 is a HOMOGENEOUS megakernel. Its number is banked
+// as the price of the readiness protocol, not ratcheted as a role-split result.
+// C > 0 remains legal and meaningful (the tail CTAs skip M7 and join only M8),
+// which is the placement arm exp_37 wants; `is_service_cta` is deliberately
+// left UNCHANGED so the M7 stride `nct - C` and the reservation stay consistent.
+inline constexpr std::uint32_t kModeCoarseReady = 14u;
 inline constexpr std::uint32_t kRemoteAccumGMask = 0xFu;   // physical g bits
 inline constexpr std::uint32_t kRemoteAccumDetectBit = 0x10u;
 #define K0P6_MPS_ERR_DUAL 134217728    // 1<<27: dual-write detector mismatch
@@ -229,7 +266,7 @@ inline constexpr std::uint32_t kRemoteAccumDetectBit = 0x10u;
 //   0x0010  dual-write lost-update detector
 //   0x0020  epilogue remote-RMW throttle ENABLE
 //   0x0040  exp_24 A: skip the DEAD `part` zero-fill in M5
-//   0x0080  reserved (rejected)
+//   0x0080  exp_34 C: mode 14 KEEPS mode 12's per-task VMEM drain
 //   0x0300  exp_24 B: throttle DEPTH select, 00->8 (today) 01->4 10->16 11->32
 //   0xFC00  reserved (rejected)
 //
@@ -239,12 +276,46 @@ inline constexpr std::uint32_t kRemoteAccumThrottleBit = 0x20u;
 inline constexpr std::uint32_t kRemoteAccumSkipPartZeroBit = 0x40u;
 inline constexpr std::uint32_t kRemoteAccumThrottleDepthMask = 0x300u;
 inline constexpr std::uint32_t kRemoteAccumThrottleDepthShift = 8u;
+// ---- exp_34 C: the drain-deletion CONFOUND CONTROL bit -----------------------
+// Mode 14 changes two things at once against mode 12: the readiness signal's
+// granularity, and -- because the per-task event publication disappears with the
+// per-row protocol -- the per-task VMEM drain that only ever ordered that
+// publication (~2,840 vmcnt(0) + 2,840 __syncthreads() per CTA). A single
+// mode 12 -> mode 14 waterfall rung would therefore carry two variables. This
+// bit restores the deferred drain under mode 14 so the two are priced
+// separately, in ONE binary, from the config word the per-task hook already
+// loads: rung (i) mode 14 + 0x80 = granularity alone, rung (ii) mode 14 = plus
+// the drain deletion. Legal ONLY on mode 14 (rejected below elsewhere), because
+// on modes 12/13 the drain is not deleted and the bit would mean nothing.
+inline constexpr std::uint32_t kCoarseKeepDrainBit = 0x80u;
+// Same bit as seen in the PACKED descriptor word: encode_config puts the low
+// byte of `group_slices` at bit 8, so 0x80 lands at bit 15. The per-task hooks
+// test the packed word directly (they already load it for the mode field) rather
+// than decoding a config struct on the hot path.
+inline constexpr std::uint64_t kCoarseKeepDrainWordBit = 0x8000ull;
 inline constexpr std::uint32_t kRemoteAccumGLegalBits =
         kRemoteAccumGMask | kRemoteAccumDetectBit | kRemoteAccumThrottleBit |
-        kRemoteAccumSkipPartZeroBit | kRemoteAccumThrottleDepthMask;
+        kRemoteAccumSkipPartZeroBit | kRemoteAccumThrottleDepthMask |
+        kCoarseKeepDrainBit;
 
+__host__ __device__ __forceinline__ bool mode_is_coarse(config c) {
+    return c.mode == kModeCoarseReady;
+}
+
+// exp_34 C: true when mode 14 is asked to keep mode 12's per-task drain. Host
+// side only (reporting / validation); the device hook reads the packed word.
+__host__ __device__ __forceinline__ bool coarse_keeps_drain(config c) {
+    return mode_is_coarse(c) && (c.group_slices & kCoarseKeepDrainBit) != 0u;
+}
+
+// Mode 14 is a member: it needs every direct-accumulate property (physical
+// g == 1, no `part` writes, no remote-part pull, the epilogue's peer-table
+// target construction in n2_phase2_gm_mps.cpp:329, the throttle accessors, the
+// power-of-two MAXTOK entry guard, and M8's consume-and-zero instantiation).
+// Its ONLY divergence from mode 12 is the readiness protocol.
 __host__ __device__ __forceinline__ bool mode_is_direct_accum(config c) {
-    return c.mode == kModeRemoteAccum || c.mode == kModeDirectRows;
+    return c.mode == kModeRemoteAccum || c.mode == kModeDirectRows ||
+           c.mode == kModeCoarseReady;
 }
 
 __host__ __device__ __forceinline__ bool detect_dual(config c) {
@@ -277,8 +348,15 @@ __host__ __device__ __forceinline__ std::uint32_t throttle_depth_sel(config c) {
 // wrong config is refused instead of silently keeping or silently dropping the
 // zero. Mode 13 satisfies the same deadness proof but stays out of scope until
 // a mode-13 run re-derives it.
+//
+// exp_34: mode 14 is admitted because it satisfies the same deadness proof by
+// construction -- it IS mode 12's transport, M8 takes `part = nullptr` on the
+// same branch, and the dual-write detector (the one `part` consumer) is rejected
+// for mode 14 below. This is not a convenience: the mode-14 rung must be able to
+// carry the ratchet's `g = 353`, or the waterfall comparison against mode 12
+// would silently also be an exp_24-A comparison.
 __host__ __device__ __forceinline__ bool skip_dead_part_zero(config c) {
-    return c.mode == kModeRemoteAccum &&
+    return (c.mode == kModeRemoteAccum || mode_is_coarse(c)) &&
            (c.group_slices & kRemoteAccumSkipPartZeroBit) != 0u &&
            !detect_dual(c) && !c.pull_fallback;
 }
@@ -362,12 +440,24 @@ __host__ __device__ __forceinline__ bool config_is_valid(config c) {
         // are rejections, so a config either engages the mechanism or fails --
         // it is never silently ignored.
         if ((c.group_slices & kRemoteAccumSkipPartZeroBit) != 0u) {
-            if (c.mode != kModeRemoteAccum) return false;
+            if (c.mode != kModeRemoteAccum && !mode_is_coarse(c)) return false;
             if ((c.group_slices & kRemoteAccumDetectBit) != 0u) return false;
         }
+        // exp_34: mode 14 deletes the per-row `row_ready` protocol, and the
+        // dual-write detector's M8 instantiation is the one slot-mode path that
+        // still POLLS it (KRN's m7_detect branch is tested before the
+        // direct-accumulate branch, so a mode-14 + detect config would take it
+        // and spin on a flag nobody publishes). Reject rather than hang.
+        if (mode_is_coarse(c) &&
+            (c.group_slices & kRemoteAccumDetectBit) != 0u) return false;
+        // exp_34 C: the drain-retention control has no meaning where the drain
+        // was never deleted. Reject on 12/13 instead of silently ignoring it --
+        // otherwise a mistyped waterfall arm would LOOK like the control arm.
+        if ((c.group_slices & kCoarseKeepDrainBit) != 0u &&
+            !mode_is_coarse(c)) return false;
     } else if (c.group_slices != 1u && c.group_slices != 2u &&
                c.group_slices != 4u && c.group_slices != 16u) return false;
-    if (c.mode > 13u) return false;
+    if (c.mode > 14u) return false;
     // Mode 7 moves no payload into the slots, so M8 must take the pull path.
     if (c.mode == 7u && !c.pull_fallback) return false;
     if (mode_is_stream(c) && c.reserved_comm_ctas == 0u) return false;

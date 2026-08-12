@@ -67,7 +67,10 @@
 //   M9 counted arrival, resets, retired pokes.
 //
 // pperr bits: 131072 shape guard, 524288 T_loc out of range, 8388608 stream poll timeout,
-//   16777216 a2_done/retire wait timeout, 33554432 row_ready combine poll timeout,
+//   16777216 a2_done/retire wait timeout, 33554432 row_ready combine poll timeout
+//   (exp_34: in mode 14 the SAME bit means "cross-rank M7-done rendezvous
+//   timeout" -- mode 14 is the one mode that compiles the row_ready poll out, so
+//   the two meanings are never both reachable; see K0P6_MPS_ERR_M7DONE),
 //   2097152 grid-barrier timeout, 65536 receive-row overflow, 1048576 scatter/CSR
 //   overflow, 4194304 pad overflow, 262144 dest_counter base-nonzero at epoch start (exp_56 (ii)).
 // ================================================================================================
@@ -101,7 +104,7 @@
 // .cuh-only change, then confirm a new hsaco mtime under
 // ~/.cache/k0-mok-synthetic-prefill/mori/jit/gfx950_mlx5/*/ before believing
 // any number. The value is never read; only its presence in the hash matters.
-#define K0P6_MPS_SRC_REV 26
+#define K0P6_MPS_SRC_REV 28
 
 // exp_27: which activation-scale layout M6 reads, and therefore whether M5's
 // scale transpose exists at all.
@@ -333,6 +336,13 @@ __device__ __forceinline__ void k0p6_mps_task_done(int b, int nc, int tid,
   // additional fences vs the mode-2 ratchet.
   const unsigned long long k0p6_m =
       (unsigned long long)k0p6_dread(k0p6_desc, K0P6_D_MPS_CFG) >> 16 & 0xFFull;
+  // exp_34 mode 14: NEITHER arm. There is no event queue to enqueue into (the
+  // drain is skipped entirely, so an event would be dead work AND would make
+  // K0P6_MPS_ERR_SERVICE ambiguous), and the parity `part_done` bump has had no
+  // correctness-path reader since exp_62's hoist (see k0p6_part_arrive). This
+  // return is where ~16,720 relaxed RMWs + 16,720 releases + 16,720 stores per
+  // rank per epoch go away.
+  if (k0p6_m == 14ull) return;
   if (k0p6_m - 2ull <= 2ull || k0p6_m == 7ull || k0p6_m == 8ull ||
       k0p6_m == 9ull || k0p6_m == 12ull || k0p6_m == 13ull) {
     std::uint32_t* mps_q = (std::uint32_t*)k0p6_dread(k0p6_desc, K0P6_D_MPS_Q);
@@ -361,10 +371,25 @@ struct k0p6_defer {
 __device__ __forceinline__ void k0p6_mps_task_drain(const long long* k0p6_desc) {
   // Direct-accumulate modes defer the drain to the next task's head; every
   // other mode drains per task end exactly as the donor+MPS stack always has.
+  //
+  // exp_34 mode 14 joins 12/13 here, and then its deferred flush is inert (see
+  // k0p6_mps_task_done_maybe_defer), so mode 14 pays NO per-task drain at all.
+  // That is sound and it is deliberate: the ONLY thing the per-task drain ever
+  // ordered was the event publication that mode 14 deletes. The epilogue's
+  // remote RMWs are drained by the SAME threads that issued them in
+  // release_cta_payload_system() at the M7.5 rendezvous (per-thread vmcnt(0) +
+  // CTA barrier + one L2 writeback), which is the mode-0/mode-1 discipline
+  // verbatim. Noted as a rung deletion, not a free ride: it removes ~2,840
+  // vmcnt(0) drains and ~2,840 __syncthreads() per CTA. exp_34 C makes that
+  // deletion INDEPENDENTLY SELECTABLE so the waterfall can price it apart from
+  // granularity: with `g |= kCoarseKeepDrainBit` (0x80) the deferred drain comes
+  // back through k0p6_mps_task_done_maybe_defer. This hook is unconditional for
+  // mode 14 either way -- the drain, when kept, is paid at the next task head,
+  // which is exactly where mode 12 pays it.
   const unsigned long long m =
       ((unsigned long long)k0p6_dread(k0p6_desc, K0P6_D_MPS_CFG) >> 16 &
        0xFFull);
-  if (m != 12ull && m != 13ull) {
+  if (m != 12ull && m != 13ull && m != 14ull) {
     asm volatile("s_waitcnt vmcnt(0)" ::: "memory");
   }
 }
@@ -382,9 +407,31 @@ __device__ __forceinline__ void k0p6_mps_task_flush_defer(
 
 __device__ __forceinline__ void k0p6_mps_task_done_maybe_defer(
     int b, int nc, int tid, const long long* k0p6_desc, k0p6_defer& p) {
-  const unsigned long long m =
-      ((unsigned long long)k0p6_dread(k0p6_desc, K0P6_D_MPS_CFG) >> 16 &
-       0xFFull);
+  // One load of the packed config word serves both the mode field and exp_34
+  // C's drain-retention bit (bit 15 of the word = 0x80 of `g`).
+  const unsigned long long w =
+      (unsigned long long)k0p6_dread(k0p6_desc, K0P6_D_MPS_CFG);
+  const unsigned long long m = (w >> 16 & 0xFFull);
+  // exp_34 mode 14 buffers nothing, so `p.b0` stays -1 for the whole task loop
+  // and k0p6_mps_task_flush_defer returns on its first line at every task head:
+  // no deferred vmcnt(0), no deferred __syncthreads(), no publication.
+  //
+  // exp_34 C (confound control): with kCoarseKeepDrainBit set, buffer the task
+  // identity with gcount == 0. k0p6_mps_task_flush_defer then still pays its
+  // vmcnt(0) + __syncthreads() at the next task head, and its publication loop
+  // runs ZERO iterations -- mode 14 with mode 12's drain and with no publication
+  // (mode 14 has no consumer for one: the queue is dead and an event would make
+  // K0P6_MPS_ERR_SERVICE ambiguous). That is the arm that prices signal
+  // granularity alone; the default arm adds the drain deletion on top.
+  if (m == 14ull) {
+    if ((w & hk_moe::mps::kCoarseKeepDrainWordBit) == 0ull) return;
+    if (p.b0 < 0) {
+      p.b0 = b;
+      p.nc = nc;
+    }
+    p.gcount = 0;
+    return;
+  }
   if (m == 12ull || m == 13ull) {
     // Buffer the task identity UNIFORMLY (no tid guard): the flush at the
     // next task head reads it on every thread before publishing from tid0.
@@ -503,8 +550,18 @@ __device__ __forceinline__ float k0p6q_bf16_to_f32(unsigned short b) {
 //     whole addend, so a 10% relative (+ small absolute) gross-loss threshold
 //     flags systematic loss without false-positive noise. One atomicOr per
 //     batch at most. Diagnostic only: doubles M8's pull traffic.
+//   * `Ready` (exp_34, mode 14 only) — COMPILE-TIME "already readable". Coarse
+//     readiness settles the whole rank's readiness ONCE, in the M7.5 rendezvous,
+//     before any CTA enters M8: every peer has published `epoch` for its whole
+//     M7 and every CTA has observed all 8 words and executed one system acquire.
+//     So there is nothing left for a per-row flag to say, and two things are
+//     compiled out of every batch: the cross-GPU `poll_epoch_system` load (>=1
+//     per fanout entry, >=21,504 per rank per epoch) and the `__ballot` that made
+//     a timeout skip the batch uniformly. The per-batch `acquire_payload_system()`
+//     deliberately STAYS -- see the note at that call site.
+//     `Ready` defaults false, so every pre-exp_34 instantiation is unchanged.
 template<int NT, typename BaseFor, typename BaseFor2,
-         bool Detect = false, bool Zero = false>
+         bool Detect = false, bool Zero = false, bool Ready = false>
 __device__ __forceinline__ void k0p6_mps_m8_batch(
     int tok0, int T, unsigned int epoch32, long long spin_limit,
     const int* __restrict__ pull_ptr, const int* __restrict__ pull_src,
@@ -543,10 +600,12 @@ __device__ __forceinline__ void k0p6_mps_m8_batch(
         // poll of row_ready (relaxed SYSTEM store). nt-only load never
         // invalidates => spins on a stale row_ready line forever. System-scope
         // atomic load.
-        batch_ready = hk_moe::poll_epoch_system(
-            row_ready + (size_t)p * T_loc_max + row, epoch32,
-            (std::uint64_t)spin_limit,
-            hk_moe::set_error_bit{pperr, 33554432});
+        if constexpr (!Ready) {
+          batch_ready = hk_moe::poll_epoch_system(
+              row_ready + (size_t)p * T_loc_max + row, epoch32,
+              (std::uint64_t)spin_limit,
+              hk_moe::set_error_bit{pperr, 33554432});
+        }
       }
       pbase[t] = base_for(p, row);
       if constexpr (Detect) pbase2[t] = base_for2(p, row);
@@ -555,9 +614,20 @@ __device__ __forceinline__ void k0p6_mps_m8_batch(
   // A timeout must not mint a usable peer payload. Skip this token batch
   // uniformly across the wave after recording pperr; M9 still retires the
   // launch, so the negative control fails without wedging the node.
-  if (__ballot(batch_ready) != ~0ull) return;
-  // Only lanes 0..31 poll readiness, while all lanes consume the shuffled
-  // bases. Apply one convergent wave acquire before any payload load.
+  //
+  // exp_34 Ready: there is no per-batch readiness verdict to ballot on, and the
+  // rendezvous already failed the whole phase closed through pperr bit 25 (which
+  // M8's `payload_ok` mask picks up for mode 14, forcing T = 0 and an empty M8),
+  // so a per-batch escape hatch would be dead code, not a second safety net.
+  if constexpr (!Ready) {
+    if (__ballot(batch_ready) != ~0ull) return;
+  } else {
+    (void)batch_ready;
+  }
+  // Only lanes 0..31 poll readiness (when they poll at all), while all lanes
+  // consume the shuffled bases. One convergent wave acquire before any payload
+  // load. This is NOT compiled out under `Ready`: it is the acquire half of the
+  // rendezvous, and leaving it here keeps it in the thread that does the reading.
   hk_moe::acquire_payload_system();
   __syncwarp();
   bool dual_mismatch = false;
@@ -715,7 +785,18 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
         // MAXTOK is a hard requirement there (the donor's division would be a
         // spill machine at the pointer peak).
         (hk_moe::mps::mode_is_direct_accum(entry_cfg) &&
-         (MAXTOK & (MAXTOK - 1)) != 0)) {
+         (MAXTOK & (MAXTOK - 1)) != 0) ||
+        // exp_34 mode 14: the 8 cross-rank M7-done words are parked in the
+        // SPARE TAIL of `row_ready`, at index T_ext of each source segment --
+        // one past the receive-row extent, so no mode can alias them (every
+        // writer of that array is bounded by `r < T_ext`). This needs the
+        // descriptor slot present and needs that index to exist. T_ext =
+        // world*MAXTOK and the shape guard above only proves T_ext <= T_loc_max,
+        // so the strict inequality is checked here rather than assumed. Today:
+        // 8*4096 = 32,768 against T_loc_max = 40,960.
+        (hk_moe::mps::mode_is_coarse(entry_cfg) &&
+         (k0p6_dread(desc, K0P6_D_ROW_READY) == 0 ||
+          world * MAXTOK >= T_loc_max))) {
       if (bid == 0 && tid == 0) atomicOr(pperr, K0P6_MPS_ERR_CONFIG);
       return;
     }
@@ -1499,6 +1580,10 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
     // capacity tax at the tail, which the phase profile identifies as the only
     // tax the reservation actually costs (plan+M6 is flat in C to 0.5%, M7
     // rises 27% from C=2 to C=64).
+    // exp_34: mode 14 is NOT a stream mode, so no CTA enters the drain -- there
+    // is nothing in the queue to drain. The absence of K0P6_MPS_ERR_SERVICE
+    // (bit 26) in a mode-14 run is therefore a positive check that the mode took
+    // the intended path.
     const bool service_cta_here = hk_moe::mps::mode_is_stream(scfg);
     if (service_cta_here) {
       const auto* symmetric = k0p6_symmetric(desc);
@@ -1624,8 +1709,51 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
   //      leader release is necessary to carry the grid-acquired payload ordering to remote flags.
   // exp_20: modes 5/6 reserve a diagnostic pool but are otherwise mode 0, so
   // they publish here too. Every CTA (service included) enters the rendezvous.
-  if (hk_moe::mps::mode_is_parity_publish(hk_moe::mps::decode_config(
-          (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG)))) {
+  //
+  // ---- exp_34 mode 14 (COARSE READINESS) SHARES THIS BLOCK -------------------
+  // Mode 14 needs precisely stages (1), (2) and (3) above, with stage (3)'s live
+  // -row loop collapsed to ONE cell, plus a cross-rank poll and one hoisted
+  // acquire. It is folded in here rather than given its own phase for a measured
+  // reason, not for tidiness: as a separate block it cost **+16 B/lane of
+  // scratch (128 -> 144), VGPR spills 15 -> 21 and SGPR spills 186 -> 221**, and
+  // a four-way probe showed the cost was not the IRIS descriptor, not `peer_ptr`
+  // and not the extra M8 instantiation -- it was simply a SECOND copy of this
+  // release/barrier/acquire/`payload_ok`/system-release sequence pushing
+  // whole-function allocation over a cliff. Sharing the sequence puts the tuple
+  // back on the ratchet's numbers. (exp_26's lesson, again: a change confined to
+  // one phase reaches the other phases through register allocation.)
+  //
+  // What mode 14 replaces with this: the ENTIRE per-row readiness protocol,
+  // ~926k atomics per rank per epoch -- `nc_arr` arrivals (535,040), `pushed`
+  // (~314k), per-row `row_ready` publishes (~19.6k), `row_rem` self-clean
+  // (~19.6k), M8's per-row polls (>=21.5k) and the event queue with its
+  // `ev_next` ticket (~16.7k) -- for one grid barrier, 8 publishes and 8 polls
+  // per CTA. The drain phase (M7.6) is skipped entirely.
+  //
+  // The rendezvous cell `m7_done[src]` is EPOCH-VALUED and never reset. That is
+  // not a convenience: a counter would need a reset with no intra-rank ordering
+  // against the next epoch, which is exactly the exp_56 fix (6) defect. It lives
+  // in the SPARE TAIL of `row_ready`, at index T_ext of each source segment --
+  // one past the receive-row extent, so it cannot alias any mode's per-row flag
+  // (every writer of that array is bounded by `r < T_ext`), and the entry guard
+  // proves the index exists. Reusing this array instead of adding a descriptor
+  // slot is deliberate: a new slot needs host-side allocation in files this
+  // change does not own.
+  //
+  // M9 is untouched. Mode 14 inherits mode 12's slot lifetime verbatim: M8's
+  // consume-and-zero is ordered before any peer's next-epoch accumulate by M9's
+  // `release_signal_batch_agent()` + the 7 `retired` pokes. Do not weaken that.
+  {
+    const hk_moe::mps::config cfg75 = hk_moe::mps::decode_config(
+        (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
+    // Grid-uniform (one descriptor word), so it is safe to gate a barrier on.
+    // readfirstlane for the reason n2_phase2_gm_mps.cpp:380 documents: the mode
+    // arrives through a volatile descriptor read, so LLVM cannot prove it uniform
+    // and would park it in a VGPR, making every branch on it extend a VECTOR live
+    // range. Worth 2 SGPR spill slots here; semantically a no-op.
+    const bool coarse75 = __builtin_amdgcn_readfirstlane(
+        (int)hk_moe::mps::mode_is_coarse(cfg75)) != 0;
+  if (hk_moe::mps::mode_is_parity_publish(cfg75) || coarse75) {
     unsigned int* row_remaining = (unsigned int*)k0p6_dread(desc, K0P6_D_ROW_REM);
     unsigned int* row_ready = (unsigned int*)k0p6_dread(desc, K0P6_D_ROW_READY);
     const unsigned int epoch32 = (unsigned int)k0p6_epoch(desc);
@@ -1650,6 +1778,27 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
     if (payload_ok && tid == 0) {
       const auto* symmetric = k0p6_symmetric(desc);
       hk_moe::release_signal_batch_system();
+      // exp_34 mode 14: ONE publisher per rank (CTA 0's leader), ONE cell, all 8
+      // targets. Same same-thread fence-then-store discipline as the parity arm
+      // below, same scopes (self AGENT, peers SYSTEM), and it deliberately keeps
+      // the SYSTEM release rather than M9's agent release -- this flag certifies
+      // that this rank's remote-accumulate payload is visible to its peers, which
+      // is stage (3)'s job exactly. The grid barrier at (2) is what makes ONE
+      // CTA's release able to carry all 256 CTAs' payload ordering.
+      if (coarse75) {
+        if (bid == 0) {
+          unsigned int* self_slot =
+              row_ready + (size_t)cur * T_loc_max + (size_t)T_ext;
+          for (int R = 0; R < world; ++R) {
+            if (R == cur) {
+              hk_moe::publish_epoch<hk_moe::scope::agent>(self_slot, epoch32);
+            } else {
+              hk_moe::publish_epoch<hk_moe::scope::system>(
+                  hk_moe::peer_ptr(self_slot, R, symmetric), epoch32);
+            }
+          }
+        }
+      } else {
       // Each CTA leader owns r = bid (mod nct) over the receive-row EXTENT. row_remaining!=0
       // selects live rows; holes are 0 and skipped.
       for (int r = bid; r < T_ext; r += nct) {
@@ -1673,7 +1822,47 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
         // soak/campaign from accumulating stale-nonzero holes that would bloat later epochs' pass.
         hk_moe::publish_relaxed<hk_moe::scope::agent>(row_remaining + r, 0u);
       }
+      }
     }
+    // (4) exp_34 mode 14 CROSS-RANK POLL.
+    //
+    // It uses the same `poll_epoch_system` (bounded, `>=`, relaxed SYSTEM load)
+    // that the per-row protocol used, so there is no new primitive and no new
+    // template instantiation. It fails closed on bit 25 (K0P6_MPS_ERR_M7DONE),
+    // which M8's `payload_ok` mask picks up for this mode -- that is now the
+    // whole fail-closed path, since the per-batch ballot is compiled out.
+    //
+    // One thread walks all 8 words rather than eight threads taking one each:
+    // measured 2 fewer spill slots, and 8 sequential bounded polls that all
+    // become satisfiable at the same instant cost nothing extra in wall clock.
+    //
+    // NOTE ON WHAT THIS BARRIER IS FOR, because it is easy to delete by
+    // mistake: only tid 0 ever observes the flags, so without it a thread that
+    // observed nothing could enter M8 and read a slot before tid 0's poll
+    // returned. The ACQUIRE half deliberately stays where it already is -- M8's
+    // per-batch `acquire_payload_system()` -- so the thread that reads the
+    // payload is the thread that performs its own system acquire. exp_30's S3
+    // wanted that acquire hoisted here as well; it is left alone because the
+    // acquire was never the cost (the 21,504 cross-GPU POLLS were), and keeping
+    // it per-reader keeps the ordering argument local to one thread.
+    //
+    // The `__syncthreads()` is gated ONLY on `coarse75` -- a grid-uniform decode
+    // of one descriptor word -- and never on `payload_ok`, which is a relaxed
+    // read of a concurrently-written `pperr` and is therefore NOT provably
+    // CTA-uniform. Gating a barrier on it would hang any CTA whose waves
+    // disagreed.
+    if (coarse75) {
+      if (payload_ok && tid == 0) {
+        for (int p = 0; p < world; ++p) {
+          (void)hk_moe::poll_epoch_system(
+              row_ready + (size_t)p * T_loc_max + (size_t)T_ext, epoch32,
+              (std::uint64_t)spin_limit,
+              hk_moe::set_error_bit{pperr, K0P6_MPS_ERR_M7DONE});
+        }
+      }
+      __syncthreads();
+    }
+  }
   }
 
   // ================= M7.6b (mode 1): BULK PUSH after the parity barrier =========
@@ -1754,6 +1943,9 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
   //                          compute CTAs start immediately and late-joining
   //                          service CTAs mix in; owner-local slot reads (or
   //                          peer-part pulls under the pull_fallback diagnostic).
+  //   mode 14 (coarse):      mode 12's slot reads and consume-and-zero on the
+  //                          same dynamic tickets, with readiness settled once
+  //                          in M7.5 so the per-row poll is compiled out.
   // The pull and local-slot address forms live in DISJOINT branches now, and
   // the static loop is restored separately from the dynamic-ticket loop:
   // resource-gate terms. Payload validity is computed phase-locally here (the
@@ -1767,7 +1959,12 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
     // K0P6_D_MPS_SLOTS dead memory their traffic generator can write into.
     const bool m8_pull =
         hk_moe::mps::mode_is_parity_publish(m8cfg) || m8cfg.pull_fallback;
-    const bool m8_dynamic = hk_moe::mps::mode_is_stream(m8cfg);
+    // exp_34: mode 14 wants the dynamic ticket loop and nothing else that
+    // `mode_is_stream` gates (it has no drain and needs no pool), so it is asked
+    // for HERE instead of being added to the predicate. See the note on
+    // mode_is_stream in moe_mps_adapter.cuh.
+    const bool m8_coarse = hk_moe::mps::mode_is_coarse(m8cfg);
+    const bool m8_dynamic = hk_moe::mps::mode_is_stream(m8cfg) || m8_coarse;
     std::uint32_t* mps_state = (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_STATE);
     std::uint64_t* mps_ts = (std::uint64_t*)(mps_state + K0P6_MPS_ST_WORDS);
     // exp_21 mode 12: detect (the dual-write detector) also pulls the
@@ -1786,9 +1983,14 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
         ? nullptr : (const unsigned short*)k0p6_dread(desc, K0P6_D_MPS_SLOTS);
     const std::uint64_t epoch = k0p6_epoch(desc);
     const unsigned int epoch32 = (unsigned int)epoch;
+    // exp_34: mode 14 compiles the per-batch readiness ballot out, so bit 25 --
+    // which in mode 14 means "the M7.5 cross-rank rendezvous timed out" -- has to
+    // be caught HERE or a failed rendezvous would read unfinished slots. This is
+    // the whole fail-closed path for the new protocol.
     const bool payload_ok = !hk_moe::error_bit_set_agent(
         pperr, 16777216 | 2097152 |
-        (m8_dynamic ? (K0P6_MPS_ERR_SERVICE | K0P6_MPS_ERR_CONFIG) : 0));
+        (m8_dynamic ? (K0P6_MPS_ERR_SERVICE | K0P6_MPS_ERR_CONFIG) : 0) |
+        (m8_coarse ? K0P6_MPS_ERR_M7DONE : 0));
     const int T = payload_ok ? (int)k0p6_dread(desc, K0P6_D_T) : 0;
     unsigned short* out = (unsigned short*)k0p6_dread(desc, K0P6_D_OUT);
     const int* pull_ptr = (const int*)k0p6_dread(desc, K0P6_D_PULL_PTR);
@@ -1866,6 +2068,27 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
                             true, true>(
               batch * NT, T, epoch32, spin_limit, pull_ptr, pull_src,
               row_ready, T_loc_max, pperr, lane, cur, out, base_slot, base_pull);
+        }
+      } else if (m8_coarse) {
+        // exp_34 mode 14: mode 12's instantiation with Ready=true. Same address
+        // form, same consume-and-zero, same arithmetic, same per-batch system
+        // acquire; only the per-row poll and the readiness ballot are gone,
+        // because the M7.5 rendezvous settled readiness for the whole rank at
+        // once. Must be tested BEFORE the direct-accumulate arm below, which
+        // mode 14 also satisfies.
+        while (true) {
+          if (lane == 0) {
+            *batch_slot =
+                kittens::distributed::fetch_add_relaxed<hk_moe::scope::agent>(
+                    m8_next, 1u);
+          }
+          __syncwarp();
+          const int batch = *batch_slot;
+          if (batch >= nbatches) break;
+          k0p6_mps_m8_batch<NT, decltype(base_slot)&, decltype(base_slot)&,
+                            false, true, true>(
+              batch * NT, T, epoch32, spin_limit, pull_ptr, pull_src,
+              row_ready, T_loc_max, pperr, lane, cur, out, base_slot, base_slot);
         }
       } else if (hk_moe::mps::mode_is_direct_accum(m8cfg)) {
         // exp_21 mode 12: the owner CONSUMES-AND-ZEROES each accumulated slot

@@ -23,7 +23,7 @@
 // Bump E22_SRC_REV on every edit (the K0P6_MPS_SRC_REV discipline: a stale
 // object is indistinguishable from a null result).
 // ===========================================================================
-#define E22_SRC_REV 9
+#define E22_SRC_REV 10
 
 #include <hip/hip_runtime.h>
 #include <hip/hip_bf16.h>
@@ -862,6 +862,14 @@ unsigned long long hbm_rows_for(const Point& pt) {
 // the compute role is, which is what sizes the overlay so it outlasts the
 // resource role.
 double tile_rate(int shape, int ctas) {
+    // A zero-CTA probe is an invalid launch config, and it means the caller
+    // asked for an overlay whose compute role has no room left (C == grid).
+    // build_grid() drops those points; refuse loudly rather than launch.
+    if (ctas <= 0) {
+        std::fprintf(stderr, "[e22] tile_rate(shape=%d, ctas=%d): no compute "
+                             "room; point should have been skipped\n", shape, ctas);
+        return 1e-6;
+    }
     const std::pair<int, int> k(shape, ctas);
     auto it = g_tile_rate.find(k);
     if (it != g_tile_rate.end()) return it->second;
@@ -1177,6 +1185,11 @@ std::vector<Point> build_grid(const std::string& tier) {
         p.heap_uncached = g_cfg.uncached;
         g.push_back(p);
     };
+    // An overlay arm needs at least one CTA left for the compute role, so
+    // C == grid is not a measurable overlay point (it is the isolated arm).
+    auto overlay_fits = [&](int ctas, const std::string& conc) {
+        return conc == "isolated" || ctas < g_cfg.grid;
+    };
     auto res = [&](const std::string& mode, int ctas, int mlp,
                    const std::string& fan, const std::string& conc, int protocol,
                    int proto_g, int pushers = 1, unsigned int rb = 14336,
@@ -1193,6 +1206,7 @@ std::vector<Point> build_grid(const std::string& tier) {
         p.row_bytes = rb;
         p.work_mode = wm;
         p.heap_uncached = g_cfg.uncached;
+        if (!overlay_fits(ctas, conc)) return;
         g.push_back(p);
     };
 

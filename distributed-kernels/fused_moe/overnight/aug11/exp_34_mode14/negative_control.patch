@@ -1,0 +1,27 @@
+--- /home/subvadla/e34/DHK/distributed-kernels/fused_moe/k0pf6gm_device_tile_mps.hip	2026-08-12 11:11:47.456301540 +0000
++++ /home/subvadla/e34/negctl/distributed-kernels/fused_moe/k0pf6gm_device_tile_mps.hip	2026-08-12 11:17:36.495280735 +0000
+@@ -104,7 +104,7 @@
+ // .cuh-only change, then confirm a new hsaco mtime under
+ // ~/.cache/k0-mok-synthetic-prefill/mori/jit/gfx950_mlx5/*/ before believing
+ // any number. The value is never read; only its presence in the hash matters.
+-#define K0P6_MPS_SRC_REV 28
++#define K0P6_MPS_SRC_REV 1028
+ 
+ // exp_27: which activation-scale layout M6 reads, and therefore whether M5's
+ // scale transpose exists at all.
+@@ -1789,7 +1789,14 @@
+         if (bid == 0) {
+           unsigned int* self_slot =
+               row_ready + (size_t)cur * T_loc_max + (size_t)T_ext;
+-          for (int R = 0; R < world; ++R) {
++          // exp_34 PROTOCOL NEGATIVE CONTROL BUILD -- NOT AN ARM, NEVER A NUMBER.
++          // `world - 1` leaves the LAST rank untold: nobody publishes into
++          // rank world-1's segment, so all 8 of its M7-done polls must time
++          // out and set K0P6_MPS_ERR_M7DONE (bit 25) on that rank alone, its
++          // M8 must be skipped by the payload_ok mask, and [MOK GATE] must
++          // fail. If this build PASSES, the rendezvous is not load-bearing
++          // and the entire mode-14 rung is meaningless.
++          for (int R = 0; R < world - 1; ++R) {
+             if (R == cur) {
+               hk_moe::publish_epoch<hk_moe::scope::agent>(self_slot, epoch32);
+             } else {
