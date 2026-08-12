@@ -38,7 +38,7 @@ value is ever compared to a stamps-off one.
 
 ---
 
-## 1. The blocking finding: the pin regresses mode 12 by +722.8 µs, all of it in M7
+## 1. The blocking finding: the pin regresses mode 12 by +726.9 µs, all of it in M7
 
 This was found because the brief required a **same-session mode-12 control**. That
 control did not reproduce the ratchet: it came in at 7,223 µs, not ~6,490.
