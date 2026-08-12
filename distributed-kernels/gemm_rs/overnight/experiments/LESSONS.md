@@ -2,6 +2,58 @@
 
 ## Session 2 — 2026-08-11 overnight (optimization session)
 
+- **BLOCKER B IS DEAD: rank-1 RUNS ON THIS NODE, and we are 1.78× behind it.**
+  Correct on all six graded shapes at both `1e-2` and `2e-3`, all 8 ranks, and
+  measured **same-run interleaved against our kernel** (one pool, same inputs,
+  arm order reversed per rep, 240 samples/arm/shape, evaluator `full` protocol).
+  Geomean best: ours **543.61** vs rank-1 **305.22 µs** → **1.781×**; geomean
+  mean 586.52 vs 322.98 → 1.816×. **rank-1 wins every shape.** Per-shape
+  ours/rank-1 on best: `1.033 / 1.382 / 1.266 / 3.090 / 1.304 / 4.387`.
+  Frozen hash `7940fcb8…f0dc5` verified; the frozen file was never written.
+  Full record in `exp_10_rank1/result.md`.
+  *The blocker was never the heap bootstrap.* **`CREATE_SHEMEM_CODE` is dead
+  code** — it appears exactly once, at its own definition, and the submission
+  contains no `subprocess`/`Popen`/`multiprocessing`/`fork`/`exec` at all. So
+  **`heap_bases_*.pkl` is unreachable and its count of 0 was never a failure
+  signal**; three sessions gated on a probe that could not fire. Retire
+  `tools/check_rank1d.sh`. Repair #5 (the `hipIpcMemHandle_t` alias) patches a
+  symbol referenced only inside that dead string and is **moot**. The real
+  bootstrap artifact, `ipc_handles_rank*.bin`, had been appearing all along.
+  *The actual blocker, and the fix is one env var with zero source edits:*
+  **`AMDGCN_USE_BUFFER_OPS=0`.** rank-1 reaches peer heaps by passing a
+  100-element bf16 tensor as the kernel base pointer plus a large negative
+  element offset (−6.6e8…−4.4e9). Triton 3.6.0's AMD backend gates `buffer_*`
+  lowering per argument on `HIPBackend.is_within_2gb(arg)` (`compiler.py:184`);
+  a 200-byte tensor qualifies, so the epilogue became `buffer_store_dwordx2`
+  whose voffset is **32-bit**, silently narrowing an offset that is correct
+  `i64` in the TTIR. Proof: all four fault addresses equal
+  `hack + 2*int32(base_addr[i])` + a tile offset inside that shape's 896 KiB
+  region, landing in 32 GiB `---p` reserved VA — hence "write to a read-only
+  page". Ruled out first with evidence: all 8 heaps map `rw-s` 1 GiB, host-side
+  peer writes all succeed, and a stage bisect showed `init_shmem` **and** the C++
+  `dist_barrier` peer atomics pass on all 8 ranks. Disclosed bias: the knob is
+  global to rank-1's Triton kernels so its A/B loads lose buffer ops too, which
+  can only **penalize rank-1** — the bias runs against the winner, so the verdict
+  is safe. Our arm is hand-written HIP, so the knob cannot touch it.
+  *Two traps for anyone touching the graded protocol.* (1) **`eval.py` gives every
+  graded shape a bias.** Its parser does `int(val)` and keeps the string on
+  failure, so `has_bias: False` becomes truthy `"False"`. rank-1's author guessed
+  it (`#####?????? bench all have bias?` on `__conf`), and its cached path does
+  `bias.data_ptr()` unconditionally, so with a genuine `None` it raises on the
+  *second* call. Both arms were therefore run with a bias on all six shapes.
+  (2) **`eval.py` reports nanoseconds.** (3) Also verified all six shapes are in
+  rank-1's `__conf`, so none of this is `origin()`, its silent torch fallback.
+  *Where the gap is:* concentrated in the large shapes, not the mainloop — shape
+  6 is 4.39× and shape 4 is 3.09×, while shape 1 is nearly a tie at 1.03×. Our
+  relative sd is 16–18% on the small shapes against rank-1's 2–6%, and the graded
+  score is a mean, so our tail is charged to us. Confirms the standing read that
+  the next work belongs in the cold-L2 / per-call egress path.
+  *Staging trap that cost previous sessions:* `dhk-eval` and `dhk-gemmrs` are
+  **separate containers with separate filesystems**, so staging iris into
+  `dhk-eval`'s `/usr/local/lib` never helped. Use `docker exec -u 0 dhk-gemmrs`.
+  Also clear `TRITON_CACHE_DIR` when changing the knob or the cached `hsaco`
+  keeps `buffer_store` and the fix looks ineffective.
+
 - **WIN, exp_08/E2: the XGMI deficit was never bandwidth efficiency, it was
   egress-link CONCURRENCY, and the fix is the tile order. Geomean 255.98 →
   230.84 µs (−9.8%).** Per-shape `77.88 / 91.18 / 90.25 / 200.33 / 644.39 /
@@ -311,6 +363,71 @@
     all 64 MFMAs, and all four `global_load_dwordx4` are in flight together
     where the fused helper drained after every two. **Two exposed global round
     trips per k-iteration became one covered one.**
+
+- **E1(c) is a FLAT AXIS — closed. Ships at 0.9969×, which is inside the noise
+  floor and should not be quoted as a win.** Alternating paired A/B with both
+  states rebuilt in the same session: candidate 230.09 µs vs base 230.80 µs,
+  worst within-arm spread **1.27%**. Only two shapes moved for real: shape 2
+  **−3.1%** (88.46 / 88.77 / 88.77 / 88.49 against 91.21–91.93, no sample
+  overlap) and shape 3 **+0.7%**. **Shapes 5 and 6 — the two this experiment
+  targeted, and the only two we lose — never left the noise.**
+  The arm is kept because it passed the full ladder and its one unambiguous
+  per-shape effect is positive, not because 0.31% is meaningful.
+
+- **THE DURABLE FINDING: scheduling *directives* do not move MFMAs in this TU;
+  *data-dependence anchors* do.** This generalizes and should be reached for
+  first next time.
+  - `sched_group_barrier` was a **literal no-op**: identical block structure,
+    identical MFMA run-lengths (`8,4,4,4,4,4,4,32`), identical resource tuples.
+    Two independent confirmed reasons — the four `global_load_dwordx4` live in
+    their **own basic block**, and a scheduling region never spans one; and
+    every memory op here is `asm volatile … : "memory"`, so their mutual order
+    is fixed no matter what the scheduler is told. **VMEM issue position is set
+    by source placement, full stop.**
+  - `sched_barrier(0x7F6)` likewise: with comments and labels stripped the two
+    ISAs have **the same 17,613 instructions**, and all 1,156 differing lines
+    are the register allocator choosing different physical registers.
+  - What *did* work: replacing `if (more)` with a clamped index collapsed the
+    k-loop from 6 basic blocks to 1, and an `acc_anchor`
+    (`asm volatile("" : "+v"(...))` per accumulator tile — the same trick as the
+    load-bearing `frag_anchor`) put **all 64 MFMAs above the commit's
+    `vmcnt(0)` on the first try**, where `sched_barrier` had left 33. The
+    intended schedule, achieved exactly, and worth nothing measurable.
+  - Rejected: peeling the last k-iteration achieves the same de-branching but
+    duplicates the MFMA block into one live range — **30 spills, 50 scratch
+    stores**, failed M2 and was never timed.
+  - `s_setprio` alone on the base is **negative** (1.007×). Its shape-2 win only
+    appears on the single-basic-block body, where priority decides which of the
+    two waves per SIMD wins the issue port — and row 2 is the highest-occupancy
+    row, which is incidental fresh evidence for the E1(a) occupancy story.
+  - **Arm C (counted `s_waitcnt`) deliberately NOT run.** It was conditional on
+    A or B winning decisively; with the whole axis inside a 1.3% noise floor, a
+    mechanism whose documented failure mode is a **30× error that still passes a
+    2e-2 gate** is not worth the risk. Judgement, not omission.
+  - Known cheap follow-up: shape 3's +0.7% has a diagnosed cause — the clamped
+    prefetch adds one redundant tile read per tile, i.e. `1/k_iters` of mainloop
+    traffic, and shape 3 has `k_iters = 12` (8.3%) against shape 6's 116 (0.9%).
+    Fix is to guard only the commit and add one `wait_vmcnt0()` after the loop.
+
+- **A free noise-floor calibration worth reusing:** two *byte-equivalent*
+  instruction streams (the `sched_barrier` pair) reported shape-6 means **1.2%
+  apart**. That is a hard lower bound on what any single measurement can
+  resolve on this node, obtained at zero cost. **Nothing below ~1.3% is a
+  result without paired A/B.**
+
+- **TRAP: CRLF, not build caching, caused four apparent "compile failures" —
+  and one of them left the BASE `.so` sitting under the candidate's source.**
+  That is the worst possible failure mode: a stale binary silently measured
+  against new source, i.e. a number attributed to a change that was never
+  compiled. Always confirm the `.so` mtime is later than the source mtime
+  before believing a measurement (the shipped state was verified this way:
+  `.so` 19:03:51 against source 19:02:46).
+
+- **TRAP: `lds_race_check.sh` throws 10 false positives once loop rotation moves
+  a drain to the top of the rotated body**, and it also counts a VALU
+  destination as a read. **Do not relax it** — the real hazard class (a bare
+  `s_waitcnt` with no data dependence silently corrupting 14 of 17 shapes) is
+  still live. Read its hits, do not suppress them.
 
 - **Attribution re-measured on the exp_08 winner, and the ranking FLIPPED BACK
   to the GEMM mainloop.** Fresh table (µs), verified fresh by asserting `full`
@@ -844,6 +961,104 @@
   Recomputing the geometry for the other rows shows none has shape 1's defect
   (last-wave fill is 94% on shapes 2, 4, 5 and 6), so **the tile axis is close
   to exhausted** until E3 lands.
+
+- **exp_09_sched / E1(c) — mainloop scheduling: LANDED at 0.997×, but the axis
+  is flat and the durable finding is about the compiler, not the kernel.**
+  Full detail and ISA evidence in `exp_09_sched/result.md`. Shipped arm
+  `b_setprio` = clamped branchless prefetch + accumulator anchor +
+  `s_setprio` over the MFMA block. Paired alternating A/B, both states rebuilt
+  tonight: candidate `77.77 / 88.77 / 90.81 / 201.56 / 640.97 / 1831.78`,
+  geomean **230.09** vs base **230.80** (the 230.84 denominator reproduced to
+  0.02%), ratio **0.9969**. Resources unchanged — 256/256/32 still 246/248 of
+  256 with zero spills; 128/256/32 improved 165 → 163. M3 17/17 at both `1e-2`
+  and `2e-3`, M4 3/3, M5 600 epochs, on every gated arm.
+
+  **Scheduling directives do not move MFMAs in this TU. Data-dependence anchors
+  do.** `sched_group_barrier` asking for VMEM spread through the MFMA block
+  changed *not one instruction*. `sched_barrier(0x7F6)` (everything except MFMA
+  may cross), placed to hold the MFMAs above the commit, produced an ISA with
+  the **same 17613 instructions** — all 1156 differing lines were register
+  renaming — and the commit's `vmcnt(0)` still sat after 33 of 64 MFMAs. An
+  `asm volatile("" : "+v"(...))` tie on each accumulator tile (`acc_anchor`, the
+  same trick as the load-bearing `frag_anchor`) got all 64 above it on the first
+  try. Two independent reasons the hints cannot work: a scheduling region never
+  spans a basic block, and every memory op here is `asm volatile ... : "memory"`
+  so their mutual order is fixed. **VMEM issue position is set by source
+  placement, not by builtins.**
+
+  Structural results worth reusing: replacing `if (more)` with a clamped index
+  `kn = (k+1 < k_iters) ? k+1 : k` collapses the k-loop from **6 basic blocks to
+  1** (and 10 → 5 for `<256,256,32,true>`, whose extra splits come from the
+  K-tail compare that shape 6 pays on all 116 iterations for a tail only the
+  last can take). **Peeling** the last iteration achieves the same branch
+  removal but duplicates the MFMA block and costs **30 VGPR spills / 50 scratch
+  stores** on the 256×256 rows — rejected at M2, do not retry without solving
+  the live range. Straight-lining also *loses* prefetch coverage: the block
+  boundary used to force all 64 MFMAs above the commit's `vmcnt(0)`, and in one
+  region the scheduler sinks 31 of them below it (21 even below
+  `__syncthreads()`, which is legal — those MFMAs read registers already drained
+  by `acquire_frags`).
+
+  **NEGATIVE: `s_setprio` alone is worth nothing (232.35 µs, 1.007×).** The
+  −3.1% it produces on shape 2 appears *only* on top of the single-region body,
+  where the whole iteration is one instruction stream and priority decides which
+  of the 2 waves/SIMD wins the issue port. Row 2 is 64/64/64 at 91 VGPRs, the
+  highest-occupancy row. **That is a measured occupancy/issue-contention effect,
+  which is new evidence for E1(a) (AGPR accumulators): `AGPRs: 0` everywhere and
+  the 256-row pair is pinned at 246/248 of 256.**
+
+  Also real: shape 3 **regressed 0.7%**, cause identified — the clamped prefetch
+  issues one redundant tile read per tile, i.e. `1/k_iters` of mainloop global
+  traffic, and shape 3 has `k_iters = 12` (8.3%) against shape 6's 116 (0.9%).
+  Fix for the next session: guard only the *commit* (a block split after all the
+  MFMAs is harmless) plus one `wait_vmcnt0()` after the loop.
+
+  Arm C (counted `s_waitcnt`) was **not run**: it was gated on A or B winning
+  decisively, and with the whole axis inside the noise floor a mechanism whose
+  documented failure mode is a 30× error that still passes a 2e-2 gate is not
+  worth it. Per the kill rule, **the directive-based approach to E1(c) is
+  closed**; what remains on the mainloop is work-changing, not order-changing:
+  E1(a) AGPRs, `v_mfma_f32_32x32x8` vs `16x16x16`, and the untouched `ds_read`
+  side (24 `ds_read_b64` and two full `lgkmcnt(0)` per k-iteration).
+
+- **TRAP: the LDS/VMEM race checker is layout-order, and loop rotation makes it
+  cry wolf.** `exp_03_mainloop/lds_race_check.sh` went 0 → 10 hazards the moment
+  a restructure let LLVM rotate the k-loop, and all ten are false positives, for
+  two separate reasons: it counts a VALU **destination** as a read
+  (`v_add_u32_e32 v130, s51, v196` reported as "reads v130"), and its linear
+  scan cannot see a drain that rotation moved to the *top* of the rotated body,
+  so on the exit path it misses the `s_waitcnt vmcnt(0)` that every execution
+  path provably passes through. Signature of a false positive: the flagged
+  register is redefined at the flagged line, and the loop's `vmcnt(0)` dominates
+  the loop exit. **Do not relax the checker** — the silent-corruption class it
+  exists for is still real; verify by hand instead
+  (`exp_09_sched/11_haz_window.sh`).
+
+- **TRAP: CRLF, not caching, is behind the "transient" build failures — and it
+  can leave the binary disagreeing with the source.** Four builds died with
+  `syntax error: unexpected end of file` (a `\r` on a heredoc's terminator) or
+  `$'\r': command not found`, at a different line each time, all looking exactly
+  like compile errors. `push.ps1`'s normalizing `sed` does not reliably win the
+  race: `harness/build.sh` was CRLF when a restore build ran and LF when
+  inspected minutes later. `nsh.ps1` launders only the script it transports, so
+  the exposure is precisely the scripts that one `docker exec`s. Worse, that
+  failed restore left the **base** `.so` under the **candidate's** source.
+  Normalize *and prove it* with `bash -n` inside `dhk-gemmrs` before any build,
+  and rebuild-and-verify after every source swap
+  (`exp_09_sched/run_ladder.sh`).
+
+- **Noise floor, measured properly for once: 1.27% on shapes 5/6.** Two arms
+  whose ISA differed only in register numbering (identical 17613-instruction
+  stream) reported shape-6 means 1.2% apart. Alternating paired reps put the
+  worst within-arm spread at 1.27%. **Any single-run claim below ~1.3% on the
+  big shapes, or ~0.5% on the geomean, is not evidence** — which retroactively
+  means every geomean delta in this experiment except the pooled shape-2 result
+  needed the paired protocol to be believable.
+
+- **Six wedged `spawn_main` workers held GPU 1 at 0% CU occupancy** for eight
+  minutes without draining, blocking M0. `tools/reap_stale.sh` identified all
+  six as ours (in `dhk-gemmrs`) and one SIGTERM sweep cleared them. Waiting is
+  right, but wait with a bound.
 
 ## Session 1 — 2026-08-11 (bring-up)
 

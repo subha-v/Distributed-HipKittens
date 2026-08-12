@@ -266,13 +266,56 @@ void gemm_rs_mi300x_kernel(const mi300x_globals g) {
             m3::load_commit<NT>(As[0], abuf);
             m3::load_commit<NT>(Bs[0], bbuf);
             __syncthreads();
+            // exp_09 E1(c): the prefetch is UNCONDITIONAL, with a clamped
+            // source index, so the `if (more)` guards are gone.
+            //
+            // Those guards were the reason the k-loop body was six basic
+            // blocks (ten for K_TAIL=true): one for the issue, one for the
+            // MFMAs, one for the commit, plus the branches. A basic-block
+            // boundary is a scheduling-region boundary -- the machine
+            // scheduler cannot move an instruction across one, and neither can
+            // sched_group_barrier, which is exactly why arm A0 (the builtin
+            // alone, no restructure) changed not a single instruction of the
+            // schedule. Straight-line, the four global_load_dwordx4 sit in the
+            // same region as the 64 MFMAs and the address arithmetic can be
+            // hoisted across the whole iteration.
+            //
+            // Peeling the last iteration instead was tried first (arm A1) and
+            // is a hard fail: duplicating the MFMA block put both copies'
+            // fragment addresses in one live range and cost 30 VGPR spills /
+            // 50 scratch stores on the 256x256 rows, which sit at 246 of 256.
+            //
+            // Why the clamp is safe. On the last iteration `kn == k`, so the
+            // prefetch re-reads the tile this iteration is already consuming:
+            // a valid, in-bounds global read whose only effect is to land in
+            // As[(k+1)&1] / Bs[(k+1)&1]. That is the buffer iteration k-1 read
+            // and nothing reads it again -- the loop is over, and the epilogue
+            // does not touch A/B LDS until after its own __syncthreads(). The
+            // steady-state buffer invariant is untouched: iteration k ds_reads
+            // As[k&1] and ds_writes As[(k+1)&1], (k+1)&1 == (k-1)&1, and the
+            // __syncthreads() ending k-1 separates the two. Cost is one extra
+            // tile read per tile, against k_iters of 116..924.
             for (int k = 0; k < k_iters; ++k) {
-                const bool more = (k + 1 < k_iters);
                 // ISSUE only -- no vmcnt here, that is the entire mechanism.
-                if (more) {
-                    m3::load_issue<ST_A, NT>(abuf, g.a, {0, 0, tm, k + 1});
-                    m3::load_issue<ST_B, NT>(bbuf, g.b, {0, 0, tn, k + 1});
-                }
+                // Clamped, not guarded: a select, not a branch.
+                const int kn = (k + 1 < k_iters) ? (k + 1) : k;
+                m3::load_issue<ST_A, NT>(abuf, g.a, {0, 0, tm, kn});
+                m3::load_issue<ST_B, NT>(bbuf, g.b, {0, 0, tn, kn});
+                // exp_09 arm B: raise this wave's issue priority for the operand
+                // reads and the MFMA block, drop it for the commit. At 512
+                // threads and 1 CTA/CU there are 2 waves per SIMD competing for
+                // one issue port, so a wave grinding through ds_writes, waits
+                // and address arithmetic can starve its neighbour's MFMAs. The
+                // gfx950 donor does the same (gemm_rs_device_tile.cpp:884-935).
+                //
+                // The window is airtight without any scheduling hint, which
+                // matters because hints do not work here (arms A0, A2). MFMAs
+                // cannot leave through the top: they depend, through
+                // acquire_frags' anchor, on ds_reads that follow this setprio,
+                // and both setprio and the ds_read asm have side effects so
+                // their order is fixed. They cannot leave through the bottom
+                // either: acc_anchor ties the accumulator below them.
+                __builtin_amdgcn_s_setprio(1);
                 #pragma unroll
                 for (int kh = 0; kh < KH; ++kh) {
                     load(A_frag, subtile_inplace<WM, KS>(As[k & 1],
@@ -300,12 +343,28 @@ void gemm_rs_mi300x_kernel(const mi300x_globals g) {
                     }
                     mma_ABt(C_accum, A_frag, B_frag, C_accum);
                 }
+                // Keep every MFMA ABOVE the commit's vmcnt(0).
+                //
+                // Straight-lining the body (above) cost prefetch coverage, and
+                // the ISA says so precisely: with the commit in its own basic
+                // block the block boundary forced all 64 MFMAs to issue before
+                // the vmcnt(0), but in one region the scheduler sank 31 of
+                // them below it -- 21 even below the __syncthreads() -- leaving
+                // the global load only 33 MFMAs of cover instead of 64. The
+                // volatile asm chain cannot move (that is what pins the
+                // vmcnt(0)), so the MFMAs are what has to be held.
+                //
+                // sched_barrier(0x7F6) -- every class except MFMA allowed to
+                // cross -- was tried here first (arm A2) and did nothing: the
+                // vmcnt(0) still landed after 33 MFMAs. The anchor below is a
+                // data dependence on the accumulator instead of a hint, which
+                // is the mechanism that already works in this TU.
+                m3::acc_anchor(C_accum);
+                __builtin_amdgcn_s_setprio(0);
                 // COMMIT: vmcnt(0) lands what was issued before the MFMAs, then
                 // the ds_writes publish it and lgkmcnt(0) drains them.
-                if (more) {
-                    m3::load_commit<NT>(As[(k + 1) & 1], abuf);
-                    m3::load_commit<NT>(Bs[(k + 1) & 1], bbuf);
-                }
+                m3::load_commit<NT>(As[(k + 1) & 1], abuf);
+                m3::load_commit<NT>(Bs[(k + 1) & 1], bbuf);
                 __syncthreads();
             }
 

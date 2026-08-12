@@ -183,6 +183,33 @@ __device__ __forceinline__ void acquire_frags(RTA& a, RTB& b) {
     frag_anchor(b);
 }
 
+// Order every accumulator-writing MFMA BEFORE this point (exp_09 E1(c) arm A3).
+//
+// Needed because scheduling *hints* do not move MFMAs in this TU. Two arms
+// proved it: sched_group_barrier asking for VMEM spread through the MFMA block
+// changed not one instruction, and sched_barrier(0x7F6) -- every class except
+// MFMA allowed to cross -- left the commit's vmcnt(0) sitting after 33 of the
+// 64 MFMAs exactly as before. What DOES work on this compiler is the same
+// mechanism frag_anchor uses: an empty asm volatile with a "+v" tie is a real
+// def, so whatever defined that register must precede it, and being volatile it
+// cannot be reordered against load_commit's volatile waits and ds_writes. That
+// is a data dependence, not scheduler goodwill.
+//
+// One operand per base tile is sufficient: a single v_mfma defines the whole
+// 4-float accumulator tile, so tying its first register pair orders that MFMA.
+// Emits no instructions.
+template<typename RT>
+__device__ __forceinline__ void acc_anchor(RT& t) {
+    #pragma unroll
+    for (int h = 0; h < RT::height; ++h) {
+        #pragma unroll
+        for (int w = 0; w < RT::width; ++w) {
+            asm volatile("" : "+v"(
+                *reinterpret_cast<std::uint64_t*>(&t.tiles[h][w].data[0])));
+        }
+    }
+}
+
 // Issue the tile's global loads into `buf`. NO waitcnt: on return the data is
 // in flight, not in registers, and `buf` must not be read until load_commit.
 template<kittens::ducks::st::all ST, int N_THREADS, int axis = 2,
