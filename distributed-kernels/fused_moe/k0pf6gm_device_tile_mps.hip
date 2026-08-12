@@ -101,7 +101,7 @@
 // .cuh-only change, then confirm a new hsaco mtime under
 // ~/.cache/k0-mok-synthetic-prefill/mori/jit/gfx950_mlx5/*/ before believing
 // any number. The value is never read; only its presence in the hash matters.
-#define K0P6_MPS_SRC_REV 24
+#define K0P6_MPS_SRC_REV 25
 
 // exp_56 (Option C): per-source SEGMENTED receive layout + chunk-counted release.
 //  * Row index = source*MAXTOK + fetch_add(dest_counter[source] on dest, 1)  (waitless).
@@ -392,7 +392,22 @@ __device__ __forceinline__ void k0p6_mps_task_done_maybe_defer(
 #define N2_KERNELS_ONLY
 #define N2_HOOK_CTX_ARG , const long long* __restrict__ k0p6_desc
 #define N2GM_TASK_DONE_HOOK k0p6_a2_arrive(b, tid, k0p6_desc);
-#include "n2_phase1_gm.cpp"
+// exp_26: 4-bit mask over phase 1's four K-loop sched_group_barrier hints.
+//   bit 0 DS read (4->4*kGM) | bit 1 VMEM (17->16+kGM)
+//   bit 2 MFMA   (16->16*kGM) | bit 3 DS write (1->kGM)
+// 0 = donor literals, and mask 0 is gated to be .text-byte-identical to the
+// n2_phase1_gm.cpp donor-include build before any number is measured.
+// 4 = MFMA only: the 33/49/14 -> 48/48/0 barrier realignment at the donor's
+// exact resource tuple. Bit 0 additionally moves the K-loop's single vmcnt(0)
+// drain from mfma=0 to mfma=48 but migrates 96 scratch loads into M8/M9's
+// remote-atomic path (scratch instructions 21 -> 114) -- exp_26 build.md §6.
+// THE SHIPPING VALUE IS THIS LITERAL, and it lives in this .hip on purpose:
+// mori's JIT cache key hashes .hip/.cpp CONTENT and not compile flags, so
+// flipping the mask with -D would silently reuse the previous hsaco. A runtime
+// K0_MPS_CFG bit is impossible -- sched_group_barrier takes immediates.
+#define N2GM_P1_SCHED_GSCALE 0
+#include "n2_phase1_gm_mps.cpp"
+#undef N2GM_P1_SCHED_GSCALE
 #undef N2GM_TASK_DONE_HOOK
 #undef N2_HOOK_CTX_ARG
 #undef N2_KERNELS_ONLY

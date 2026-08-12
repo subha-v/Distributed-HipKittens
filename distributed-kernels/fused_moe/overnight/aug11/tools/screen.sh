@@ -310,11 +310,21 @@ else:
 cm = re.search(r"\[MARK\] control_fails=(\w+)", text)
 control = cm.group(1) if cm else "VOID"
 
-sm = re.search(r"\[MPS SOAK\] completed=(\d+)/(\d+) pperr=(\d+) pass=(\w+)", text)
+# exp_32 added `poison=` and `poison_epoch=` between pperr= and pass=, so this
+# must NOT anchor pass= directly to pperr=. Tolerant of both line formats.
+sm = re.search(r"\[MPS SOAK\] completed=(\d+)/(\d+) pperr=(\d+).*?pass=(\w+)", text)
 if sm:
     soak, soak_ep = sm.group(4), f"{sm.group(1)}/{sm.group(2)}"
 else:
     soak, soak_ep = ("MALFORMED" if "[MPS SOAK]" in text else "VOID"), NA
+
+# exp_32: a run whose NaN-poison detector is not live proves nothing, so it is
+# VOID rather than OK. Absence of the line is not a failure (production-only
+# runs never emit one).
+selftest = re.findall(r"\[POISON SELFTEST\] arm=(\S+) one_row_poisoned_fails=(\w+)", text)
+selftest_dead = [a for a, v in selftest if v != "True"]
+poison_alive = [ln for ln in re.findall(r"\[POISON\] \S+ arm=\S+ rank=\d+ survivors=(\d+)", text)
+                if ln != "0"]
 
 perrs = [int(v) for v in re.findall(r"pperr=(\d+)", text)]
 pperr = str(max(perrs)) if perrs else "VOID"
@@ -356,6 +366,10 @@ for pat, tagname in (
 ):
     if re.search(pat, text):
         notes.append(tagname)
+if poison_alive:
+    notes.append("poison-survivors=" + "/".join(poison_alive[:4]))
+if selftest_dead:
+    notes.append("selftest-dead:" + "/".join(sorted(set(selftest_dead))))
 
 if rc != 0:
     status = f"FAIL:rc{rc}"
@@ -369,6 +383,8 @@ elif pperr != "0":
     status = f"FAIL:pperr={pperr}"
 elif control != "True":
     status = f"FAIL:control={control}"
+elif selftest_dead:
+    status = "VOID:selftest"
 else:
     status = "OK"
 
