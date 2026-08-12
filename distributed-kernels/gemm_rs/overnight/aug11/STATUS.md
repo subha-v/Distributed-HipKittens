@@ -21,6 +21,24 @@ seven queue items produced data; exp_22's third arm is the only piece still owed
    **203.78 → 200.00 µs**. The graded ratio at this config is **being re-measured
    now** — exp_26's own ≈1.085× is an arithmetic projection from a pipelined
    measurement and is explicitly not a graded measurement.
+3. **RE-MEASURED (exp_24 §remeasure, binary `fb3d670b`): the projection did NOT
+   hold and the gap to rank-1 did not move.** `ours/rank-1` = **1.1165× graded /
+   1.1111× pipelined**, against 1.0971× / 1.1189× on the pre-exp_26 binary — both
+   inside the ±2% ratio floor, i.e. **unchanged**. Shape 5 came back **flat
+   graded** (+0.99%, under its 2.00% floor) and **~3% worse pipelined**, versus
+   exp_26's paired −6.56%: a ~9.5-point disagreement including sign. exp_26's
+   paired same-run design beats my cross-run one, so **the shape-5 win is
+   unconfirmed under the graded protocol, not withdrawn**; the decisive test is a
+   sixth `ours_prev` arm inside instrument A's pool (one run). Two instrument
+   findings came with it: **cross-run graded µs is not comparable on the small
+   shapes** (every arm inflated together, the no-op floor kernel by +19–29%, its
+   graded rsd is 150–270%), so report within-run ratios across runs and µs only
+   within a run; and **the inherited cyclic arm rotation is defective** — a full
+   rotation still pins every arm *pair* at a constant offset, which had `ours_null`
+   permanently one slot behind `ours`. Fixed with a per-rep shuffle; mean graded
+   null floor collapsed **1.62% → 0.62%** (shape 6: 4.31% → 0.60%). The
+   `ours/reference` move to 0.8522× is the **reference arm degrading**, not us.
+   Details in `exp_24_ladders/result_remeasure.md`.
 
 | paper figure | experiment | headline number | data |
 |---|---|---|---|

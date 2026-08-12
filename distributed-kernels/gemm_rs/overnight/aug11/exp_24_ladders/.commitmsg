@@ -1,37 +1,8 @@
-exp_24 re-measure at exp_26's binary: the gap to rank-1 did not move, and shape 5's win did not reproduce
+aug11 STATUS: the re-measure overturns exp_26's projection, not exp_26
 
-Instrument A only, six shapes, five arms, both protocols, on fb3d670b (exp_26's
-landed PERSHAPE=2 build; the previous ladder ran the pre-exp_26 79599cce, so its
-ratios were the previous kernel's).
-
-ours/rank-1 is 1.1165x graded / 1.1111x pipelined against 1.0971x / 1.1189x --
-both moves inside the 2% ratio-noise floor, so unchanged in both directions.
-exp_26's ~1.085x graded projection did NOT hold (measured 1.1165x best, 1.0924x
-median; shape 5 at 1.2831x against a projected ~1.20x). Shape 5, the only row
-whose rgroup changed, is flat graded (+0.99% under its 2.00% floor) and ~3%
-WORSE pipelined (outside its floor), against exp_26's paired -6.56% in 80 of 80
-rounds. exp_26's design is the stronger one -- paired same-run A/B versus my
-cross-run comparison -- so the decisive test is a sixth `ours_prev` arm inside
-instrument A's own pool. Until then the shape-5 win is unconfirmed under the
-protocol that grades us.
-
-Cross-run graded us on the small shapes turns out not to be comparable at all:
-on shapes 1-2 every arm inflated together, including the no-op harness_floor
-kernel (+19%, +29%) and rank-1, and that arm's graded rsd runs 150-270%. Report
-within-run ratios across runs; report us only within a run. The ours/reference
-"improvement" from 0.8863x to 0.8522x is likewise the reference arm degrading
-(+36% graded, +48% pipelined on shape 1), not us gaining, and is not claimed.
-
-Also confirms and fixes an instrument defect the whole tree inherits: the cyclic
-arm rotation makes every arm first exactly once but still pins every arm PAIR at
-a constant relative offset, and it had ours_null permanently one slot behind
-ours. Replaced with a per-rep permutation seeded from the shape index only --
-identical on all 8 ranks, or the collective arms deadlock against each other.
-The null arm confirms it mattered: mean graded floor 1.62% -> 0.62%, shape 6
-4.31% -> 0.60%, reproducing exp_26's signature. Residual disclosed: 5 reps is
-too few for a shuffle to guarantee decorrelation (2 of 6 shapes still had an
-accidentally pinned pair, neither ours<->ours_null); a Latin square is the fix.
-
-Instrument B was not re-run, per the dispatch. Its previous-binary captures are
-quarantined out of the aggregator's reach so they cannot read as this run's, and
-the 1.1349x evaluator finding stands unchanged against 79599cce.
+Morning read now carries the measured graded ratio at the shipped binary
+(1.1165x graded / 1.1111x pipelined, both unchanged inside the 2% ratio floor)
+instead of exp_26's arithmetic 1.085x projection, plus the two instrument
+findings that came out of it: cross-run graded us is not comparable on the small
+shapes, and the inherited cyclic arm rotation pins arm pairs at a constant
+offset.
