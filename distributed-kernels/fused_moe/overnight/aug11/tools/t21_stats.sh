@@ -5,7 +5,7 @@
 set -uo pipefail
 cd "$HOME/overnight-scratch" || exit 1
 # Control FIRST. Edit as batches land (nsh.ps1 forwards no arguments).
-TAGS="e26_m0a e26_m4 e26_m1 e26_m1b e26_m5 e26_m0b"
+TAGS="e26_m0a e26_m4 e26_m1 e26_m1b e26_m5 e26_m0b e26_m4b e26_m5b"
 python3 - $TAGS <<'PY'
 import csv, math, sys
 
@@ -109,5 +109,59 @@ for col in COLS:
             print(f"{tag:10s} {n:2d} {m:10.2f} {s:7.2f} {d:+9.2f} {t:8.2f} {df:6.1f} {p:10.2e}")
     if not math.isnan(sb) and sb > 0:
         print(f"  control sd = {sb:.2f}; a 3-sigma effect on the control's own sd is {3*sb:.1f}")
+
+# ---------------------------------------------------------------- 2x2 factorial
+# The ladder IS a factorial in (DSR bit 0, MFMA bit 2), so analyse it as one.
+# Cells pool every batch of the same mask; batch means are printed so the
+# replication is visible rather than hidden inside a pooled sd.
+CELL = {0: ["e26_m0a", "e26_m0b"], 1: ["e26_m1", "e26_m1b"],
+        4: ["e26_m4", "e26_m4b"], 5: ["e26_m5", "e26_m5b"]}
+print("\n" + "=" * 96)
+print("2x2 FACTORIAL on ts_M6_us   bits: DSR = mask&1, MFMA = mask&4")
+print("=" * 96)
+cell = {}
+for mask, tg in CELL.items():
+    vals, per_batch = [], []
+    for t in tg:
+        if t not in data: continue
+        v = [float(r["ts_M6_us"]) for r in data[t] if r["ts_M6_us"] not in ("", None)]
+        if v:
+            vals += v
+            per_batch.append((t, len(v), sum(v) / len(v)))
+    if not vals: continue
+    n, m, s = stats(vals)
+    cell[mask] = (n, m, s)
+    bs = "  ".join(f"{t}={mv:.2f}(n{bn})" for t, bn, mv in per_batch)
+    print(f"mask {mask}: DSR={mask & 1} MFMA={(mask & 4) >> 2}  "
+          f"n={n:2d} mean={m:8.2f} sd={s:6.2f}   batches: {bs}")
+
+def contrast(coefs):
+    """coefs: {mask: weight}. Returns (estimate, se, t, df_min)."""
+    est = sum(w * cell[k][1] for k, w in coefs.items())
+    var = sum(w * w * cell[k][2] ** 2 / cell[k][0] for k, w in coefs.items())
+    se = math.sqrt(var)
+    dfs = [cell[k][0] - 1 for k in coefs]
+    return est, se, (est / se if se > 0 else float("nan")), min(dfs)
+
+if set(cell) >= {0, 1, 4, 5}:
+    print()
+    for name, coefs in (
+        ("MFMA bit main effect ", {4: 0.5, 5: 0.5, 0: -0.5, 1: -0.5}),
+        ("DS-read bit main eff ", {1: 0.5, 5: 0.5, 0: -0.5, 4: -0.5}),
+        ("interaction          ", {5: 0.5, 0: 0.5, 1: -0.5, 4: -0.5}),
+    ):
+        e, se, t, df = contrast(coefs)
+        print(f"{name} = {e:+8.2f} us  SE {se:5.2f}  t {t:+6.2f}  "
+              f"p2 {t_two_sided_p(t, df):8.2e}  (df>={df})")
+    print()
+    on = [float(r["ts_M6_us"]) for t in CELL[4] + CELL[5] if t in data
+          for r in data[t] if r["ts_M6_us"] not in ("", None)]
+    off = [float(r["ts_M6_us"]) for t in CELL[0] + CELL[1] if t in data
+           for r in data[t] if r["ts_M6_us"] not in ("", None)]
+    d, t, df, p = welch(on, off)
+    n1, m1, s1 = stats(on); n0, m0, s0 = stats(off)
+    print(f"MFMA on  n={n1:2d} mean={m1:8.2f} sd={s1:6.2f}")
+    print(f"MFMA off n={n0:2d} mean={m0:8.2f} sd={s0:6.2f}")
+    print(f"pooled Welch on-vs-off: {d:+.2f} us  t={t:+.2f}  df={df:.1f}  p2={p:.2e}")
 PY
 exit 0
