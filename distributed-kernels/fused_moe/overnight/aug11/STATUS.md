@@ -13,6 +13,59 @@ Live document. Updated as each experiment lands. The append-only ledger is
 
 Target: **0.80× ≈ 6,172 µs**, i.e. **−513 µs** from the ratchet.
 
+## RATCHET MOVED AGAIN (exp_27, `f113d73f`) — **0.8408× production**
+
+**`C=16, g=353, mode=12, flush_rows=16` + `K0P6_MPS_ASCALE_TM 1` = 6,482.7 µs =
+0.8408× production**, from 6,568.0 / 0.8522×. **−85.3 µs, +1.14 points.** Two
+candidate campaigns (6,477.0 / 6,488.3) paired against a same-session control
+campaign that reproduced the old ratchet to 0.16 %.
+
+| | | |
+|---|---:|---|
+| M6 stamp, control | 2,534.12 ± 10.71 | n = 10, two batches |
+| M6 stamp, candidate | **2,454.39 ± 13.20** | n = 10, two batches |
+| **ΔM6** | **−79.7 µs, t = −14.84** | the two controls agree to 5.1 µs, so the effect is **15.6× the drift** |
+| paired campaign delta | −75.0 µs | lands within 4.7 µs of the stamp — **M6's saving passes through ~1:1** |
+
+Resource tuple exact: `SGPR 106 / VGPR 256 / AGPR 256 / scratch 128 B / LDS
+155,496`, MFMA 180, zero scratch ops in either MFMA span. The ISA came out
+better than designed: trip count **21 → 6**, `flat_load_dword` → `dwordx4`,
+stride folded as the immediate `0xe0 = 224`, and the four LDS stores merged into
+two `ds_write2_b32`.
+
+**Remaining to 0.80×: −317 µs.**
+
+### Two corrections this experiment forced
+
+1. **The M5 transpose was cheap to produce, expensive to consume.** Deleting the
+   whole M5 loop (`scale_transpose_row` is now compiled out) was worth only
+   **−2.95 µs (t = −1.71)**, not the predicted −17: `sc_dst[lane·T_ext + t]` has
+   consecutive `t` adjacent, so the scatter **coalesces in L2**. Only the
+   *consumption* side was ever 16×-amplified.
+2. **The bit-identity gate I demanded was not well-posed, and this experiment
+   proved it.** A binary whose `.text` is byte-identical to the ratchet printed
+   two different `[MOK GATE] relative` values across five runs, and **untouched
+   `production` printed two different `max_abs` values in those same runs**.
+   MoK's dispatch assigns receive rows by `fetch_add` on a device counter and
+   mode 12's combine is a nondeterministic bf16 remote atomic, so **`out` is not
+   bit-reproducible in *any* arm.** The sound substitute: same-run paired
+   `mps − pf6gm` at full precision from the rank JSONs — shift **−8.8e-9,
+   t = −0.73**, with `max_abs(mps) == max_abs(pf6gm)` in **160/160** cells and
+   the negative control sitting 108× above the arm. Bit-identity of M6's *loads*
+   was proven structurally instead.
+
+### A statistical rule that nearly caused a false stop
+
+**Cluster by RUN, not by (run, rank).** The eight ranks in a run share one
+input. That numerics null reads **t = −0.73 clustered and t = −5.01
+unclustered** — the unclustered version would have halted a correct experiment.
+
+### Prediction haircut, now measured twice
+
+exp_27's M6 term came in **43 % below** its point estimate and its M5 term
+**83 %** below. Read every remaining prediction in this family pessimistically,
+including exp_30's +245…+695 µs.
+
 ## RATCHET MOVED (exp_24, `9530382a`)
 
 **`C=16, g=353, mode=12, flush_rows=16` = 6,568.0 ± 4.6 µs = 0.8522× production**
