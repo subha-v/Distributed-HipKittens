@@ -584,6 +584,75 @@ in whatever way the new bytes parse as. The replacement was staged under a
 temporary name, `bash -n` syntax-checked, and installed with `mv` — an atomic
 rename leaves the running process on its original inode.
 
+## NODE — a dead process stalled the queue for 25 minutes, and the node was fine
+
+The most expensive twenty-five minutes of the night, and the cause was a
+misreading that this project's own rules made easy. Written up in full because
+the next session will hit it again.
+
+**What happened.** The orphaned exp_26 M9 run took a **`VM_L2_PROTECTION_FAULT`**
+— `dmesg` shows `PERMISSION_FAULTS`, `MAPPING_ERROR: 0x1`, faulty UTCL2 client
+`TCP`, on dies AID0/AID1/AID2 XCD0 across several devices, all attributed to pid
+3001610. The process died and then **wedged in `exit_mm`**, keeping its KFD entry
+and ~1.25 GB per GPU.
+
+**Why it looked like a wedged node and was not.** `rocm-smi --showpids` still
+listed it, so every drain check in this tree — `reattribute.sh`'s `wait_clean`,
+`run_reference_arm.sh`'s preflight, and my own `gpu_lease.sh` — counted it as a
+live tenant and refused to start anything. Two correctly-behaved campaigns
+(exp_21, exp_24) sat in `acquire` behind a process that no longer existed.
+Meanwhile: **all 8 GPUs passed a live 4096³ bf16 matmul, 189-190 GiB free of 192,
+junction temps 38-44 °C, package power 134-151 W, 0% utilization.** The hardware
+was completely idle and completely healthy.
+
+**The three diagnostic signals that separate a corpse from a running job**, and
+all three are cheap:
+
+| signal | corpse | live job |
+|---|---|---|
+| `/proc/<pid>/wchan` | `exit_mm` (or `do_exit`) | a scheduler/driver wait |
+| `utime`/`stime` in `/proc/<pid>/stat` over 5 s | **frozen** | advancing |
+| `CU OCCUPANCY` in `rocm-smi --showpids` | 0 for minutes | non-zero, or bursty |
+
+Plus the decisive one: **just try a trivial matmul on all 8 devices.** That single
+test would have answered the question in 30 seconds and it is now the first thing
+to run when the node looks busy but nothing is progressing.
+
+**A task in `exit_mm` cannot be signalled.** It is already exiting and has no
+`mm`; SIGTERM and SIGKILL are both no-ops. So the charter's "never SIGKILL a GPU
+process" is not the operative rule here — there is nothing to kill, and trying is
+how a stale entry gets escalated into a genuinely wedged node. Nothing was
+signalled. Only the **plain bash waiters** were SIGTERMed, which is safe because
+they are shell, not GPU processes.
+
+**The fix, and why it is principled rather than a workaround.**
+`gpu_lease.sh` now excludes pids that are zombies or in `exit_mm`/`do_exit` from
+its live count, and reports them separately as
+`KFD STALE pids (exiting/zombie, cannot dispatch, ignored)` so the condition
+stays visible instead of being silently tolerated. A process with no address
+space cannot dispatch a kernel — excluding it is simply correct.
+
+**Standing caveat for every number taken after 05:15 tonight:** a stale KFD entry
+holding ~1.25 GB/GPU existed while the remaining campaigns ran. It had 0 CU
+occupancy and 0% GPU utilization throughout, so the expected effect on timing is
+nil, but it is disclosed, and the first campaign to run afterwards should
+re-verify a known value before its numbers are trusted.
+
+**And the fault itself is a real finding, not just an obstacle: the exp_26 arm
+faulted.** A `VM_L2_PROTECTION_FAULT` is an out-of-bounds or unmapped access, not
+a tolerance miss. Two candidate causes, and they must be separated before exp_26
+is measured at all:
+1. the `rgroup = max(1, min(RELEASE_GROUP, tiles_per_cta))` change itself, or
+2. M9's harness, since shape 5 had to be **added** to `m9_stale_slot.py`'s `CASES`
+   and M9's golden module was already known stale after the exp_14 retile.
+
+Cause 2 is at least as likely as cause 1 and is the cheaper hypothesis to test:
+run the **unmodified** kernel through the same extended M9 first. **This
+retroactively and strongly vindicates forcing `RELEASE_GROUP_PERSHAPE` to default
+0** — had it shipped default-on, this fault would have been in every experiment's
+binary tonight, and its first symptom would have been an unexplained fault in
+some *other* experiment.
+
 ## Measurement discipline carried into the figure work
 
 - **The harness bias is per-allocation AND partly allocation-ORDER, not

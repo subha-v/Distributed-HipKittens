@@ -9,12 +9,27 @@
   "shapes": {
     "1": {
       "shape": "64x7168x18432",
-      "null_floor_worst_draw_pct": 2.815623142884901,
+      "null_pairs": [
+        "null vs c"
+      ],
+      "null_floor_worst_draw_pct": 2.8156231428849043,
+      "null_floor_single_pair_pct": 2.8156231428849043,
+      "null_floor_per_pair": {
+        "null vs c": {
+          "per_draw_pct": [
+            -0.3836206286531141,
+            2.8156231428849043,
+            0.25819754302180975,
+            2.659293815532582
+          ],
+          "worst_pct": 2.8156231428849043
+        }
+      },
       "null_floor_per_draw_pct": [
-        0.38509794380606766,
-        2.815623142884901,
-        0.2581975430218148,
-        2.6592938155325867
+        -0.3836206286531141,
+        2.8156231428849043,
+        0.25819754302180975,
+        2.659293815532582
       ],
       "ab_rung_active": false,
       "bc_rung_active": false,
@@ -183,6 +198,7 @@
           "p_floor_at_this_draw_count": 0.014285714285714285,
           "verdict": "UNRESOLVED",
           "predicted_flat": true,
+          "is_null_pair": false,
           "beyond_floor": false
         },
         "c vs b": {
@@ -210,6 +226,7 @@
           "p_floor_at_this_draw_count": 0.014285714285714285,
           "verdict": "UNRESOLVED",
           "predicted_flat": true,
+          "is_null_pair": false,
           "beyond_floor": false
         },
         "null vs c": {
@@ -235,8 +252,9 @@
           "p_ranksum_faster": 0.34285714285714286,
           "p_ranksum_slower": 0.34285714285714286,
           "p_floor_at_this_draw_count": 0.014285714285714285,
-          "verdict": "UNRESOLVED",
+          "verdict": "NULL PAIR (floor estimate, not a result)",
           "predicted_flat": null,
+          "is_null_pair": true,
           "beyond_floor": false
         },
         "nr8 vs c": {
@@ -264,6 +282,7 @@
           "p_floor_at_this_draw_count": 0.014285714285714285,
           "verdict": "RESOLVED slower",
           "predicted_flat": null,
+          "is_null_pair": false,
           "beyond_floor": true
         },
         "nr16 vs c": {
@@ -291,6 +310,7 @@
           "p_floor_at_this_draw_count": 0.014285714285714285,
           "verdict": "RESOLVED slower",
           "predicted_flat": null,
+          "is_null_pair": false,
           "beyond_floor": true
         },
         "nr32 vs c": {
@@ -318,6 +338,7 @@
           "p_floor_at_this_draw_count": 0.014285714285714285,
           "verdict": "RESOLVED slower",
           "predicted_flat": null,
+          "is_null_pair": false,
           "beyond_floor": true
         },
         "nr48 vs c": {
@@ -345,18 +366,44 @@
           "p_floor_at_this_draw_count": 0.014285714285714285,
           "verdict": "UNRESOLVED",
           "predicted_flat": null,
+          "is_null_pair": false,
           "beyond_floor": false
         }
       }
     },
     "2": {
       "shape": "512x4096x12288",
-      "null_floor_worst_draw_pct": 2.087977584865248,
+      "null_pairs": [
+        "null vs c",
+        "nr32 vs c"
+      ],
+      "null_floor_worst_draw_pct": 2.0879775848652526,
+      "null_floor_single_pair_pct": 2.0879775848652526,
+      "null_floor_per_pair": {
+        "null vs c": {
+          "per_draw_pct": [
+            -0.3650817707051335,
+            1.8991147576565615,
+            0.8462349361779697,
+            2.0879775848652526
+          ],
+          "worst_pct": 2.0879775848652526
+        },
+        "nr32 vs c": {
+          "per_draw_pct": [
+            1.4039298392617638,
+            -0.7551740417581887,
+            1.957311832339137,
+            -0.02075741917065832
+          ],
+          "worst_pct": 1.957311832339137
+        }
+      },
       "null_floor_per_draw_pct": [
-        0.3664195015094576,
-        1.8991147576565504,
-        0.8462349361779703,
-        2.087977584865248
+        -0.3650817707051335,
+        1.8991147576565615,
+        0.8462349361779697,
+        2.0879775848652526
       ],
       "ab_rung_active": false,
       "bc_rung_active": false,
@@ -513,11 +560,11 @@
             0.3618876823833439
           ],
           "null_best_range": [
-            0.31349617884732783,
-            1.1062046968871586
+            -0.7547743945597984,
+            2.053158345051842
           ],
           "null_median_range": [
-            -0.3650817707051335,
+            -0.7551740417581887,
             2.0879775848652526
           ],
           "p_ranksum_faster": 0.9714285714285714,
@@ -525,6 +572,7 @@
           "p_floor_at_this_draw_count": 0.014285714285714285,
           "verdict": "UNRESOLVED",
           "predicted_flat": true,
+          "is_null_pair": false,
           "beyond_floor": false
         },
         "c vs b": {
@@ -540,11 +588,11 @@
             0.23644816278318714
           ],
           "null_best_range": [
-            0.31349617884732783,
-            1.1062046968871586
+            -0.7547743945597984,
+            2.053158345051842
           ],
           "null_median_range": [
-            -0.3650817707051335,
+            -0.7551740417581887,
             2.0879775848652526
           ],
           "p_ranksum_faster": 0.9428571428571428,
@@ -552,6 +600,7 @@
           "p_floor_at_this_draw_count": 0.014285714285714285,
           "verdict": "UNRESOLVED",
           "predicted_flat": true,
+          "is_null_pair": false,
           "beyond_floor": false
         },
         "null vs c": {
@@ -567,18 +616,19 @@
             2.0879775848652526
           ],
           "null_best_range": [
-            0.31349617884732783,
-            1.1062046968871586
+            -0.7547743945597984,
+            2.053158345051842
           ],
           "null_median_range": [
-            -0.3650817707051335,
+            -0.7551740417581887,
             2.0879775848652526
           ],
           "p_ranksum_faster": 0.34285714285714286,
           "p_ranksum_slower": 0.34285714285714286,
           "p_floor_at_this_draw_count": 0.014285714285714285,
-          "verdict": "UNRESOLVED",
+          "verdict": "NULL PAIR (floor estimate, not a result)",
           "predicted_flat": null,
+          "is_null_pair": true,
           "beyond_floor": false
         },
         "nr8 vs c": {
@@ -594,11 +644,11 @@
             -24.883779066197686
           ],
           "null_best_range": [
-            0.31349617884732783,
-            1.1062046968871586
+            -0.7547743945597984,
+            2.053158345051842
           ],
           "null_median_range": [
-            -0.3650817707051335,
+            -0.7551740417581887,
             2.0879775848652526
           ],
           "p_ranksum_faster": 1.0,
@@ -606,6 +656,7 @@
           "p_floor_at_this_draw_count": 0.014285714285714285,
           "verdict": "RESOLVED slower",
           "predicted_flat": null,
+          "is_null_pair": false,
           "beyond_floor": true
         },
         "nr16 vs c": {
@@ -621,11 +672,11 @@
             -8.48801516169071
           ],
           "null_best_range": [
-            0.31349617884732783,
-            1.1062046968871586
+            -0.7547743945597984,
+            2.053158345051842
           ],
           "null_median_range": [
-            -0.3650817707051335,
+            -0.7551740417581887,
             2.0879775848652526
           ],
           "p_ranksum_faster": 1.0,
@@ -633,9 +684,10 @@
           "p_floor_at_this_draw_count": 0.014285714285714285,
           "verdict": "RESOLVED slower",
           "predicted_flat": null,
+          "is_null_pair": false,
           "beyond_floor": true
         },
-        "nr32 vs c": {
+        "nr32 vs c *shipped": {
           "draws": 4,
           "gain_best_pct": 0.38258206895601665,
           "gain_median_pct": 0.6915862100455528,
@@ -648,18 +700,19 @@
             1.957311832339137
           ],
           "null_best_range": [
-            0.31349617884732783,
-            1.1062046968871586
+            -0.7547743945597984,
+            2.053158345051842
           ],
           "null_median_range": [
-            -0.3650817707051335,
+            -0.7551740417581887,
             2.0879775848652526
           ],
           "p_ranksum_faster": 0.7571428571428571,
           "p_ranksum_slower": 0.34285714285714286,
           "p_floor_at_this_draw_count": 0.014285714285714285,
-          "verdict": "UNRESOLVED",
+          "verdict": "NULL PAIR (floor estimate, not a result)",
           "predicted_flat": null,
+          "is_null_pair": true,
           "beyond_floor": false
         },
         "nr48 vs c": {
@@ -675,11 +728,11 @@
             1.3968019621942496
           ],
           "null_best_range": [
-            0.31349617884732783,
-            1.1062046968871586
+            -0.7547743945597984,
+            2.053158345051842
           ],
           "null_median_range": [
-            -0.3650817707051335,
+            -0.7551740417581887,
             2.0879775848652526
           ],
           "p_ranksum_faster": 0.9,
@@ -687,18 +740,44 @@
           "p_floor_at_this_draw_count": 0.014285714285714285,
           "verdict": "UNRESOLVED",
           "predicted_flat": null,
+          "is_null_pair": false,
           "beyond_floor": false
         }
       }
     },
     "3": {
       "shape": "2048x2880x2880",
-      "null_floor_worst_draw_pct": 0.34320609396997465,
+      "null_pairs": [
+        "null vs c",
+        "nr32 vs c"
+      ],
+      "null_floor_worst_draw_pct": 1.741992017853644,
+      "null_floor_single_pair_pct": 0.34320609396998325,
+      "null_floor_per_pair": {
+        "null vs c": {
+          "per_draw_pct": [
+            0.34320609396998325,
+            0.02992310079186211,
+            -0.24716746265173173,
+            -0.305835408845867
+          ],
+          "worst_pct": 0.34320609396998325
+        },
+        "nr32 vs c": {
+          "per_draw_pct": [
+            0.6713579688955473,
+            1.405268166801421,
+            -1.741992017853644,
+            -0.7604556720300804
+          ],
+          "worst_pct": 1.741992017853644
+        }
+      },
       "null_floor_per_draw_pct": [
-        0.34320609396997465,
-        0.02992310079185586,
-        0.24777989392851243,
-        0.3067736312351849
+        0.34320609396998325,
+        0.02992310079186211,
+        -0.24716746265173173,
+        -0.305835408845867
       ],
       "ab_rung_active": false,
       "bc_rung_active": false,
@@ -855,19 +934,20 @@
             0.3536472771323629
           ],
           "null_best_range": [
-            -0.4157583661315911,
-            0.5114527774597422
+            -1.7157385511544998,
+            1.3412790091655635
           ],
           "null_median_range": [
-            -0.305835408845867,
-            0.34320609396998325
+            -1.741992017853644,
+            1.405268166801421
           ],
           "p_ranksum_faster": 0.9,
           "p_ranksum_slower": 0.17142857142857143,
           "p_floor_at_this_draw_count": 0.014285714285714285,
           "verdict": "UNRESOLVED",
           "predicted_flat": true,
-          "beyond_floor": true
+          "is_null_pair": false,
+          "beyond_floor": false
         },
         "c vs b": {
           "draws": 4,
@@ -882,19 +962,20 @@
             2.524634406856552
           ],
           "null_best_range": [
-            -0.4157583661315911,
-            0.5114527774597422
+            -1.7157385511544998,
+            1.3412790091655635
           ],
           "null_median_range": [
-            -0.305835408845867,
-            0.34320609396998325
+            -1.741992017853644,
+            1.405268166801421
           ],
           "p_ranksum_faster": 0.014285714285714285,
           "p_ranksum_slower": 1.0,
           "p_floor_at_this_draw_count": 0.014285714285714285,
           "verdict": "UNRESOLVED",
           "predicted_flat": true,
-          "beyond_floor": true
+          "is_null_pair": false,
+          "beyond_floor": false
         },
         "null vs c": {
           "draws": 4,
@@ -909,18 +990,19 @@
             0.34320609396998325
           ],
           "null_best_range": [
-            -0.4157583661315911,
-            0.5114527774597422
+            -1.7157385511544998,
+            1.3412790091655635
           ],
           "null_median_range": [
-            -0.305835408845867,
-            0.34320609396998325
+            -1.741992017853644,
+            1.405268166801421
           ],
           "p_ranksum_faster": 0.34285714285714286,
           "p_ranksum_slower": 0.34285714285714286,
           "p_floor_at_this_draw_count": 0.014285714285714285,
-          "verdict": "UNRESOLVED",
+          "verdict": "NULL PAIR (floor estimate, not a result)",
           "predicted_flat": null,
+          "is_null_pair": true,
           "beyond_floor": false
         },
         "nr8 vs c": {
@@ -936,18 +1018,19 @@
             -26.93704091155591
           ],
           "null_best_range": [
-            -0.4157583661315911,
-            0.5114527774597422
+            -1.7157385511544998,
+            1.3412790091655635
           ],
           "null_median_range": [
-            -0.305835408845867,
-            0.34320609396998325
+            -1.741992017853644,
+            1.405268166801421
           ],
           "p_ranksum_faster": 1.0,
           "p_ranksum_slower": 0.014285714285714285,
           "p_floor_at_this_draw_count": 0.014285714285714285,
           "verdict": "RESOLVED slower",
           "predicted_flat": null,
+          "is_null_pair": false,
           "beyond_floor": true
         },
         "nr16 vs c": {
@@ -963,21 +1046,22 @@
             -10.057747264572093
           ],
           "null_best_range": [
-            -0.4157583661315911,
-            0.5114527774597422
+            -1.7157385511544998,
+            1.3412790091655635
           ],
           "null_median_range": [
-            -0.305835408845867,
-            0.34320609396998325
+            -1.741992017853644,
+            1.405268166801421
           ],
           "p_ranksum_faster": 1.0,
           "p_ranksum_slower": 0.014285714285714285,
           "p_floor_at_this_draw_count": 0.014285714285714285,
           "verdict": "RESOLVED slower",
           "predicted_flat": null,
+          "is_null_pair": false,
           "beyond_floor": true
         },
-        "nr32 vs c": {
+        "nr32 vs c *shipped": {
           "draws": 4,
           "gain_best_pct": 0.02115588729885154,
           "gain_median_pct": -0.04454885156726651,
@@ -990,18 +1074,19 @@
             1.405268166801421
           ],
           "null_best_range": [
-            -0.4157583661315911,
-            0.5114527774597422
+            -1.7157385511544998,
+            1.3412790091655635
           ],
           "null_median_range": [
-            -0.305835408845867,
-            0.34320609396998325
+            -1.741992017853644,
+            1.405268166801421
           ],
           "p_ranksum_faster": 0.5571428571428572,
           "p_ranksum_slower": 0.5571428571428572,
           "p_floor_at_this_draw_count": 0.014285714285714285,
-          "verdict": "UNRESOLVED",
+          "verdict": "NULL PAIR (floor estimate, not a result)",
           "predicted_flat": null,
+          "is_null_pair": true,
           "beyond_floor": false
         },
         "nr48 vs c": {
@@ -1017,30 +1102,56 @@
             1.495880422219087
           ],
           "null_best_range": [
-            -0.4157583661315911,
-            0.5114527774597422
+            -1.7157385511544998,
+            1.3412790091655635
           ],
           "null_median_range": [
-            -0.305835408845867,
-            0.34320609396998325
+            -1.741992017853644,
+            1.405268166801421
           ],
           "p_ranksum_faster": 0.34285714285714286,
           "p_ranksum_slower": 0.7571428571428571,
           "p_floor_at_this_draw_count": 0.014285714285714285,
           "verdict": "UNRESOLVED",
           "predicted_flat": null,
-          "beyond_floor": true
+          "is_null_pair": false,
+          "beyond_floor": false
         }
       }
     },
     "4": {
       "shape": "4096x4096x4096",
-      "null_floor_worst_draw_pct": 0.28357998913039184,
+      "null_pairs": [
+        "null vs c",
+        "nr32 vs c"
+      ],
+      "null_floor_worst_draw_pct": 0.8474073793903081,
+      "null_floor_single_pair_pct": 0.2835799891304003,
+      "null_floor_per_pair": {
+        "null vs c": {
+          "per_draw_pct": [
+            0.2835799891304003,
+            -0.10629180299613905,
+            0.06194796793066448,
+            0.2161963323733307
+          ],
+          "worst_pct": 0.2835799891304003
+        },
+        "nr32 vs c": {
+          "per_draw_pct": [
+            0.2161655261323725,
+            0.4788796944382945,
+            -0.8474073793903081,
+            -0.45316464793755395
+          ],
+          "worst_pct": 0.8474073793903081
+        }
+      },
       "null_floor_per_draw_pct": [
-        0.28357998913039184,
-        0.1064049026856822,
-        0.06194796793066333,
-        0.21619633237333008
+        0.2835799891304003,
+        -0.10629180299613905,
+        0.06194796793066448,
+        0.2161963323733307
       ],
       "ab_rung_active": false,
       "bc_rung_active": false,
@@ -1197,18 +1308,19 @@
             0.22008843431615688
           ],
           "null_best_range": [
-            -0.07872953557197526,
+            -0.7661605771850821,
             0.46910949795706536
           ],
           "null_median_range": [
-            -0.10629180299613905,
-            0.2835799891304003
+            -0.8474073793903081,
+            0.4788796944382945
           ],
           "p_ranksum_faster": 0.8285714285714286,
           "p_ranksum_slower": 0.24285714285714285,
           "p_floor_at_this_draw_count": 0.014285714285714285,
           "verdict": "UNRESOLVED",
           "predicted_flat": true,
+          "is_null_pair": false,
           "beyond_floor": false
         },
         "c vs b": {
@@ -1224,18 +1336,19 @@
             0.7356788241960288
           ],
           "null_best_range": [
-            -0.07872953557197526,
+            -0.7661605771850821,
             0.46910949795706536
           ],
           "null_median_range": [
-            -0.10629180299613905,
-            0.2835799891304003
+            -0.8474073793903081,
+            0.4788796944382945
           ],
           "p_ranksum_faster": 0.6571428571428571,
           "p_ranksum_slower": 0.44285714285714284,
           "p_floor_at_this_draw_count": 0.014285714285714285,
           "verdict": "UNRESOLVED",
           "predicted_flat": true,
+          "is_null_pair": false,
           "beyond_floor": false
         },
         "null vs c": {
@@ -1251,18 +1364,19 @@
             0.2835799891304003
           ],
           "null_best_range": [
-            -0.07872953557197526,
+            -0.7661605771850821,
             0.46910949795706536
           ],
           "null_median_range": [
-            -0.10629180299613905,
-            0.2835799891304003
+            -0.8474073793903081,
+            0.4788796944382945
           ],
           "p_ranksum_faster": 0.34285714285714286,
           "p_ranksum_slower": 0.34285714285714286,
           "p_floor_at_this_draw_count": 0.014285714285714285,
-          "verdict": "UNRESOLVED",
+          "verdict": "NULL PAIR (floor estimate, not a result)",
           "predicted_flat": null,
+          "is_null_pair": true,
           "beyond_floor": false
         },
         "nr8 vs c": {
@@ -1278,18 +1392,19 @@
             -24.441822817508797
           ],
           "null_best_range": [
-            -0.07872953557197526,
+            -0.7661605771850821,
             0.46910949795706536
           ],
           "null_median_range": [
-            -0.10629180299613905,
-            0.2835799891304003
+            -0.8474073793903081,
+            0.4788796944382945
           ],
           "p_ranksum_faster": 1.0,
           "p_ranksum_slower": 0.014285714285714285,
           "p_floor_at_this_draw_count": 0.014285714285714285,
           "verdict": "RESOLVED slower",
           "predicted_flat": null,
+          "is_null_pair": false,
           "beyond_floor": true
         },
         "nr16 vs c": {
@@ -1305,21 +1420,22 @@
             -8.962298096206911
           ],
           "null_best_range": [
-            -0.07872953557197526,
+            -0.7661605771850821,
             0.46910949795706536
           ],
           "null_median_range": [
-            -0.10629180299613905,
-            0.2835799891304003
+            -0.8474073793903081,
+            0.4788796944382945
           ],
           "p_ranksum_faster": 1.0,
           "p_ranksum_slower": 0.014285714285714285,
           "p_floor_at_this_draw_count": 0.014285714285714285,
           "verdict": "RESOLVED slower",
           "predicted_flat": null,
+          "is_null_pair": false,
           "beyond_floor": true
         },
-        "nr32 vs c": {
+        "nr32 vs c *shipped": {
           "draws": 4,
           "gain_best_pct": -0.16428051291704215,
           "gain_median_pct": -0.11849956090259073,
@@ -1332,18 +1448,19 @@
             0.4788796944382945
           ],
           "null_best_range": [
-            -0.07872953557197526,
+            -0.7661605771850821,
             0.46910949795706536
           ],
           "null_median_range": [
-            -0.10629180299613905,
-            0.2835799891304003
+            -0.8474073793903081,
+            0.4788796944382945
           ],
           "p_ranksum_faster": 0.7571428571428571,
           "p_ranksum_slower": 0.34285714285714286,
           "p_floor_at_this_draw_count": 0.014285714285714285,
-          "verdict": "UNRESOLVED",
+          "verdict": "NULL PAIR (floor estimate, not a result)",
           "predicted_flat": null,
+          "is_null_pair": true,
           "beyond_floor": false
         },
         "nr48 vs c": {
@@ -1359,30 +1476,56 @@
             0.6265677281207971
           ],
           "null_best_range": [
-            -0.07872953557197526,
+            -0.7661605771850821,
             0.46910949795706536
           ],
           "null_median_range": [
-            -0.10629180299613905,
-            0.2835799891304003
+            -0.8474073793903081,
+            0.4788796944382945
           ],
           "p_ranksum_faster": 0.1,
           "p_ranksum_slower": 0.9428571428571428,
           "p_floor_at_this_draw_count": 0.014285714285714285,
           "verdict": "UNRESOLVED",
           "predicted_flat": null,
-          "beyond_floor": true
+          "is_null_pair": false,
+          "beyond_floor": false
         }
       }
     },
     "5": {
       "shape": "8192x4096x14336",
-      "null_floor_worst_draw_pct": 4.141839722144597,
+      "null_pairs": [
+        "null vs c",
+        "nr32 vs c"
+      ],
+      "null_floor_worst_draw_pct": 4.972466664701458,
+      "null_floor_single_pair_pct": 3.9771140333176636,
+      "null_floor_per_pair": {
+        "null vs c": {
+          "per_draw_pct": [
+            -0.6918756311723451,
+            0.34619483697333475,
+            -0.15374391341604898,
+            -3.9771140333176636
+          ],
+          "worst_pct": 3.9771140333176636
+        },
+        "nr32 vs c": {
+          "per_draw_pct": [
+            -1.2979346175486128,
+            4.972466664701458,
+            -3.446197570167253,
+            -4.7227126441137575
+          ],
+          "worst_pct": 4.972466664701458
+        }
+      },
       "null_floor_per_draw_pct": [
-        0.6966959003301086,
-        0.34619483697333775,
-        0.15398064929216898,
-        4.141839722144597
+        -0.6918756311723451,
+        0.34619483697333475,
+        -0.15374391341604898,
+        -3.9771140333176636
       ],
       "ab_rung_active": true,
       "bc_rung_active": false,
@@ -1539,18 +1682,19 @@
             19.06514710756082
           ],
           "null_best_range": [
-            -3.853468672794347,
-            0.3162760101913298
+            -4.555270406341217,
+            4.958616731246845
           ],
           "null_median_range": [
-            -3.9771140333176636,
-            0.34619483697333475
+            -4.7227126441137575,
+            4.972466664701458
           ],
           "p_ranksum_faster": 0.014285714285714285,
           "p_ranksum_slower": 1.0,
           "p_floor_at_this_draw_count": 0.014285714285714285,
           "verdict": "RESOLVED faster",
           "predicted_flat": false,
+          "is_null_pair": false,
           "beyond_floor": true
         },
         "c vs b": {
@@ -1566,18 +1710,19 @@
             4.696465988539211
           ],
           "null_best_range": [
-            -3.853468672794347,
-            0.3162760101913298
+            -4.555270406341217,
+            4.958616731246845
           ],
           "null_median_range": [
-            -3.9771140333176636,
-            0.34619483697333475
+            -4.7227126441137575,
+            4.972466664701458
           ],
           "p_ranksum_faster": 0.17142857142857143,
           "p_ranksum_slower": 0.9,
           "p_floor_at_this_draw_count": 0.014285714285714285,
           "verdict": "UNRESOLVED",
           "predicted_flat": true,
+          "is_null_pair": false,
           "beyond_floor": false
         },
         "null vs c": {
@@ -1593,18 +1738,19 @@
             0.34619483697333475
           ],
           "null_best_range": [
-            -3.853468672794347,
-            0.3162760101913298
+            -4.555270406341217,
+            4.958616731246845
           ],
           "null_median_range": [
-            -3.9771140333176636,
-            0.34619483697333475
+            -4.7227126441137575,
+            4.972466664701458
           ],
           "p_ranksum_faster": 0.34285714285714286,
           "p_ranksum_slower": 0.34285714285714286,
           "p_floor_at_this_draw_count": 0.014285714285714285,
-          "verdict": "UNRESOLVED",
+          "verdict": "NULL PAIR (floor estimate, not a result)",
           "predicted_flat": null,
+          "is_null_pair": true,
           "beyond_floor": false
         },
         "nr8 vs c": {
@@ -1620,18 +1766,19 @@
             -11.628382730913911
           ],
           "null_best_range": [
-            -3.853468672794347,
-            0.3162760101913298
+            -4.555270406341217,
+            4.958616731246845
           ],
           "null_median_range": [
-            -3.9771140333176636,
-            0.34619483697333475
+            -4.7227126441137575,
+            4.972466664701458
           ],
           "p_ranksum_faster": 1.0,
           "p_ranksum_slower": 0.014285714285714285,
           "p_floor_at_this_draw_count": 0.014285714285714285,
           "verdict": "RESOLVED slower",
           "predicted_flat": null,
+          "is_null_pair": false,
           "beyond_floor": true
         },
         "nr16 vs c": {
@@ -1647,21 +1794,22 @@
             -2.7392085993060866
           ],
           "null_best_range": [
-            -3.853468672794347,
-            0.3162760101913298
+            -4.555270406341217,
+            4.958616731246845
           ],
           "null_median_range": [
-            -3.9771140333176636,
-            0.34619483697333475
+            -4.7227126441137575,
+            4.972466664701458
           ],
           "p_ranksum_faster": 0.9857142857142858,
           "p_ranksum_slower": 0.02857142857142857,
           "p_floor_at_this_draw_count": 0.014285714285714285,
           "verdict": "UNRESOLVED",
           "predicted_flat": null,
+          "is_null_pair": false,
           "beyond_floor": true
         },
-        "nr32 vs c": {
+        "nr32 vs c *shipped": {
           "draws": 4,
           "gain_best_pct": -2.454580752466268,
           "gain_median_pct": -2.372066093857933,
@@ -1674,18 +1822,19 @@
             4.972466664701458
           ],
           "null_best_range": [
-            -3.853468672794347,
-            0.3162760101913298
+            -4.555270406341217,
+            4.958616731246845
           ],
           "null_median_range": [
-            -3.9771140333176636,
-            0.34619483697333475
+            -4.7227126441137575,
+            4.972466664701458
           ],
           "p_ranksum_faster": 0.7571428571428571,
           "p_ranksum_slower": 0.34285714285714286,
           "p_floor_at_this_draw_count": 0.014285714285714285,
-          "verdict": "UNRESOLVED",
+          "verdict": "NULL PAIR (floor estimate, not a result)",
           "predicted_flat": null,
+          "is_null_pair": true,
           "beyond_floor": false
         },
         "nr48 vs c": {
@@ -1701,30 +1850,56 @@
             2.07159039713678
           ],
           "null_best_range": [
-            -3.853468672794347,
-            0.3162760101913298
+            -4.555270406341217,
+            4.958616731246845
           ],
           "null_median_range": [
-            -3.9771140333176636,
-            0.34619483697333475
+            -4.7227126441137575,
+            4.972466664701458
           ],
           "p_ranksum_faster": 0.1,
           "p_ranksum_slower": 0.9428571428571428,
           "p_floor_at_this_draw_count": 0.014285714285714285,
           "verdict": "UNRESOLVED",
           "predicted_flat": null,
+          "is_null_pair": false,
           "beyond_floor": false
         }
       }
     },
     "6": {
       "shape": "8192x8192x29568",
-      "null_floor_worst_draw_pct": 1.1024849864755488,
+      "null_pairs": [
+        "null vs c",
+        "nr48 vs c"
+      ],
+      "null_floor_worst_draw_pct": 4.436012719229665,
+      "null_floor_single_pair_pct": 1.1024849864755382,
+      "null_floor_per_pair": {
+        "null vs c": {
+          "per_draw_pct": [
+            -0.6200679642373919,
+            1.0166428345492973,
+            -0.7290171964476899,
+            1.1024849864755382
+          ],
+          "worst_pct": 1.1024849864755382
+        },
+        "nr48 vs c": {
+          "per_draw_pct": [
+            3.7352091943611,
+            4.436012719229665,
+            4.097422612017909,
+            2.52754501832797
+          ],
+          "worst_pct": 4.436012719229665
+        }
+      },
       "null_floor_per_draw_pct": [
-        0.6239367964291411,
-        1.016642834549308,
-        0.7343708864959555,
-        1.1024849864755488
+        -0.6200679642373919,
+        1.0166428345492973,
+        -0.7290171964476899,
+        1.1024849864755382
       ],
       "ab_rung_active": true,
       "bc_rung_active": true,
@@ -1882,17 +2057,18 @@
           ],
           "null_best_range": [
             -0.5170082395318465,
-            1.7448532454480858
+            4.348223519721772
           ],
           "null_median_range": [
             -0.7290171964476899,
-            1.1024849864755382
+            4.436012719229665
           ],
           "p_ranksum_faster": 0.014285714285714285,
           "p_ranksum_slower": 1.0,
           "p_floor_at_this_draw_count": 0.014285714285714285,
           "verdict": "RESOLVED faster",
           "predicted_flat": false,
+          "is_null_pair": false,
           "beyond_floor": true
         },
         "c vs b": {
@@ -1909,17 +2085,18 @@
           ],
           "null_best_range": [
             -0.5170082395318465,
-            1.7448532454480858
+            4.348223519721772
           ],
           "null_median_range": [
             -0.7290171964476899,
-            1.1024849864755382
+            4.436012719229665
           ],
           "p_ranksum_faster": 0.014285714285714285,
           "p_ranksum_slower": 1.0,
           "p_floor_at_this_draw_count": 0.014285714285714285,
           "verdict": "RESOLVED faster",
           "predicted_flat": false,
+          "is_null_pair": false,
           "beyond_floor": true
         },
         "null vs c": {
@@ -1936,17 +2113,18 @@
           ],
           "null_best_range": [
             -0.5170082395318465,
-            1.7448532454480858
+            4.348223519721772
           ],
           "null_median_range": [
             -0.7290171964476899,
-            1.1024849864755382
+            4.436012719229665
           ],
           "p_ranksum_faster": 0.34285714285714286,
           "p_ranksum_slower": 0.34285714285714286,
           "p_floor_at_this_draw_count": 0.014285714285714285,
-          "verdict": "UNRESOLVED",
+          "verdict": "NULL PAIR (floor estimate, not a result)",
           "predicted_flat": null,
+          "is_null_pair": true,
           "beyond_floor": false
         },
         "nr8 vs c": {
@@ -1963,17 +2141,18 @@
           ],
           "null_best_range": [
             -0.5170082395318465,
-            1.7448532454480858
+            4.348223519721772
           ],
           "null_median_range": [
             -0.7290171964476899,
-            1.1024849864755382
+            4.436012719229665
           ],
           "p_ranksum_faster": 1.0,
           "p_ranksum_slower": 0.014285714285714285,
           "p_floor_at_this_draw_count": 0.014285714285714285,
           "verdict": "RESOLVED slower",
           "predicted_flat": null,
+          "is_null_pair": false,
           "beyond_floor": true
         },
         "nr16 vs c": {
@@ -1990,17 +2169,18 @@
           ],
           "null_best_range": [
             -0.5170082395318465,
-            1.7448532454480858
+            4.348223519721772
           ],
           "null_median_range": [
             -0.7290171964476899,
-            1.1024849864755382
+            4.436012719229665
           ],
           "p_ranksum_faster": 1.0,
           "p_ranksum_slower": 0.014285714285714285,
           "p_floor_at_this_draw_count": 0.014285714285714285,
           "verdict": "RESOLVED slower",
           "predicted_flat": null,
+          "is_null_pair": false,
           "beyond_floor": true
         },
         "nr32 vs c": {
@@ -2017,20 +2197,21 @@
           ],
           "null_best_range": [
             -0.5170082395318465,
-            1.7448532454480858
+            4.348223519721772
           ],
           "null_median_range": [
             -0.7290171964476899,
-            1.1024849864755382
+            4.436012719229665
           ],
           "p_ranksum_faster": 1.0,
           "p_ranksum_slower": 0.014285714285714285,
           "p_floor_at_this_draw_count": 0.014285714285714285,
           "verdict": "RESOLVED slower",
           "predicted_flat": null,
-          "beyond_floor": true
+          "is_null_pair": false,
+          "beyond_floor": false
         },
-        "nr48 vs c": {
+        "nr48 vs c *shipped": {
           "draws": 4,
           "gain_best_pct": 4.126042762678816,
           "gain_median_pct": 3.9163159031895045,
@@ -2044,18 +2225,19 @@
           ],
           "null_best_range": [
             -0.5170082395318465,
-            1.7448532454480858
+            4.348223519721772
           ],
           "null_median_range": [
             -0.7290171964476899,
-            1.1024849864755382
+            4.436012719229665
           ],
           "p_ranksum_faster": 0.014285714285714285,
           "p_ranksum_slower": 1.0,
           "p_floor_at_this_draw_count": 0.014285714285714285,
-          "verdict": "RESOLVED faster",
+          "verdict": "NULL PAIR (floor estimate, not a result)",
           "predicted_flat": null,
-          "beyond_floor": true
+          "is_null_pair": true,
+          "beyond_floor": false
         }
       }
     }

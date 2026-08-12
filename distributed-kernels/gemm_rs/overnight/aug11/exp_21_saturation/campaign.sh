@@ -50,15 +50,16 @@ say "waiting for the GPU lease (up to ${WAIT_S}s per attempt)"
 # 300 s window (tonight: a sibling's m9_stale_slot.py). Neither is a reason to
 # throw the invocation away.
 got=0
-for attempt in 1 2 3 4; do
+ATTEMPTS=${ATTEMPTS:-12}
+for attempt in $(seq 1 "$ATTEMPTS"); do
   bash "$ON/tools/gpu_lease.sh" acquire "$OWNER" "$WAIT_S"
   rc=$?
   if [ "$rc" = "0" ]; then got=1; break; fi
-  say "acquire attempt $attempt failed (rc=$rc); retrying in 90s"
-  sleep 90
+  say "acquire attempt $attempt/$ATTEMPTS failed (rc=$rc); retrying in 120s"
+  sleep 120
 done
 if [ "$got" != "1" ]; then
-  say "ABORT: could not acquire the lease after 4 attempts"
+  say "ABORT: could not acquire the lease after $ATTEMPTS attempts"
   exit 2
 fi
 

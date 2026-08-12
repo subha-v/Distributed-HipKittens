@@ -1,0 +1,3241 @@
+{
+  "shapes": {
+    "0": {
+      "shape": "64x7168x18432",
+      "index": 0,
+      "bias": false,
+      "iters": 300,
+      "passes": 8,
+      "reverse": false,
+      "shipped_nr": 56,
+      "tiles": 224,
+      "num_gemm_ctas": 248,
+      "tiles_per_cta": 1,
+      "ab_rung_active": false,
+      "bc_rung_active": false,
+      "arms": {
+        "a": {
+          "module": "gemm_rs_w23_a",
+          "nr": 56,
+          "num_gemm_ctas": 248,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 6.103515625e-05,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 0,
+              "wall_us": 63.15889457861582,
+              "device_us": 62.945594787597656
+            },
+            {
+              "pass": 1,
+              "pos": 7,
+              "wall_us": 64.28509950637817,
+              "device_us": 64.15878295898438
+            },
+            {
+              "pass": 2,
+              "pos": 6,
+              "wall_us": 63.09103220701218,
+              "device_us": 62.88224538167318
+            },
+            {
+              "pass": 3,
+              "pos": 5,
+              "wall_us": 64.67348585526149,
+              "device_us": 64.37260309855144
+            },
+            {
+              "pass": 4,
+              "pos": 4,
+              "wall_us": 64.47311490774155,
+              "device_us": 64.36150868733723
+            },
+            {
+              "pass": 5,
+              "pos": 3,
+              "wall_us": 63.85785837968191,
+              "device_us": 63.646933237711586
+            },
+            {
+              "pass": 6,
+              "pos": 2,
+              "wall_us": 63.157652815183006,
+              "device_us": 62.98194885253906
+            },
+            {
+              "pass": 7,
+              "pos": 1,
+              "wall_us": 63.22053571542104,
+              "device_us": 63.09673945109049
+            }
+          ],
+          "best_us": 63.09103220701218,
+          "median_us": 63.539197047551475,
+          "spread_pct": 2.5082069398659055,
+          "device_best_us": 62.88224538167318,
+          "device_median_us": 63.37183634440104
+        },
+        "b": {
+          "module": "gemm_rs_w23_b",
+          "nr": 56,
+          "num_gemm_ctas": 248,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 6.103515625e-05,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 1,
+              "wall_us": 64.16120876868565,
+              "device_us": 64.13003921508789
+            },
+            {
+              "pass": 1,
+              "pos": 0,
+              "wall_us": 63.416361808776855,
+              "device_us": 63.256842295328774
+            },
+            {
+              "pass": 2,
+              "pos": 7,
+              "wall_us": 63.73486171166102,
+              "device_us": 63.61874262491862
+            },
+            {
+              "pass": 3,
+              "pos": 6,
+              "wall_us": 63.91507883866628,
+              "device_us": 63.661905924479164
+            },
+            {
+              "pass": 4,
+              "pos": 5,
+              "wall_us": 63.80839894215266,
+              "device_us": 63.69905471801758
+            },
+            {
+              "pass": 5,
+              "pos": 4,
+              "wall_us": 63.89481325944265,
+              "device_us": 63.81078084309896
+            },
+            {
+              "pass": 6,
+              "pos": 3,
+              "wall_us": 63.608624041080475,
+              "device_us": 63.359483083089195
+            },
+            {
+              "pass": 7,
+              "pos": 2,
+              "wall_us": 64.71201777458191,
+              "device_us": 64.62959289550781
+            }
+          ],
+          "best_us": 63.416361808776855,
+          "median_us": 63.85160610079765,
+          "spread_pct": 2.043094130363269,
+          "device_best_us": 63.256842295328774,
+          "device_median_us": 63.68048032124837
+        },
+        "c": {
+          "module": "gemm_rs_w23_c",
+          "nr": 56,
+          "num_gemm_ctas": 248,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 6.103515625e-05,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 2,
+              "wall_us": 62.987307707468666,
+              "device_us": 62.78388977050781
+            },
+            {
+              "pass": 1,
+              "pos": 1,
+              "wall_us": 63.672177493572235,
+              "device_us": 63.481362660725914
+            },
+            {
+              "pass": 2,
+              "pos": 0,
+              "wall_us": 62.196155389149986,
+              "device_us": 62.03189214070638
+            },
+            {
+              "pass": 3,
+              "pos": 7,
+              "wall_us": 63.853214184443154,
+              "device_us": 63.68810017903646
+            },
+            {
+              "pass": 4,
+              "pos": 6,
+              "wall_us": 62.067657709121704,
+              "device_us": 61.828225453694664
+            },
+            {
+              "pass": 5,
+              "pos": 5,
+              "wall_us": 62.87613262732824,
+              "device_us": 62.69461313883463
+            },
+            {
+              "pass": 6,
+              "pos": 4,
+              "wall_us": 61.88817322254181,
+              "device_us": 61.774908701578774
+            },
+            {
+              "pass": 7,
+              "pos": 3,
+              "wall_us": 63.39283039172491,
+              "device_us": 63.22503407796224
+            }
+          ],
+          "best_us": 61.88817322254181,
+          "median_us": 62.93172016739845,
+          "spread_pct": 3.1751477860484156,
+          "device_best_us": 61.774908701578774,
+          "device_median_us": 62.73925145467122
+        },
+        "null": {
+          "module": "gemm_rs_w23_null",
+          "nr": 56,
+          "num_gemm_ctas": 248,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 6.103515625e-05,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 3,
+              "wall_us": 62.9521906375885,
+              "device_us": 62.77787526448568
+            },
+            {
+              "pass": 1,
+              "pos": 2,
+              "wall_us": 63.436937828858696,
+              "device_us": 62.97232309977213
+            },
+            {
+              "pass": 2,
+              "pos": 1,
+              "wall_us": 63.81912777821223,
+              "device_us": 63.624610900878906
+            },
+            {
+              "pass": 3,
+              "pos": 0,
+              "wall_us": 64.59773828585942,
+              "device_us": 64.53965504964192
+            },
+            {
+              "pass": 4,
+              "pos": 7,
+              "wall_us": 62.51633167266846,
+              "device_us": 62.3280398050944
+            },
+            {
+              "pass": 5,
+              "pos": 6,
+              "wall_us": 63.20875138044357,
+              "device_us": 62.92501449584961
+            },
+            {
+              "pass": 6,
+              "pos": 5,
+              "wall_us": 63.13938647508621,
+              "device_us": 62.943719228108726
+            },
+            {
+              "pass": 7,
+              "pos": 4,
+              "wall_us": 62.89586424827576,
+              "device_us": 62.63006846110026
+            }
+          ],
+          "best_us": 62.51633167266846,
+          "median_us": 63.17406892776489,
+          "spread_pct": 3.3293805914414123,
+          "device_best_us": 62.3280398050944,
+          "device_median_us": 62.93436686197917
+        },
+        "nr8": {
+          "module": "gemm_rs_w23_c",
+          "nr": 8,
+          "num_gemm_ctas": 296,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 6.103515625e-05,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 4,
+              "wall_us": 129.21765446662903,
+              "device_us": 129.15467580159506
+            },
+            {
+              "pass": 1,
+              "pos": 3,
+              "wall_us": 129.31294739246368,
+              "device_us": 129.16470845540366
+            },
+            {
+              "pass": 2,
+              "pos": 2,
+              "wall_us": 129.2102038860321,
+              "device_us": 129.0936024983724
+            },
+            {
+              "pass": 3,
+              "pos": 1,
+              "wall_us": 129.29756194353104,
+              "device_us": 129.16430155436197
+            },
+            {
+              "pass": 4,
+              "pos": 0,
+              "wall_us": 129.26996996005377,
+              "device_us": 128.99002075195312
+            },
+            {
+              "pass": 5,
+              "pos": 7,
+              "wall_us": 129.26350037256876,
+              "device_us": 129.00018056233725
+            },
+            {
+              "pass": 6,
+              "pos": 6,
+              "wall_us": 129.26780929168066,
+              "device_us": 129.01503245035806
+            },
+            {
+              "pass": 7,
+              "pos": 5,
+              "wall_us": 129.31408981482187,
+              "device_us": 129.18287913004556
+            }
+          ],
+          "best_us": 129.2102038860321,
+          "median_us": 129.26888962586722,
+          "spread_pct": 0.08040071578355848,
+          "device_best_us": 128.99002075195312,
+          "device_median_us": 129.12413914998373
+        },
+        "nr16": {
+          "module": "gemm_rs_w23_c",
+          "nr": 16,
+          "num_gemm_ctas": 288,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 6.103515625e-05,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 5,
+              "wall_us": 87.58670339981715,
+              "device_us": 87.45773951212566
+            },
+            {
+              "pass": 1,
+              "pos": 4,
+              "wall_us": 87.6073290904363,
+              "device_us": 87.4700419108073
+            },
+            {
+              "pass": 2,
+              "pos": 3,
+              "wall_us": 87.51792212327321,
+              "device_us": 87.3151461283366
+            },
+            {
+              "pass": 3,
+              "pos": 2,
+              "wall_us": 87.48702704906464,
+              "device_us": 87.26530075073242
+            },
+            {
+              "pass": 4,
+              "pos": 1,
+              "wall_us": 87.42038160562515,
+              "device_us": 87.27131525675456
+            },
+            {
+              "pass": 5,
+              "pos": 0,
+              "wall_us": 87.48364945252736,
+              "device_us": 87.32062657674153
+            },
+            {
+              "pass": 6,
+              "pos": 7,
+              "wall_us": 87.59072671333949,
+              "device_us": 87.43462880452473
+            },
+            {
+              "pass": 7,
+              "pos": 6,
+              "wall_us": 87.51160154740016,
+              "device_us": 87.36766815185547
+            }
+          ],
+          "best_us": 87.42038160562515,
+          "median_us": 87.51476183533669,
+          "spread_pct": 0.21384885466927886,
+          "device_best_us": 87.26530075073242,
+          "device_median_us": 87.3441473642985
+        },
+        "nr32": {
+          "module": "gemm_rs_w23_c",
+          "nr": 32,
+          "num_gemm_ctas": 272,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 6.103515625e-05,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 6,
+              "wall_us": 66.815751294295,
+              "device_us": 66.6391372680664
+            },
+            {
+              "pass": 1,
+              "pos": 5,
+              "wall_us": 66.84726725021999,
+              "device_us": 66.59250259399414
+            },
+            {
+              "pass": 2,
+              "pos": 4,
+              "wall_us": 67.20172862211864,
+              "device_us": 66.94517135620117
+            },
+            {
+              "pass": 3,
+              "pos": 3,
+              "wall_us": 66.95977101723354,
+              "device_us": 66.73336029052734
+            },
+            {
+              "pass": 4,
+              "pos": 2,
+              "wall_us": 66.82761013507843,
+              "device_us": 66.69045766194661
+            },
+            {
+              "pass": 5,
+              "pos": 1,
+              "wall_us": 66.85849279165268,
+              "device_us": 66.71384175618489
+            },
+            {
+              "pass": 6,
+              "pos": 0,
+              "wall_us": 67.232350508372,
+              "device_us": 67.09351857503255
+            },
+            {
+              "pass": 7,
+              "pos": 7,
+              "wall_us": 66.93273782730103,
+              "device_us": 66.7654291788737
+            }
+          ],
+          "best_us": 66.815751294295,
+          "median_us": 66.89561530947685,
+          "spread_pct": 0.6235044970789198,
+          "device_best_us": 66.59250259399414,
+          "device_median_us": 66.72360102335611
+        },
+        "nr48": {
+          "module": "gemm_rs_w23_c",
+          "nr": 48,
+          "num_gemm_ctas": 256,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 6.103515625e-05,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 7,
+              "wall_us": 63.04372102022171,
+              "device_us": 62.83053080240885
+            },
+            {
+              "pass": 1,
+              "pos": 6,
+              "wall_us": 62.5853364666303,
+              "device_us": 62.36706415812174
+            },
+            {
+              "pass": 2,
+              "pos": 5,
+              "wall_us": 62.7165287733078,
+              "device_us": 62.488416035970054
+            },
+            {
+              "pass": 3,
+              "pos": 4,
+              "wall_us": 62.18248357375463,
+              "device_us": 62.11676279703776
+            },
+            {
+              "pass": 4,
+              "pos": 3,
+              "wall_us": 61.990879476070404,
+              "device_us": 61.799093882242836
+            },
+            {
+              "pass": 5,
+              "pos": 2,
+              "wall_us": 62.53241250912348,
+              "device_us": 62.32750574747721
+            },
+            {
+              "pass": 6,
+              "pos": 1,
+              "wall_us": 62.29344755411148,
+              "device_us": 62.037906646728516
+            },
+            {
+              "pass": 7,
+              "pos": 0,
+              "wall_us": 61.90143525600433,
+              "device_us": 61.775309244791664
+            }
+          ],
+          "best_us": 61.90143525600433,
+          "median_us": 62.41293003161748,
+          "spread_pct": 1.845330014551766,
+          "device_best_us": 61.775309244791664,
+          "device_median_us": 62.222134272257485
+        }
+      },
+      "null_floor_best_pct": 1.0149894841262674,
+      "null_floor_median_pct": 0.38509794380606766
+    },
+    "1": {
+      "shape": "512x4096x12288",
+      "index": 1,
+      "bias": true,
+      "iters": 250,
+      "passes": 8,
+      "reverse": false,
+      "shipped_nr": 32,
+      "tiles": 256,
+      "num_gemm_ctas": 272,
+      "tiles_per_cta": 1,
+      "ab_rung_active": false,
+      "bc_rung_active": false,
+      "arms": {
+        "a": {
+          "module": "gemm_rs_w23_a",
+          "nr": 32,
+          "num_gemm_ctas": 272,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 0.00048828125,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 0,
+              "wall_us": 64.25422430038452,
+              "device_us": 63.94409942626953
+            },
+            {
+              "pass": 1,
+              "pos": 7,
+              "wall_us": 66.2396103143692,
+              "device_us": 65.97500610351562
+            },
+            {
+              "pass": 2,
+              "pos": 6,
+              "wall_us": 64.50416147708893,
+              "device_us": 64.26114654541016
+            },
+            {
+              "pass": 3,
+              "pos": 5,
+              "wall_us": 65.73176383972168,
+              "device_us": 65.50367736816406
+            },
+            {
+              "pass": 4,
+              "pos": 4,
+              "wall_us": 65.0392472743988,
+              "device_us": 64.72525787353516
+            },
+            {
+              "pass": 5,
+              "pos": 3,
+              "wall_us": 66.18808209896088,
+              "device_us": 65.95319366455078
+            },
+            {
+              "pass": 6,
+              "pos": 2,
+              "wall_us": 66.49650633335114,
+              "device_us": 66.15670013427734
+            },
+            {
+              "pass": 7,
+              "pos": 1,
+              "wall_us": 65.78554213047028,
+              "device_us": 65.53688049316406
+            }
+          ],
+          "best_us": 64.25422430038452,
+          "median_us": 65.75865298509598,
+          "spread_pct": 3.489703684669951,
+          "device_best_us": 63.94409942626953,
+          "device_median_us": 65.52027893066406
+        },
+        "b": {
+          "module": "gemm_rs_w23_b",
+          "nr": 32,
+          "num_gemm_ctas": 272,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 0.00048828125,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 1,
+              "wall_us": 66.57318770885468,
+              "device_us": 66.35026550292969
+            },
+            {
+              "pass": 1,
+              "pos": 0,
+              "wall_us": 65.19889831542969,
+              "device_us": 64.99675750732422
+            },
+            {
+              "pass": 2,
+              "pos": 7,
+              "wall_us": 66.12303853034973,
+              "device_us": 65.8839111328125
+            },
+            {
+              "pass": 3,
+              "pos": 6,
+              "wall_us": 65.2059018611908,
+              "device_us": 64.84248352050781
+            },
+            {
+              "pass": 4,
+              "pos": 5,
+              "wall_us": 66.04723632335663,
+              "device_us": 65.80517578125
+            },
+            {
+              "pass": 5,
+              "pos": 4,
+              "wall_us": 65.28729200363159,
+              "device_us": 64.9611587524414
+            },
+            {
+              "pass": 6,
+              "pos": 3,
+              "wall_us": 66.37175381183624,
+              "device_us": 66.09223175048828
+            },
+            {
+              "pass": 7,
+              "pos": 2,
+              "wall_us": 66.21451675891876,
+              "device_us": 65.94485473632812
+            }
+          ],
+          "best_us": 65.19889831542969,
+          "median_us": 66.08513742685318,
+          "spread_pct": 2.1078414343387064,
+          "device_best_us": 64.84248352050781,
+          "device_median_us": 65.84454345703125
+        },
+        "c": {
+          "module": "gemm_rs_w23_c",
+          "nr": 32,
+          "num_gemm_ctas": 272,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 0.00048828125,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 2,
+              "wall_us": 66.03378057479858,
+              "device_us": 65.80998229980469
+            },
+            {
+              "pass": 1,
+              "pos": 1,
+              "wall_us": 65.9768134355545,
+              "device_us": 65.82457733154297
+            },
+            {
+              "pass": 2,
+              "pos": 0,
+              "wall_us": 68.19765269756317,
+              "device_us": 67.86045837402344
+            },
+            {
+              "pass": 3,
+              "pos": 7,
+              "wall_us": 65.87997078895569,
+              "device_us": 65.53319549560547
+            },
+            {
+              "pass": 4,
+              "pos": 6,
+              "wall_us": 65.82339107990265,
+              "device_us": 65.56285858154297
+            },
+            {
+              "pass": 5,
+              "pos": 5,
+              "wall_us": 65.6203031539917,
+              "device_us": 65.36801147460938
+            },
+            {
+              "pass": 6,
+              "pos": 4,
+              "wall_us": 65.91342389583588,
+              "device_us": 65.5990982055664
+            },
+            {
+              "pass": 7,
+              "pos": 3,
+              "wall_us": 65.94507396221161,
+              "device_us": 65.71167755126953
+            }
+          ],
+          "best_us": 65.6203031539917,
+          "median_us": 65.92924892902374,
+          "spread_pct": 3.9276708879615887,
+          "device_best_us": 65.36801147460938,
+          "device_median_us": 65.65538787841797
+        },
+        "null": {
+          "module": "gemm_rs_w23_null",
+          "nr": 32,
+          "num_gemm_ctas": 272,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 0.00048828125,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 3,
+              "wall_us": 65.53126871585846,
+              "device_us": 65.27932739257812
+            },
+            {
+              "pass": 1,
+              "pos": 2,
+              "wall_us": 66.03240966796875,
+              "device_us": 65.82505798339844
+            },
+            {
+              "pass": 2,
+              "pos": 1,
+              "wall_us": 66.30924344062805,
+              "device_us": 65.99296569824219
+            },
+            {
+              "pass": 3,
+              "pos": 0,
+              "wall_us": 66.92995131015778,
+              "device_us": 66.67549133300781
+            },
+            {
+              "pass": 4,
+              "pos": 7,
+              "wall_us": 66.31201505661011,
+              "device_us": 65.99120330810547
+            },
+            {
+              "pass": 5,
+              "pos": 6,
+              "wall_us": 64.90235030651093,
+              "device_us": 64.55638885498047
+            },
+            {
+              "pass": 6,
+              "pos": 5,
+              "wall_us": 66.59325957298279,
+              "device_us": 66.27649688720703
+            },
+            {
+              "pass": 7,
+              "pos": 4,
+              "wall_us": 65.65879285335541,
+              "device_us": 65.42878723144531
+            }
+          ],
+          "best_us": 64.90235030651093,
+          "median_us": 66.1708265542984,
+          "spread_pct": 3.124079473349125,
+          "device_best_us": 64.55638885498047,
+          "device_median_us": 65.90813064575195
+        },
+        "nr8": {
+          "module": "gemm_rs_w23_c",
+          "nr": 8,
+          "num_gemm_ctas": 296,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 0.00048828125,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 4,
+              "wall_us": 88.59919011592865,
+              "device_us": 88.44131469726562
+            },
+            {
+              "pass": 1,
+              "pos": 3,
+              "wall_us": 88.67165446281433,
+              "device_us": 88.49935913085938
+            },
+            {
+              "pass": 2,
+              "pos": 2,
+              "wall_us": 88.65633606910706,
+              "device_us": 88.3067626953125
+            },
+            {
+              "pass": 3,
+              "pos": 1,
+              "wall_us": 88.53648602962494,
+              "device_us": 88.21422576904297
+            },
+            {
+              "pass": 4,
+              "pos": 0,
+              "wall_us": 88.66532146930695,
+              "device_us": 88.35374450683594
+            },
+            {
+              "pass": 5,
+              "pos": 7,
+              "wall_us": 88.56123685836792,
+              "device_us": 88.25399780273438
+            },
+            {
+              "pass": 6,
+              "pos": 6,
+              "wall_us": 88.6286199092865,
+              "device_us": 88.34444427490234
+            },
+            {
+              "pass": 7,
+              "pos": 5,
+              "wall_us": 88.50426971912384,
+              "device_us": 88.26747131347656
+            }
+          ],
+          "best_us": 88.50426971912384,
+          "median_us": 88.61390501260757,
+          "spread_pct": 0.1891261791342961,
+          "device_best_us": 88.21422576904297,
+          "device_median_us": 88.32560348510742
+        },
+        "nr16": {
+          "module": "gemm_rs_w23_c",
+          "nr": 16,
+          "num_gemm_ctas": 288,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 0.00048828125,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 5,
+              "wall_us": 71.95305824279785,
+              "device_us": 71.63936614990234
+            },
+            {
+              "pass": 1,
+              "pos": 4,
+              "wall_us": 72.03178107738495,
+              "device_us": 71.83902740478516
+            },
+            {
+              "pass": 2,
+              "pos": 3,
+              "wall_us": 72.07711040973663,
+              "device_us": 71.79844665527344
+            },
+            {
+              "pass": 3,
+              "pos": 2,
+              "wall_us": 72.09926843643188,
+              "device_us": 71.76718139648438
+            },
+            {
+              "pass": 4,
+              "pos": 1,
+              "wall_us": 72.00685143470764,
+              "device_us": 71.6953353881836
+            },
+            {
+              "pass": 5,
+              "pos": 0,
+              "wall_us": 73.15005362033844,
+              "device_us": 72.91494750976562
+            },
+            {
+              "pass": 6,
+              "pos": 7,
+              "wall_us": 72.05699384212494,
+              "device_us": 71.78498077392578
+            },
+            {
+              "pass": 7,
+              "pos": 6,
+              "wall_us": 72.02458381652832,
+              "device_us": 71.75371551513672
+            }
+          ],
+          "best_us": 71.95305824279785,
+          "median_us": 72.04438745975494,
+          "spread_pct": 1.6635781810711316,
+          "device_best_us": 71.63936614990234,
+          "device_median_us": 71.77608108520508
+        },
+        "nr32": {
+          "module": "gemm_rs_w23_c",
+          "nr": 32,
+          "num_gemm_ctas": 272,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 0.00048828125,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 6,
+              "wall_us": 64.72554802894592,
+              "device_us": 64.48758697509766
+            },
+            {
+              "pass": 1,
+              "pos": 5,
+              "wall_us": 64.30011987686157,
+              "device_us": 64.09500885009766
+            },
+            {
+              "pass": 2,
+              "pos": 4,
+              "wall_us": 65.52036106586456,
+              "device_us": 65.23153686523438
+            },
+            {
+              "pass": 3,
+              "pos": 3,
+              "wall_us": 65.45434892177582,
+              "device_us": 65.17220306396484
+            },
+            {
+              "pass": 4,
+              "pos": 2,
+              "wall_us": 65.3073787689209,
+              "device_us": 65.05464935302734
+            },
+            {
+              "pass": 5,
+              "pos": 1,
+              "wall_us": 64.42233920097351,
+              "device_us": 64.09901428222656
+            },
+            {
+              "pass": 6,
+              "pos": 0,
+              "wall_us": 64.34708833694458,
+              "device_us": 64.13140869140625
+            },
+            {
+              "pass": 7,
+              "pos": 7,
+              "wall_us": 65.59842824935913,
+              "device_us": 65.31396484375
+            }
+          ],
+          "best_us": 64.30011987686157,
+          "median_us": 65.01646339893341,
+          "spread_pct": 2.0191383390635878,
+          "device_best_us": 64.09500885009766,
+          "device_median_us": 64.7711181640625
+        },
+        "nr48": {
+          "module": "gemm_rs_w23_c",
+          "nr": 48,
+          "num_gemm_ctas": 256,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 0.00048828125,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 7,
+              "wall_us": 66.5486752986908,
+              "device_us": 66.37464141845703
+            },
+            {
+              "pass": 1,
+              "pos": 6,
+              "wall_us": 66.51556491851807,
+              "device_us": 66.22196960449219
+            },
+            {
+              "pass": 2,
+              "pos": 5,
+              "wall_us": 66.74826145172119,
+              "device_us": 66.49090576171875
+            },
+            {
+              "pass": 3,
+              "pos": 4,
+              "wall_us": 67.44706630706787,
+              "device_us": 67.1923599243164
+            },
+            {
+              "pass": 4,
+              "pos": 3,
+              "wall_us": 66.82531535625458,
+              "device_us": 66.58953857421875
+            },
+            {
+              "pass": 5,
+              "pos": 2,
+              "wall_us": 65.92768430709839,
+              "device_us": 65.6749496459961
+            },
+            {
+              "pass": 6,
+              "pos": 1,
+              "wall_us": 65.61405956745148,
+              "device_us": 65.37875366210938
+            },
+            {
+              "pass": 7,
+              "pos": 0,
+              "wall_us": 64.86482918262482,
+              "device_us": 64.56136322021484
+            }
+          ],
+          "best_us": 64.86482918262482,
+          "median_us": 66.53212010860443,
+          "spread_pct": 3.980951090109017,
+          "device_best_us": 64.56136322021484,
+          "device_median_us": 66.29830551147461
+        }
+      },
+      "null_floor_best_pct": 1.1062046968871477,
+      "null_floor_median_pct": 0.3664195015094576
+    },
+    "2": {
+      "shape": "2048x2880x2880",
+      "index": 2,
+      "bias": true,
+      "iters": 250,
+      "passes": 8,
+      "reverse": false,
+      "shipped_nr": 32,
+      "tiles": 240,
+      "num_gemm_ctas": 272,
+      "tiles_per_cta": 1,
+      "ab_rung_active": false,
+      "bc_rung_active": false,
+      "arms": {
+        "a": {
+          "module": "gemm_rs_w23_a",
+          "nr": 32,
+          "num_gemm_ctas": 272,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 0.00048828125,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 0,
+              "wall_us": 84.83707904815674,
+              "device_us": 84.53522491455078
+            },
+            {
+              "pass": 1,
+              "pos": 7,
+              "wall_us": 84.59095656871796,
+              "device_us": 84.41414642333984
+            },
+            {
+              "pass": 2,
+              "pos": 6,
+              "wall_us": 84.62373912334442,
+              "device_us": 84.34918975830078
+            },
+            {
+              "pass": 3,
+              "pos": 5,
+              "wall_us": 84.86749231815338,
+              "device_us": 84.54564666748047
+            },
+            {
+              "pass": 4,
+              "pos": 4,
+              "wall_us": 84.87775921821594,
+              "device_us": 84.57130432128906
+            },
+            {
+              "pass": 5,
+              "pos": 3,
+              "wall_us": 84.91970598697662,
+              "device_us": 84.75572967529297
+            },
+            {
+              "pass": 6,
+              "pos": 2,
+              "wall_us": 84.7509354352951,
+              "device_us": 84.4481430053711
+            },
+            {
+              "pass": 7,
+              "pos": 1,
+              "wall_us": 85.14094352722168,
+              "device_us": 84.84168243408203
+            }
+          ],
+          "best_us": 84.59095656871796,
+          "median_us": 84.85228568315506,
+          "spread_pct": 0.6501722888745655,
+          "device_best_us": 84.34918975830078,
+          "device_median_us": 84.54043579101562
+        },
+        "b": {
+          "module": "gemm_rs_w23_b",
+          "nr": 32,
+          "num_gemm_ctas": 272,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 0.00048828125,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 1,
+              "wall_us": 85.25781333446503,
+              "device_us": 85.05609893798828
+            },
+            {
+              "pass": 1,
+              "pos": 0,
+              "wall_us": 85.41643619537354,
+              "device_us": 85.253662109375
+            },
+            {
+              "pass": 2,
+              "pos": 7,
+              "wall_us": 85.26286482810974,
+              "device_us": 85.05833435058594
+            },
+            {
+              "pass": 3,
+              "pos": 6,
+              "wall_us": 85.40613949298859,
+              "device_us": 85.05882263183594
+            },
+            {
+              "pass": 4,
+              "pos": 5,
+              "wall_us": 85.42945981025696,
+              "device_us": 85.20845031738281
+            },
+            {
+              "pass": 5,
+              "pos": 4,
+              "wall_us": 85.23747324943542,
+              "device_us": 85.0347671508789
+            },
+            {
+              "pass": 6,
+              "pos": 3,
+              "wall_us": 85.03340184688568,
+              "device_us": 84.70697784423828
+            },
+            {
+              "pass": 7,
+              "pos": 2,
+              "wall_us": 85.23525297641754,
+              "device_us": 84.96067810058594
+            }
+          ],
+          "best_us": 85.03340184688568,
+          "median_us": 85.26033908128738,
+          "spread_pct": 0.4657675157868359,
+          "device_best_us": 84.70697784423828,
+          "device_median_us": 85.05721664428711
+        },
+        "c": {
+          "module": "gemm_rs_w23_c",
+          "nr": 32,
+          "num_gemm_ctas": 272,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 0.00048828125,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 2,
+              "wall_us": 84.89719033241272,
+              "device_us": 84.71482849121094
+            },
+            {
+              "pass": 1,
+              "pos": 1,
+              "wall_us": 84.93100106716156,
+              "device_us": 84.74433898925781
+            },
+            {
+              "pass": 2,
+              "pos": 0,
+              "wall_us": 84.98969674110413,
+              "device_us": 84.71772003173828
+            },
+            {
+              "pass": 3,
+              "pos": 7,
+              "wall_us": 85.00358462333679,
+              "device_us": 84.73487854003906
+            },
+            {
+              "pass": 4,
+              "pos": 6,
+              "wall_us": 84.9439948797226,
+              "device_us": 84.65533447265625
+            },
+            {
+              "pass": 5,
+              "pos": 5,
+              "wall_us": 85.0178450345993,
+              "device_us": 84.82340240478516
+            },
+            {
+              "pass": 6,
+              "pos": 4,
+              "wall_us": 84.9350243806839,
+              "device_us": 84.75138854980469
+            },
+            {
+              "pass": 7,
+              "pos": 3,
+              "wall_us": 84.92827415466309,
+              "device_us": 84.62710571289062
+            }
+          ],
+          "best_us": 84.89719033241272,
+          "median_us": 84.93950963020325,
+          "spread_pct": 0.14211860453115605,
+          "device_best_us": 84.62710571289062,
+          "device_median_us": 84.72629928588867
+        },
+        "null": {
+          "module": "gemm_rs_w23_null",
+          "nr": 32,
+          "num_gemm_ctas": 272,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 0.00048828125,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 3,
+              "wall_us": 84.48481559753418,
+              "device_us": 84.31568145751953
+            },
+            {
+              "pass": 1,
+              "pos": 2,
+              "wall_us": 84.54792201519012,
+              "device_us": 84.37613677978516
+            },
+            {
+              "pass": 2,
+              "pos": 1,
+              "wall_us": 84.66947078704834,
+              "device_us": 84.46963500976562
+            },
+            {
+              "pass": 3,
+              "pos": 0,
+              "wall_us": 84.69179272651672,
+              "device_us": 84.53041076660156
+            },
+            {
+              "pass": 4,
+              "pos": 7,
+              "wall_us": 84.62850749492645,
+              "device_us": 84.4210433959961
+            },
+            {
+              "pass": 5,
+              "pos": 6,
+              "wall_us": 84.46519076824188,
+              "device_us": 84.18818664550781
+            },
+            {
+              "pass": 6,
+              "pos": 5,
+              "wall_us": 84.67555046081543,
+              "device_us": 84.36698913574219
+            },
+            {
+              "pass": 7,
+              "pos": 4,
+              "wall_us": 84.92229878902435,
+              "device_us": 84.62374114990234
+            }
+          ],
+          "best_us": 84.46519076824188,
+          "median_us": 84.6489891409874,
+          "spread_pct": 0.541179172893479,
+          "device_best_us": 84.18818664550781,
+          "device_median_us": 84.39859008789062
+        },
+        "nr8": {
+          "module": "gemm_rs_w23_c",
+          "nr": 8,
+          "num_gemm_ctas": 296,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 0.00048828125,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 4,
+              "wall_us": 116.4756715297699,
+              "device_us": 116.18998718261719
+            },
+            {
+              "pass": 1,
+              "pos": 3,
+              "wall_us": 116.53280258178711,
+              "device_us": 116.24435424804688
+            },
+            {
+              "pass": 2,
+              "pos": 2,
+              "wall_us": 116.47039651870728,
+              "device_us": 116.18228912353516
+            },
+            {
+              "pass": 3,
+              "pos": 1,
+              "wall_us": 115.91555178165436,
+              "device_us": 115.68289947509766
+            },
+            {
+              "pass": 4,
+              "pos": 0,
+              "wall_us": 116.22743308544159,
+              "device_us": 115.9481430053711
+            },
+            {
+              "pass": 5,
+              "pos": 7,
+              "wall_us": 116.40633642673492,
+              "device_us": 116.10403442382812
+            },
+            {
+              "pass": 6,
+              "pos": 6,
+              "wall_us": 116.3971871137619,
+              "device_us": 116.10370635986328
+            },
+            {
+              "pass": 7,
+              "pos": 5,
+              "wall_us": 116.1101907491684,
+              "device_us": 115.8443832397461
+            }
+          ],
+          "best_us": 115.91555178165436,
+          "median_us": 116.40176177024841,
+          "spread_pct": 0.5325004200432423,
+          "device_best_us": 115.68289947509766,
+          "device_median_us": 116.1038703918457
+        },
+        "nr16": {
+          "module": "gemm_rs_w23_c",
+          "nr": 16,
+          "num_gemm_ctas": 288,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 0.00048828125,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 5,
+              "wall_us": 95.50531208515167,
+              "device_us": 95.31629180908203
+            },
+            {
+              "pass": 1,
+              "pos": 4,
+              "wall_us": 95.54736316204071,
+              "device_us": 95.3781967163086
+            },
+            {
+              "pass": 2,
+              "pos": 3,
+              "wall_us": 95.72617709636688,
+              "device_us": 95.4298324584961
+            },
+            {
+              "pass": 3,
+              "pos": 2,
+              "wall_us": 96.12694382667542,
+              "device_us": 95.93643951416016
+            },
+            {
+              "pass": 4,
+              "pos": 1,
+              "wall_us": 95.84583342075348,
+              "device_us": 95.54545593261719
+            },
+            {
+              "pass": 5,
+              "pos": 0,
+              "wall_us": 95.5435037612915,
+              "device_us": 95.25856018066406
+            },
+            {
+              "pass": 6,
+              "pos": 7,
+              "wall_us": 95.34786641597748,
+              "device_us": 95.1004409790039
+            },
+            {
+              "pass": 7,
+              "pos": 6,
+              "wall_us": 95.903679728508,
+              "device_us": 95.70230102539062
+            }
+          ],
+          "best_us": 95.34786641597748,
+          "median_us": 95.6367701292038,
+          "spread_pct": 0.8170895060189692,
+          "device_best_us": 95.1004409790039,
+          "device_median_us": 95.40401458740234
+        },
+        "nr32": {
+          "module": "gemm_rs_w23_c",
+          "nr": 32,
+          "num_gemm_ctas": 272,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 0.00048828125,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 6,
+              "wall_us": 84.35244858264923,
+              "device_us": 84.17503356933594
+            },
+            {
+              "pass": 1,
+              "pos": 5,
+              "wall_us": 84.22613143920898,
+              "device_us": 83.92870330810547
+            },
+            {
+              "pass": 2,
+              "pos": 4,
+              "wall_us": 84.43202078342438,
+              "device_us": 84.14921569824219
+            },
+            {
+              "pass": 3,
+              "pos": 3,
+              "wall_us": 84.23523604869843,
+              "device_us": 83.94522094726562
+            },
+            {
+              "pass": 4,
+              "pos": 2,
+              "wall_us": 84.36259627342224,
+              "device_us": 84.0416030883789
+            },
+            {
+              "pass": 5,
+              "pos": 1,
+              "wall_us": 84.3835324048996,
+              "device_us": 84.1551513671875
+            },
+            {
+              "pass": 6,
+              "pos": 0,
+              "wall_us": 84.57690477371216,
+              "device_us": 84.27092742919922
+            },
+            {
+              "pass": 7,
+              "pos": 7,
+              "wall_us": 84.54704284667969,
+              "device_us": 84.26258850097656
+            }
+          ],
+          "best_us": 84.22613143920898,
+          "median_us": 84.37306433916092,
+          "spread_pct": 0.4164661590285051,
+          "device_best_us": 83.92870330810547,
+          "device_median_us": 84.15218353271484
+        },
+        "nr48": {
+          "module": "gemm_rs_w23_c",
+          "nr": 48,
+          "num_gemm_ctas": 256,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 0.00048828125,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 7,
+              "wall_us": 83.9153528213501,
+              "device_us": 83.76849365234375
+            },
+            {
+              "pass": 1,
+              "pos": 6,
+              "wall_us": 83.94698798656464,
+              "device_us": 83.65592193603516
+            },
+            {
+              "pass": 2,
+              "pos": 5,
+              "wall_us": 84.03712511062622,
+              "device_us": 83.7471694946289
+            },
+            {
+              "pass": 3,
+              "pos": 4,
+              "wall_us": 83.85007083415985,
+              "device_us": 83.5423812866211
+            },
+            {
+              "pass": 4,
+              "pos": 3,
+              "wall_us": 84.33389663696289,
+              "device_us": 84.00727844238281
+            },
+            {
+              "pass": 5,
+              "pos": 2,
+              "wall_us": 84.10672843456268,
+              "device_us": 83.78084564208984
+            },
+            {
+              "pass": 6,
+              "pos": 1,
+              "wall_us": 84.05300974845886,
+              "device_us": 83.8754653930664
+            },
+            {
+              "pass": 7,
+              "pos": 0,
+              "wall_us": 84.13141965866089,
+              "device_us": 83.79383850097656
+            }
+          ],
+          "best_us": 83.85007083415985,
+          "median_us": 84.04506742954254,
+          "spread_pct": 0.5770129923443461,
+          "device_best_us": 83.5423812866211,
+          "device_median_us": 83.7746696472168
+        }
+      },
+      "null_floor_best_pct": 0.5114527774597357,
+      "null_floor_median_pct": 0.34320609396997465
+    },
+    "3": {
+      "shape": "4096x4096x4096",
+      "index": 3,
+      "bias": false,
+      "iters": 120,
+      "passes": 8,
+      "reverse": false,
+      "shipped_nr": 32,
+      "tiles": 256,
+      "num_gemm_ctas": 272,
+      "tiles_per_cta": 1,
+      "ab_rung_active": false,
+      "bc_rung_active": false,
+      "arms": {
+        "a": {
+          "module": "gemm_rs_w23_a",
+          "nr": 32,
+          "num_gemm_ctas": 272,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 3.0517578125e-05,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 0,
+              "wall_us": 199.40457617243132,
+              "device_us": 198.7951119740804
+            },
+            {
+              "pass": 1,
+              "pos": 7,
+              "wall_us": 199.8350334664186,
+              "device_us": 199.24046198527017
+            },
+            {
+              "pass": 2,
+              "pos": 6,
+              "wall_us": 200.00068470835686,
+              "device_us": 199.3958314259847
+            },
+            {
+              "pass": 3,
+              "pos": 5,
+              "wall_us": 198.99867475032806,
+              "device_us": 198.32369486490884
+            },
+            {
+              "pass": 4,
+              "pos": 4,
+              "wall_us": 199.80156794190407,
+              "device_us": 199.2311159769694
+            },
+            {
+              "pass": 5,
+              "pos": 3,
+              "wall_us": 199.1726147631804,
+              "device_us": 198.6113707224528
+            },
+            {
+              "pass": 6,
+              "pos": 2,
+              "wall_us": 200.1442015171051,
+              "device_us": 199.58292643229166
+            },
+            {
+              "pass": 7,
+              "pos": 1,
+              "wall_us": 199.49298972884813,
+              "device_us": 198.90836079915366
+            }
+          ],
+          "best_us": 198.99867475032806,
+          "median_us": 199.64727883537608,
+          "spread_pct": 0.5756454248824842,
+          "device_best_us": 198.32369486490884,
+          "device_median_us": 199.06973838806152
+        },
+        "b": {
+          "module": "gemm_rs_w23_b",
+          "nr": 32,
+          "num_gemm_ctas": 272,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 3.0517578125e-05,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 1,
+              "wall_us": 198.4714219967524,
+              "device_us": 197.8362719217936
+            },
+            {
+              "pass": 1,
+              "pos": 0,
+              "wall_us": 199.59580774108568,
+              "device_us": 198.9802042643229
+            },
+            {
+              "pass": 2,
+              "pos": 7,
+              "wall_us": 198.94524787863097,
+              "device_us": 198.33505948384604
+            },
+            {
+              "pass": 3,
+              "pos": 6,
+              "wall_us": 198.8067291676998,
+              "device_us": 198.21478525797525
+            },
+            {
+              "pass": 4,
+              "pos": 5,
+              "wall_us": 199.34133936961493,
+              "device_us": 198.76370429992676
+            },
+            {
+              "pass": 5,
+              "pos": 4,
+              "wall_us": 199.56653316815695,
+              "device_us": 198.94514083862305
+            },
+            {
+              "pass": 6,
+              "pos": 3,
+              "wall_us": 199.21508307258287,
+              "device_us": 198.65412712097168
+            },
+            {
+              "pass": 7,
+              "pos": 2,
+              "wall_us": 199.20260335008302,
+              "device_us": 198.60868453979492
+            }
+          ],
+          "best_us": 198.4714219967524,
+          "median_us": 199.20884321133295,
+          "spread_pct": 0.5665227431844901,
+          "device_best_us": 197.8362719217936,
+          "device_median_us": 198.6314058303833
+        },
+        "c": {
+          "module": "gemm_rs_w23_c",
+          "nr": 32,
+          "num_gemm_ctas": 272,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 3.0517578125e-05,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 2,
+              "wall_us": 198.61183439691862,
+              "device_us": 198.03503354390463
+            },
+            {
+              "pass": 1,
+              "pos": 1,
+              "wall_us": 198.07042554020882,
+              "device_us": 197.4774201711019
+            },
+            {
+              "pass": 2,
+              "pos": 0,
+              "wall_us": 198.7020174662272,
+              "device_us": 198.158327738444
+            },
+            {
+              "pass": 3,
+              "pos": 7,
+              "wall_us": 198.17246745030084,
+              "device_us": 197.68555959065756
+            },
+            {
+              "pass": 4,
+              "pos": 6,
+              "wall_us": 198.52789118885994,
+              "device_us": 197.9190985361735
+            },
+            {
+              "pass": 5,
+              "pos": 5,
+              "wall_us": 198.96924495697021,
+              "device_us": 198.32070668538412
+            },
+            {
+              "pass": 6,
+              "pos": 4,
+              "wall_us": 198.90572875738144,
+              "device_us": 198.39119911193848
+            },
+            {
+              "pass": 7,
+              "pos": 3,
+              "wall_us": 198.80831241607666,
+              "device_us": 198.2231299082438
+            }
+          ],
+          "best_us": 198.07042554020882,
+          "median_us": 198.6569259315729,
+          "spread_pct": 0.4537877950784407,
+          "device_best_us": 197.4774201711019,
+          "device_median_us": 198.09668064117432
+        },
+        "null": {
+          "module": "gemm_rs_w23_null",
+          "nr": 32,
+          "num_gemm_ctas": 272,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 3.0517578125e-05,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 3,
+              "wall_us": 197.47211287419,
+              "device_us": 196.90612157185873
+            },
+            {
+              "pass": 1,
+              "pos": 2,
+              "wall_us": 198.11714688936868,
+              "device_us": 197.48077392578125
+            },
+            {
+              "pass": 2,
+              "pos": 1,
+              "wall_us": 198.42907786369324,
+              "device_us": 197.85296122233072
+            },
+            {
+              "pass": 3,
+              "pos": 0,
+              "wall_us": 197.8458215792974,
+              "device_us": 197.21282323201498
+            },
+            {
+              "pass": 4,
+              "pos": 7,
+              "wall_us": 197.74595275521278,
+              "device_us": 197.11726506551108
+            },
+            {
+              "pass": 5,
+              "pos": 6,
+              "wall_us": 198.384840041399,
+              "device_us": 197.7921485900879
+            },
+            {
+              "pass": 6,
+              "pos": 5,
+              "wall_us": 198.12496999899545,
+              "device_us": 197.51718839009604
+            },
+            {
+              "pass": 7,
+              "pos": 4,
+              "wall_us": 198.07318846384683,
+              "device_us": 197.50749270121256
+            }
+          ],
+          "best_us": 197.47211287419,
+          "median_us": 198.09516767660776,
+          "spread_pct": 0.48460766210210104,
+          "device_best_us": 196.90612157185873,
+          "device_median_us": 197.4941333134969
+        },
+        "nr8": {
+          "module": "gemm_rs_w23_c",
+          "nr": 8,
+          "num_gemm_ctas": 296,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 3.0517578125e-05,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 4,
+              "wall_us": 263.086458047231,
+              "device_us": 262.436564763387
+            },
+            {
+              "pass": 1,
+              "pos": 3,
+              "wall_us": 263.419592132171,
+              "device_us": 262.7038637797038
+            },
+            {
+              "pass": 2,
+              "pos": 2,
+              "wall_us": 263.08239127198857,
+              "device_us": 262.419859568278
+            },
+            {
+              "pass": 3,
+              "pos": 1,
+              "wall_us": 262.7197963496049,
+              "device_us": 262.1522744496663
+            },
+            {
+              "pass": 4,
+              "pos": 0,
+              "wall_us": 262.92940601706505,
+              "device_us": 262.24780082702637
+            },
+            {
+              "pass": 5,
+              "pos": 7,
+              "wall_us": 262.9360494514306,
+              "device_us": 262.3133023579915
+            },
+            {
+              "pass": 6,
+              "pos": 6,
+              "wall_us": 263.4709080060323,
+              "device_us": 262.8391742706299
+            },
+            {
+              "pass": 7,
+              "pos": 5,
+              "wall_us": 262.98311228553456,
+              "device_us": 262.3473644256592
+            }
+          ],
+          "best_us": 262.7197963496049,
+          "median_us": 263.03275177876156,
+          "spread_pct": 0.28589838560466474,
+          "device_best_us": 262.1522744496663,
+          "device_median_us": 262.3836119969686
+        },
+        "nr16": {
+          "module": "gemm_rs_w23_c",
+          "nr": 16,
+          "num_gemm_ctas": 288,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 3.0517578125e-05,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 5,
+              "wall_us": 219.60102021694183,
+              "device_us": 218.95974477132162
+            },
+            {
+              "pass": 1,
+              "pos": 4,
+              "wall_us": 219.57565719882646,
+              "device_us": 218.87890497843424
+            },
+            {
+              "pass": 2,
+              "pos": 3,
+              "wall_us": 219.79265535871187,
+              "device_us": 219.1431681315104
+            },
+            {
+              "pass": 3,
+              "pos": 2,
+              "wall_us": 219.78265916307768,
+              "device_us": 219.19263203938803
+            },
+            {
+              "pass": 4,
+              "pos": 1,
+              "wall_us": 219.5578378935655,
+              "device_us": 218.96510124206543
+            },
+            {
+              "pass": 5,
+              "pos": 0,
+              "wall_us": 220.4074834783872,
+              "device_us": 219.8380947113037
+            },
+            {
+              "pass": 6,
+              "pos": 7,
+              "wall_us": 219.81894969940186,
+              "device_us": 219.20029322306314
+            },
+            {
+              "pass": 7,
+              "pos": 6,
+              "wall_us": 220.10359292229018,
+              "device_us": 219.4889704386393
+            }
+          ],
+          "best_us": 219.5578378935655,
+          "median_us": 219.78765726089478,
+          "spread_pct": 0.3869803023081242,
+          "device_best_us": 218.87890497843424,
+          "device_median_us": 219.16790008544922
+        },
+        "nr32": {
+          "module": "gemm_rs_w23_c",
+          "nr": 32,
+          "num_gemm_ctas": 272,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 3.0517578125e-05,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 6,
+              "wall_us": 198.089766005675,
+              "device_us": 197.49213854471842
+            },
+            {
+              "pass": 1,
+              "pos": 5,
+              "wall_us": 198.16740726431212,
+              "device_us": 197.64013290405273
+            },
+            {
+              "pass": 2,
+              "pos": 4,
+              "wall_us": 198.45012575387955,
+              "device_us": 197.79046376546225
+            },
+            {
+              "pass": 3,
+              "pos": 3,
+              "wall_us": 198.23992624878883,
+              "device_us": 197.63846397399902
+            },
+            {
+              "pass": 4,
+              "pos": 2,
+              "wall_us": 198.4161635239919,
+              "device_us": 197.79982566833496
+            },
+            {
+              "pass": 5,
+              "pos": 1,
+              "wall_us": 198.24964304765066,
+              "device_us": 197.61773745218912
+            },
+            {
+              "pass": 6,
+              "pos": 0,
+              "wall_us": 198.01377008358637,
+              "device_us": 197.42730458577475
+            },
+            {
+              "pass": 7,
+              "pos": 7,
+              "wall_us": 198.21692258119583,
+              "device_us": 197.63545989990234
+            }
+          ],
+          "best_us": 198.01377008358637,
+          "median_us": 198.22842441499233,
+          "spread_pct": 0.22036632609388,
+          "device_best_us": 197.42730458577475,
+          "device_median_us": 197.63696193695068
+        },
+        "nr48": {
+          "module": "gemm_rs_w23_c",
+          "nr": 48,
+          "num_gemm_ctas": 256,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 3.0517578125e-05,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 7,
+              "wall_us": 197.82415280739465,
+              "device_us": 197.17806180318198
+            },
+            {
+              "pass": 1,
+              "pos": 6,
+              "wall_us": 197.33052079876265,
+              "device_us": 196.78783416748047
+            },
+            {
+              "pass": 2,
+              "pos": 5,
+              "wall_us": 197.7266433338324,
+              "device_us": 197.1159299214681
+            },
+            {
+              "pass": 3,
+              "pos": 4,
+              "wall_us": 197.86062960823378,
+              "device_us": 197.26293881734213
+            },
+            {
+              "pass": 4,
+              "pos": 3,
+              "wall_us": 198.37493697802225,
+              "device_us": 197.79650370279947
+            },
+            {
+              "pass": 5,
+              "pos": 2,
+              "wall_us": 198.0997622013092,
+              "device_us": 197.53990173339844
+            },
+            {
+              "pass": 6,
+              "pos": 1,
+              "wall_us": 198.09411217768988,
+              "device_us": 197.49080340067545
+            },
+            {
+              "pass": 7,
+              "pos": 0,
+              "wall_us": 197.21932088335356,
+              "device_us": 196.62213325500488
+            }
+          ],
+          "best_us": 197.21932088335356,
+          "median_us": 197.84239120781422,
+          "spread_pct": 0.5859548088354806,
+          "device_best_us": 196.62213325500488,
+          "device_median_us": 197.22050031026205
+        }
+      },
+      "null_floor_best_pct": 0.3029859038374699,
+      "null_floor_median_pct": 0.28357998913039184
+    },
+    "4": {
+      "shape": "8192x4096x14336",
+      "index": 4,
+      "bias": true,
+      "iters": 60,
+      "passes": 8,
+      "reverse": false,
+      "shipped_nr": 32,
+      "tiles": 512,
+      "num_gemm_ctas": 272,
+      "tiles_per_cta": 2,
+      "ab_rung_active": true,
+      "bc_rung_active": false,
+      "arms": {
+        "a": {
+          "module": "gemm_rs_w23_a",
+          "nr": 32,
+          "num_gemm_ctas": 272,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 0.00048828125,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 0,
+              "wall_us": 749.3219648798307,
+              "device_us": 748.5066731770834
+            },
+            {
+              "pass": 1,
+              "pos": 7,
+              "wall_us": 751.252348224322,
+              "device_us": 750.2934137980143
+            },
+            {
+              "pass": 2,
+              "pos": 6,
+              "wall_us": 749.6558750669161,
+              "device_us": 748.8627751668295
+            },
+            {
+              "pass": 3,
+              "pos": 5,
+              "wall_us": 751.3093451658884,
+              "device_us": 750.5847295125326
+            },
+            {
+              "pass": 4,
+              "pos": 4,
+              "wall_us": 752.0880550146103,
+              "device_us": 751.3618469238281
+            },
+            {
+              "pass": 5,
+              "pos": 3,
+              "wall_us": 750.3996913631757,
+              "device_us": 749.6452967325846
+            },
+            {
+              "pass": 6,
+              "pos": 2,
+              "wall_us": 750.5257924397787,
+              "device_us": 749.4989395141602
+            },
+            {
+              "pass": 7,
+              "pos": 1,
+              "wall_us": 751.69720997413,
+              "device_us": 750.8894602457682
+            }
+          ],
+          "best_us": 749.3219648798307,
+          "median_us": 750.8890703320503,
+          "spread_pct": 0.3691457430082373,
+          "device_best_us": 748.5066731770834,
+          "device_median_us": 749.9693552652994
+        },
+        "b": {
+          "module": "gemm_rs_w23_b",
+          "nr": 32,
+          "num_gemm_ctas": 272,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 0.00048828125,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 1,
+              "wall_us": 641.8488298853239,
+              "device_us": 640.5647913614908
+            },
+            {
+              "pass": 1,
+              "pos": 0,
+              "wall_us": 642.3821051915487,
+              "device_us": 641.2443161010742
+            },
+            {
+              "pass": 2,
+              "pos": 7,
+              "wall_us": 643.6749051014582,
+              "device_us": 642.3983256022135
+            },
+            {
+              "pass": 3,
+              "pos": 6,
+              "wall_us": 641.7648866772652,
+              "device_us": 640.5220031738281
+            },
+            {
+              "pass": 4,
+              "pos": 5,
+              "wall_us": 642.9397190610567,
+              "device_us": 641.8310801188151
+            },
+            {
+              "pass": 5,
+              "pos": 4,
+              "wall_us": 643.9115852117538,
+              "device_us": 642.6462809244791
+            },
+            {
+              "pass": 6,
+              "pos": 3,
+              "wall_us": 644.2589685320854,
+              "device_us": 643.1781133015951
+            },
+            {
+              "pass": 7,
+              "pos": 2,
+              "wall_us": 643.2262559731802,
+              "device_us": 641.9586817423502
+            }
+          ],
+          "best_us": 641.7648866772652,
+          "median_us": 643.0829875171185,
+          "spread_pct": 0.38862859383494,
+          "device_best_us": 640.5220031738281,
+          "device_median_us": 641.8948809305826
+        },
+        "c": {
+          "module": "gemm_rs_w23_c",
+          "nr": 32,
+          "num_gemm_ctas": 272,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 0.00048828125,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 2,
+              "wall_us": 649.6126453081766,
+              "device_us": 648.2511520385742
+            },
+            {
+              "pass": 1,
+              "pos": 1,
+              "wall_us": 650.0802313288053,
+              "device_us": 648.7656275431315
+            },
+            {
+              "pass": 2,
+              "pos": 0,
+              "wall_us": 650.3333027164141,
+              "device_us": 649.1692225138346
+            },
+            {
+              "pass": 3,
+              "pos": 7,
+              "wall_us": 653.450811902682,
+              "device_us": 652.1326700846354
+            },
+            {
+              "pass": 4,
+              "pos": 6,
+              "wall_us": 651.7495959997177,
+              "device_us": 650.3920237223307
+            },
+            {
+              "pass": 5,
+              "pos": 5,
+              "wall_us": 651.1370340983073,
+              "device_us": 649.8353958129883
+            },
+            {
+              "pass": 6,
+              "pos": 4,
+              "wall_us": 651.5458847085634,
+              "device_us": 650.2229690551758
+            },
+            {
+              "pass": 7,
+              "pos": 3,
+              "wall_us": 652.0954892039299,
+              "device_us": 650.9586970011393
+            }
+          ],
+          "best_us": 649.6126453081766,
+          "median_us": 651.3414594034354,
+          "spread_pct": 0.5908392674044208,
+          "device_best_us": 648.2511520385742,
+          "device_median_us": 650.029182434082
+        },
+        "null": {
+          "module": "gemm_rs_w23_null",
+          "nr": 32,
+          "num_gemm_ctas": 272,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 0.00048828125,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 3,
+              "wall_us": 652.9385223984718,
+              "device_us": 651.6348520914713
+            },
+            {
+              "pass": 1,
+              "pos": 2,
+              "wall_us": 656.9676101207733,
+              "device_us": 655.6988398234049
+            },
+            {
+              "pass": 2,
+              "pos": 1,
+              "wall_us": 655.5356706182162,
+              "device_us": 654.2455037434896
+            },
+            {
+              "pass": 3,
+              "pos": 0,
+              "wall_us": 655.8967133363088,
+              "device_us": 654.871686299642
+            },
+            {
+              "pass": 4,
+              "pos": 7,
+              "wall_us": 655.8619439601898,
+              "device_us": 654.6297073364258
+            },
+            {
+              "pass": 5,
+              "pos": 6,
+              "wall_us": 657.2275112072626,
+              "device_us": 656.0883839925131
+            },
+            {
+              "pass": 6,
+              "pos": 5,
+              "wall_us": 655.4048508405685,
+              "device_us": 654.1987737019857
+            },
+            {
+              "pass": 7,
+              "pos": 4,
+              "wall_us": 656.2065333127975,
+              "device_us": 654.8656463623047
+            }
+          ],
+          "best_us": 652.9385223984718,
+          "median_us": 655.8793286482494,
+          "spread_pct": 0.65687482996651,
+          "device_best_us": 651.6348520914713,
+          "device_median_us": 654.7476768493652
+        },
+        "nr8": {
+          "module": "gemm_rs_w23_c",
+          "nr": 8,
+          "num_gemm_ctas": 296,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 0.00048828125,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 4,
+              "wall_us": 737.7386093139648,
+              "device_us": 736.5244547526041
+            },
+            {
+              "pass": 1,
+              "pos": 3,
+              "wall_us": 736.3864531119665,
+              "device_us": 735.0503921508789
+            },
+            {
+              "pass": 2,
+              "pos": 2,
+              "wall_us": 735.794318219026,
+              "device_us": 734.4376881917318
+            },
+            {
+              "pass": 3,
+              "pos": 1,
+              "wall_us": 737.1046269933382,
+              "device_us": 735.8469645182291
+            },
+            {
+              "pass": 4,
+              "pos": 0,
+              "wall_us": 736.9993254542351,
+              "device_us": 735.8863194783529
+            },
+            {
+              "pass": 5,
+              "pos": 7,
+              "wall_us": 737.0971764127413,
+              "device_us": 735.9197616577148
+            },
+            {
+              "pass": 6,
+              "pos": 6,
+              "wall_us": 736.4432017008463,
+              "device_us": 735.1981480916342
+            },
+            {
+              "pass": 7,
+              "pos": 5,
+              "wall_us": 737.1288413802782,
+              "device_us": 735.9030405680338
+            }
+          ],
+          "best_us": 735.794318219026,
+          "median_us": 737.0482509334881,
+          "spread_pct": 0.26424383102671817,
+          "device_best_us": 734.4376881917318,
+          "device_median_us": 735.866641998291
+        },
+        "nr16": {
+          "module": "gemm_rs_w23_c",
+          "nr": 16,
+          "num_gemm_ctas": 288,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 0.00048828125,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 5,
+              "wall_us": 680.4120416442553,
+              "device_us": 679.1427612304688
+            },
+            {
+              "pass": 1,
+              "pos": 4,
+              "wall_us": 681.6856563091278,
+              "device_us": 680.5185317993164
+            },
+            {
+              "pass": 2,
+              "pos": 3,
+              "wall_us": 680.2787383397421,
+              "device_us": 679.0919621785482
+            },
+            {
+              "pass": 3,
+              "pos": 2,
+              "wall_us": 680.0510610143343,
+              "device_us": 678.8981119791666
+            },
+            {
+              "pass": 4,
+              "pos": 1,
+              "wall_us": 681.608666976293,
+              "device_us": 680.3601582845052
+            },
+            {
+              "pass": 5,
+              "pos": 0,
+              "wall_us": 681.3934072852135,
+              "device_us": 680.1977793375651
+            },
+            {
+              "pass": 6,
+              "pos": 7,
+              "wall_us": 682.4089835087458,
+              "device_us": 681.1807632446289
+            },
+            {
+              "pass": 7,
+              "pos": 6,
+              "wall_us": 682.405320306619,
+              "device_us": 681.2214533487955
+            }
+          ],
+          "best_us": 680.0510610143343,
+          "median_us": 681.5010371307533,
+          "spread_pct": 0.34672727234547573,
+          "device_best_us": 678.8981119791666,
+          "device_median_us": 680.2789688110352
+        },
+        "nr32": {
+          "module": "gemm_rs_w23_c",
+          "nr": 32,
+          "num_gemm_ctas": 272,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 0.00048828125,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 6,
+              "wall_us": 660.1430475711823,
+              "device_us": 658.9149475097656
+            },
+            {
+              "pass": 1,
+              "pos": 5,
+              "wall_us": 659.6218173702558,
+              "device_us": 658.3603541056315
+            },
+            {
+              "pass": 2,
+              "pos": 4,
+              "wall_us": 659.8404919107755,
+              "device_us": 658.6069107055664
+            },
+            {
+              "pass": 3,
+              "pos": 3,
+              "wall_us": 659.5187510053316,
+              "device_us": 658.2607905069987
+            },
+            {
+              "pass": 4,
+              "pos": 2,
+              "wall_us": 659.9727397163709,
+              "device_us": 658.6610158284506
+            },
+            {
+              "pass": 5,
+              "pos": 1,
+              "wall_us": 660.2923075358073,
+              "device_us": 659.0539296468099
+            },
+            {
+              "pass": 6,
+              "pos": 0,
+              "wall_us": 659.7257529695829,
+              "device_us": 658.5380554199219
+            },
+            {
+              "pass": 7,
+              "pos": 7,
+              "wall_us": 660.079283018907,
+              "device_us": 658.7966918945312
+            }
+          ],
+          "best_us": 659.5187510053316,
+          "median_us": 659.9066158135732,
+          "spread_pct": 0.11729105947275227,
+          "device_best_us": 658.2607905069987,
+          "device_median_us": 658.6339632670085
+        },
+        "nr48": {
+          "module": "gemm_rs_w23_c",
+          "nr": 48,
+          "num_gemm_ctas": 256,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 0.00048828125,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 7,
+              "wall_us": 648.8621234893799,
+              "device_us": 647.6911544799805
+            },
+            {
+              "pass": 1,
+              "pos": 6,
+              "wall_us": 649.5776896675428,
+              "device_us": 648.418108622233
+            },
+            {
+              "pass": 2,
+              "pos": 5,
+              "wall_us": 650.6846596797308,
+              "device_us": 649.4873046875
+            },
+            {
+              "pass": 3,
+              "pos": 4,
+              "wall_us": 651.4940410852432,
+              "device_us": 650.1768747965494
+            },
+            {
+              "pass": 4,
+              "pos": 3,
+              "wall_us": 650.5013753970464,
+              "device_us": 649.2634455362955
+            },
+            {
+              "pass": 5,
+              "pos": 2,
+              "wall_us": 648.4180067976316,
+              "device_us": 647.2381591796875
+            },
+            {
+              "pass": 6,
+              "pos": 1,
+              "wall_us": 651.8390650550524,
+              "device_us": 650.6158828735352
+            },
+            {
+              "pass": 7,
+              "pos": 0,
+              "wall_us": 650.5085776249567,
+              "device_us": 649.2039998372396
+            }
+          ],
+          "best_us": 648.4180067976316,
+          "median_us": 650.5049765110016,
+          "spread_pct": 0.5276007485227779,
+          "device_best_us": 647.2381591796875,
+          "device_median_us": 649.2337226867676
+        }
+      },
+      "null_floor_best_pct": 0.5119785020067452,
+      "null_floor_median_pct": 0.6966959003301086
+    },
+    "5": {
+      "shape": "8192x8192x29568",
+      "index": 5,
+      "bias": false,
+      "iters": 50,
+      "passes": 8,
+      "reverse": false,
+      "shipped_nr": 48,
+      "tiles": 1024,
+      "num_gemm_ctas": 256,
+      "tiles_per_cta": 4,
+      "ab_rung_active": true,
+      "bc_rung_active": true,
+      "arms": {
+        "a": {
+          "module": "gemm_rs_w23_a",
+          "nr": 48,
+          "num_gemm_ctas": 256,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 0.0001220703125,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 0,
+              "wall_us": 2595.0462371110916,
+              "device_us": 2594.4476318359375
+            },
+            {
+              "pass": 1,
+              "pos": 7,
+              "wall_us": 2604.6647131443024,
+              "device_us": 2604.237060546875
+            },
+            {
+              "pass": 2,
+              "pos": 6,
+              "wall_us": 2613.597884774208,
+              "device_us": 2613.0709838867188
+            },
+            {
+              "pass": 3,
+              "pos": 5,
+              "wall_us": 2597.481533885002,
+              "device_us": 2597.2467041015625
+            },
+            {
+              "pass": 4,
+              "pos": 4,
+              "wall_us": 2621.580585837364,
+              "device_us": 2621.0894775390625
+            },
+            {
+              "pass": 5,
+              "pos": 3,
+              "wall_us": 2620.757818222046,
+              "device_us": 2620.1840209960938
+            },
+            {
+              "pass": 6,
+              "pos": 2,
+              "wall_us": 2619.9310272932053,
+              "device_us": 2619.3341064453125
+            },
+            {
+              "pass": 7,
+              "pos": 1,
+              "wall_us": 2611.1992448568344,
+              "device_us": 2610.6341552734375
+            }
+          ],
+          "best_us": 2595.0462371110916,
+          "median_us": 2612.3985648155212,
+          "spread_pct": 1.0225000366780237,
+          "device_best_us": 2594.4476318359375,
+          "device_median_us": 2611.852569580078
+        },
+        "b": {
+          "module": "gemm_rs_w23_b",
+          "nr": 48,
+          "num_gemm_ctas": 256,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 0.0001220703125,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 1,
+              "wall_us": 1838.085576891899,
+              "device_us": 1836.4006042480469
+            },
+            {
+              "pass": 1,
+              "pos": 0,
+              "wall_us": 1844.3677574396133,
+              "device_us": 1843.1535339355469
+            },
+            {
+              "pass": 2,
+              "pos": 7,
+              "wall_us": 1824.665442109108,
+              "device_us": 1823.2208251953125
+            },
+            {
+              "pass": 3,
+              "pos": 6,
+              "wall_us": 1849.3076413869858,
+              "device_us": 1847.9350280761719
+            },
+            {
+              "pass": 4,
+              "pos": 5,
+              "wall_us": 1830.8260291814804,
+              "device_us": 1829.3043518066406
+            },
+            {
+              "pass": 5,
+              "pos": 4,
+              "wall_us": 1829.3412774801254,
+              "device_us": 1828.2810974121094
+            },
+            {
+              "pass": 6,
+              "pos": 3,
+              "wall_us": 1841.3246423006058,
+              "device_us": 1839.9110412597656
+            },
+            {
+              "pass": 7,
+              "pos": 2,
+              "wall_us": 1844.0622091293335,
+              "device_us": 1842.4969482421875
+            }
+          ],
+          "best_us": 1824.665442109108,
+          "median_us": 1839.7051095962524,
+          "spread_pct": 1.3505050684466406,
+          "device_best_us": 1823.2208251953125,
+          "device_median_us": 1838.1558227539062
+        },
+        "c": {
+          "module": "gemm_rs_w23_c",
+          "nr": 48,
+          "num_gemm_ctas": 256,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 0.0001220703125,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 2,
+              "wall_us": 1668.1566834449768,
+              "device_us": 1666.5306091308594
+            },
+            {
+              "pass": 1,
+              "pos": 1,
+              "wall_us": 1637.8400474786758,
+              "device_us": 1636.2931823730469
+            },
+            {
+              "pass": 2,
+              "pos": 0,
+              "wall_us": 1623.6958652734756,
+              "device_us": 1622.2560119628906
+            },
+            {
+              "pass": 3,
+              "pos": 7,
+              "wall_us": 1643.9835727214813,
+              "device_us": 1642.8024291992188
+            },
+            {
+              "pass": 4,
+              "pos": 6,
+              "wall_us": 1634.427085518837,
+              "device_us": 1632.7458190917969
+            },
+            {
+              "pass": 5,
+              "pos": 5,
+              "wall_us": 1637.5450789928436,
+              "device_us": 1636.3908386230469
+            },
+            {
+              "pass": 6,
+              "pos": 4,
+              "wall_us": 1644.5903480052948,
+              "device_us": 1643.1721496582031
+            },
+            {
+              "pass": 7,
+              "pos": 3,
+              "wall_us": 1653.512641787529,
+              "device_us": 1651.9834899902344
+            }
+          ],
+          "best_us": 1623.6958652734756,
+          "median_us": 1640.9118101000786,
+          "spread_pct": 2.738247914674139,
+          "device_best_us": 1622.2560119628906,
+          "device_median_us": 1639.5966339111328
+        },
+        "null": {
+          "module": "gemm_rs_w23_null",
+          "nr": 48,
+          "num_gemm_ctas": 256,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 0.0001220703125,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 3,
+              "wall_us": 1631.8188607692719,
+              "device_us": 1630.23681640625
+            },
+            {
+              "pass": 1,
+              "pos": 2,
+              "wall_us": 1675.507128238678,
+              "device_us": 1673.6444091796875
+            },
+            {
+              "pass": 2,
+              "pos": 1,
+              "wall_us": 1654.6792536973953,
+              "device_us": 1653.0804443359375
+            },
+            {
+              "pass": 3,
+              "pos": 0,
+              "wall_us": 1662.3880714178085,
+              "device_us": 1660.6410217285156
+            },
+            {
+              "pass": 4,
+              "pos": 7,
+              "wall_us": 1647.6208716630936,
+              "device_us": 1646.0908508300781
+            },
+            {
+              "pass": 5,
+              "pos": 6,
+              "wall_us": 1671.4723408222198,
+              "device_us": 1670.0706481933594
+            },
+            {
+              "pass": 6,
+              "pos": 5,
+              "wall_us": 1624.2288053035736,
+              "device_us": 1622.6675415039062
+            },
+            {
+              "pass": 7,
+              "pos": 4,
+              "wall_us": 1634.4858705997467,
+              "device_us": 1632.8700256347656
+            }
+          ],
+          "best_us": 1624.2288053035736,
+          "median_us": 1651.1500626802444,
+          "spread_pct": 3.15708739850358,
+          "device_best_us": 1622.6675415039062,
+          "device_median_us": 1649.5856475830078
+        },
+        "nr8": {
+          "module": "gemm_rs_w23_c",
+          "nr": 8,
+          "num_gemm_ctas": 296,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 0.0001220703125,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 4,
+              "wall_us": 2000.330537557602,
+              "device_us": 1998.43505859375
+            },
+            {
+              "pass": 1,
+              "pos": 3,
+              "wall_us": 2000.5352050065994,
+              "device_us": 1998.7629699707031
+            },
+            {
+              "pass": 2,
+              "pos": 2,
+              "wall_us": 2001.3175904750824,
+              "device_us": 1999.6530151367188
+            },
+            {
+              "pass": 3,
+              "pos": 1,
+              "wall_us": 2002.21486389637,
+              "device_us": 2000.2085876464844
+            },
+            {
+              "pass": 4,
+              "pos": 0,
+              "wall_us": 1998.2679933309555,
+              "device_us": 1995.4225158691406
+            },
+            {
+              "pass": 5,
+              "pos": 7,
+              "wall_us": 2011.137381196022,
+              "device_us": 2009.2454528808594
+            },
+            {
+              "pass": 6,
+              "pos": 6,
+              "wall_us": 2012.6618444919586,
+              "device_us": 2010.5828857421875
+            },
+            {
+              "pass": 7,
+              "pos": 5,
+              "wall_us": 2001.7441362142563,
+              "device_us": 2000.1934814453125
+            }
+          ],
+          "best_us": 1998.2679933309555,
+          "median_us": 2001.5308633446693,
+          "spread_pct": 0.7203163544149899,
+          "device_best_us": 1995.4225158691406,
+          "device_median_us": 1999.9232482910156
+        },
+        "nr16": {
+          "module": "gemm_rs_w23_c",
+          "nr": 16,
+          "num_gemm_ctas": 288,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 0.0001220703125,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 5,
+              "wall_us": 1810.983195900917,
+              "device_us": 1809.4587707519531
+            },
+            {
+              "pass": 1,
+              "pos": 4,
+              "wall_us": 1805.2470684051514,
+              "device_us": 1803.5659790039062
+            },
+            {
+              "pass": 2,
+              "pos": 3,
+              "wall_us": 1823.1679499149323,
+              "device_us": 1821.2947082519531
+            },
+            {
+              "pass": 3,
+              "pos": 2,
+              "wall_us": 1806.1377853155136,
+              "device_us": 1804.0936279296875
+            },
+            {
+              "pass": 4,
+              "pos": 1,
+              "wall_us": 1791.9065058231354,
+              "device_us": 1790.5375671386719
+            },
+            {
+              "pass": 5,
+              "pos": 0,
+              "wall_us": 1807.284727692604,
+              "device_us": 1805.8447265625
+            },
+            {
+              "pass": 6,
+              "pos": 7,
+              "wall_us": 1805.039718747139,
+              "device_us": 1803.55712890625
+            },
+            {
+              "pass": 7,
+              "pos": 6,
+              "wall_us": 1809.9402636289597,
+              "device_us": 1808.2600402832031
+            }
+          ],
+          "best_us": 1791.9065058231354,
+          "median_us": 1806.7112565040588,
+          "spread_pct": 1.744591249052725,
+          "device_best_us": 1790.5375671386719,
+          "device_median_us": 1804.9691772460938
+        },
+        "nr32": {
+          "module": "gemm_rs_w23_c",
+          "nr": 32,
+          "num_gemm_ctas": 272,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 0.0001220703125,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 6,
+              "wall_us": 1709.4319313764572,
+              "device_us": 1707.7186584472656
+            },
+            {
+              "pass": 1,
+              "pos": 5,
+              "wall_us": 1678.9228469133377,
+              "device_us": 1676.754150390625
+            },
+            {
+              "pass": 2,
+              "pos": 4,
+              "wall_us": 1684.5423728227615,
+              "device_us": 1683.0644226074219
+            },
+            {
+              "pass": 3,
+              "pos": 3,
+              "wall_us": 1692.4632340669632,
+              "device_us": 1690.1190185546875
+            },
+            {
+              "pass": 4,
+              "pos": 2,
+              "wall_us": 1685.929149389267,
+              "device_us": 1684.6537780761719
+            },
+            {
+              "pass": 5,
+              "pos": 1,
+              "wall_us": 1674.5512187480927,
+              "device_us": 1673.3566284179688
+            },
+            {
+              "pass": 6,
+              "pos": 0,
+              "wall_us": 1692.8598284721375,
+              "device_us": 1691.5864562988281
+            },
+            {
+              "pass": 7,
+              "pos": 7,
+              "wall_us": 1695.8486288785934,
+              "device_us": 1694.4706726074219
+            }
+          ],
+          "best_us": 1674.5512187480927,
+          "median_us": 1689.196191728115,
+          "spread_pct": 2.0829886979773393,
+          "device_best_us": 1673.3566284179688,
+          "device_median_us": 1687.3863983154297
+        },
+        "nr48": {
+          "module": "gemm_rs_w23_c",
+          "nr": 48,
+          "num_gemm_ctas": 256,
+          "dead": null,
+          "diag": null,
+          "max_abs_diff": 0.0001220703125,
+          "ok_graded": true,
+          "ok_tight": true,
+          "samples": [
+            {
+              "pass": 0,
+              "pos": 7,
+              "wall_us": 1561.2783282995224,
+              "device_us": 1559.7212219238281
+            },
+            {
+              "pass": 1,
+              "pos": 6,
+              "wall_us": 1577.6699781417847,
+              "device_us": 1576.2423706054688
+            },
+            {
+              "pass": 2,
+              "pos": 5,
+              "wall_us": 1566.506177186966,
+              "device_us": 1564.9308776855469
+            },
+            {
+              "pass": 3,
+              "pos": 4,
+              "wall_us": 1582.3187679052353,
+              "device_us": 1580.5314636230469
+            },
+            {
+              "pass": 4,
+              "pos": 3,
+              "wall_us": 1581.3357383012772,
+              "device_us": 1579.866943359375
+            },
+            {
+              "pass": 5,
+              "pos": 2,
+              "wall_us": 1610.128954052925,
+              "device_us": 1608.6618041992188
+            },
+            {
+              "pass": 6,
+              "pos": 1,
+              "wall_us": 1584.809347987175,
+              "device_us": 1583.1141662597656
+            },
+            {
+              "pass": 7,
+              "pos": 0,
+              "wall_us": 1599.639430642128,
+              "device_us": 1598.0596923828125
+            }
+          ],
+          "best_us": 1561.2783282995224,
+          "median_us": 1581.8272531032562,
+          "spread_pct": 3.1288864303015544,
+          "device_best_us": 1559.7212219238281,
+          "device_median_us": 1580.199203491211
+        }
+      },
+      "null_floor_best_pct": 0.032822651180934026,
+      "null_floor_median_pct": 0.6239367964291411
+    }
+  },
+  "passes": 0,
+  "scale": 1.0,
+  "reverse": false,
+  "fingerprints": {
+    "a": "ec714ea8a64442848ab8155a4f79b5ced777189fb26469d3697446092ff42cfb",
+    "b": "366d4f08a030afaae5d1964cb2eb54586b396a5132fbda63e4553af2548519f2",
+    "c": "7926c2e872835c8d86687d4915b7fadde19c542c094eefbeb9e2190e770ba90c",
+    "null": "7926c2e872835c8d86687d4915b7fadde19c542c094eefbeb9e2190e770ba90c"
+  }
+}

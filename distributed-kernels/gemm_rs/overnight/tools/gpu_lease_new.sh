@@ -30,44 +30,35 @@ STALE_S=${STALE_S:-5400}
 now() { date -u +%s; }
 stamp() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 
-# Count only pids that can still dispatch work.
-#
-# A process wedged in `exit_mm` is ALREADY EXITING: the kernel is tearing down
-# its address space and it has no mm left, so it cannot launch a kernel, and no
-# signal can affect it -- SIGTERM and SIGKILL are both no-ops against a task in
-# exit_mm. It nevertheless keeps its KFD entry and its VRAM reservation until the
-# driver finishes reclaiming, which can take tens of minutes or not complete.
-#
-# Counting such a corpse as a live tenant is what actually stalled the figure
-# queue tonight: an exp_26 arm took a VM_L2_PROTECTION_FAULT, died, wedged in
-# teardown, and two correctly-behaved campaigns then sat in acquire behind a
-# process that no longer existed. Meanwhile all 8 GPUs passed a live matmul with
-# 190 of 192 GiB free.
-#
-# So: exclude pids that are zombies or in exit_mm, and report them separately so
-# the condition is visible rather than silently tolerated.
-stale_pids() {
-  local p out=""
+proc_state() { sed -n 's/.*) \([A-Z]\) .*/\1/p' "/proc/$1/stat" 2>/dev/null; }
+
+# A KFD pid that has already left user space cannot issue GPU work ever again, so
+# counting it as "draining" is a false positive -- and an expensive one: on
+# 2026-08-12 a harness control wedged in amdgpu/KFD address-space teardown (state
+# D, wchan exit_mm, zero CU occupancy, VRAM still mapped, CPU time flat) aborted
+# both exp_21's and exp_24's acquire after their full 300 s drain window. Such a
+# task cannot even be reclaimed: D state ignores SIGTERM, and SIGKILL is forbidden
+# here anyway. So the drain check counts only pids that are still ALIVE in the
+# sense that matters -- able to launch a kernel.
+zombie_kfd_pids() {
+  local p st wc
   for p in $(rocm-smi --showpids 2>/dev/null | awk '/^[0-9]+/{print $1}'); do
-    [ -d "/proc/$p" ] || { out="$out $p"; continue; }
-    local st wc
-    st=$(awk '/^State:/{print $2}' "/proc/$p/status" 2>/dev/null)
+    [ -d "/proc/$p" ] || continue
+    st=$(proc_state "$p")
     wc=$(cat "/proc/$p/wchan" 2>/dev/null)
-    if [ "$st" = "Z" ] || [ "$wc" = "exit_mm" ] || [ "$wc" = "do_exit" ]; then
-      out="$out $p"
-    fi
+    [ "$st" = "Z" ] && { echo "$p"; continue; }
+    [ "$st" = "D" ] && [ "$wc" = "exit_mm" ] && echo "$p"
   done
-  echo "${out# }"
 }
-live_pids() {
-  local p stale out=""
-  stale=" $(stale_pids) "
+live_kfd_pids() {
+  local dead p
+  dead=" $(zombie_kfd_pids | tr '\n' ' ') "
   for p in $(rocm-smi --showpids 2>/dev/null | awk '/^[0-9]+/{print $1}'); do
-    case "$stale" in *" $p "*) ;; *) out="$out $p";; esac
+    case "$dead" in *" $p "*) continue;; esac
+    echo "$p"
   done
-  echo "${out# }"
 }
-kfd_pids() { local l; l=$(live_pids); [ -z "$l" ] && echo 0 || echo "$l" | wc -w; }
+kfd_pids() { live_kfd_pids | wc -l; }
 
 note() { echo "$(stamp) $*" >> "$LOG" 2>/dev/null; }
 
@@ -99,25 +90,23 @@ case "${1:-status}" in
         echo "$OWNER" > "$LOCK/owner"
         now > "$LOCK/since"
         echo "$$" > "$LOCK/pid"
-        # Having the lease is necessary but not sufficient: a foreign tenant, or
-        # one of our own jobs that failed to take the lease, may still be on the
-        # GPUs. Wait for drain rather than aborting on the first sample -- a
-        # previous run's last worker lingers for tens of seconds after its parent
-        # returns, and aborting there wastes an invocation.
-        #
-        # The drain wait spends the CALLER'S remaining budget, not a fixed 300 s.
-        # Learned the hard way: an unleased 2-hour M9 gate run held all 8 GPUs
-        # while a queued campaign sat in acquire. With a fixed 300 s cap the
-        # queued job aborted, which is the opposite of what a queue is for -- a
-        # busy node is a reason to keep waiting, not a reason to fail. The only
-        # thing that should end the wait is the caller's own deadline.
-        while :; do
+        z=$(zombie_kfd_pids | tr '\n' ' ')
+        if [ -n "${z// /}" ]; then
+          echo "  NOTE: ignoring KFD pid(s) [$z] wedged in address-space teardown"
+          echo "        (state D/Z, wchan exit_mm): they hold VRAM but cannot launch."
+          note "IGNORE-ZOMBIE $OWNER -- pids [$z] in teardown"
+        fi
+        # Having the lease is necessary but not sufficient: a foreign tenant may
+        # still be on the GPUs. Wait for drain rather than aborting on the first
+        # sample -- a previous run's last worker lingers for tens of seconds
+        # after its parent returns, and aborting there wastes an invocation.
+        for i in $(seq 1 30); do
           n=$(kfd_pids)
           [ "$n" = "0" ] && break
-          [ -z "${_warned:-}" ] && { echo "  lease held by '$OWNER'; $n KFD pid(s) still draining (unleased job?)"; _warned=1; }
-          if [ $(( $(now) - t0 )) -ge "$WAIT" ]; then
-            echo "  TIMEOUT: node still dirty at the caller's ${WAIT}s deadline; releasing the lease"
-            note "TIMEOUT $OWNER -- node dirty at deadline, $n pid(s)"
+          [ "$i" = "1" ] && echo "  lease held by '$OWNER'; $n live KFD pid(s) still draining"
+          if [ "$i" = "30" ]; then
+            echo "  ABORT: node still dirty after 300s; releasing the lease"
+            note "ABORT $OWNER -- node dirty after 300s (live pids: $(live_kfd_pids | tr '\n' ' '))"
             rm -rf "$LOCK"
             exit 1
           fi
@@ -162,9 +151,9 @@ case "${1:-status}" in
     else
       echo "lease FREE"
     fi
-    echo "KFD live pid count: $(kfd_pids)"
-    s=$(stale_pids)
-    [ -n "$s" ] && echo "KFD STALE pids (exiting/zombie, cannot dispatch, ignored): $s"
+    echo "KFD pid count: $(kfd_pids)"
+    z=$(zombie_kfd_pids | tr '\n' ' ')
+    [ -n "${z// /}" ] && echo "  ignored (wedged in teardown, hold VRAM, cannot launch): $z"
     ;;
   *) echo "usage: gpu_lease.sh {acquire <owner> [wait_s]|release <owner>|steal <owner> <reason>|status}"; exit 64;;
 esac
