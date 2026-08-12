@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # t08: poll the current screen batch. Pass TAG in E32TAG (default e32regate).
 set -uo pipefail
-TAG="${E32TAG:-e32regate}"
+TAG="${E32TAG:-$(cat /tmp/screen_tag 2>/dev/null || echo e32regate)}"
 LOG="$HOME/overnight-scratch/${TAG}.driver.log"
 echo "== alive? =="
 pgrep -af 'screen.sh|torchrun|run_campaign' | head -10 || echo "(no driver/job)"
