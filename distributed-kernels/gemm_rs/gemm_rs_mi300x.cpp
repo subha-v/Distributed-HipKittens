@@ -124,17 +124,18 @@
 // whose reducers got 2 rounds of work) and as inside its own noise on
 // 8192x4096x14336 itself, before WGM and the NR retune moved both. It is a
 // measurement, and exp_26 makes it against a paired null arm.
-// DEFAULT 0 UNTIL GATED. This is a candidate, not a landed change: nothing may
-// alter the shipped kernel's behaviour before it has been through the full gate
-// ladder (M3 at both 1e-2 and 2e-3, M4, M5, and -- because this moves
-// publication order -- M9, which is not part of gate_ladder.sh and whose golden
-// needs re-golding at RG=1 after the exp_14 retile), and then a paired timing
-// win against a null arm in both construction orders. It shipped here briefly
-// as 1, which would have silently redefined the production binary for every
-// other experiment building from this file tonight, including the waterfall's
-// rung (c) "shipped binary" reference arm. exp_26 turns it on explicitly with
-// -DHK_GEMM_RS_MI300X_RELEASE_GROUP_PERSHAPE=<n>; the default stays 0 until its
-// result.md says otherwise.
+// GATED AND LANDED AS 2 (aug11/exp_26_release_pershape/result.md). The bar was:
+// the full ladder (M3 at both 1e-2 and 2e-3, M4, M5) plus -- because this moves
+// publication order -- M9 with CTRL_PUBLISH_EARLY still failing, plus a paired
+// timing win against a null arm in BOTH construction orders. All of it holds:
+// on 8192x4096x14336 the shipped value beats the incumbent in 80 of 80 paired
+// rounds, median -6.56%, against a null arm of -0.61% on the same shape, and it
+// is bit-identical to the incumbent everywhere.
+//
+// It briefly defaulted to 1 before any of that had been run, which would have
+// silently redefined the production binary for every other experiment building
+// from this file, including the waterfall's rung (c) "shipped binary" arm. That
+// was wrong then and the value below is only 2 now because the evidence exists.
 //
 // Values -- two spellings of the same rule, which do NOT measure the same:
 //
@@ -148,14 +149,17 @@
 //      counts. exp_09 recorded the same class of effect from the same variable:
 //      folded constant, known bound and runtime value are three schedules.
 //   2  the same rule spelled as a descending select over a COMPILE-TIME LADDER
-//      of group sizes, so rgroup is again one of a handful of literals.
+//      of group sizes, so rgroup is again one of a handful of literals. Its
+//      resource tuple is the incumbent's on all seven instantiations, to the
+//      register, and it adds between -1 and +7 instructions -- the extra rung
+//      and nothing else. THIS IS THE SHIPPED RULE.
 //
 // The ladder is `{RELEASE_GROUP, 2, 1}` -- a strict generalization of the
 // incumbent, one rung added. A CTA owning 3 tiles takes the 2 rung and its last
 // group is truncated to 1 by `emitted`, the same conservative treatment every
 // short CTA already gets.
 #ifndef HK_GEMM_RS_MI300X_RELEASE_GROUP_PERSHAPE
-#define HK_GEMM_RS_MI300X_RELEASE_GROUP_PERSHAPE 0
+#define HK_GEMM_RS_MI300X_RELEASE_GROUP_PERSHAPE 2
 #endif
 
 // exp_14 (E4b) tile screening. BM/BN/BK are template parameters, so unlike the
