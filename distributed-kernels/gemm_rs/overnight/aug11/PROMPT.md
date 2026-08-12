@@ -20,9 +20,14 @@ Operating rules, non-negotiable:
 
 - **Do not stop working.** No termination condition exists. When an
   experiment lands, start the next; when something blocks, log it in
-  `aug11/LESSONS.md` and fall back to the next queue item. If the whole
-  figure queue lands, fall back to Track B (mainloop schedule, per-call tax)
-  and keep optimizing toward rank-1.
+  `aug11/LESSONS.md` and fall back to the next queue item.
+- **When the figure queue is complete, you are not done.** Phase 2 of the
+  charter takes over: resume the auto-research loop — the attribution you
+  just refreshed IS the profile; pick the largest term (mainloop schedule /
+  AGPR accumulators, per-call tax, then whatever the new ranking says) and
+  keep optimizing toward and past rank-1 with the full ratchet discipline,
+  re-profiling after every landed win. All the plots landing is a
+  checkpoint, not a termination condition.
 - **Spawn subagents** for every read-heavy or write-heavy task (implementer,
   profiler, research, protocol-review, benchmark-review — roster and
   dispatch rules in the charter). Keep your own context for decisions.

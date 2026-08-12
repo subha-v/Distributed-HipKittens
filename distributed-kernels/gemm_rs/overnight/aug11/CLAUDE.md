@@ -40,16 +40,18 @@ epilogue; `NUM_REDUCER_CTAS = 32` reducers exist only because the reduction
 must run on the owner; the two biggest wins were a task-order change (WGM,
 −27.9% shape 6) and a signal-coarsening change (RELEASE_GROUP=4).
 
-## Mission queue (in order; existing numbering ends at exp_12 — start at exp_13)
+## Mission queue (in order; numbering starts at exp_20 — the live loop has
+## already taken exp_13/exp_14 under `overnight/experiments/`, so tonight's
+## figure experiments are exp_20+ under `overnight/aug11/` to avoid collision)
 
-1. **exp_13 — bottleneck attribution refresh (paper Q3, Simran's "what step
+1. **exp_20 — bottleneck attribution refresh (paper Q3, Simran's "what step
    is bottlenecking speed right now").** Re-run the macro-gated ablation
    (`exp_ablation.py`) and one `rocprofv3` counter pass at the CURRENT best
    config (WGM fix + RELEASE_GROUP=4 + prebound launch), all six shapes.
    The RESULTS.md ablation table predates WGM/E3 and is stale. Deliverable:
-   `exp_13_attribution/ablation.json` (shape × {full, GEMM, egress, reduce,
+   `exp_20_attribution/ablation.json` (shape × {full, GEMM, egress, reduce,
    sync, release} µs) + result.md ranking. Cheap; run first.
-2. **exp_14 — NanoFlow-Fig-7 analog on MI300X (paper Fig 2 / Q4).** Port the
+2. **exp_21 — NanoFlow-Fig-7 analog on MI300X (paper Fig 2 / Q4).** Port the
    spec from the codex branch (`fused_moe/overnight/aug11/
    exp_22_fig7_saturation/{plan,design}.md` — fetch read-only) to this
    kernel's shapes: (a) MFMA TFLOPS vs CTA count using this GEMM's mainloop
@@ -63,7 +65,7 @@ must run on the owner; the two biggest wins were a task-order change (WGM,
    `saturation.json` + knee summary. Pre-register: the emit saturates by
    8–16 CTAs; the concurrent curve sits below isolated by a measurable gap
    (the interference term); MFMA scales ~linearly to 304.
-3. **exp_15 — NanoFlow-v2-Fig-10 analog (paper Fig 3 / Q4).** Per-layer
+3. **exp_22 — NanoFlow-v2-Fig-10 analog (paper Fig 3 / Q4).** Per-layer
    resource timeline, one graded shape (use shape 5; shape 6 if time), three
    arms: (a) **reference GEMM+RCCL** via a torch-profiler/rocprofv3 kernel
    trace (each kernel interval maps to one resource strip — this arm needs no
@@ -74,7 +76,7 @@ must run on the owner; the two biggest wins were a task-order change (WGM,
    OFF); (c) rank-1 if its trace is obtainable without modifying the frozen
    submission — otherwise two arms and say so. Deliverables: `events.json`
    per arm + `timeline_bins.csv` + integral validation in result.md.
-4. **exp_16 — the knob waterfall, GEMM-RS column (paper Fig 4 / Q1 — the
+4. **exp_23 — the knob waterfall, GEMM-RS column (paper Fig 4 / Q1 — the
    money figure).** Same-run paired ladder, all six shapes, full gate ladder
    per rung: (a) pre-WGM order + per-tile release (the aug10 baseline
    config); (b) + WGM destination-spreading order; (c) + RELEASE_GROUP=4;
@@ -82,23 +84,44 @@ must run on the owner; the two biggest wins were a task-order change (WGM,
    exhibit. Deliverable: `waterfall.json` (rung × shape × mean µs + geomean).
    Rungs (a)–(c) are config/one-liner reverts of shipped changes — verify
    each rung's ISA fingerprint so a stale build cannot masquerade as an arm.
-5. **exp_17 — external ladders refresh (paper Q6).** Ours vs reference
-   GEMM+RCCL vs frozen rank-1, same-run interleaved, at the exp_16 winner,
+5. **exp_24 — external ladders refresh (paper Q6).** Ours vs reference
+   GEMM+RCCL vs frozen rank-1, same-run interleaved, at the exp_23 winner,
    both protocols (pipelined AND graded per-call — the graded number is the
    competition's ranking statistic; report both, never blend). Machinery
    exists (`tools/run_ours_evaluator.sh`, `tools/run_rank1_bench3.sh`,
    exp_10's repairs). Deliverable: `ladders.json`.
-6. **exp_18 — sensitivity readout (paper Q5).** No new runs needed if
-   exp_13/16 land: the six graded shapes ARE the size axis (64×7168×18432 →
+6. **exp_25 — sensitivity readout (paper Q5).** No new runs needed if
+   exp_20/23 land: the six graded shapes ARE the size axis (64×7168×18432 →
    8192×8192×29568). Deliverable: `sensitivity.md` + `knob_by_shape.json` —
    per-shape delta of each waterfall rung, plotted against that shape's
-   measured comm share from exp_13. Pre-register: order/granularity deltas
+   measured comm share from exp_20. Pre-register: order/granularity deltas
    grow with comm share; the NR curve stays flat everywhere.
 
-Stretch (only if the queue is green — Track B never dies): the mainloop
-schedule upgrade (E1 line: the K-loop is still correctness-first
-double-buffering; 46% of shape 6) and the per-call host tax — these chase
-rank-1, which remains the standing objective from the root charter.
+## Phase 2 — when the figure queue is done, the optimization loop RESUMES
+
+Getting every plot is not the end of the night; it is the checkpoint where
+the root charter's standing objective takes back over: **close the gap to
+rank-1 (1.098x at last push and falling) and keep widening the margin over
+reference GEMM+RCCL**, with the full ratchet discipline. The figure data
+tells you where to strike — exp_20's refreshed attribution is the profile of
+the current winner. The optimization queue, in expected-value order:
+
+1. **The GEMM mainloop schedule** — still the largest term (~46% of shape 6
+   at last attribution): the K-loop is correctness-first double-buffering
+   with a full `__syncthreads()` per iteration; E1(a) AGPR accumulators
+   should also clear the Gate-M2 spills on the 256/256/32 rows.
+2. **The per-call host tax** (exp_12's residue) — it is most of the remaining
+   graded-protocol gap to rank-1.
+3. **Whatever exp_20's new attribution ranks next** — after WGM and E3 the
+   old ranking (egress 32%, release 9%) is stale; re-rank before building.
+4. Re-sweep interactions at the new best (WGM x RELEASE_GROUP x NR) — wins
+   compose nonlinearly and the shipped constants were tuned one at a time.
+
+Loop rule: after every landed optimization, update the ratchet, append to
+`aug11/LESSONS.md`, commit+push, re-run the attribution stamps, and pick the
+next target from the NEW profile — never from tonight's stale one. If a
+build blocks, fall back to the next item; do CPU-side builds/ISA reads while
+GPU campaigns run. **The night has no done state.**
 
 ## Deliverable discipline — this is a figure-producing night
 
