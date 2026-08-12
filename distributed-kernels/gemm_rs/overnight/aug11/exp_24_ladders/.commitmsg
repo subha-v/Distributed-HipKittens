@@ -1,40 +1,37 @@
-exp_24: evaluator cross-check overturns half the verdict -- we do NOT beat reference under the real harness
+exp_24 re-measure at exp_26's binary: the gap to rank-1 did not move, and shape 5's win did not reproduce
 
-Instrument B (official eval.py, one process per rank, all three arms check: pass,
-no parser refusals) disagrees with instrument A on ARM ORDERING, which is the one
-thing it was built to test:
+Instrument A only, six shapes, five arms, both protocols, on fb3d670b (exp_26's
+landed PERSHAPE=2 build; the previous ladder ran the pre-exp_26 79599cce, so its
+ratios were the previous kernel's).
 
-                 A (graded)   B (evaluator)   B/A
-  ours              339.3         578.7      1.71x
-  reference         382.8         509.9      1.33x
-  rank-1            309.3         358.1      1.16x
+ours/rank-1 is 1.1165x graded / 1.1111x pipelined against 1.0971x / 1.1189x --
+both moves inside the 2% ratio-noise floor, so unchanged in both directions.
+exp_26's ~1.085x graded projection did NOT hold (measured 1.1165x best, 1.0924x
+median; shape 5 at 1.2831x against a projected ~1.20x). Shape 5, the only row
+whose rgroup changed, is flat graded (+0.99% under its 2.00% floor) and ~3%
+WORSE pipelined (outside its floor), against exp_26's paired -6.56% in 80 of 80
+rounds. exp_26's design is the stronger one -- paired same-run A/B versus my
+cross-run comparison -- so the decisive test is a sixth `ours_prev` arm inside
+instrument A's own pool. Until then the shape-5 win is unconfirmed under the
+protocol that grades us.
 
-  ours/rank1       1.0971        1.6159
-  ours/reference   0.8863        1.1349
+Cross-run graded us on the small shapes turns out not to be comparable at all:
+on shapes 1-2 every arm inflated together, including the no-op harness_floor
+kernel (+19%, +29%) and rank-1, and that arm's graded rsd runs 150-270%. Report
+within-run ratios across runs; report us only within a run. The ours/reference
+"improvement" from 0.8863x to 0.8522x is likewise the reference arm degrading
+(+36% graded, +48% pipelined on shape 1), not us gaining, and is not claimed.
 
-The inflation is arm-dependent rather than a shared constant, so it does not cancel
-in the ratios. Ordering disagrees on four of six shapes; A and B agree only on
-shapes 5 and 6, the two largest, where kernel time dominates per-call overhead.
+Also confirms and fixes an instrument defect the whole tree inherits: the cyclic
+arm rotation makes every arm first exactly once but still pins every arm PAIR at
+a constant relative offset, and it had ours_null permanently one slot behind
+ours. Replaced with a per-rep permutation seeded from the shape index only --
+identical on all 8 ranks, or the collective arms deadlock against each other.
+The null arm confirms it mattered: mean graded floor 1.62% -> 0.62%, shape 6
+4.31% -> 0.60%, reproducing exp_26's signature. Residual disclosed: 5 reps is
+too few for a shuffle to guarantee decorrelation (2 of 6 shapes still had an
+accidentally pinned pair, neither ours<->ours_null); a Latin square is the fix.
 
-Reading: instrument A's one-process/8-device shortcut is not a neutral
-reparametrization and it favours our kernel specifically. A launches eight devices
-from one process sharing one launch path and one IPC setup; the evaluator pays that
-cost eight times. Ours inflates most, rank-1 least. That is exp_12's per-call host
-tax appearing as a first-order term instead of a footnote, and it moves that item up
-the optimization queue: under the protocol that actually grades us it is the largest
-single term separating us from rank-1.
-
-Neither instrument is discarded. A is the controlled one -- same-run interleaved,
-five arms including a null, full rotation, both protocols, a measured per-shape noise
-floor -- and is the right tool for attributing a difference to the kernel. B is the
-harness that grades us and is the right tool for stating where we stand. They answer
-different questions and must not be blended; A's ours/reference win must not be
-quoted as an evaluator result.
-
-Confidence is medium-high on direction, medium on magnitude: the flip is a 28-point
-swing, consistent across four shapes and monotone in shape size, but instrument B
-ran a single rotation with no repeat to bound drift. A second rotation with reversed
-arm order would settle it.
-
-rank-1's warm pass came out 0.97x its bench pass, confirming the repaired driver
-warms the JIT correctly and that the mandatory warm -> test -> bench order works.
+Instrument B was not re-run, per the dispatch. Its previous-binary captures are
+quarantined out of the aggregator's reach so they cannot read as this run's, and
+the 1.1349x evaluator finding stands unchanged against 79599cce.

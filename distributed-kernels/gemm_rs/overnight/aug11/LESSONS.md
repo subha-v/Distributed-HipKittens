@@ -1415,6 +1415,86 @@ Artifacts: `exp_21_saturation/{saturation.json,knees.json,saturation.csv,ceiling
   module and artifacts in the experiment directory). `sed -i` is safe where `scp`
   is not, because it renames instead of truncating.
 
+## exp_24 RE-MEASURE (instrument A at exp_26's shipped binary `fb3d670b…`)
+
+- **The gap to rank-1 did not move.** `ours/rank-1` 1.0971× → **1.1165×**
+  graded, 1.1189× → **1.1111×** pipelined (per-shape best, geomean). Both moves
+  are inside the ±2% ratio-noise floor: *unchanged*, in both directions.
+- **exp_26's ≈1.085× graded projection did NOT hold** — measured 1.1165× best /
+  1.0924× median; shape 5's graded ratio is 1.2831× against a projected ~1.20×.
+  The projection flagged itself as an arithmetic extrapolation from a pipelined
+  measurement, and the release saving did not survive the per-call protocol.
+- **exp_26's shape-5 −6.56% did not reproduce in instrument A**: +0.99% graded
+  best (under its 2.00% floor, no effect) and **+2.87% pipelined best**
+  (outside its 2.25% floor, i.e. worse). A ~9.5-point disagreement including
+  sign. exp_26's design is the stronger one — paired same-run A/B of the two
+  binaries — and mine is a cross-run comparison, which the same run proves is
+  drift-contaminated. **Treat the shape-5 win as unconfirmed under the graded
+  protocol until the two binaries are compared inside one pool** (add
+  `ours_prev` from exp_26's `ps0.so` as a sixth arm; one run settles it).
+- **Absolute graded µs is NOT comparable across runs on the small shapes.** On
+  shapes 1–2 every arm inflated together versus the previous ladder, including
+  the no-op `harness_floor` kernel (+19.2%, +29.3%) and rank-1 (+11.5%, +6.5%);
+  our +13.6%/+12.0% is that per-call constant moving, not the kernel, and the
+  same shapes moved only ~+1% under the pipelined protocol, which does not pay
+  the constant per call. `harness_floor` graded rsd is 194.8/153.0/274.2/266.9/
+  4.3/60.0% across the six shapes. **Report within-run ratios across runs;
+  report µs only within a run.** (This also re-kills the netted table: floor
+  spread 63.7%, `shape_independent=False`.)
+- **The apparent ours/reference "win" (0.8863× → 0.8522×) is not ours.** The
+  reference arm degraded +36% graded / +48% pipelined on shape 1 in this run
+  while our arms moved ~+1%. A ratio improves when the denominator gets worse;
+  say which happened before claiming it.
+- **The inherited cyclic arm rotation is defective, confirmed and fixed.**
+  `order[i] = arms[(rep + i) mod n]` makes every arm first exactly once — which
+  only removes an *absolute-position* bias. The *relative* offset between any
+  arm pair is `(j − k) mod n` in every rep, so `ours_null` sat permanently one
+  slot behind `ours`. **A complete rotation over all positions is not immunity
+  from a pairwise-neighbour effect.** Fixed with a per-rep permutation seeded
+  from the shape index only (never rank or wall clock — all 8 ranks must walk
+  the same order or the collective arms deadlock). The null arm confirms it
+  mattered: mean graded floor **1.62% → 0.62%**, shape 6 **4.31% → 0.60%**,
+  shape 5 2.00% → 0.41%, reproducing exp_26's signature. Residual: 5 reps is
+  too few for a shuffle to guarantee decorrelation — 2 of 6 shapes still had an
+  accidentally pinned pair (neither was `ours↔ours_null`). A Latin square over
+  the five positions is the proper fix.
+- **A build that dies mid-script can still print a "sha differs" pass.**
+  `harness/build.sh` arrived with CRLF, emitted only its first module, and the
+  freshness assertion downstream compared a `.so` that invocation had never
+  written. Delete the targets first so "the file exists" is a real result, and
+  check the build's rc before believing anything derived from its output.
+- **A verification that hardcodes what it verifies will fail on the kernel's
+  behalf.** `verify_rgroup.py` v1 retyped the graded table, got rows 3–4 wrong
+  (`2048×4096×12288` for `2048×2880×2880`, all bias flags inverted), both fell
+  to generic config row 0, and it reported FAIL on a correct binary. It now
+  imports `SCORED` from `ladder_mp.py`.
+- **`python3 -` with a heredoc that does not survive the remote transport exits
+  0 having done nothing.** A silent false pass on the exact assertion the check
+  existed to make. Put checks in files; never in heredocs through `nsh.ps1`.
+- **`LAD_KEEP` was never implemented in `run_ladders.sh`.** It does not delete
+  previous samples; it overwrites per shape, which is safe only if every shape
+  succeeds. A failed shape silently leaves the previous *binary's* file to be
+  parsed into the new ladder. Gate on content, not on the overwrite:
+  `finalize.sh` requires `rot_mode == "shuffle"` in all 48 sample files.
+- **I reintroduced the mid-run push hazard** already recorded above and it cost
+  a `rc=2` on a clean six-shape run (syntax error at `run_ladders.sh:454`, after
+  the data and the aggregate were safely written). Probe scripts must be pushed
+  **before** the launch.
+- **`tools/push.ps1` DESTROYS node-side results.** It `scp -r`s the whole
+  overnight tree including `*.json`, so pushing a script to the node overwrites
+  node artifacts with whatever stale copy the Windows worktree holds. It
+  replaced the fresh `ladders.json` (2 252 816 B) with the previous run's
+  (2 244 658 B), and the report text captured immediately afterwards was
+  generated from the wrong file — numbers that looked plausible and were the
+  *previous binary's*. Recoverable here only because the 48 per-rank sample
+  files under `raw/ladder/` exist solely on the node and so were never
+  overwrite candidates. **Two standing rules from this:** (1) `nsh.ps1 -Script`
+  copies the single script to `/tmp` itself, so use it ALONE to run something
+  remotely — it never needs a push; (2) pull results back (`scp` node → local)
+  before any subsequent push, and re-derive aggregates from raw samples rather
+  than trusting a synced aggregate. A `.json` in a synced tree is not a
+  durable artifact.
+
 ## Open validation gap
 
 - **`gemm_rs_mi300x_static_checks.py` has been dead since exp_02.** Its first
