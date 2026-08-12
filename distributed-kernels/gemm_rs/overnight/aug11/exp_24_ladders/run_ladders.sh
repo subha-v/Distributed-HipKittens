@@ -282,6 +282,7 @@ instrument_a() {
       -e LAD_OUT="$out/lad_s${s}" \
       -e LAD_ARMS="${LAD_ARMS:-}" \
       -e LAD_WARM_MS="${LAD_WARM_MS:-400}" \
+      -e LAD_ROT="${LAD_ROT:-shuffle}" \
       dhk-gemmrs bash -lc \
         "timeout --signal=TERM ${LAD_TMO:-1800} setsid python3 -u $D/ladder_mp.py \
          $s $ITERS $REPS $port $BURST $PIPE_ITERS" \

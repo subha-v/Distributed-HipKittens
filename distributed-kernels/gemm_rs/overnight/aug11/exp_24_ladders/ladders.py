@@ -565,9 +565,12 @@ def main():
             "null_arms": NULL_ARMS,
             "protocols": PROTOCOLS,
             "instrument_a": "ladder_mp.py -- five arms, one 8-process pool per "
-                            "shape, arm order cyclically rotated so every arm is "
-                            "first exactly once, protocol order flipped per rep, "
-                            "duration-based warmup, all 8 ranks pooled",
+                            "shape, arm order permuted per rep (LAD_ROT=shuffle; "
+                            "the earlier cyclic scheme held every arm PAIR at a "
+                            "constant relative offset, so a neighbour effect "
+                            "could not average out), protocol order flipped per "
+                            "rep, duration-based warmup, all 8 ranks pooled",
+            "rot_mode": "shuffle",
             "instrument_b": "the official evaluator via tools/run_ours_evaluator.sh, "
                             "tools/run_reference_arm.sh and "
                             "experiments/exp_10_rank1/r1_eval.sh, arm order rotated",

@@ -26,7 +26,7 @@ seven queue items produced data; exp_22's third arm is the only piece still owed
 |---|---|---|---|
 | Q3 attribution | exp_20 | shape 6: GEMM **992.2 µs (60.8%)**, of which only **421.2 µs is MFMA** → **~571 µs, 35% of the operation, is schedule** | `exp_20_attribution/ablation.json`, `counters.json` |
 | **Fig 2** saturation | exp_21 | the emit saturates at **C=16 of 304 CTAs = 5.3% of the machine** (single link at C=2); **protocol costs 0.440×** of egress at identical payload bytes | `exp_21_saturation/saturation.json` |
-| **Fig 3** timeline | exp_22 | RCCL baseline is **strictly serialized, zero overlap**: 243.2 GEMM / 43.4 bias / **241.3 RCCL = 45.7% comm share** | `exp_22_timeline/events_b0_reference.json` |
+| **Fig 3** timeline | exp_22 | **COMPLETE (2 arms).** MFMA and xGMI both live in **17/68 bins (25%)** for us vs **0/53 (0%)** for reference; our epilogue peaks **420.4 GB/s** vs RCCL's 244.4 on the same 58.72 MB = **1.72×** | `exp_22_timeline/events_ours_*.json`, `events_b0_reference.json`, `timeline_bins.csv` |
 | **Fig 4** waterfall | exp_23 | **1.113×** cumulative = **1.082× task order × 1.028× granularity**; 192/192 arms correct at both tolerances | `exp_23_waterfall/waterfall.json`, `stats.json` |
 | Q1 rung validity | exp_23 | four rungs are four binaries, distinguished at the sites their mechanisms predict | `exp_23_waterfall/fingerprints.json` |
 | Q5 sensitivity | exp_25 | **premise falsified in sign, then shown NOT IDENTIFIABLE** (mask ⟂ comm share confounded at ρ=±1.00) | `exp_25_sensitivity/knob_by_shape.json` |
@@ -142,9 +142,18 @@ at 99.9% full-64 B**, closing the egress-width axis; and `WRREQ_STALL` fell to
 
 **The ranking that matters** (shapes 5 and 6 carry the whole graded gap):
 GEMM mainloop **992 µs** on shape 6 and **305 µs** on shape 5 — dominant, 60.8%
-and 47.5%. Then XGMI (376 / 180), then sync (169 / 53). Release has collapsed to
-0.9% on shape 6 but is **10.2% on shape 5**, because grouping is switched off
-wherever a CTA owns fewer than 4 tiles — see LESSONS.
+and 47.5%. Then XGMI (376 / 180). Release was 10.2% on shape 5 — **exp_26 has since
+recovered ~43 µs of it**.
+
+> **READ THESE AS COUNTERFACTUALS, NOT RESIDENCIES.** A single-cut delta is "what
+> the kernel costs with this mechanism minus without it", including every
+> rescheduling effect the removal permits — **not** time spent in the phase. exp_22's
+> phase ring measures the producer credit-wait at **2.1 µs on shape 5** against this
+> table's **52.9 µs `sync`**, a 25× gap, with the ring firing 512 times with zero
+> drops. Both are correct about different questions. **`sync` is therefore NOT a
+> Phase 2 target**; the real back-pressure is `emit` (149.2 µs, bandwidth-shaped) and
+> `release` (52.1 µs, the `vmcnt(0)` drain). Use the ring for latency questions and
+> the ablation for "what would removing this buy".
 
 ## Where the kernel stands
 
@@ -373,7 +382,8 @@ exp_26 owns it (~32 µs on shape 5, ≈0.8% geomean) and is blocked on its fault
 | # | target | pool it attacks | expected | risk |
 |---|---|---|---|---|
 | 1 | **GEMM mainloop non-MFMA time** | **~571 µs** of shape 6's 992 µs GEMM pool is NOT MFMA occupancy (counter pass: only 421.2 µs is) — **35% of the whole operation**; ~204 µs on shape 5 | the only pool big enough to close the rank-1 gap, and it is a schedule problem, not a math-throughput one | high — rows 4/5/6 pinned at the 64 KB LDS cap, so `waves × k_iters` (16/112/464) is unreachable by retiling; needs single-buffered `BK` or an async pipeline |
-| 2 | `sync` — cross-rank waits/credits/publishes | 168.7 µs (shape 6), now 2nd-largest non-GEMM | untouched axis | medium |
+| ~~2~~ | ~~`sync`~~ — **REMOVED as a target.** exp_22's ring measures the producer credit-wait at **2.1 µs**, not 52.9 µs; the ablation delta was a counterfactual, not a residency | — | — |
+| 2 | **per-call host tax** — promoted by exp_24 §12 | under the **evaluator** ours inflates **1.71×** vs rank-1's 1.16×; the largest single term separating us from rank-1 on the protocol that grades us | exp_12 filed it as a residue; it is first-order | medium |
 | 3 | **exp_26: `RELEASE_GROUP_FULL_ONLY=0`** | 65.4 µs on shape 5 | ~32 µs ≈ 5% of shape 5, ~0.8% geomean | low — one build flag; but needs M9 re-golding and shape 5 added to M9's `CASES` |
 | 4 | XGMI on shape 4 specifically | **86.2 µs = 42.4%** of shape 4 | shape-specific; the profile is not uniform | medium |
 

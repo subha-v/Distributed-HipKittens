@@ -1241,6 +1241,81 @@ paired results re-examined. Note also that best-of-pass is the statistic that fa
 here — it compares two arms' luckiest rounds **from different draws**; the
 **within-round paired median** is what resolved.
 
+## exp_22 arm (b) — Fig 3 COMPLETE, and the overlap claim is quantified
+
+**The number the figure exists to produce:** on shape 5, MFMA occupancy and xGMI
+traffic are **both live in 17 of 68 bins — 25%** for our kernel, and in **0 of 53
+bins — 0%** for reference GEMM+RCCL. The baseline's three strips are mutually
+exclusive by construction; ours are not. That is the paper's overlap claim as a
+measurement rather than an argument.
+
+**And a second number that is arguably stronger:** our epilogue's emit strip peaks
+at **420.4 GB/s against a ~448 GB/s per-GPU xGMI ceiling**, while the reference's
+RCCL peaks at **244.4 GB/s** — moving **the same 58.72 MB**. The epilogue-carried
+payload reaches **1.72× the collective's peak egress**.
+
+Supporting gates: flag-OFF parity **PASS, 0 failures** (`off_absent` ≡
+`off_present` on all 7 instantiations, both matching the incumbent
+`98/104/136/246/248/91/92`); traced build correct at `1e-2` **and** `2e-3`
+(`max|diff| = 4.88e-4`) with **zero ring drops on 304/304 CTAs**; tick rate
+**agrees three ways within 0.27%** (in-situ 99.8879 ticks/µs at r² = 0.99984 vs
+exp_21's 99.7358 vs the sibling's 100.0). exp_26's landed change is directly
+visible in the trace: **512 emits to 272 releases** on shape 5, one per two tiles.
+
+## THE ±10% INTEGRAL GATE I DEMANDED WAS VACUOUS
+
+Residuals came back at **+3.4e-16 / −1.3e-16 / 0.0** on HBM / xGMI / FLOPs, and the
+agent correctly refused to present that as validation. **Bytes are analytic and
+distributed across bins proportionally, so re-summing them recovers the input by
+construction.** It is a genuine *conservation* check — it does exclude mass lost at
+bin edges — but it is not independent, and a ±10% tolerance is meaningless against
+an identity that closes at 1e-16.
+
+**The check that could actually have failed** is the ceiling comparison: the emit
+strip peaks at 420.4 GB/s **under** the ~448 GB/s xGMI ceiling and close to it,
+where a wrong byte model would very likely have punched through. That is the real
+validation and it is the one to state in the paper.
+
+**Lesson for gate design, and it applies well beyond this figure: a gate whose
+tolerance is far wider than its own arithmetic precision is not testing anything.**
+Before asserting a tolerance, ask what value of the input would make the check fail
+— if no realistic error can, the gate is decoration. I specified this one; it should
+have been "does any strip exceed its hardware ceiling", not "does the integral
+match the input it was computed from".
+
+## CORRECTION, and it changes how EVERY exp_20 number is read: a single-cut ablation delta is NOT phase residency
+
+The two instruments disagree by **25× on shape 5 and 58× on shape 6**: the in-kernel
+phase ring measures the producer credit-wait at **2.1 µs / 2.9 µs**, while exp_20's
+ablation prices `sync` at **52.9 / 168.6 µs**.
+
+**The ring is sound** — it fires 512 and 1024 times with zero drops, and the stamps
+bracket `wait_reuse_credit` plus its barrier exactly, verified in source. So this is
+not an instrument fault; the two measure **different quantities**:
+
+- **The ablation deletes the whole signalling mechanism and lets the schedule
+  re-form around the hole.** Its delta is "what the kernel costs *with* this
+  mechanism minus what it costs *without* it" — which includes every second-order
+  rescheduling effect the removal permits.
+- **The ring measures time actually spent inside the phase.** And the producer
+  **almost never blocks on a credit**: 2.1 µs of it.
+
+So the `sync` pool is **not producer stall time**, and **Phase 2 must not be pointed
+at a "52.9 µs sync pool" that is 2.1 µs at the producer.** Where the back-pressure
+actually sits, from the ring: **`emit` 149.2 µs (bandwidth-shaped)** and **`release`
+52.1 µs (the `vmcnt(0)` drain)** — the latter being exactly the axis exp_26 just
+paid out on, which is corroboration rather than coincidence.
+
+**This reading generalizes to the whole attribution table.** The single-cut deltas
+are *counterfactual costs*, not residencies; they overlap, they need not sum, and
+they can exceed the time anything spends in the named phase. They are the right
+instrument for "what would removing this buy" and the wrong one for "where is the
+kernel waiting". **`sync` is hereby removed as a Phase 2 target**, and the
+ring — not the ablation — is the instrument for latency questions.
+
+Useful bound that comes free: the xGMI strip's possible inflation from
+mis-attributed credit-wait is at most **1.4%**.
+
 ## Measurement discipline carried into the figure work
 
 - **The harness bias is per-allocation AND partly allocation-ORDER, not

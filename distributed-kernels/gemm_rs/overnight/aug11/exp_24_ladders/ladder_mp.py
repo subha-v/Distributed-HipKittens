@@ -34,6 +34,7 @@ Env:   LAD_OUT (output path stem), LAD_ARMS (csv subset), LAD_WARM_MS,
 import importlib.util
 import json
 import os
+import random
 import statistics
 import sys
 import time
@@ -313,9 +314,34 @@ def _worker(rank, shape_index, iters, reps, port, burst, pipe_iters, arm_keys,
 
         samples = {key: {"graded": [], "pipelined": []} for key in arms}
         rank0_flag = (rank == 0)
+        # Arm ordering. The inherited cyclic scheme -- order[i] = arms[(rep + i)
+        # mod n] -- makes every arm FIRST exactly once, which removes an
+        # absolute-position bias, but it leaves the RELATIVE offset between any
+        # two arms at the constant (j - k) mod n in every rep. So "arm j always
+        # runs one slot after arm k" is never broken up, and a neighbour effect
+        # (L2 state, xGMI queue depth, RCCL residue) lands as a fixed offset on
+        # that pair instead of averaging out. exp_26 caught exactly this: its
+        # null arm, which cannot differ in behaviour, read -2.29% on shape 6 in
+        # 57 of 64 rounds at p < 1e-4, and a per-round shuffle collapsed it to
+        # -0.61%. Here ours_null sat permanently one slot behind ours.
+        #
+        # The seed depends ONLY on the shape, never on rank or wall clock: all
+        # eight ranks must walk the identical order or the collective arms
+        # (reference, rank1) deadlock against each other.
+        rot_mode = os.environ.get("LAD_ROT", "shuffle")
+        rot_rng = random.Random(0x24A5 + shape_index)
+        orders = []
         for rep in range(reps):
-            shift = rep % len(arms)
-            order = arms[shift:] + arms[:shift]
+            if rot_mode == "cyclic":
+                shift = rep % len(arms)
+                orders.append(arms[shift:] + arms[:shift])
+            else:
+                perm = list(arms)
+                rot_rng.shuffle(perm)
+                orders.append(perm)
+        say(f"  arm-order mode={rot_mode} orders={orders}")
+        for rep in range(reps):
+            order = orders[rep]
             protos = (("graded", "pipelined") if rep % 2 == 0
                       else ("pipelined", "graded"))
             say(f"  rep {rep}: order={order} protos={protos}")
@@ -341,6 +367,7 @@ def _worker(rank, shape_index, iters, reps, port, burst, pipe_iters, arm_keys,
             "shape_label": f"{m}x{n}x{k}",
             "bias_forced": os.environ.get("VS_FORCE_BIAS") == "1",
             "iters": iters, "reps": reps,
+            "rot_mode": rot_mode, "arm_orders": orders,
             "pipe_iters": pipe_iters, "burst": burst,
             "warm_ms": warm_ms, "warm_calls": warm_calls,
             "is_rank0": rank0_flag,
