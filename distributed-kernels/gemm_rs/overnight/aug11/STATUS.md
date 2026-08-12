@@ -15,12 +15,22 @@ seven queue items produced data; exp_22's third arm is the only piece still owed
    **ordering disagrees on four of six shapes**. Our kernel pays the most, which
    makes the **per-call host tax the largest single term separating us from rank-1
    under the grading protocol** — no longer a residue. See exp_24 §12.
-2. **exp_26 landed a real optimization**: shape 5 **−6.56% (≈ −43 µs)**, 80/80
-   paired rounds in both allocation orders, full ladder green including M9,
-   bit-identical to the incumbent, register tuple unchanged. Pipelined geomean best
-   **203.78 → 200.00 µs**. The graded ratio at this config is **being re-measured
-   now** — exp_26's own ≈1.085× is an arithmetic projection from a pipelined
-   measurement and is explicitly not a graded measurement.
+2. **exp_26's optimization is UNCONFIRMED, and the ratchet did NOT move.** exp_26
+   measured shape 5 at **−6.56% in 80/80 paired rounds**; exp_24's re-measure on
+   that exact binary (`fb3d670b`, verified three ways) got **+0.99% graded** (inside
+   floor) and **+2.87% pipelined** (outside floor, i.e. *worse*) — a ~9.5-point
+   disagreement **including the sign**. Gap to rank-1: **1.1165× graded / 1.1111×
+   pipelined**, both **inside the ±2% ratio floor** versus the previous 1.0971× /
+   1.1189×. **No movement.** The decisive same-run paired test (`ours_prev` as a
+   sixth arm in one pool) is running. `PERSHAPE=2` stays meanwhile only because it
+   is bit-identical to the incumbent with an unchanged register tuple, so it risks
+   nothing while the question is settled.
+
+3. **A single instrument defect explains three separate "mysteries" from tonight**,
+   and it inflated the noise floors this whole session quoted — see LESSONS,
+   "the pairwise-offset artifact". Rotating arm order so every arm is first exactly
+   once still pins every *pair* at a constant offset. Fixing it collapsed the mean
+   graded null floor **1.62% → 0.62%** and shape 6's **4.31% → 0.60%**.
 3. **RE-MEASURED (exp_24 §remeasure, binary `fb3d670b`): the projection did NOT
    hold and the gap to rank-1 did not move.** `ours/rank-1` = **1.1165× graded /
    1.1111× pipelined**, against 1.0971× / 1.1189× on the pre-exp_26 binary — both
@@ -81,12 +91,17 @@ seven queue items produced data; exp_22's third arm is the only piece still owed
    cannot dispatch, and cannot be signalled. The predicate lived wrong in **eleven
    files**; use `tools/kfd_live.sh`.
 
-### Where Track B stands — it got its turn and it landed
+### Where Track B stands — a candidate shipped, but the ratchet has NOT moved
 
-**exp_26 shipped `RELEASE_GROUP_PERSHAPE = 2`.** Pipelined geomean best
-**203.78 → 200.00 µs**, entirely from shape 5's **−6.56%**. The release axis that
-exp_21 identified as the whole egress residue (protocol costs 0.440× of egress at
-identical payload bytes) paid out on the first attempt.
+**Honest headline: the gap to rank-1 is where the night started.** 1.1165× graded /
+1.1111× pipelined against 1.0971× / 1.1189×, both inside the ±2% ratio floor.
+
+**exp_26 shipped `RELEASE_GROUP_PERSHAPE = 2`** on a paired same-run A/B measuring
+shape 5 at **−6.56% in 80/80 rounds** with a full green ladder — but **exp_24's
+re-measure on that same binary did not reproduce it** and got +2.87% pipelined,
+outside the floor. Two instruments, opposite signs. **The win is unconfirmed, not
+withdrawn**, and the decisive same-run paired test is running. Do not quote
+203.78 → 200.00 µs as a landed improvement until it returns.
 
 Three things from it that outlive the win:
 

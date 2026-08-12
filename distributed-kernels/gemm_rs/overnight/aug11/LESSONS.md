@@ -1316,6 +1316,90 @@ ring — not the ablation — is the instrument for latency questions.
 Useful bound that comes free: the xGMI strip's possible inflation from
 mis-attributed credit-wait is at most **1.4%**.
 
+## ONE DEFECT EXPLAINS THREE SEPARATE MYSTERIES — the pairwise-offset artifact
+
+This is the deepest methodological finding of the session, and it was reached by
+three experiments independently hitting the same wall.
+
+**The defect.** A paired A/B that rotates arm order as `order = (r + i) mod n` — or
+equivalently `arms[shift:] + arms[:shift]` — makes **every arm first exactly once**,
+which feels like the textbook cure for order effects. It is not. Arm *j* still runs
+**exactly `(j − k) mod n` blocks after arm *k* in every single round of every pass**.
+So any effect that depends on what ran immediately before a block becomes a
+**constant offset on that pair** rather than noise that averages out. **A full
+rotation is not immunity; only decorrelating the pairwise offsets is.**
+
+**The three mysteries it explains, all previously logged separately in this file:**
+
+1. **exp_23's twin-pair false positive.** Two *identically configured* arms read
+   **+3.74 / +4.44 / +4.10 / +2.53%** on shape 6, consistently in **both**
+   construction orders — which the disjointness rule certified as "RESOLVED faster".
+   I recorded this as "one null twin is not enough, and cross-order consistency does
+   not rescue you". That conclusion was right, but **the cause was not per-allocation
+   chance — it was the pinned pairwise offset**, and cross-order consistency could
+   never have rescued it because the offset is structural.
+2. **exp_26's null arm** reading **−2.29% on shape 6 in 57 of 64 rounds at
+   p < 10⁻⁴** on behaviour that cannot differ. Fixed by a per-round shuffle → −0.61%.
+3. **exp_24's inflated noise floors.** Fixing the rotation collapsed the mean graded
+   null floor **1.62% → 0.62%**, shape 6 **4.31% → 0.60%**, shape 5 **2.00% → 0.41%**.
+
+**Consequence, and it is uncomfortable: the per-shape floors this project quoted all
+night were inflated by an instrument defect.** Both the published set
+(`1.34/0.56/0.61/2.41/2.17/4.28%`) and tonight's "widened" set
+(`2.82/2.09/1.74/0.85/4.97/4.44%`) are suspect. Tighter true floors mean several
+contrasts called "unresolved" tonight **may in fact be resolvable** — including
+exp_23's shape-6 granularity rung, which I reported as possibly unresolvable against
+a 4.28% floor that may really be 0.60%. **Every floor needs restating under the
+fixed rotation before the figures ship.**
+
+**Residual, honestly noted:** 5 reps is too few for a random shuffle to *guarantee*
+decorrelation — 2 of 6 shapes still had an accidentally pinned pair after the fix. A
+**Latin square over arm positions** decorrelates by construction rather than in
+expectation and is the proper fix.
+
+## exp_24 re-measure — THE RATCHET DID NOT MOVE, and exp_26's win did not reproduce
+
+Measured on exp_26's binary (`fb3d670b…`, verified three ways: differs from
+`79599cce…`, reproduced bit-for-bit by a from-scratch rebuild, and `rgroup` confirmed
+`1/1/1/1/2/4` from the live shape planner with a `PERSHAPE=0` recompile yielding a
+different object, so it is not dead code).
+
+| | previous | new | call |
+|---|---|---|---|
+| ours/rank-1 **graded** | 1.0971× | **1.1165×** | **unchanged** (+1.77%, inside the ±2% ratio floor) |
+| ours/rank-1 **pipelined** | 1.1189× | **1.1111×** | **unchanged** (−0.70%) |
+
+**exp_26's ≈1.085× graded projection did NOT hold** (1.1165× best / 1.0924× median),
+and **shape 5 did not reproduce**: graded **+0.99%** (inside its 2.00% floor, no
+effect) and pipelined **+2.87%/+3.06%**, *outside* its floor — i.e. **worse**,
+against exp_26's **−6.56% in 80 of 80 paired rounds**. A ~9.5-point disagreement
+**including the sign**.
+
+**Not resolved by preference.** exp_26's design is the stronger one — paired same-run
+A/B versus a cross-run comparison — so the win is **UNCONFIRMED under the graded
+protocol, not withdrawn**, and the decisive test is running: the pre-exp_26 build
+added as a sixth `ours_prev` arm **inside instrument A's own pool**, which makes it
+same-run paired. `PERSHAPE=2` stays meanwhile because it is bit-identical to the
+incumbent with an unchanged register tuple, so it carries no correctness or
+performance risk while the question is settled.
+
+**Cross-run graded µs is NOT comparable on the small shapes.** Shapes 1-2 moved
++13.6%/+12.0% — but **every arm inflated together**, including the **no-op
+`harness_floor` kernel at +19.2%/+29.3%** and rank-1 at +11.5%/+6.5% (graded rsd
+150-270%). Shape 1 is ~150 µs of which ~95-113 µs is the per-call constant, so a 19%
+shift there is the entire move; the same shapes moved only ~+1% pipelined. **Within-run
+ratios are comparable; cross-run absolute graded µs on small shapes are not.** This
+also retires an apparent improvement: `ours/reference` "improving" to 0.8522× is not
+ours — **reference degraded** +36% graded / +48% pipelined on shape 1.
+
+**A build false-pass worth guarding**: the first build died mid-script on CRLF in
+`harness/build.sh` and **still printed a "sha differs" line**, which reads as
+success. Assert the build completed before trusting a sha comparison.
+
+**`push.ps1` struck again**: it syncs `*.json` and **overwrote a fresh aggregate with
+the stale local copy**, recovered only by re-aggregating from node-only raw samples.
+Use `push_scoped.ps1`, and never push while a run is live.
+
 ## Measurement discipline carried into the figure work
 
 - **The harness bias is per-allocation AND partly allocation-ORDER, not
