@@ -36,6 +36,28 @@ namespace hk_moe::mps {
 // reachable in one executed path. Named here so kernel and adapter agree on it.
 #define K0P6_MPS_ERR_M7DONE 33554432     // 1<<25: mode-14 M7-done rendezvous
 
+// ---- exp_38: mode 14 IS COMPILE-TIME OPT-IN, AND THAT IS NOT TIDINESS --------
+// Merely making mode-14 code REACHABLE cost the mode-12 ratchet +726.9 us
+// (6,497.3 -> 7,224.2, same session, same config, same `production` denominator)
+// with mode 12's own source lines untouched. The mechanism is register pressure
+// and instruction scheduling in the SHARED functions mode 14 extends -- most of
+// all `mode_is_direct_accum`, which the M7 epilogue branches on, and
+// `k0p6_mps_task_done_maybe_defer`, which every task head runs. The visible
+// symptom was that exp_24's `vmcnt` injection bound went INERT: the g=353 vs
+// g=65 contrast collapsed from -613.5 us to -1.8 us while all four `vmcnt`
+// instantiations stayed present at identical counts, and every field of the
+// resource tuple still matched. So the tuple does not certify parity; only
+// `.text` byte-identity does.
+//
+// Everything mode 14 adds therefore sits behind this flag, and the flag defaults
+// OFF so that the DEFAULT build of this tree is `.text`-identical to rev 26.
+// Turn it on with -DK0P6_MPS_ENABLE_MODE14=1 to run exp_34's arms; that build is
+// the one that carries the +727 us, and it is a mode-14 measurement, not a
+// mode-12 one. Never publish a mode-12 number from a MODE14=1 binary.
+#ifndef K0P6_MPS_ENABLE_MODE14
+#define K0P6_MPS_ENABLE_MODE14 0
+#endif
+
 // ---- K0P6_D_MPS_STATE scalar word lanes -------------------------------------
 #define K0P6_MPS_ST_TICKET 0   // finish-order role tickets (agent monotonic)
 #define K0P6_MPS_ST_TAIL 1     // event tail ticket (monotonic, capacity-bound)
@@ -56,6 +78,59 @@ namespace hk_moe::mps {
 #define K0P6_MPS_TS_M2_DONE 6       // max(t)   over CTAs leaving the M2 barrier
 #define K0P6_MPS_TS_M6_DONE 7       // max(t)   over CTAs leaving M6
 #define K0P6_MPS_TS_COUNT 8
+
+// ---- exp_23: per-CTA phase event ring ---------------------------------------
+// Fixed slots, not a queue: cell (b, k) is the LAST time CTA b crossed boundary
+// k in this epoch. 256 CTAs x 16 slots x 8 B = 32 KiB, parked in the tail of
+// K0P6_D_MPS_STATE immediately after the 8 coarse uint64 cells, so there is no
+// new descriptor slot, no host-bridge signature change and no kernel ABI
+// change -- only the host allocation of slot 60 grows (the harness edit is
+// carried as exp_23_fig10_timeline/e23_ab.patch).
+//
+// DELIBERATELY NOT ZEROED BY M0. M0's reset loop covers ST_WORDS +
+// 2*TS_COUNT uint32 words; widening it would put a grid-wide 32 KiB store into
+// the reset path of an arm that ships with the ring off. The host zero-init is
+// the floor instead. That is sound because within one launch every CTA
+// rewrites each slot it owns on every epoch, so a final-epoch read is current,
+// and a slot a CTA never writes in any epoch (M7_DONE on a service CTA) stays
+// 0 and is read as "boundary never crossed" rather than as a stale time.
+#define K0P6_MPS_E23_SLOTS 16
+#define K0P6_MPS_E23_MAX_CTA 256
+#define K0P6_MPS_E23_CELLS (K0P6_MPS_E23_SLOTS * K0P6_MPS_E23_MAX_CTA)
+
+#define K0P6_MPS_E23_KSTART 0        // tier B
+#define K0P6_MPS_E23_M2_DONE 1       // tier A
+#define K0P6_MPS_E23_M5_DONE 2       // tier A
+#define K0P6_MPS_E23_M6_DONE 3       // tier A
+#define K0P6_MPS_E23_M7_DONE 4       // tier A
+#define K0P6_MPS_E23_SVC_ENTER 5     // tier C
+#define K0P6_MPS_E23_SVC_EXIT 6      // tier C
+#define K0P6_MPS_E23_M75_ENTER 7     // tier C
+#define K0P6_MPS_E23_M75_BAR 8       // tier C
+#define K0P6_MPS_E23_M75_EXIT 9      // tier C
+#define K0P6_MPS_E23_M8_ENTER 10     // tier B
+#define K0P6_MPS_E23_REDUCE_DONE 11  // tier A
+#define K0P6_MPS_E23_M9_DONE 12      // tier B
+#define K0P6_MPS_E23_META 15         // tier C: (role << 32) | task count
+
+// exp_38 DEMOTES THIS FROM 1 TO 0. The original plan was to ship the ring
+// compiled in and gate it at runtime on cfg.timestamps, on the strength of a
+// parity gate that compared RESOURCE TUPLES. exp_38 established that the tuple
+// does not certify parity: the mode-14 commit matched every field of it and
+// still cost the mode-12 ratchet +726.9 us. The ring was never GPU-timed, so it
+// is not accused -- it is simply held to the gate we now trust, `.text`
+// byte-identity against rev 26, which a compiled-in ring cannot meet by
+// construction (it adds a store to every stamped boundary). Build exp_23's
+// figure arms with -DK0P6_MPS_E23_RING=1 and treat that binary as its own arm.
+#ifndef K0P6_MPS_E23_RING
+#define K0P6_MPS_E23_RING 0
+#endif
+// Gate-only: fold `enable` to a compile-time true so the stamps cannot be
+// sunk behind a branch. This is how the "ring on" resource tuple is measured.
+// Never defined in a shipped build.
+#ifndef K0P6_MPS_E23_FORCE_ON
+#define K0P6_MPS_E23_FORCE_ON 0
+#endif
 
 // ---- packed config word (K0P6_D_MPS_CFG) --------------------------------------
 // [0:8)   C    reserved minimum-progress service CTAs (finish order)
@@ -295,8 +370,11 @@ inline constexpr std::uint32_t kCoarseKeepDrainBit = 0x80u;
 inline constexpr std::uint64_t kCoarseKeepDrainWordBit = 0x8000ull;
 inline constexpr std::uint32_t kRemoteAccumGLegalBits =
         kRemoteAccumGMask | kRemoteAccumDetectBit | kRemoteAccumThrottleBit |
-        kRemoteAccumSkipPartZeroBit | kRemoteAccumThrottleDepthMask |
-        kCoarseKeepDrainBit;
+        kRemoteAccumSkipPartZeroBit | kRemoteAccumThrottleDepthMask
+#if K0P6_MPS_ENABLE_MODE14
+        | kCoarseKeepDrainBit
+#endif
+        ;
 
 __host__ __device__ __forceinline__ bool mode_is_coarse(config c) {
     return c.mode == kModeCoarseReady;
@@ -313,9 +391,18 @@ __host__ __device__ __forceinline__ bool coarse_keeps_drain(config c) {
 // target construction in n2_phase2_gm_mps.cpp:329, the throttle accessors, the
 // power-of-two MAXTOK entry guard, and M8's consume-and-zero instantiation).
 // Its ONLY divergence from mode 12 is the readiness protocol.
+//
+// exp_38: the third term is the single highest-value line in this file to keep
+// behind the flag. Every `throttle_enabled`, `detect_dual` and epilogue-target
+// decision in phase 2 funnels through here, so a third comparison lengthens the
+// live range of the descriptor-derived mode in the exact block that carries the
+// `vmcnt` throttle. This is where the +726.9 us lived.
 __host__ __device__ __forceinline__ bool mode_is_direct_accum(config c) {
-    return c.mode == kModeRemoteAccum || c.mode == kModeDirectRows ||
-           c.mode == kModeCoarseReady;
+    return c.mode == kModeRemoteAccum || c.mode == kModeDirectRows
+#if K0P6_MPS_ENABLE_MODE14
+           || c.mode == kModeCoarseReady
+#endif
+        ;
 }
 
 __host__ __device__ __forceinline__ bool detect_dual(config c) {
@@ -356,7 +443,11 @@ __host__ __device__ __forceinline__ std::uint32_t throttle_depth_sel(config c) {
 // carry the ratchet's `g = 353`, or the waterfall comparison against mode 12
 // would silently also be an exp_24-A comparison.
 __host__ __device__ __forceinline__ bool skip_dead_part_zero(config c) {
+#if K0P6_MPS_ENABLE_MODE14
     return (c.mode == kModeRemoteAccum || mode_is_coarse(c)) &&
+#else
+    return c.mode == kModeRemoteAccum &&
+#endif
            (c.group_slices & kRemoteAccumSkipPartZeroBit) != 0u &&
            !detect_dual(c) && !c.pull_fallback;
 }
@@ -440,9 +531,14 @@ __host__ __device__ __forceinline__ bool config_is_valid(config c) {
         // are rejections, so a config either engages the mechanism or fails --
         // it is never silently ignored.
         if ((c.group_slices & kRemoteAccumSkipPartZeroBit) != 0u) {
+#if K0P6_MPS_ENABLE_MODE14
             if (c.mode != kModeRemoteAccum && !mode_is_coarse(c)) return false;
+#else
+            if (c.mode != kModeRemoteAccum) return false;
+#endif
             if ((c.group_slices & kRemoteAccumDetectBit) != 0u) return false;
         }
+#if K0P6_MPS_ENABLE_MODE14
         // exp_34: mode 14 deletes the per-row `row_ready` protocol, and the
         // dual-write detector's M8 instantiation is the one slot-mode path that
         // still POLLS it (KRN's m7_detect branch is tested before the
@@ -455,9 +551,14 @@ __host__ __device__ __forceinline__ bool config_is_valid(config c) {
         // otherwise a mistyped waterfall arm would LOOK like the control arm.
         if ((c.group_slices & kCoarseKeepDrainBit) != 0u &&
             !mode_is_coarse(c)) return false;
+#endif
     } else if (c.group_slices != 1u && c.group_slices != 2u &&
                c.group_slices != 4u && c.group_slices != 16u) return false;
+#if K0P6_MPS_ENABLE_MODE14
     if (c.mode > 14u) return false;
+#else
+    if (c.mode > 13u) return false;
+#endif
     // Mode 7 moves no payload into the slots, so M8 must take the pull path.
     if (c.mode == 7u && !c.pull_fallback) return false;
     if (mode_is_stream(c) && c.reserved_comm_ctas == 0u) return false;
@@ -552,6 +653,81 @@ __device__ __forceinline__ void ts_first(std::uint64_t* cell, bool enable) {
 __device__ __forceinline__ void ts_last(std::uint64_t* cell, bool enable) {
     if (!enable || cell == nullptr) return;
     atomicMax(reinterpret_cast<unsigned long long*>(cell), realtime_now());
+}
+
+// ---- exp_23: per-CTA phase event ring, accessors -------------------------------
+// Base of the ring: immediately past the 8 coarse uint64 cells.
+__device__ __forceinline__ std::uint64_t* e23_ring(std::uint64_t* ts_base) {
+    return (ts_base == nullptr) ? nullptr : (ts_base + K0P6_MPS_TS_COUNT);
+}
+
+// Plain 8 B store: not atomic, not volatile, no fence. Every call site is under
+// `tid == 0`, so (CTA, slot) has exactly one writer, and the only reader is the
+// host after the launch joins -- the join is the release edge.
+__device__ __forceinline__ void e23_mark(std::uint64_t* ts_base, int bid,
+                                         int slot, std::uint64_t t,
+                                         bool enable) {
+#if K0P6_MPS_E23_RING
+    if (!enable || ts_base == nullptr) return;
+    if ((unsigned)bid >= (unsigned)K0P6_MPS_E23_MAX_CTA) return;
+    e23_ring(ts_base)[bid * K0P6_MPS_E23_SLOTS + slot] = t;
+#else
+    (void)ts_base; (void)bid; (void)slot; (void)t; (void)enable;
+#endif
+}
+
+// FUSED coarse + per-CTA stamp. THE WHOLE POINT IS THE SINGLE CLOCK READ: one
+// `t` feeds both the coarse atomicMax cell and this CTA's ring cell, which
+// makes `max over CTAs (ring cell) == coarse cell` an identity rather than an
+// approximation, and that identity is what proves the array was indexed into
+// the right cell in the right epoch.
+//
+// DO NOT rewrite a call site as `ts_last(cell, e); e23_mark(base, ...)`. That
+// compiles, it passes the resource tuple, the figure still looks right -- and
+// the two cells now come from two different clock reads, which silently demotes
+// the reconciliation check. Gate G7 (an `s_memrealtime` census in the ISA:
+// tier A must add exactly zero) exists solely to catch that substitution.
+//
+// exp_38: with the ring compiled OUT this must degenerate to EXACTLY rev 26's
+// `ts_last(cell, enable)` -- not to something equivalent-looking. The nullptr
+// test and the named `t` are part of the fused form and both are absent from
+// rev 26, so the ring-off definition forwards rather than sharing a body. That
+// is what makes the default build's `.text` match rev 26 byte for byte with the
+// call sites left in their fused form.
+#if K0P6_MPS_E23_RING
+__device__ __forceinline__ void ts_mark(std::uint64_t* cell,
+                                        std::uint64_t* ts_base, int bid,
+                                        int slot, bool enable) {
+#if K0P6_MPS_E23_FORCE_ON
+    (void)enable;
+    const bool en = true;
+#else
+    const bool en = enable;
+#endif
+    if (!en) return;
+    const std::uint64_t t = realtime_now();
+    if (cell != nullptr) {
+        atomicMax(reinterpret_cast<unsigned long long*>(cell),
+                  (unsigned long long)t);
+    }
+    e23_mark(ts_base, bid, slot, t, en);
+}
+#else
+__device__ __forceinline__ void ts_mark(std::uint64_t* cell,
+                                        std::uint64_t* ts_base, int bid,
+                                        int slot, bool enable) {
+    (void)ts_base; (void)bid; (void)slot;
+    ts_last(cell, enable);
+}
+#endif
+
+// Tier C metadata cell: (role << 32) | per-CTA task count, in slot 15. Not a
+// timestamp, so it does not go through ts_mark and reads no clock.
+__device__ __forceinline__ void e23_meta(std::uint64_t* ts_base, int bid,
+                                         std::uint32_t role,
+                                         std::uint32_t count, bool enable) {
+    e23_mark(ts_base, bid, K0P6_MPS_E23_META,
+             ((std::uint64_t)role << 32) | (std::uint64_t)count, enable);
 }
 
 // ---- producer side: M7 task-done hook body -------------------------------------

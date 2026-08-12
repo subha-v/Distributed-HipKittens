@@ -104,7 +104,7 @@
 // .cuh-only change, then confirm a new hsaco mtime under
 // ~/.cache/k0-mok-synthetic-prefill/mori/jit/gfx950_mlx5/*/ before believing
 // any number. The value is never read; only its presence in the hash matters.
-#define K0P6_MPS_SRC_REV 28
+#define K0P6_MPS_SRC_REV 30
 
 // exp_27: which activation-scale layout M6 reads, and therefore whether M5's
 // scale transpose exists at all.
@@ -342,7 +342,9 @@ __device__ __forceinline__ void k0p6_mps_task_done(int b, int nc, int tid,
   // correctness-path reader since exp_62's hoist (see k0p6_part_arrive). This
   // return is where ~16,720 relaxed RMWs + 16,720 releases + 16,720 stores per
   // rank per epoch go away.
+#if K0P6_MPS_ENABLE_MODE14
   if (k0p6_m == 14ull) return;
+#endif
   if (k0p6_m - 2ull <= 2ull || k0p6_m == 7ull || k0p6_m == 8ull ||
       k0p6_m == 9ull || k0p6_m == 12ull || k0p6_m == 13ull) {
     std::uint32_t* mps_q = (std::uint32_t*)k0p6_dread(k0p6_desc, K0P6_D_MPS_Q);
@@ -389,7 +391,11 @@ __device__ __forceinline__ void k0p6_mps_task_drain(const long long* k0p6_desc) 
   const unsigned long long m =
       ((unsigned long long)k0p6_dread(k0p6_desc, K0P6_D_MPS_CFG) >> 16 &
        0xFFull);
+#if K0P6_MPS_ENABLE_MODE14
   if (m != 12ull && m != 13ull && m != 14ull) {
+#else
+  if (m != 12ull && m != 13ull) {
+#endif
     asm volatile("s_waitcnt vmcnt(0)" ::: "memory");
   }
 }
@@ -409,9 +415,22 @@ __device__ __forceinline__ void k0p6_mps_task_done_maybe_defer(
     int b, int nc, int tid, const long long* k0p6_desc, k0p6_defer& p) {
   // One load of the packed config word serves both the mode field and exp_34
   // C's drain-retention bit (bit 15 of the word = 0x80 of `g`).
+  //
+  // exp_38: the rev-26 form derives `m` in one expression and never names the
+  // whole word. Keeping BOTH forms is not redundancy -- this hook runs at every
+  // M7 task head, so the extra named 64-bit live value is one of the two changes
+  // that moved the epilogue's schedule. The mode-14 form appears only when
+  // mode 14 is actually compiled in.
+#if K0P6_MPS_ENABLE_MODE14
   const unsigned long long w =
       (unsigned long long)k0p6_dread(k0p6_desc, K0P6_D_MPS_CFG);
   const unsigned long long m = (w >> 16 & 0xFFull);
+#else
+  const unsigned long long m =
+      ((unsigned long long)k0p6_dread(k0p6_desc, K0P6_D_MPS_CFG) >> 16 &
+       0xFFull);
+#endif
+#if K0P6_MPS_ENABLE_MODE14
   // exp_34 mode 14 buffers nothing, so `p.b0` stays -1 for the whole task loop
   // and k0p6_mps_task_flush_defer returns on its first line at every task head:
   // no deferred vmcnt(0), no deferred __syncthreads(), no publication.
@@ -432,6 +451,7 @@ __device__ __forceinline__ void k0p6_mps_task_done_maybe_defer(
     p.gcount = 0;
     return;
   }
+#endif
   if (m == 12ull || m == 13ull) {
     // Buffer the task identity UNIFORMLY (no tid guard): the flush at the
     // next task head reads it on every thread before publishing from tid0.
@@ -785,7 +805,9 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
         // MAXTOK is a hard requirement there (the donor's division would be a
         // spill machine at the pointer peak).
         (hk_moe::mps::mode_is_direct_accum(entry_cfg) &&
-         (MAXTOK & (MAXTOK - 1)) != 0) ||
+         (MAXTOK & (MAXTOK - 1)) != 0)
+#if K0P6_MPS_ENABLE_MODE14
+        ||
         // exp_34 mode 14: the 8 cross-rank M7-done words are parked in the
         // SPARE TAIL of `row_ready`, at index T_ext of each source segment --
         // one past the receive-row extent, so no mode can alias them (every
@@ -796,7 +818,9 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
         // 8*4096 = 32,768 against T_loc_max = 40,960.
         (hk_moe::mps::mode_is_coarse(entry_cfg) &&
          (k0p6_dread(desc, K0P6_D_ROW_READY) == 0 ||
-          world * MAXTOK >= T_loc_max))) {
+          world * MAXTOK >= T_loc_max))
+#endif
+        ) {
       if (bid == 0 && tid == 0) atomicOr(pperr, K0P6_MPS_ERR_CONFIG);
       return;
     }
@@ -1233,10 +1257,11 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
           (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_STATE);
       const hk_moe::mps::config cfg2 = hk_moe::mps::decode_config(
           (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
-      hk_moe::mps::ts_last(
-          (std::uint64_t*)(mps_state2 + K0P6_MPS_ST_WORDS) +
-              K0P6_MPS_TS_M2_DONE,
-          cfg2.timestamps);
+      // exp_23 tier A: same clock read feeds the coarse cell and this CTA's
+      // ring cell. ts_mark, never ts_last + e23_mark (see gate G7).
+      std::uint64_t* ts2 = (std::uint64_t*)(mps_state2 + K0P6_MPS_ST_WORDS);
+      hk_moe::mps::ts_mark(ts2 + K0P6_MPS_TS_M2_DONE, ts2, bid,
+                           K0P6_MPS_E23_M2_DONE, cfg2.timestamps);
     }
     // ---- Per-CTA fill/ns table from the (now settled, current-epoch) chunk words. Every CTA needs
     // ALL 64 fills because Pass B waves unpack rows from any source. SYSTEM atomic load invalidates
@@ -1467,9 +1492,9 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
           (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_STATE);
       const hk_moe::mps::config cfg5 = hk_moe::mps::decode_config(
           (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
-      hk_moe::mps::ts_last(
-          (std::uint64_t*)(mps_state5 + K0P6_MPS_ST_WORDS) + K0P6_MPS_TS_M5_DONE,
-          cfg5.timestamps);
+      std::uint64_t* ts5 = (std::uint64_t*)(mps_state5 + K0P6_MPS_ST_WORDS);
+      hk_moe::mps::ts_mark(ts5 + K0P6_MPS_TS_M5_DONE, ts5, bid,
+                           K0P6_MPS_E23_M5_DONE, cfg5.timestamps);
     }
   }
   if (debug_stop == 4) return;
@@ -1507,9 +1532,9 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
         (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_STATE);
     const hk_moe::mps::config cfg6 = hk_moe::mps::decode_config(
         (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
-    hk_moe::mps::ts_last(
-        (std::uint64_t*)(mps_state6 + K0P6_MPS_ST_WORDS) + K0P6_MPS_TS_M6_DONE,
-        cfg6.timestamps);
+    std::uint64_t* ts6 = (std::uint64_t*)(mps_state6 + K0P6_MPS_ST_WORDS);
+    hk_moe::mps::ts_mark(ts6 + K0P6_MPS_TS_M6_DONE, ts6, bid,
+                         K0P6_MPS_E23_M6_DONE, cfg6.timestamps);
   }
 
   // ================= M6.9: minimum-progress role selection (static tail) =======
@@ -1555,7 +1580,8 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
         std::uint64_t* mps_ts = (std::uint64_t*)(mps_state + K0P6_MPS_ST_WORDS);
         const hk_moe::mps::config m7cfg = hk_moe::mps::decode_config(
             (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
-        hk_moe::mps::ts_last(mps_ts + K0P6_MPS_TS_M7_DONE, m7cfg.timestamps);
+        hk_moe::mps::ts_mark(mps_ts + K0P6_MPS_TS_M7_DONE, mps_ts, bid,
+                             K0P6_MPS_E23_M7_DONE, m7cfg.timestamps);
       }
     }
   }
@@ -1743,6 +1769,12 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
   // M9 is untouched. Mode 14 inherits mode 12's slot lifetime verbatim: M8's
   // consume-and-zero is ordered before any peer's next-epoch accumulate by M9's
   // `release_signal_batch_agent()` + the 7 `retired` pokes. Do not weaken that.
+  //
+  // exp_38: mode 14's entry into this block adds an enclosing scope, a named
+  // `cfg75` and a `readfirstlane`d `coarse75` whose live range spans the whole
+  // rendezvous. Under MODE14=0 the block reverts to rev 26's single decode
+  // expression so that nothing here reaches M7's register allocation.
+#if K0P6_MPS_ENABLE_MODE14
   {
     const hk_moe::mps::config cfg75 = hk_moe::mps::decode_config(
         (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
@@ -1754,6 +1786,10 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
     const bool coarse75 = __builtin_amdgcn_readfirstlane(
         (int)hk_moe::mps::mode_is_coarse(cfg75)) != 0;
   if (hk_moe::mps::mode_is_parity_publish(cfg75) || coarse75) {
+#else
+  if (hk_moe::mps::mode_is_parity_publish(hk_moe::mps::decode_config(
+          (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG)))) {
+#endif
     unsigned int* row_remaining = (unsigned int*)k0p6_dread(desc, K0P6_D_ROW_REM);
     unsigned int* row_ready = (unsigned int*)k0p6_dread(desc, K0P6_D_ROW_READY);
     const unsigned int epoch32 = (unsigned int)k0p6_epoch(desc);
@@ -1785,6 +1821,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
       // that this rank's remote-accumulate payload is visible to its peers, which
       // is stage (3)'s job exactly. The grid barrier at (2) is what makes ONE
       // CTA's release able to carry all 256 CTAs' payload ordering.
+#if K0P6_MPS_ENABLE_MODE14
       if (coarse75) {
         if (bid == 0) {
           unsigned int* self_slot =
@@ -1799,6 +1836,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
           }
         }
       } else {
+#endif
       // Each CTA leader owns r = bid (mod nct) over the receive-row EXTENT. row_remaining!=0
       // selects live rows; holes are 0 and skipped.
       for (int r = bid; r < T_ext; r += nct) {
@@ -1822,8 +1860,11 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
         // soak/campaign from accumulating stale-nonzero holes that would bloat later epochs' pass.
         hk_moe::publish_relaxed<hk_moe::scope::agent>(row_remaining + r, 0u);
       }
+#if K0P6_MPS_ENABLE_MODE14
       }
+#endif
     }
+#if K0P6_MPS_ENABLE_MODE14
     // (4) exp_34 mode 14 CROSS-RANK POLL.
     //
     // It uses the same `poll_epoch_system` (bounded, `>=`, relaxed SYSTEM load)
@@ -1862,8 +1903,11 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
       }
       __syncthreads();
     }
+#endif
   }
+#if K0P6_MPS_ENABLE_MODE14
   }
+#endif
 
   // ================= M7.6b (mode 1): BULK PUSH after the parity barrier =========
   // Isolates the copy/layout improvement from the overlap improvement: all 256
@@ -1963,8 +2007,12 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
     // `mode_is_stream` gates (it has no drain and needs no pool), so it is asked
     // for HERE instead of being added to the predicate. See the note on
     // mode_is_stream in moe_mps_adapter.cuh.
+#if K0P6_MPS_ENABLE_MODE14
     const bool m8_coarse = hk_moe::mps::mode_is_coarse(m8cfg);
     const bool m8_dynamic = hk_moe::mps::mode_is_stream(m8cfg) || m8_coarse;
+#else
+    const bool m8_dynamic = hk_moe::mps::mode_is_stream(m8cfg);
+#endif
     std::uint32_t* mps_state = (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_STATE);
     std::uint64_t* mps_ts = (std::uint64_t*)(mps_state + K0P6_MPS_ST_WORDS);
     // exp_21 mode 12: detect (the dual-write detector) also pulls the
@@ -1989,8 +2037,11 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
     // the whole fail-closed path for the new protocol.
     const bool payload_ok = !hk_moe::error_bit_set_agent(
         pperr, 16777216 | 2097152 |
-        (m8_dynamic ? (K0P6_MPS_ERR_SERVICE | K0P6_MPS_ERR_CONFIG) : 0) |
-        (m8_coarse ? K0P6_MPS_ERR_M7DONE : 0));
+        (m8_dynamic ? (K0P6_MPS_ERR_SERVICE | K0P6_MPS_ERR_CONFIG) : 0)
+#if K0P6_MPS_ENABLE_MODE14
+        | (m8_coarse ? K0P6_MPS_ERR_M7DONE : 0)
+#endif
+        );
     const int T = payload_ok ? (int)k0p6_dread(desc, K0P6_D_T) : 0;
     unsigned short* out = (unsigned short*)k0p6_dread(desc, K0P6_D_OUT);
     const int* pull_ptr = (const int*)k0p6_dread(desc, K0P6_D_PULL_PTR);
@@ -2069,6 +2120,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
               batch * NT, T, epoch32, spin_limit, pull_ptr, pull_src,
               row_ready, T_loc_max, pperr, lane, cur, out, base_slot, base_pull);
         }
+#if K0P6_MPS_ENABLE_MODE14
       } else if (m8_coarse) {
         // exp_34 mode 14: mode 12's instantiation with Ready=true. Same address
         // form, same consume-and-zero, same arithmetic, same per-batch system
@@ -2090,6 +2142,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
               batch * NT, T, epoch32, spin_limit, pull_ptr, pull_src,
               row_ready, T_loc_max, pperr, lane, cur, out, base_slot, base_slot);
         }
+#endif
       } else if (hk_moe::mps::mode_is_direct_accum(m8cfg)) {
         // exp_21 mode 12: the owner CONSUMES-AND-ZEROES each accumulated slot
         // row (the retirement gate orders this zeroing before any peer's
@@ -2125,8 +2178,8 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
       }
     }
     if (tid == 0) {
-      hk_moe::mps::ts_last(mps_ts + K0P6_MPS_TS_REDUCE_DONE,
-                           m8cfg.timestamps);
+      hk_moe::mps::ts_mark(mps_ts + K0P6_MPS_TS_REDUCE_DONE, mps_ts, bid,
+                           K0P6_MPS_E23_REDUCE_DONE, m8cfg.timestamps);
     }
   }
 
