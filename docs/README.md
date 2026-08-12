@@ -2,6 +2,7 @@
 
 ## Distributed HipKittens
 
+- [Paper skeleton: scheduling, not placement](distributed/PAPER.md)
 - [Architecture and promotion gates](distributed/ARCHITECTURE.md)
 - [PGL and primitive contracts](distributed/PRIMITIVES.md)
 - [Source audit and donor selection](distributed/SOURCE_AUDIT.md)
