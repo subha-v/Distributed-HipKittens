@@ -39,8 +39,8 @@
     "instrument_b": "the official evaluator via tools/run_ours_evaluator.sh, tools/run_reference_arm.sh and experiments/exp_10_rank1/r1_eval.sh, arm order rotated",
     "bias_forced_all_shapes": true,
     "shapes_expected_instrument_a": 6,
-    "rotations_expected_instrument_b": 0,
-    "partial_run": true
+    "rotations_expected_instrument_b": 1,
+    "partial_run": false
   },
   "protocols": {
     "graded": {
@@ -86060,9 +86060,328 @@
     }
   },
   "evaluator_crosscheck": {
-    "rotations": {},
+    "rotations": {
+      "rot0": {
+        "ours/benchmark": {
+          "source": "/home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_24_ladders/raw/eval/rot0/ours/benchmark.popcorn.txt",
+          "check": "pass",
+          "per_shape": [
+            {
+              "shape": "64x7168x18432",
+              "best_us": 352.561,
+              "mean_us": 385.43788,
+              "median_us": null,
+              "worst_us": 611.922,
+              "std_us": 36.94855878062434,
+              "rsd_pct": 9.58612546868106,
+              "runs": 100,
+              "samples_us": []
+            },
+            {
+              "shape": "512x4096x12288",
+              "best_us": 352.1,
+              "mean_us": 392.70289,
+              "median_us": null,
+              "worst_us": 1169.544,
+              "std_us": 93.22256328991021,
+              "rsd_pct": 23.738700596247256,
+              "runs": 100,
+              "samples_us": []
+            },
+            {
+              "shape": "2048x2880x2880",
+              "best_us": 369.771,
+              "mean_us": 449.65218,
+              "median_us": null,
+              "worst_us": 3016.352,
+              "std_us": 322.4232860011281,
+              "rsd_pct": 71.70504232874576,
+              "runs": 100,
+              "samples_us": []
+            },
+            {
+              "shape": "4096x4096x4096",
+              "best_us": 483.64,
+              "mean_us": 559.9557,
+              "median_us": null,
+              "worst_us": 1174.82,
+              "std_us": 146.4035433567236,
+              "rsd_pct": 26.145558185535677,
+              "runs": 100,
+              "samples_us": []
+            },
+            {
+              "shape": "8192x4096x14336",
+              "best_us": 886.381,
+              "mean_us": 1410.5208,
+              "median_us": null,
+              "worst_us": 15244.611,
+              "std_us": 2040.6815806808422,
+              "rsd_pct": 144.67575243703192,
+              "runs": 100,
+              "samples_us": []
+            },
+            {
+              "shape": "8192x8192x29568",
+              "best_us": 1908.479,
+              "mean_us": 5952.96759,
+              "median_us": null,
+              "worst_us": 48478.881,
+              "std_us": 10986.298817996036,
+              "rsd_pct": 184.5516316341315,
+              "runs": 100,
+              "samples_us": []
+            }
+          ],
+          "geomean_us": 578.6871823698945,
+          "geomean_mean_us": 827.0408850083792,
+          "statistic_note": "geomean_us is over per-shape BEST; eval.py emits no median",
+          "label": "benchmark",
+          "is_warm": false,
+          "is_headline": true
+        },
+        "rank1/bench": {
+          "source": "/home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_24_ladders/raw/eval/rot0/rank1/bench.popcorn.txt",
+          "check": "pass",
+          "per_shape": [
+            {
+              "shape": "64x7168x18432",
+              "best_us": 213.662,
+              "mean_us": 224.74918,
+              "median_us": null,
+              "worst_us": 351.802,
+              "std_us": 21.999974157184088,
+              "rsd_pct": 9.788678275571057,
+              "runs": 100,
+              "samples_us": []
+            },
+            {
+              "shape": "512x4096x12288",
+              "best_us": 186.378,
+              "mean_us": 197.62448999999998,
+              "median_us": null,
+              "worst_us": 368.458,
+              "std_us": 26.85113234355699,
+              "rsd_pct": 13.586945799863667,
+              "runs": 100,
+              "samples_us": []
+            },
+            {
+              "shape": "2048x2880x2880",
+              "best_us": 200.991,
+              "mean_us": 251.80819,
+              "median_us": null,
+              "worst_us": 2317.222,
+              "std_us": 275.03480885045803,
+              "rsd_pct": 109.22393304620395,
+              "runs": 100,
+              "samples_us": []
+            },
+            {
+              "shape": "4096x4096x4096",
+              "best_us": 306.919,
+              "mean_us": 331.8407,
+              "median_us": null,
+              "worst_us": 760.707,
+              "std_us": 49.99305365879657,
+              "rsd_pct": 15.06537735087847,
+              "runs": 100,
+              "samples_us": []
+            },
+            {
+              "shape": "8192x4096x14336",
+              "best_us": 574.844,
+              "mean_us": 681.30895,
+              "median_us": null,
+              "worst_us": 1280.461,
+              "std_us": 180.4201158868202,
+              "rsd_pct": 26.48139524467134,
+              "runs": 100,
+              "samples_us": []
+            },
+            {
+              "shape": "8192x8192x29568",
+              "best_us": 1493.595,
+              "mean_us": 2636.62146,
+              "median_us": null,
+              "worst_us": 13317.046,
+              "std_us": 3153.763337502082,
+              "rsd_pct": 119.61380825225028,
+              "runs": 100,
+              "samples_us": []
+            }
+          ],
+          "geomean_us": 358.11089111806245,
+          "geomean_mean_us": 433.83212636862623,
+          "statistic_note": "geomean_us is over per-shape BEST; eval.py emits no median",
+          "label": "bench",
+          "is_warm": false,
+          "is_headline": true
+        },
+        "rank1/warm": {
+          "source": "/home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_24_ladders/raw/eval/rot0/rank1/warm.popcorn.txt",
+          "check": "pass",
+          "per_shape": [
+            {
+              "shape": "64x7168x18432",
+              "best_us": 215.855,
+              "mean_us": 241.713,
+              "median_us": null,
+              "worst_us": 1677.946,
+              "std_us": 146.87567828568075,
+              "rsd_pct": 60.76449271891903,
+              "runs": 100,
+              "samples_us": []
+            },
+            {
+              "shape": "512x4096x12288",
+              "best_us": 181.507,
+              "mean_us": 220.63317999999998,
+              "median_us": null,
+              "worst_us": 2132.947,
+              "std_us": 205.36719386185942,
+              "rsd_pct": 93.08082939377451,
+              "runs": 100,
+              "samples_us": []
+            },
+            {
+              "shape": "2048x2880x2880",
+              "best_us": 184.497,
+              "mean_us": 209.14169,
+              "median_us": null,
+              "worst_us": 788.529,
+              "std_us": 62.618818918124845,
+              "rsd_pct": 29.940859193652326,
+              "runs": 100,
+              "samples_us": []
+            },
+            {
+              "shape": "4096x4096x4096",
+              "best_us": 298.058,
+              "mean_us": 333.84386,
+              "median_us": null,
+              "worst_us": 1417.588,
+              "std_us": 111.10773436488289,
+              "rsd_pct": 33.28134726362285,
+              "runs": 100,
+              "samples_us": []
+            },
+            {
+              "shape": "8192x4096x14336",
+              "best_us": 560.941,
+              "mean_us": 617.5443100000001,
+              "median_us": null,
+              "worst_us": 1422.798,
+              "std_us": 132.95302611898632,
+              "rsd_pct": 21.52930955172857,
+              "runs": 100,
+              "samples_us": []
+            },
+            {
+              "shape": "8192x8192x29568",
+              "best_us": 1489.064,
+              "mean_us": 2234.17544,
+              "median_us": null,
+              "worst_us": 13222.065,
+              "std_us": 2535.515443875107,
+              "rsd_pct": 113.48775026705633,
+              "runs": 100,
+              "samples_us": []
+            }
+          ],
+          "geomean_us": 348.762157259831,
+          "geomean_mean_us": 415.39063987053413,
+          "statistic_note": "geomean_us is over per-shape BEST; eval.py emits no median",
+          "label": "warm",
+          "is_warm": true,
+          "is_headline": false
+        },
+        "reference/benchmark": {
+          "source": "/home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_24_ladders/raw/eval/rot0/reference/benchmark.popcorn.txt",
+          "check": "pass",
+          "per_shape": [
+            {
+              "shape": "64x7168x18432",
+              "best_us": 318.029,
+              "mean_us": 390.20858000000004,
+              "median_us": null,
+              "worst_us": 1968.417,
+              "std_us": 203.2201089699073,
+              "rsd_pct": 52.07986686758843,
+              "runs": 100,
+              "samples_us": []
+            },
+            {
+              "shape": "512x4096x12288",
+              "best_us": 331.036,
+              "mean_us": 405.9078,
+              "median_us": null,
+              "worst_us": 1756.624,
+              "std_us": 180.3866173626956,
+              "rsd_pct": 44.44029342690523,
+              "runs": 100,
+              "samples_us": []
+            },
+            {
+              "shape": "2048x2880x2880",
+              "best_us": 325.971,
+              "mean_us": 395.53737,
+              "median_us": null,
+              "worst_us": 2508.272,
+              "std_us": 227.82880105805012,
+              "rsd_pct": 57.59981694221462,
+              "runs": 100,
+              "samples_us": []
+            },
+            {
+              "shape": "4096x4096x4096",
+              "best_us": 401.594,
+              "mean_us": 466.98457,
+              "median_us": null,
+              "worst_us": 2488.104,
+              "std_us": 229.26869634915604,
+              "rsd_pct": 49.0955614120518,
+              "runs": 100,
+              "samples_us": []
+            },
+            {
+              "shape": "8192x4096x14336",
+              "best_us": 749.786,
+              "mean_us": 799.18655,
+              "median_us": null,
+              "worst_us": 2433.055,
+              "std_us": 198.77833187472035,
+              "rsd_pct": 24.872582236865764,
+              "runs": 100,
+              "samples_us": []
+            },
+            {
+              "shape": "8192x8192x29568",
+              "best_us": 1701.29,
+              "mean_us": 1790.27291,
+              "median_us": null,
+              "worst_us": 3064.246,
+              "std_us": 175.7239374562647,
+              "rsd_pct": 9.81548324139389,
+              "runs": 100,
+              "samples_us": []
+            }
+          ],
+          "geomean_us": 509.92225614983215,
+          "geomean_mean_us": 589.2464097033434,
+          "statistic_note": "geomean_us is over per-shape BEST; eval.py emits no median",
+          "label": "benchmark",
+          "is_warm": false,
+          "is_headline": true
+        }
+      }
+    },
     "parse_errors": [],
-    "skipped_test_mode": []
+    "skipped_test_mode": [
+      "/home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_24_ladders/raw/eval/rot0/ours/test.popcorn.txt",
+      "/home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_24_ladders/raw/eval/rot0/rank1/test.popcorn.txt",
+      "/home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_24_ladders/raw/eval/rot0/reference/test.popcorn.txt"
+    ]
   },
   "prior_denominator": {
     "source": "exp_14 result.md section 8, same-run graded, best-of-arm",

@@ -180,7 +180,15 @@ Null arm (`ours_null`) geomean: 339.25 µs graded / 210.21 µs pipelined — 0.0
 and 0.20% from `ours`. Every ratio above clears the floor by more than an order
 of magnitude at the geomean; **per shape it is not that simple, see §2.4.**
 
-Three things this run changes:
+**And the cross-check overturns the second half of that verdict.** Under the
+official evaluator — one process per rank, the competition's own topology — the
+ordering flips: `ours/rank1` is **1.6159×** and `ours/reference` is **1.1349×**, so
+**we do not beat reference GEMM+RCCL under the harness that actually grades us.**
+The inflation from instrument A to instrument B is not a shared constant; it is
+**arm-dependent** (ours 1.71×, reference 1.33×, rank-1 1.16×), and our kernel pays
+the most. Full analysis in §12; this is the finding to act on.
+
+Four things this run changes:
 
 1. **The graded/pipelined dilution is real at the geomean but NOT uniform per
  shape.** Graded understates our gap to rank-1 by 18.4% of the gap (best) /
@@ -194,6 +202,10 @@ Three things this run changes:
  The geomean win is carried by the small and mid shapes.
 3. **The netted table is dropped**, on both of the conditions the dispatch named
  — see §2.2.
+4. **Instrument A's topology flatters us specifically.** The one-process /
+ 8-device shortcut is not a neutral scaling of all arms, so instrument A's
+ absolute values and its `ours/reference` win cannot be quoted as evaluator
+ results. §12.
 
 ## 2. The ladder
 
@@ -327,7 +339,7 @@ across runs: the geomean is much more stable than its terms.
 | 4 | *(re-registered after the quick run)* pipelined ratio WORSE than graded, i.e. graded dilutes in our favour | **HELD at the geomean, FAILED per shape.** Geomean compression +18.4% (best) / +20.6% (median), so graded does flatter us overall. But per shape it holds on only 4 of 6, and on shapes 4 and 6 graded *overstates* the gap (−100.4%, −0.5%). Shape 2, the quick run's shape, is the extreme case at +88.4% |
 | 5 | `harness_floor` measures 57–99 µs, shape-independent | **HALF FAILED.** Magnitude right (86–157 µs median, 94.27 geomean best) but **not shape-independent**: 67.5% spread, scaling with operand size. This is what killed §2.2 |
 | 6 | `ours` vs `ours_null` <4.3% per shape, <2% geomean | **HELD.** Max 4.31% (shape 6 graded best, exactly at the published 4.28%); geomean 0.01% graded / 0.20% pipelined |
-| 7 | instrument B absolutes 25–45% above A; both agree on arm ORDERING | see §12 |
+| 7 | instrument B absolutes 25–45% above A; both agree on arm ORDERING | **BOTH HALVES FAILED, and this is the run's most important result.** Inflation is 16–71%, not 25–45%, and it is **arm-dependent**; the ordering **DISAGREES** on four of six shapes. See §12 |
 
 Expectation 4 is the one worth keeping: the *direction* of the dilution argument
 survives and is the headline for the paper's Q6, but the claim has to be made at
@@ -689,3 +701,80 @@ set, is an error rather than a mislabelled row.
 | `probe_stage.sh`, `probe_fixtures.sh`, `probe_protocol.sh`, `probe_rank1_driver.sh`, `probe_clocks.sh` | the read-only staging probes |
 | `logs/provenance.txt` | config fingerprint captured at run time |
 | `raw/ladder/`, `raw/eval/rot<N>/<arm>/` | every arm's raw output, copied out of `compbench/` before the next arm's `rm -rf` |
+| `report.py`, `report_b.py` | the two readouts; every number reported upward comes out of `ladders.json` via these |
+
+## 12. Instrument B — the official evaluator, and why it overturns half of §1
+
+One rotation (see §8.11), three arms, `eval.py` under the competition's real
+one-process-per-rank topology, 2026-08-12 08:24–08:58. Geomean of per-shape best,
+µs. All three arms `check: pass`. Parser refusals: **none**; three test-mode files
+skipped as expected (they carry no timing blocks).
+
+| arm / pass | 64 | 512 | 2048 | 4096 | 8192a | 8192b | geomean |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `ours/benchmark` | 352.6 | 352.1 | 369.8 | 483.6 | 886.4 | 1908.5 | **578.7** |
+| `reference/benchmark` | 318.0 | 331.0 | 326.0 | 401.6 | 749.8 | 1701.3 | **509.9** |
+| `rank1/bench` | 213.7 | 186.4 | 201.0 | 306.9 | 574.8 | 1493.6 | **358.1** |
+| `rank1/warm` *(throwaway)* | 215.9 | 181.5 | 184.5 | 298.1 | 560.9 | 1489.1 | 348.8 |
+
+rank-1's warm pass came out 0.97× its bench pass — i.e. the JIT was already warm
+and the two passes agree to 3%. That is the intended behaviour of the mandatory
+`warm → test → bench` order and confirms the repaired driver is warming correctly.
+
+### 12.1 The inflation is arm-dependent, which is the whole problem
+
+| arm | A (graded) | B (evaluator) | B/A |
+|---|---:|---:|---:|
+| ours | 339.3 | 578.7 | **1.71×** |
+| reference | 382.8 | 509.9 | 1.33× |
+| rank-1 | 309.3 | 358.1 | 1.16× |
+
+Pre-registration expected a roughly common 25–45% inflation, which would cancel in
+the ratios and leave ordering intact. It does not cancel:
+
+| ratio | instrument A | instrument B |
+|---|---:|---:|
+| `ours / rank1` | 1.0971 | **1.6159** |
+| `ours / reference` | 0.8863 | **1.1349** |
+
+**Ordering disagrees on four of six shapes.** A ranks `rank1 < ours < reference`
+on shapes 2–4 and puts us first on shape 1; B ranks `rank1 < reference < ours` on
+every shape. The two instruments agree only on shapes **5 and 6**, the two largest
+— exactly the shapes where kernel time dominates any per-call overhead.
+
+### 12.2 What this means, and what it does not
+
+It means **instrument A's one-process / 8-device shortcut is not a neutral
+reparametrization, and it favours our kernel specifically.** The reading consistent
+with everything else we know is per-call, per-process cost: instrument A launches
+all eight devices from one process and one host thread, so eight ranks share one
+launch path and one IPC setup, while the evaluator pays that cost eight times
+independently. Our kernel has the largest such cost of the three arms — which is
+exp_12's "per-call host tax" residue, now visible as a first-order term rather than
+a footnote. rank-1 inflates least (1.16×), so whatever it does per call is cheaper
+than ours.
+
+It does **not** mean instrument A is wrong or should be discarded. A is the
+controlled instrument: same-run interleaved, five arms including a null, full
+rotation, both protocols, a measured noise floor per shape. It is the right tool
+for *attributing* differences to the kernel. B is the right tool for *stating where
+we stand*, because B is the harness that grades us. The two answer different
+questions and this run is the first time we have both on the same night.
+
+**Do not average or blend them, and do not quote A's `ours/reference` win as an
+evaluator result.**
+
+### 12.3 Confidence, and what would settle it
+
+Medium-high on the direction, medium on the magnitude. Supporting it: the flip is
+large (a 28-point swing in `ours/reference`), consistent across four shapes,
+monotone in the right direction with shape size, and every arm passed its
+correctness check. Against it: **one rotation only**, so instrument B's arms ran
+sequentially rather than interleaved and there is no repeat to bound drift; and
+`ours` at 578.7 µs is above the ~345 µs this harness has historically read, so part
+of the gap is the topology and part could be run-to-run. A second rotation with the
+arm order reversed is the cheap next step and would settle both.
+
+**Action this implies for the optimization queue:** the per-call host tax moves up
+the ranking. Under the protocol that actually grades us it is not a residue, it is
+the largest single term separating us from rank-1.
