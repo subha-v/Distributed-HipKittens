@@ -176,6 +176,33 @@ static_assert(N2GM_P1_SCHED_GSCALE >= 0 && N2GM_P1_SCHED_GSCALE <= 15,
 #define N2GM_P1_N_DSWRITE 1
 #endif
 
+// MPS-DELTA (9): the memory layout the activation-scale gather reads.
+//
+//   0 (default) = donor. GROUP-major, A_scale[k * T + token], T = nvi[1] = T_ext
+//                 = 32,768, so one token's 56 scales are 131,072 B apart. The
+//                 96x56 gather touches 5,376 distinct 64 B lines to deliver
+//                 21,504 B: 16x line amplification, 344 KB per task.
+//   1           = TOKEN-major, A_scale[token * kKGroups + k]. A row is 224 B and
+//                 224*token mod 64 is always 0 or 32, so a row spans EXACTLY 4
+//                 lines: 384 lines for the same 21,504 B. 14.0x less line
+//                 traffic, and the gather sits between two __syncthreads() where
+//                 no MFMA can cover it.
+//
+// The two arrays hold the same values BY CONSTRUCTION, so this switch is
+// bit-identical by definition rather than by tolerance. M5's
+// hk_moe::mps::scale_transpose_row (moe_mps_adapter.cuh:298-305) writes
+// sc_dst[lane * T_ext + t] = sc_stage[t * 56 + lane] for every t in [0, T_ext)
+// and every lane < 56, and hkp_sort.hpp's scan() sets nvi[1] = T_loc = T_ext, so
+// the group-major array M6 reads today is a pure transposed copy of the
+// token-major one it reads at 1. The transposed copy has exactly one consumer,
+// which is this gather, so at 1 the M5 transpose is dead and is deleted.
+#ifndef N2GM_P1_ASCALE_TOKEN_MAJOR
+#define N2GM_P1_ASCALE_TOKEN_MAJOR 0
+#endif
+static_assert(N2GM_P1_ASCALE_TOKEN_MAJOR == 0 ||
+                  N2GM_P1_ASCALE_TOKEN_MAJOR == 1,
+              "N2GM_P1_ASCALE_TOKEN_MAJOR is a bool: 0 = donor group-major");
+
 __device__ __forceinline__ void n2_completion_observation_probe() {
 #if N2_FORCE_VMCNT0
   asm volatile("s_waitcnt vmcnt(0)" ::: "memory");
@@ -328,6 +355,39 @@ N2_P1_QUAL void N2_P1_NAME(
     }
     __syncthreads();
 
+#if N2GM_P1_ASCALE_TOKEN_MAJOR
+    // MPS-DELTA (9) arm 1. input_scale is TOKEN-MAJOR: input_scale[token * 56 + k].
+    // One row is kKGroups * 4 = 224 B contiguous, so a row spans exactly 4 lines
+    // (224*token mod 64 is 0 or 32, never 5 lines): 96 rows = 384 distinct lines
+    // against the group-major path's 96 * 56 = 5,376.
+    //
+    // float4, not float: the byte offset is 224*token + 16*c and 224 = 14*16, so
+    // 16 B alignment holds for every (token, c). Cuts 5,376 scalar loads to 1,344
+    // vector loads over the same 384 lines, and the trip count from 21 to 6.
+    //
+    // Row-fast (i from idx % kMrows), not quad-fast: consecutive lanes then write
+    // consecutive ascale_lds dwords, which is bank-conflict-free. Quad-fast would
+    // merge the line requests but stride the LDS writes by 4*kMrows dwords -- a
+    // multiple of 32 -- putting every lane of a quad in one bank.
+    static_assert(kKGroups % 4 == 0, "float4 scale quads need kKGroups % 4 == 0");
+    constexpr int kScaleQuads = kKGroups / 4;   // 14, no tail
+    for (int idx = tid; idx < kScaleQuads * kMrows; idx += kThreads) {
+      const int i = idx % kMrows;
+      const int c = idx / kMrows;
+      const int token = tok_lds[i];
+      // Same predicate as the donor, so pad sub-block rows still get exact +0.0f.
+      // Note T is no longer part of any ADDRESS in this arm, only of the mask.
+      float4 v = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+      if (token < T) {
+        v = *reinterpret_cast<const float4*>(
+            A_scale + static_cast<std::size_t>(token) * kKGroups + 4 * c);
+      }
+      ascale_lds[4 * c + 0][i] = v.x;
+      ascale_lds[4 * c + 1][i] = v.y;
+      ascale_lds[4 * c + 2][i] = v.z;
+      ascale_lds[4 * c + 3][i] = v.w;
+    }
+#else
     // input_scale live prefix is GROUP-MAJOR: input_scale[k128 * T + token].
     for (int idx = tid; idx < kKGroups * kMrows; idx += kThreads) {
       const int k = idx / kMrows;
@@ -337,6 +397,7 @@ N2_P1_QUAL void N2_P1_NAME(
                              ? A_scale[static_cast<std::size_t>(k) * T + token]
                              : 0.0f;
     }
+#endif
     __syncthreads();
 
     // Per-sub-block A base offset (a_row is the row WITHIN a 32-block).

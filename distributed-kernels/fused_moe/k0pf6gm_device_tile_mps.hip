@@ -101,7 +101,24 @@
 // .cuh-only change, then confirm a new hsaco mtime under
 // ~/.cache/k0-mok-synthetic-prefill/mori/jit/gfx950_mlx5/*/ before believing
 // any number. The value is never read; only its presence in the hash matters.
-#define K0P6_MPS_SRC_REV 25
+#define K0P6_MPS_SRC_REV 26
+
+// exp_27: which activation-scale layout M6 reads, and therefore whether M5's
+// scale transpose exists at all.
+//   0 = M6 reads the group-major `sc_dst` (slot 20) that M5 manufactures.
+//   1 = M6 reads the token-major `sc_stage` (slot 9) directly, and M5's
+//       transpose -- whose only consumer was that gather -- is deleted.
+// Both arrays hold the same values by construction (see MPS-DELTA (9) in
+// n2_phase1_gm_mps.cpp), so the two arms are BIT-IDENTICAL and the gate is
+// identical `[MOK GATE]` digits, not a tolerance.
+//
+// THE SHIPPING VALUE IS THIS LITERAL, and it lives in this .hip on purpose:
+// mori's JIT cache key hashes .hip/.cpp CONTENT and not compile flags, so
+// flipping the arm with -D would silently reuse the previous hsaco. The #ifndef
+// exists only so an out-of-tree genco ISA build can force an arm.
+#ifndef K0P6_MPS_ASCALE_TM
+#define K0P6_MPS_ASCALE_TM 0
+#endif
 
 // exp_56 (Option C): per-source SEGMENTED receive layout + chunk-counted release.
 //  * Row index = source*MAXTOK + fetch_add(dest_counter[source] on dest, 1)  (waitless).
@@ -406,7 +423,10 @@ __device__ __forceinline__ void k0p6_mps_task_done_maybe_defer(
 // flipping the mask with -D would silently reuse the previous hsaco. A runtime
 // K0_MPS_CFG bit is impossible -- sched_group_barrier takes immediates.
 #define N2GM_P1_SCHED_GSCALE 0
+// exp_27: MPS-DELTA (9). Forwards this .hip's shipping literal into the gather.
+#define N2GM_P1_ASCALE_TOKEN_MAJOR K0P6_MPS_ASCALE_TM
 #include "n2_phase1_gm_mps.cpp"
+#undef N2GM_P1_ASCALE_TOKEN_MAJOR
 #undef N2GM_P1_SCHED_GSCALE
 #undef N2GM_TASK_DONE_HOOK
 #undef N2_HOOK_CTX_ARG
@@ -1306,14 +1326,30 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
       // rank per epoch (T_ext * 7168 * 2 B) buys mode 12 nothing.
       //
       // The scale transpose is a DIFFERENT job that hkp_quant.hpp happens to
-      // fuse into the same body, and it IS live: it writes sc_dst, which M6
-      // reads (line 1321). Only the zero half is dropped, and only when the
-      // fail-closed guard holds (mode 12, no dual-write detector, no pull).
+      // fuse into the same body. exp_24 dropped only the zero half, and only
+      // when the fail-closed guard holds (mode 12, no dual-write detector, no
+      // pull); exp_27 drops the other half. The transpose existed to hand M6 a
+      // GROUP-major `sc_dst`, but `sc_stage` is already token-major and holds
+      // the same values, so at K0P6_MPS_ASCALE_TM=1 M6 reads `sc_stage`
+      // directly (the phase-1 call below) and the transpose has NO consumer:
+      // `sc_dst` is then written by nothing on this path and read by nothing.
+      // The fallback branch is deliberately untouched in both arms -- it keeps
+      // writing a now-unread `sc_dst`, which is harmless and keeps this a
+      // one-variable change.
       //
       // exp_56: zero/transpose over the segmented EXTENT (holes must be zeroed too, else stale
       // part rows corrupt combine). T_ext, not the live count.
       const hk_moe::mps::config cfg4 = hk_moe::mps::decode_config(
           (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
+#if K0P6_MPS_ASCALE_TM
+      if (!hk_moe::mps::skip_dead_part_zero(cfg4)) {
+        for (int t = w; t < T_ext; t += nw2) {
+          hkp::zero_part_scale_transpose<14>(part + (std::size_t)t * K0P6_H, sc_dst,
+                                             sc_stage + (std::size_t)t * K0P6_NG, t, T_ext,
+                                             K0P6_NG, lane2);
+        }
+      }
+#else
       if (hk_moe::mps::skip_dead_part_zero(cfg4)) {
         for (int t = w; t < T_ext; t += nw2) {
           hk_moe::mps::scale_transpose_row(sc_dst,
@@ -1327,6 +1363,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
                                              K0P6_NG, lane2);
         }
       }
+#endif
     }
 
     hkp::grid_barrier(bar, tid, bar_err);   // M4 publishes scratch/nvi/sei/pull_ptr
@@ -1359,7 +1396,17 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
   // ================= M6: N2 phase1 (G-stacked; a2_done arrivals per live sub-block) =========
   production_fused_moe::n2::n2p6gm_phase1_body(
       (const std::uint8_t*)k0p6_dread(desc, K0P6_D_A_DST),
+      // exp_27: the activation scales, in the layout MPS-DELTA (9) expects.
+      // Slot 9 (token-major `sc_stage`) and slot 20 (group-major `sc_dst`) hold
+      // the same values; both already exist in the descriptor, so this is not an
+      // ABI change. Slot 9 carries STRICTLY MORE ordering than slot 20: it is
+      // written by M2's unpack and published by the M3, M4 and both M5 barriers,
+      // where slot 20 was published by the M5 barrier alone.
+#if K0P6_MPS_ASCALE_TM
+      (const float*)k0p6_dread(desc, K0P6_D_SC_STAGE),
+#else
       (const float*)k0p6_dread(desc, K0P6_D_SC_DST),
+#endif
       (const std::uint8_t*)k0p6_dread(desc, K0P6_D_W13),
       (const float*)k0p6_dread(desc, K0P6_D_S13),
       (const int*)k0p6_dread(desc, K0P6_D_STI),
