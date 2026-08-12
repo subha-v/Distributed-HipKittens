@@ -35,9 +35,17 @@
 
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #ifndef HK_GEMM_RS_MI300X_NEGATIVE_CONTROLS
 #define HK_GEMM_RS_MI300X_NEGATIVE_CONTROLS 0
+#endif
+
+// Restores the donors' WGM = 4 grouped tile order. Exists as exp_08's control
+// arm; see the tile-order comment in the producer role for why 4 costs the two
+// large shapes most of their xGMI egress bandwidth.
+#ifndef HK_GEMM_RS_MI300X_WGM4
+#define HK_GEMM_RS_MI300X_WGM4 0
 #endif
 
 using namespace kittens;
@@ -204,14 +212,39 @@ void gemm_rs_mi300x_kernel(const mi300x_globals g) {
         const int tiles = num_pid_m * num_pid_n;
         const int k_iters = (K + BK - 1) / BK;
         const int tail_k = K_TAIL ? (K - (k_iters - 1) * BK) : BK;
-        constexpr int WGM = 4;
-        // XCD remap is a pure scheduling transform; the initial design keeps
-        // the natural loop stride and leaves XCD-tuned orders to the retune
-        // table (MI300X_DESIGN.md section 8). Coverage below is exact: each
-        // tile index is visited by exactly one producer CTA per launch.
+        // WGM is the xGMI egress-link-concurrency knob, not the L2-locality one
+        // it looks like. A producer CTA's whole tile lands on ONE peer --
+        // dest = (tm*BM)/(M/8) -- so the set of `tm` values live across the
+        // concurrently resident CTAs IS the set of egress links this rank is
+        // using at that instant.
+        //
+        // When the tile loop runs more than one round, the donors' WGM = 4
+        // makes in_group = 4*num_pid_n SMALLER than a round (128 vs 272 tiles
+        // on 8192x8192x29568), so a round spans ~2 M-groups and therefore only
+        // 2-3 of the 8 destinations: measured 117.44 MB of egress at 102 GB/s
+        // against 2.02 effective links x ~47 GB/s = 95 GB/s, i.e. the links in
+        // use were already saturated while five sat idle. WGM = num_pid_m makes
+        // the decode column-major (group and first collapse to 0, gsize to
+        // num_pid_m, so tm varies fastest), which puts all 8 destinations in
+        // every round -- 7.53 effective links.
+        //
+        // When `tiles <= num_gemm_ctas` every tile is resident at once, so the
+        // order cannot change egress concurrency at all and only its operand
+        // locality is left. There WGM = 4 is better and column-major is a
+        // measured regression, because column-major gives each XCD one A tile
+        // per 8 pids and every B tile (2 + 16 distinct operand tiles per XCD on
+        // 4096x4096x4096) where WGM = 4 gives it 4 + 8.
+#if HK_GEMM_RS_MI300X_WGM4
+        const int WGM = 4;
+#else
+        const int WGM = (tiles <= g.num_gemm_ctas) ? 4 : num_pid_m;
+#endif
+        // Coverage is unchanged and exact for either value: each tile index is
+        // visited by exactly one producer CTA per launch, so every ready cell
+        // is still published exactly once per rank per epoch.
 
         for (int t = pid; t < tiles; t += g.num_gemm_ctas) {
-            // grouped L2-friendly tile order (same family as both donors).
+            // grouped tile order (same family as both donors), WGM as above.
             const int in_group = WGM * num_pid_n;
             const int group = t / in_group;
             const int first = group * WGM;
@@ -234,13 +267,56 @@ void gemm_rs_mi300x_kernel(const mi300x_globals g) {
             m3::load_commit<NT>(As[0], abuf);
             m3::load_commit<NT>(Bs[0], bbuf);
             __syncthreads();
+            // exp_09 E1(c): the prefetch is UNCONDITIONAL, with a clamped
+            // source index, so the `if (more)` guards are gone.
+            //
+            // Those guards were the reason the k-loop body was six basic
+            // blocks (ten for K_TAIL=true): one for the issue, one for the
+            // MFMAs, one for the commit, plus the branches. A basic-block
+            // boundary is a scheduling-region boundary -- the machine
+            // scheduler cannot move an instruction across one, and neither can
+            // sched_group_barrier, which is exactly why arm A0 (the builtin
+            // alone, no restructure) changed not a single instruction of the
+            // schedule. Straight-line, the four global_load_dwordx4 sit in the
+            // same region as the 64 MFMAs and the address arithmetic can be
+            // hoisted across the whole iteration.
+            //
+            // Peeling the last iteration instead was tried first (arm A1) and
+            // is a hard fail: duplicating the MFMA block put both copies'
+            // fragment addresses in one live range and cost 30 VGPR spills /
+            // 50 scratch stores on the 256x256 rows, which sit at 246 of 256.
+            //
+            // Why the clamp is safe. On the last iteration `kn == k`, so the
+            // prefetch re-reads the tile this iteration is already consuming:
+            // a valid, in-bounds global read whose only effect is to land in
+            // As[(k+1)&1] / Bs[(k+1)&1]. That is the buffer iteration k-1 read
+            // and nothing reads it again -- the loop is over, and the epilogue
+            // does not touch A/B LDS until after its own __syncthreads(). The
+            // steady-state buffer invariant is untouched: iteration k ds_reads
+            // As[k&1] and ds_writes As[(k+1)&1], (k+1)&1 == (k-1)&1, and the
+            // __syncthreads() ending k-1 separates the two. Cost is one extra
+            // tile read per tile, against k_iters of 116..924.
             for (int k = 0; k < k_iters; ++k) {
-                const bool more = (k + 1 < k_iters);
                 // ISSUE only -- no vmcnt here, that is the entire mechanism.
-                if (more) {
-                    m3::load_issue<ST_A, NT>(abuf, g.a, {0, 0, tm, k + 1});
-                    m3::load_issue<ST_B, NT>(bbuf, g.b, {0, 0, tn, k + 1});
-                }
+                // Clamped, not guarded: a select, not a branch.
+                const int kn = (k + 1 < k_iters) ? (k + 1) : k;
+                m3::load_issue<ST_A, NT>(abuf, g.a, {0, 0, tm, kn});
+                m3::load_issue<ST_B, NT>(bbuf, g.b, {0, 0, tn, kn});
+                // exp_09 arm B: raise this wave's issue priority for the operand
+                // reads and the MFMA block, drop it for the commit. At 512
+                // threads and 1 CTA/CU there are 2 waves per SIMD competing for
+                // one issue port, so a wave grinding through ds_writes, waits
+                // and address arithmetic can starve its neighbour's MFMAs. The
+                // gfx950 donor does the same (gemm_rs_device_tile.cpp:884-935).
+                //
+                // The window is airtight without any scheduling hint, which
+                // matters because hints do not work here (arms A0, A2). MFMAs
+                // cannot leave through the top: they depend, through
+                // acquire_frags' anchor, on ds_reads that follow this setprio,
+                // and both setprio and the ds_read asm have side effects so
+                // their order is fixed. They cannot leave through the bottom
+                // either: acc_anchor ties the accumulator below them.
+                __builtin_amdgcn_s_setprio(1);
                 #pragma unroll
                 for (int kh = 0; kh < KH; ++kh) {
                     load(A_frag, subtile_inplace<WM, KS>(As[k & 1],
@@ -268,12 +344,28 @@ void gemm_rs_mi300x_kernel(const mi300x_globals g) {
                     }
                     mma_ABt(C_accum, A_frag, B_frag, C_accum);
                 }
+                // Keep every MFMA ABOVE the commit's vmcnt(0).
+                //
+                // Straight-lining the body (above) cost prefetch coverage, and
+                // the ISA says so precisely: with the commit in its own basic
+                // block the block boundary forced all 64 MFMAs to issue before
+                // the vmcnt(0), but in one region the scheduler sank 31 of
+                // them below it -- 21 even below the __syncthreads() -- leaving
+                // the global load only 33 MFMAs of cover instead of 64. The
+                // volatile asm chain cannot move (that is what pins the
+                // vmcnt(0)), so the MFMAs are what has to be held.
+                //
+                // sched_barrier(0x7F6) -- every class except MFMA allowed to
+                // cross -- was tried here first (arm A2) and did nothing: the
+                // vmcnt(0) still landed after 33 MFMAs. The anchor below is a
+                // data dependence on the accumulator instead of a hint, which
+                // is the mechanism that already works in this TU.
+                m3::acc_anchor(C_accum);
+                __builtin_amdgcn_s_setprio(0);
                 // COMMIT: vmcnt(0) lands what was issued before the MFMAs, then
                 // the ds_writes publish it and lgkmcnt(0) drains them.
-                if (more) {
-                    m3::load_commit<NT>(As[(k + 1) & 1], abuf);
-                    m3::load_commit<NT>(Bs[(k + 1) & 1], bbuf);
-                }
+                m3::load_commit<NT>(As[(k + 1) & 1], abuf);
+                m3::load_commit<NT>(Bs[(k + 1) & 1], bbuf);
                 __syncthreads();
             }
 
@@ -498,6 +590,82 @@ void dispatch_gemm_rs_mi300x(mi300x_globals g) {
 }
 
 // ================================================================================================
+// Prebound launch path (exp_12). Same POD, same dispatch, same one launch per
+// call; the only thing that differs is where the arguments come from.
+//
+// Why it exists. Under the graded protocol (barrier -> call -> synchronize ->
+// barrier) nothing overlaps the host path, so every microsecond spent in python
+// and pybind is charged to the score. pyutils' gl<> converter re-derives each
+// tensor argument from a python object on every call: __class__.__name__,
+// is_contiguous(), device.type, shape and data_ptr(), i.e. ~8 attribute
+// lookups, two python calls and two std::string comparisons per tensor, four
+// tensors deep. Measured in an 8-rank pool on this node that is ~7.5 us of the
+// ~23 us the host path costs, and all of it recomputes values that cannot
+// change between calls on a cached (rank, shape) state.
+//
+// So the invariant part is bound once, from the same place hk_submission builds
+// its descriptors, and the call site passes only what actually changes: the
+// three input pointers and the stream. The `gemm_rs_mi300x` binding below is
+// untouched -- the single-process validation harness still drives it, and the
+// two paths must construct byte-identical mi300x_globals.
+// ================================================================================================
+namespace prebound {
+
+// One table per process, indexed by an opaque handle the caller stores next to
+// the allocation it describes. Deliberately NOT a cache keyed on shape: a
+// module-global keyed on nothing is precisely the hazard that makes the
+// competitor's cached launch path raise on its second call with a new shape.
+// The GIL serializes every access, so no lock is needed.
+static std::vector<mi300x_globals>& slots() {
+    static std::vector<mi300x_globals> table;
+    return table;
+}
+
+static int configure(
+        int a_rows, int a_cols, int b_rows, int b_cols,
+        std::uintptr_t c_heap, int c_batch, int c_rows, int c_cols,
+        std::uintptr_t out, int out_rows, int out_cols,
+        std::uintptr_t c_heap_peers, std::uintptr_t sig,
+        std::uintptr_t sig_peers, std::uintptr_t ep_cell, std::uintptr_t err,
+        std::uintptr_t stream_ptr, std::uint64_t spin_limit,
+        int me, int M, int N, int K, int lrows, int cols, int eb,
+        int num_gemm_ctas, int ready_words, int packet_fast_path,
+        int config_row, int even_k) {
+    mi300x_globals g {
+        make_gl<_gl_A>(0, 1, 1, a_rows, a_cols),
+        make_gl<_gl_B>(0, 1, 1, b_rows, b_cols),
+        make_gl<_gl_C>((std::uint64_t)c_heap, c_batch, 1, c_rows, c_cols),
+        make_gl<_gl_C>((std::uint64_t)out, 1, 1, out_rows, out_cols),
+        c_heap_peers, sig, sig_peers, ep_cell, /*bias=*/0, err,
+        stream_ptr, spin_limit, me, M, N, K, lrows, cols, eb,
+        num_gemm_ctas, ready_words, packet_fast_path,
+        /*ctrl_flags=*/0u, /*ctrl_rank=*/0, /*ctrl_arg0=*/0,
+        config_row, even_k,
+    };
+    slots().push_back(g);
+    return (int)slots().size() - 1;
+}
+
+static void run(int handle, std::uintptr_t a, std::uintptr_t b,
+                std::uintptr_t bias, std::uintptr_t stream_ptr) {
+    if (handle < 0 || handle >= (int)slots().size()) {
+        throw std::runtime_error("GEMM-RS mi300x: bad prebound handle " +
+                                 std::to_string(handle));
+    }
+    mi300x_globals g = slots()[(std::size_t)handle];
+    // Only the three per-call inputs and the stream move. Writing raw_ptr is
+    // the whole of what make_gl would do here: gl<bf16,-1,-1,-1,-1> carries no
+    // TMA descriptors on gfx942, so its constructor is a field copy.
+    g.a.raw_ptr = reinterpret_cast<bf16*>(a);
+    g.b.raw_ptr = reinterpret_cast<bf16*>(b);
+    g.bias = bias;
+    if (stream_ptr != 0) g.stream_ptr = stream_ptr;
+    dispatch_gemm_rs_mi300x(g);
+}
+
+}  // namespace prebound
+
+// ================================================================================================
 // Bindings. The production module exposes exactly one function; the negative
 // control module (separate TU product) exposes only the control variants.
 // ================================================================================================
@@ -533,5 +701,13 @@ PYBIND11_MODULE(TK_MODNAME, m) {
         &mi300x_globals::ctrl_flags, &mi300x_globals::ctrl_rank,
         &mi300x_globals::ctrl_arg0, &mi300x_globals::config_row,
         &mi300x_globals::even_k);
+    // The prebound pair. Still exactly one kernel launch per call (gate 16),
+    // still the same dispatch table and the same POD; see the comment above
+    // namespace prebound for why the duck-typed path is too expensive to keep
+    // on the graded critical path.
+    m.def("gemm_rs_mi300x_configure", &prebound::configure,
+          "bind everything invariant for one (rank, shape); returns a handle");
+    m.def("gemm_rs_mi300x_run", &prebound::run,
+          "launch a configured handle with (a, b, bias, stream)");
 #endif
 }

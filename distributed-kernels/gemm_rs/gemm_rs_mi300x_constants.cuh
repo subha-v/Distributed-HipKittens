@@ -44,6 +44,12 @@ inline constexpr int ERR_REDUCER_READY   = 1 << 26;
 inline constexpr unsigned CTRL_DROP_PUBLICATION = 1u << 0;
 inline constexpr unsigned CTRL_REROUTE_SLOT     = 1u << 1;
 inline constexpr unsigned CTRL_DROP_CREDIT      = 1u << 2;
+// Inverts a release group's release/publication order. This is the control of a
+// control: the three above are all blind to release-vs-publication ordering,
+// which is the exact property a batched release puts at risk. It is observable
+// only against a poisoned heap and a bitwise golden (harness/m9_stale_slot.py);
+// if it does not fail there, that gate has no detection power.
+inline constexpr unsigned CTRL_PUBLISH_EARLY    = 1u << 3;
 
 // ---------------------------------------------------------------------------
 // Dependency-key layout helpers. constexpr => valid in both host and device

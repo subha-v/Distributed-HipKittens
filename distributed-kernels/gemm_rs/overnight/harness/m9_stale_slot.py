@@ -25,9 +25,11 @@ Four ingredients, all outside any timed region:
       frozen pre-E3 build driven over the same input sequence in the same
       process -- orders of magnitude stronger than 2e-3, and free.
   (c) STRESS. Many epochs, changing inputs, rotated launch skew, on the shapes
-      that actually batch: 8192x8192x29568 (4 tiles per producer CTA, 3-tile
-      tail) and the generic row at 8192x8192x28672 (121 tiles per CTA), which
-      the scored table never reaches.
+      that actually batch: 8192x8192x29568 (1024 tiles over 272 producers = 4
+      tiles per CTA with a 3-tile tail) and the generic row at 8192x8192x28672
+      (32768 tiles over 280 producers = up to 118 tiles per CTA), which the
+      scored table never reaches and which is the case that makes an unbounded
+      group rule unacceptable.
   (d) CTRL_PUBLISH_EARLY. The control of the control. A build that publishes the
       group BEFORE releasing it must be caught by (a)+(b)+(c). If it is not,
       this gate has no power over the property it exists to test and no batched
@@ -67,11 +69,21 @@ CTRL_PUBLISH_EARLY = getattr(rt, "CTRL_PUBLISH_EARLY", 1 << 3)
 CASES = [
     ((512, 4096, 12288, True), 600, "row 2, 2 tiles/CTA with a 1-tile tail"),
     ((8192, 8192, 29568, False), 60, "row 6, 4 tiles/CTA with a 3-tile tail"),
-    ((8192, 8192, 28672, False), 20, "generic row, >100 tiles/CTA"),
+    ((8192, 8192, 28672, False), 20, "generic row, up to 118 tiles/CTA"),
+    # The one-tile-per-CTA shapes. No release granularity can group anything on
+    # these, so the protocol review's condition C8 is that they come out
+    # bit-identical -- which is a claim about output, and therefore a claim this
+    # gate is the right place to test rather than to assert. Few epochs: they are
+    # here for the bitwise comparison, not for the race.
+    ((64, 7168, 18432, False), 30, "row 1, 1 tile/CTA, 216 idle CTAs (C8)"),
+    ((2048, 2880, 2880, True), 30, "row 3, 1 tile/CTA, 80 idle CTAs (C8)"),
+    ((4096, 4096, 4096, False), 30, "row 4, 1 tile/CTA, 16 idle CTAs (C8)"),
 ]
 
-# The publish-early control needs enough epochs to race, not a full soak.
-CONTROL_EPOCHS = [20, 20, 10]
+# The publish-early control needs enough epochs to race, not a full soak. The
+# one-tile shapes still get a few: publishing before the release is wrong there
+# too, it just cannot be made wrong by BATCHING.
+CONTROL_EPOCHS = [20, 20, 10, 10, 10, 10]
 
 failures = []
 notes = []

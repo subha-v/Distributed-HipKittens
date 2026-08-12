@@ -387,6 +387,65 @@
   Shape 1 was subject to the same bug but did not move: at m=64 it is
   latency-bound at ~181 µs, so tile geometry is not what sets its time.
 
+- **WIN (narrow): E3 release grouping ships as `RELEASE_GROUP = 4` with a
+  full-group condition. Shape 6 graded 1955.46 → 1877.9 µs (−4.0%), its gap to
+  rank-1 1.338× → 1.280×.** Pipelined geomean 229.33 → 225.62 (0.9838).
+  Reproducible to 0.05% across two runs, with rank-1's same-run anchor stable
+  to 0.54%.
+  **The geomean does not move beyond what the instruments resolve** (−0.70%
+  graded; rank-1's own geomean wandered ±1% between runs), because five of six
+  scored shapes own too few tiles per CTA to group at all. The win is exactly
+  the size the mechanism predicts: shape 6's release is 134.9 µs of 1777.9, so
+  eliminating three of four releases is ~5.7% predicted against 6.1% measured.
+  All four arms passed the full ladder plus M9. Single-shot latency improved
+  alongside throughput on shape 6 (1939.41 → 1877.76), so the protocol review's
+  pipelined-throughput risk did not materialize.
+
+- **NEGATIVE, and it is the reason the shipped rule has a condition: grouping a
+  PARTIAL group is a net loss.** Unconditional `N ∈ {2,4}` regresses
+  512×4096×12288 by **3.6-3.9%** across four independent paired runs against a
+  0.60% floor. Mechanism: deferring the first of two tiles' publication starves
+  that shape's reducers for half the producer phase, which costs more than
+  halving two releases can save. Grouping only where a CTA owns a *full* group
+  brings shape 2 back to +0.60%, i.e. exactly the null arm. **Batching a
+  producer's output is only free when there is enough of it to batch** — the
+  consumer's starvation is the hidden cost.
+
+- **TRAP, and it invalidates casual A/B on this harness: our pipelined A/B has a
+  POSITIONAL BIAS of up to 3.9% per shape and ~0.8% on the geomean.** Found by
+  running a **null arm** — two builds of `RELEASE_GROUP = 1` under different
+  module names, which are behaviourally identical by construction. An earlier
+  pass "measured" a 2% regression on 4096×4096×4096, **a shape with one tile per
+  CTA that cannot group at all**; that was the instrument, not the change.
+  Shape 5 is indeterminate for the same reason (floor 3.6%, and two
+  behaviourally identical arms differ by 2.2%).
+  **Run a null arm before believing any per-shape delta under ~4%.** This is
+  cheap, and it is the only thing that distinguishes a small real effect from
+  the harness.
+
+- **`CTRL_PUBLISH_EARLY` works and is now a real gate**: it fails on **6 of 6
+  shapes**, each firing a NaN plus a bitwise difference plus a `2e-3` failure.
+  Its power is concentrated at **epoch 1** — the window is widest on the first
+  launch, before the credit fast path throttles anything — so it is a
+  deterministic epoch-1 detector rather than a continuous one. That is
+  sufficient: one launch of a batched build with the order inverted is caught
+  with certainty. Shapes 1, 3 and 4 are now **gated** bit-identical to the
+  pre-E3 build (`torch.equal` on all 8 ranks over 30 poisoned epochs with
+  changing inputs) rather than argued to be.
+
+- **Disclosed, not absorbed: shape 3 moves +2.13% (floor 0.24%) and it is code
+  generation, not the release.** Whether `rgroup` is a folded constant, a known
+  bound, or a runtime value gives the 128×256 instantiation three different
+  schedules. Worth knowing that a control shape can move for reasons that have
+  nothing to do with the mechanism under test.
+
+- **The ungated E3 diff would have silently reverted exp_08.** `e3_wip_ungated.diff`
+  hard-coded `constexpr int WGM = 4` inside its decode helper — which would
+  have undone the 9.8% egress-concurrency win *and* made the publish loop decode
+  different tiles than the emit loop. The shipped helper takes `wgm` as a
+  runtime argument. Two independent bugs from one stale constant; this is the
+  third time an inherited `WGM`/table constant has bitten.
+
 - **The ~100 µs per-call cost is DECOMPOSED and the axis is CLOSED. Most of it
   was never ours.** Three extra timestamps inside the graded timed region
   (`perf_counter_ns` is `CLOCK_MONOTONIC`, so the eight ranks' stamps are

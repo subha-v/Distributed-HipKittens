@@ -48,6 +48,46 @@
 #define HK_GEMM_RS_MI300X_WGM4 0
 #endif
 
+// Release granularity (exp_05 / E3). The number of output tiles one producer
+// CTA emits between consecutive producer_drain_release() calls: the tile loop
+// becomes an outer group loop that emits RELEASE_GROUP tiles, issues ONE
+// release, then publishes all of the group's (tile, band) ready flags.
+//
+// It is a compile-time constant with a hard cap, and it is applied identically
+// on the generic config row. "One release per CTA per epoch" as an unbounded
+// rule is rejected: the generic row is BM=32/BN=64 with 280 producers, so
+// 8192x8192 is 32768 tiles = up to 118 tiles per CTA, and deferring every
+// publication to the end of the GEMM there would make every reducer spin
+// through the whole mainloop. 1 is the behaviour-preserving control arm.
+#ifndef HK_GEMM_RS_MI300X_RELEASE_GROUP
+#define HK_GEMM_RS_MI300X_RELEASE_GROUP 4
+#endif
+
+// Group only when a producer CTA owns at least RELEASE_GROUP tiles, i.e. only
+// when the group can be full. 0 groups unconditionally (exp_05's arm rg4).
+//
+// This is measured, not assumed. Batching trades release cost for publication
+// delay, and the two do not scale together:
+//
+//   * 8192x8192x29568 owns 4 tiles per CTA and 4 releases cost it ~135 us of
+//     1778. Collapsing them to one saved 5.96% (paired, null-arm floor 0.10%),
+//     which is within a few tenths of the 3/4 x 135 us the release attribution
+//     predicts. The reduce that now has to happen in the tail is only ~4.9% of
+//     the op and hides under the remaining producers.
+//   * 512x4096x12288 owns 2 tiles per CTA and is an 88 us operation whose
+//     reducers get 2 rounds of work. Deferring the first tile's publication to
+//     the end of the second COSTS 3.75% -- more than halving its releases can
+//     possibly save. 8192x4096x14336, also 2 tiles per CTA, is inside its own
+//     noise either way.
+//
+// So the rule keys on the one quantity that separates them and that the kernel
+// already knows: how many tiles a CTA owns. A partial group is never worth its
+// publication delay in anything measured here. Shapes with 3 tiles per CTA are
+// untested and take the ungrouped path, which is the conservative side.
+#ifndef HK_GEMM_RS_MI300X_RELEASE_GROUP_FULL_ONLY
+#define HK_GEMM_RS_MI300X_RELEASE_GROUP_FULL_ONLY 1
+#endif
+
 using namespace kittens;
 namespace m3 = hk_gemm_rs_mi300x;
 using G = kittens::group<m3::NUM_WARPS>;
@@ -122,6 +162,34 @@ __device__ __forceinline__ void mask_a_k_tail(RT &t, int tail_k) {
             }
         }
     }
+}
+
+// ================================================================================================
+// The tile -> (tm, tn) map, as ONE function.
+//
+// It exists as a function rather than as straight-line code inside the tile
+// loop because the deferred publish loop has to name the same tiles the emit
+// loop just wrote, and the alternatives are worse: journalling the group in LDS
+// is impossible (the emit staging buffer aliases the A/B double buffers, which
+// are already at the 65536 B ceiling for BM=BN=256) and journalling it in
+// registers demotes to scratch (a runtime-indexed local array on rows that
+// already sit at 246-248 of 256 VGPRs). Recomputing costs a handful of scalar
+// ops per published band and makes an emit/publish index drift impossible
+// without editing one shared expression.
+//
+// `wgm` is a runtime argument because exp_08 made it one: WGM = 4 when every
+// tile is resident at once, num_pid_m otherwise. Both callers must pass the
+// same value, which they do -- it is loop-invariant and computed once.
+// ================================================================================================
+struct tile_id { int tm, tn; };
+
+__device__ __forceinline__ tile_id decode_tile(int t, int num_pid_m,
+                                               int num_pid_n, int wgm) {
+    const int in_group = wgm * num_pid_n;
+    const int group = t / in_group;
+    const int first = group * wgm;
+    const int gsize = (num_pid_m - first < wgm) ? (num_pid_m - first) : wgm;
+    return {first + (t % in_group) % gsize, (t % in_group) / gsize};
 }
 
 // ================================================================================================
@@ -243,231 +311,321 @@ void gemm_rs_mi300x_kernel(const mi300x_globals g) {
         // visited by exactly one producer CTA per launch, so every ready cell
         // is still published exactly once per rank per epoch.
 
-        for (int t = pid; t < tiles; t += g.num_gemm_ctas) {
-            // grouped tile order (same family as both donors), WGM as above.
-            const int in_group = WGM * num_pid_n;
-            const int group = t / in_group;
-            const int first = group * WGM;
-            const int gsize = (num_pid_m - first < WGM) ? (num_pid_m - first)
-                                                        : WGM;
-            const int tm = first + (t % in_group) % gsize;
-            const int tn = (t % in_group) / gsize;
-
-            zero(C_accum);
-            // ---- double-buffered mainloop, issue/commit split ----------------
-            // Buffer lifetime, unchanged from the fused version: iteration k
-            // ds_reads As[k&1] and ds_writes As[(k+1)&1]; (k+1)&1 == (k-1)&1, so
-            // the buffer being written is the one iteration k-1 read, and the
-            // __syncthreads() ending iteration k-1 separates them. Both of
-            // iteration k's ds_read halves are drained (acquire_frags) before
-            // that barrier, and iteration k's ds_writes are drained by
-            // load_commit's trailing lgkmcnt(0), also before it.
-            m3::load_issue<ST_A, NT>(abuf, g.a, {0, 0, tm, 0});
-            m3::load_issue<ST_B, NT>(bbuf, g.b, {0, 0, tn, 0});
-            m3::load_commit<NT>(As[0], abuf);
-            m3::load_commit<NT>(Bs[0], bbuf);
-            __syncthreads();
-            // exp_09 E1(c): the prefetch is UNCONDITIONAL, with a clamped
-            // source index, so the `if (more)` guards are gone.
-            //
-            // Those guards were the reason the k-loop body was six basic
-            // blocks (ten for K_TAIL=true): one for the issue, one for the
-            // MFMAs, one for the commit, plus the branches. A basic-block
-            // boundary is a scheduling-region boundary -- the machine
-            // scheduler cannot move an instruction across one, and neither can
-            // sched_group_barrier, which is exactly why arm A0 (the builtin
-            // alone, no restructure) changed not a single instruction of the
-            // schedule. Straight-line, the four global_load_dwordx4 sit in the
-            // same region as the 64 MFMAs and the address arithmetic can be
-            // hoisted across the whole iteration.
-            //
-            // Peeling the last iteration instead was tried first (arm A1) and
-            // is a hard fail: duplicating the MFMA block put both copies'
-            // fragment addresses in one live range and cost 30 VGPR spills /
-            // 50 scratch stores on the 256x256 rows, which sit at 246 of 256.
-            //
-            // Why the clamp is safe. On the last iteration `kn == k`, so the
-            // prefetch re-reads the tile this iteration is already consuming:
-            // a valid, in-bounds global read whose only effect is to land in
-            // As[(k+1)&1] / Bs[(k+1)&1]. That is the buffer iteration k-1 read
-            // and nothing reads it again -- the loop is over, and the epilogue
-            // does not touch A/B LDS until after its own __syncthreads(). The
-            // steady-state buffer invariant is untouched: iteration k ds_reads
-            // As[k&1] and ds_writes As[(k+1)&1], (k+1)&1 == (k-1)&1, and the
-            // __syncthreads() ending k-1 separates the two. Cost is one extra
-            // tile read per tile, against k_iters of 116..924.
-            for (int k = 0; k < k_iters; ++k) {
-                // ISSUE only -- no vmcnt here, that is the entire mechanism.
-                // Clamped, not guarded: a select, not a branch.
-                const int kn = (k + 1 < k_iters) ? (k + 1) : k;
-                m3::load_issue<ST_A, NT>(abuf, g.a, {0, 0, tm, kn});
-                m3::load_issue<ST_B, NT>(bbuf, g.b, {0, 0, tn, kn});
-                // exp_09 arm B: raise this wave's issue priority for the operand
-                // reads and the MFMA block, drop it for the commit. At 512
-                // threads and 1 CTA/CU there are 2 waves per SIMD competing for
-                // one issue port, so a wave grinding through ds_writes, waits
-                // and address arithmetic can starve its neighbour's MFMAs. The
-                // gfx950 donor does the same (gemm_rs_device_tile.cpp:884-935).
-                //
-                // The window is airtight without any scheduling hint, which
-                // matters because hints do not work here (arms A0, A2). MFMAs
-                // cannot leave through the top: they depend, through
-                // acquire_frags' anchor, on ds_reads that follow this setprio,
-                // and both setprio and the ds_read asm have side effects so
-                // their order is fixed. They cannot leave through the bottom
-                // either: acc_anchor ties the accumulator below them.
-                __builtin_amdgcn_s_setprio(1);
-                #pragma unroll
-                for (int kh = 0; kh < KH; ++kh) {
-                    load(A_frag, subtile_inplace<WM, KS>(As[k & 1],
-                                                         {warp_row, kh}));
-                    load(B_frag, subtile_inplace<WN, KS>(Bs[k & 1],
-                                                         {warp_col, kh}));
-                    // Mandatory: every ds_read in this tree is inside an
-                    // asm volatile, so SIInsertWaitcnts never observes the LDS
-                    // event and emits no use-wait of its own. Nothing else
-                    // between these reads and the MFMAs waits on lgkmcnt. The
-                    // anchor is equally mandatory -- a bare wait is reorderable
-                    // past an MFMA and was, silently, on 14 of 17 shapes.
-                    m3::acquire_frags(A_frag, B_frag);
-                    // The A operand carries the only mask: whatever lands in
-                    // the K-padding columns of A is overwritten with exact
-                    // zeros before the MFMA (gates 3, 15). The threshold is
-                    // rebased into this half's local K coordinates; a half that
-                    // starts at or past the tail gets threshold 0, i.e. is
-                    // zeroed outright.
-                    if constexpr (K_TAIL) {
-                        if (k == k_iters - 1) {
-                            const int th = tail_k - kh * KS;
-                            mask_a_k_tail(A_frag, th > 0 ? th : 0);
-                        }
-                    }
-                    mma_ABt(C_accum, A_frag, B_frag, C_accum);
-                }
-                // Keep every MFMA ABOVE the commit's vmcnt(0).
-                //
-                // Straight-lining the body (above) cost prefetch coverage, and
-                // the ISA says so precisely: with the commit in its own basic
-                // block the block boundary forced all 64 MFMAs to issue before
-                // the vmcnt(0), but in one region the scheduler sank 31 of
-                // them below it -- 21 even below the __syncthreads() -- leaving
-                // the global load only 33 MFMAs of cover instead of 64. The
-                // volatile asm chain cannot move (that is what pins the
-                // vmcnt(0)), so the MFMAs are what has to be held.
-                //
-                // sched_barrier(0x7F6) -- every class except MFMA allowed to
-                // cross -- was tried here first (arm A2) and did nothing: the
-                // vmcnt(0) still landed after 33 MFMAs. The anchor below is a
-                // data dependence on the accumulator instead of a hint, which
-                // is the mechanism that already works in this TU.
-                m3::acc_anchor(C_accum);
-                __builtin_amdgcn_s_setprio(0);
-                // COMMIT: vmcnt(0) lands what was issued before the MFMAs, then
-                // the ds_writes publish it and lgkmcnt(0) drains them.
-                m3::load_commit<NT>(As[(k + 1) & 1], abuf);
-                m3::load_commit<NT>(Bs[(k + 1) & 1], bbuf);
-                __syncthreads();
-            }
-
-            // ---- egress: per-band credit wait, emit, one release, publish ---
-            const int bands = BM / EB;             // EB | BM (gate 5)
-            // Every band of this tile must be reusable before ANY payload
-            // store of epoch ep: waits on leader lanes only, result broadcast
-            // by the CTA barrier + shared error bit (fail-closed).
-            if (threadIdx.x < (unsigned)bands) {
-                const int b = (int)threadIdx.x;
-                const int row0 = tm * BM + b * EB;
-                const int dest = m3::owner_of_row(row0, slice);
-                const int lrow = (row0 - dest * slice) / EB;
-                const bool ok = m3::wait_reuse_credit(
-                    sig + m3::SIGNAL_GUARD_U32 + g.ready_words +
-                        m3::credit_idx(dest, lrow, tn, lrows, cols),
-                    ep, spin, errp, m3::ERR_PRODUCER_CREDIT);
-                if (!ok) atomicOr(errp, m3::ERR_PRODUCER_CREDIT);
-            }
-            __syncthreads();
-            if (m3::error_bit_set(errp, m3::ERR_PRODUCER_CREDIT)) return;
-
-            const bf16* biasp = reinterpret_cast<const bf16*>(g.bias);
-            const int win_rows = EB < 32 ? EB : 32;      // EB % win_rows == 0
-            const int vt = N - tn * BN < BN ? N - tn * BN : BN;   // <= BN
-
-            for (int b = 0; b < bands; ++b) {
-                const int row0 = tm * BM + b * EB;
-                const int dest = m3::owner_of_row(row0, slice);
-                const int lrow = (row0 - dest * slice) / EB;
-                int dest_eff = dest;
-#if HK_GEMM_RS_MI300X_NEGATIVE_CONTROLS
-                // REROUTE-SLOT control: land this band on the wrong rank while
-                // publishing the true destination. Numerics MUST fail.
-                if ((g.ctrl_flags & m3::CTRL_REROUTE_SLOT) &&
-                    me == g.ctrl_rank && b == g.ctrl_arg0) {
-                    dest_eff = (dest + 1) % m3::WORLD_SIZE;
-                }
+        constexpr int RELEASE_GROUP = HK_GEMM_RS_MI300X_RELEASE_GROUP;
+        static_assert(RELEASE_GROUP >= 1 && RELEASE_GROUP <= 8,
+                      "RELEASE_GROUP is a hard-capped compile-time constant: an "
+                      "unbounded group defers publication arbitrarily far on the "
+                      "generic row, where a CTA owns up to 118 tiles");
+        const int stride = g.num_gemm_ctas;
+        const int bands = BM / EB;                 // EB | BM (gate 5)
+        // Uniform across the grid: both terms come from the shape plan. The
+        // compile-time cap still bounds rgroup, so the generic row's 118 tiles
+        // per CTA group in fours exactly like the scored rows and nothing is
+        // special-cased per config row.
+        const int tiles_per_cta = (tiles + stride - 1) / stride;
+#if HK_GEMM_RS_MI300X_RELEASE_GROUP_FULL_ONLY
+        const int rgroup = tiles_per_cta >= RELEASE_GROUP ? RELEASE_GROUP : 1;
+#else
+        const int rgroup = RELEASE_GROUP;
 #endif
-                auto dst = hk_gemm_rs::peer_view(g.c_heap, heap_peers, dest_eff);
-                bf16* const dst_base =
-                    &dst[{me, 0, lrow * EB, tn * BN}];
-                const long dst_stride = dst.template stride<2>();
 
-                for (int w0 = 0; w0 < EB; w0 += win_rows) {
-                    m3::stage_fragment_bf16(
-                        stage, BN, C_accum, biasp,
-                        warp_row * WM, warp_col * WN,
-                        /*win_row0=*/b * EB + w0, /*win_rows=*/win_rows,
-                        /*global_col_base=*/tn * BN, /*bias_limit=*/N);
-                    __syncthreads();
-                    bf16* const wdst = dst_base + (long)w0 * dst_stride;
-                    if (g.packet_fast_path) {
-                        // Contract check first; fall back to scalar wholesale
-                        // rather than violate a single 16-byte rule.
-                        bool contract_ok = m3::emit_band_preflight(
-                            wdst, dst_stride, stage, BN, win_rows, BN, vt,
-                            threadIdx.x, m3::CTA_THREADS);
-                        // Uniform decision: any lane's failure is everyone's.
-                        if (__builtin_amdgcn_readfirstlane(
-                                static_cast<unsigned>(!contract_ok))) {
-                            m3::emit_band_scalar(
-                                wdst, dst_stride, stage, BN, win_rows, BN, vt,
-                                threadIdx.x, m3::CTA_THREADS);
-                        } else {
-                            m3::emit_band_packets(
-                                wdst, dst_stride, stage, BN, win_rows, BN, vt,
-                                threadIdx.x, m3::CTA_THREADS);
+        // Grouping does not perturb coverage, because
+        //   {t0 + j*NG : t0 in {pid, pid+G*NG, ...}, j in [0,G)} & [0,tiles)
+        // is {pid + i*NG : i >= 0} & [0,tiles) -- the same tile set as the
+        // ungrouped loop, in the same order, each visited once.
+        for (int t0 = pid; t0 < tiles; t0 += rgroup * stride) {
+            // This group's size, in closed form and BEFORE the tile body. A
+            // counter incremented inside the body would be loop-carried
+            // through the mainloop's register-critical region, and the 256x256
+            // rows sit within 10 VGPRs of the 256 arch cap.
+            //
+            // t0 < tiles, so left >= 1 and emitted >= 1 on every iteration that
+            // runs. That is what makes an unflushed tail structurally
+            // impossible rather than a matter of vigilance: a zero-tile CTA
+            // never enters this loop, so it can neither release nor publish,
+            // and every group that emits reaches the release and the publish
+            // below in the same iteration.
+            const int left = (tiles - t0 + stride - 1) / stride;
+            const int emitted = left < rgroup ? left : rgroup;
+
+            for (int j = 0; j < emitted; ++j) {
+                const int t = t0 + j * stride;
+                // grouped tile order (same family as both donors), WGM as above.
+                const tile_id id = decode_tile(t, num_pid_m, num_pid_n, WGM);
+                const int tm = id.tm;
+                const int tn = id.tn;
+
+                zero(C_accum);
+                // ---- double-buffered mainloop, issue/commit split ----------------
+                // Buffer lifetime, unchanged from the fused version: iteration k
+                // ds_reads As[k&1] and ds_writes As[(k+1)&1]; (k+1)&1 == (k-1)&1, so
+                // the buffer being written is the one iteration k-1 read, and the
+                // __syncthreads() ending iteration k-1 separates them. Both of
+                // iteration k's ds_read halves are drained (acquire_frags) before
+                // that barrier, and iteration k's ds_writes are drained by
+                // load_commit's trailing lgkmcnt(0), also before it.
+                m3::load_issue<ST_A, NT>(abuf, g.a, {0, 0, tm, 0});
+                m3::load_issue<ST_B, NT>(bbuf, g.b, {0, 0, tn, 0});
+                m3::load_commit<NT>(As[0], abuf);
+                m3::load_commit<NT>(Bs[0], bbuf);
+                __syncthreads();
+                // exp_09 E1(c): the prefetch is UNCONDITIONAL, with a clamped
+                // source index, so the `if (more)` guards are gone.
+                //
+                // Those guards were the reason the k-loop body was six basic
+                // blocks (ten for K_TAIL=true): one for the issue, one for the
+                // MFMAs, one for the commit, plus the branches. A basic-block
+                // boundary is a scheduling-region boundary -- the machine
+                // scheduler cannot move an instruction across one, and neither can
+                // sched_group_barrier, which is exactly why arm A0 (the builtin
+                // alone, no restructure) changed not a single instruction of the
+                // schedule. Straight-line, the four global_load_dwordx4 sit in the
+                // same region as the 64 MFMAs and the address arithmetic can be
+                // hoisted across the whole iteration.
+                //
+                // Peeling the last iteration instead was tried first (arm A1) and
+                // is a hard fail: duplicating the MFMA block put both copies'
+                // fragment addresses in one live range and cost 30 VGPR spills /
+                // 50 scratch stores on the 256x256 rows, which sit at 246 of 256.
+                //
+                // Why the clamp is safe. On the last iteration `kn == k`, so the
+                // prefetch re-reads the tile this iteration is already consuming:
+                // a valid, in-bounds global read whose only effect is to land in
+                // As[(k+1)&1] / Bs[(k+1)&1]. That is the buffer iteration k-1 read
+                // and nothing reads it again -- the loop is over, and the epilogue
+                // does not touch A/B LDS until after its own __syncthreads(). The
+                // steady-state buffer invariant is untouched: iteration k ds_reads
+                // As[k&1] and ds_writes As[(k+1)&1], (k+1)&1 == (k-1)&1, and the
+                // __syncthreads() ending k-1 separates the two. Cost is one extra
+                // tile read per tile, against k_iters of 116..924.
+                for (int k = 0; k < k_iters; ++k) {
+                    // ISSUE only -- no vmcnt here, that is the entire mechanism.
+                    // Clamped, not guarded: a select, not a branch.
+                    const int kn = (k + 1 < k_iters) ? (k + 1) : k;
+                    m3::load_issue<ST_A, NT>(abuf, g.a, {0, 0, tm, kn});
+                    m3::load_issue<ST_B, NT>(bbuf, g.b, {0, 0, tn, kn});
+                    // exp_09 arm B: raise this wave's issue priority for the operand
+                    // reads and the MFMA block, drop it for the commit. At 512
+                    // threads and 1 CTA/CU there are 2 waves per SIMD competing for
+                    // one issue port, so a wave grinding through ds_writes, waits
+                    // and address arithmetic can starve its neighbour's MFMAs. The
+                    // gfx950 donor does the same (gemm_rs_device_tile.cpp:884-935).
+                    //
+                    // The window is airtight without any scheduling hint, which
+                    // matters because hints do not work here (arms A0, A2). MFMAs
+                    // cannot leave through the top: they depend, through
+                    // acquire_frags' anchor, on ds_reads that follow this setprio,
+                    // and both setprio and the ds_read asm have side effects so
+                    // their order is fixed. They cannot leave through the bottom
+                    // either: acc_anchor ties the accumulator below them.
+                    __builtin_amdgcn_s_setprio(1);
+                    #pragma unroll
+                    for (int kh = 0; kh < KH; ++kh) {
+                        load(A_frag, subtile_inplace<WM, KS>(As[k & 1],
+                                                             {warp_row, kh}));
+                        load(B_frag, subtile_inplace<WN, KS>(Bs[k & 1],
+                                                             {warp_col, kh}));
+                        // Mandatory: every ds_read in this tree is inside an
+                        // asm volatile, so SIInsertWaitcnts never observes the LDS
+                        // event and emits no use-wait of its own. Nothing else
+                        // between these reads and the MFMAs waits on lgkmcnt. The
+                        // anchor is equally mandatory -- a bare wait is reorderable
+                        // past an MFMA and was, silently, on 14 of 17 shapes.
+                        m3::acquire_frags(A_frag, B_frag);
+                        // The A operand carries the only mask: whatever lands in
+                        // the K-padding columns of A is overwritten with exact
+                        // zeros before the MFMA (gates 3, 15). The threshold is
+                        // rebased into this half's local K coordinates; a half that
+                        // starts at or past the tail gets threshold 0, i.e. is
+                        // zeroed outright.
+                        if constexpr (K_TAIL) {
+                            if (k == k_iters - 1) {
+                                const int th = tail_k - kh * KS;
+                                mask_a_k_tail(A_frag, th > 0 ? th : 0);
+                            }
                         }
-                    } else {
-                        m3::emit_band_scalar(
-                            wdst, dst_stride, stage, BN, win_rows, BN, vt,
-                            threadIdx.x, m3::CTA_THREADS);
+                        mma_ABt(C_accum, A_frag, B_frag, C_accum);
                     }
+                    // Keep every MFMA ABOVE the commit's vmcnt(0).
+                    //
+                    // Straight-lining the body (above) cost prefetch coverage, and
+                    // the ISA says so precisely: with the commit in its own basic
+                    // block the block boundary forced all 64 MFMAs to issue before
+                    // the vmcnt(0), but in one region the scheduler sank 31 of
+                    // them below it -- 21 even below the __syncthreads() -- leaving
+                    // the global load only 33 MFMAs of cover instead of 64. The
+                    // volatile asm chain cannot move (that is what pins the
+                    // vmcnt(0)), so the MFMAs are what has to be held.
+                    //
+                    // sched_barrier(0x7F6) -- every class except MFMA allowed to
+                    // cross -- was tried here first (arm A2) and did nothing: the
+                    // vmcnt(0) still landed after 33 MFMAs. The anchor below is a
+                    // data dependence on the accumulator instead of a hint, which
+                    // is the mechanism that already works in this TU.
+                    m3::acc_anchor(C_accum);
+                    __builtin_amdgcn_s_setprio(0);
+                    // COMMIT: vmcnt(0) lands what was issued before the MFMAs, then
+                    // the ds_writes publish it and lgkmcnt(0) drains them.
+                    m3::load_commit<NT>(As[(k + 1) & 1], abuf);
+                    m3::load_commit<NT>(Bs[(k + 1) & 1], bbuf);
                     __syncthreads();
                 }
-            }
 
-            // One grouped CTA release covers every band of this tile, then
-            // the leader publishes each band's cheap completion cell on its
-            // destination rank (publication separate from movement, F6-style).
-            m3::release_payload_system();
-            if (threadIdx.x == 0) {
+                // ---- egress: per-band credit wait, then emit ---------------
+                // The credit wait STAYS PER TILE and stays before that tile's
+                // first payload store; it is what makes overwriting an
+                // unconsumed slot impossible, and hoisting it to the group
+                // would grant permission for tile j+1 before tile j had it. A
+                // failed wait still returns immediately: the pending group is
+                // abandoned unreleased AND unpublished, which is fail-closed --
+                // its reducers time out on bit 26 rather than read a slot
+                // nobody finished writing.
+                //
+                // Every band of this tile must be reusable before ANY payload
+                // store of epoch ep: waits on leader lanes only, result broadcast
+                // by the CTA barrier + shared error bit (fail-closed).
+                if (threadIdx.x < (unsigned)bands) {
+                    const int b = (int)threadIdx.x;
+                    const int row0 = tm * BM + b * EB;
+                    const int dest = m3::owner_of_row(row0, slice);
+                    const int lrow = (row0 - dest * slice) / EB;
+                    const bool ok = m3::wait_reuse_credit(
+                        sig + m3::SIGNAL_GUARD_U32 + g.ready_words +
+                            m3::credit_idx(dest, lrow, tn, lrows, cols),
+                        ep, spin, errp, m3::ERR_PRODUCER_CREDIT);
+                    if (!ok) atomicOr(errp, m3::ERR_PRODUCER_CREDIT);
+                }
+                __syncthreads();
+                if (m3::error_bit_set(errp, m3::ERR_PRODUCER_CREDIT)) return;
+
+                const bf16* biasp = reinterpret_cast<const bf16*>(g.bias);
+                const int win_rows = EB < 32 ? EB : 32;      // EB % win_rows == 0
+                const int vt = N - tn * BN < BN ? N - tn * BN : BN;   // <= BN
+
                 for (int b = 0; b < bands; ++b) {
                     const int row0 = tm * BM + b * EB;
                     const int dest = m3::owner_of_row(row0, slice);
                     const int lrow = (row0 - dest * slice) / EB;
+                    int dest_eff = dest;
 #if HK_GEMM_RS_MI300X_NEGATIVE_CONTROLS
-                    // DROP-PUBLICATION control: this consumer MUST time out
-                    // without reading. Production builds cannot see this code.
-                    if ((g.ctrl_flags & m3::CTRL_DROP_PUBLICATION) &&
-                        me == g.ctrl_rank && dest == g.ctrl_arg0) {
-                        continue;
+                    // REROUTE-SLOT control: land this band on the wrong rank while
+                    // publishing the true destination. Numerics MUST fail.
+                    if ((g.ctrl_flags & m3::CTRL_REROUTE_SLOT) &&
+                        me == g.ctrl_rank && b == g.ctrl_arg0) {
+                        dest_eff = (dest + 1) % m3::WORLD_SIZE;
                     }
 #endif
-                    m3::publish_band_epoch(
-                        sig, sig_peers, dest, me,
-                        m3::SIGNAL_GUARD_U32 +
-                            m3::ready_idx(me, lrow, tn, lrows, cols),
-                        ep);
+                    auto dst = hk_gemm_rs::peer_view(g.c_heap, heap_peers, dest_eff);
+                    bf16* const dst_base =
+                        &dst[{me, 0, lrow * EB, tn * BN}];
+                    const long dst_stride = dst.template stride<2>();
+
+                    for (int w0 = 0; w0 < EB; w0 += win_rows) {
+                        m3::stage_fragment_bf16(
+                            stage, BN, C_accum, biasp,
+                            warp_row * WM, warp_col * WN,
+                            /*win_row0=*/b * EB + w0, /*win_rows=*/win_rows,
+                            /*global_col_base=*/tn * BN, /*bias_limit=*/N);
+                        __syncthreads();
+                        bf16* const wdst = dst_base + (long)w0 * dst_stride;
+                        if (g.packet_fast_path) {
+                            // Contract check first; fall back to scalar wholesale
+                            // rather than violate a single 16-byte rule.
+                            bool contract_ok = m3::emit_band_preflight(
+                                wdst, dst_stride, stage, BN, win_rows, BN, vt,
+                                threadIdx.x, m3::CTA_THREADS);
+                            // Uniform decision: any lane's failure is everyone's.
+                            if (__builtin_amdgcn_readfirstlane(
+                                    static_cast<unsigned>(!contract_ok))) {
+                                m3::emit_band_scalar(
+                                    wdst, dst_stride, stage, BN, win_rows, BN, vt,
+                                    threadIdx.x, m3::CTA_THREADS);
+                            } else {
+                                m3::emit_band_packets(
+                                    wdst, dst_stride, stage, BN, win_rows, BN, vt,
+                                    threadIdx.x, m3::CTA_THREADS);
+                            }
+                        } else {
+                            m3::emit_band_scalar(
+                                wdst, dst_stride, stage, BN, win_rows, BN, vt,
+                                threadIdx.x, m3::CTA_THREADS);
+                        }
+                        __syncthreads();
+                    }
+                }
+
+            }   // end of the group's tile loop
+
+            // ONE release for the whole group. Whole-CTA convergent and outside
+            // any divergent region (it contains two __syncthreads()), and it
+            // covers every payload store issued above by every thread to every
+            // destination: vmcnt is destination-agnostic and retires in order
+            // on gfx9, so a store issued three tiles ago is drained exactly as
+            // well as one issued three instructions ago, and buffer_wbl2
+            // sc0 sc1 writes back the whole L2 of the executing XCD -- the only
+            // L2 a workgroup's threads can have dirtied. Batching therefore
+            // adds no hardware assumption; it applies the per-tile release's
+            // own properties to a larger set of stores.
+            //
+            // The publications that follow are RELAXED stores by design. They
+            // carry no ordering of their own and are correct only because this
+            // release dominates them, which is why coarsening the release
+            // without coarsening the publication is a protocol error rather
+            // than a smaller version of this change.
+#if HK_GEMM_RS_MI300X_NEGATIVE_CONTROLS
+            // PUBLISH-EARLY control: announce readiness BEFORE the release that
+            // covers the payload. A reducer may then acquire a slot whose bytes
+            // are still in flight or still dirty in this XCD's L2, and its
+            // buffer_inv pulls the PREVIOUS epoch's line -- which is the right
+            // answer whenever the inputs did not change, so no tolerance can
+            // see it. m9_stale_slot poisons every rank's heap with bf16 NaN to
+            // make it visible; if this control does not fail that gate, the
+            // gate has no power over the property batching puts at risk.
+            //
+            // ctrl_flags is a kernel argument and therefore CTA-uniform, so the
+            // release stays convergent on both paths and exactly one of the two
+            // sites executes per group.
+            const bool publish_early =
+                (g.ctrl_flags & m3::CTRL_PUBLISH_EARLY) != 0u;
+            if (!publish_early) m3::release_payload_system();
+#else
+            m3::release_payload_system();
+#endif
+
+            // ALL of the group's publications, after that single release: the
+            // leader publishes each (tile, band)'s cheap completion cell on its
+            // destination rank (publication separate from movement, F6-style).
+            // Every tile is named by decode_tile -- the same helper the emit
+            // loop above used -- so an emit/publish index drift cannot happen
+            // without editing one shared expression, and nothing about the
+            // group is journalled in LDS or in registers.
+            if (threadIdx.x == 0) {
+                for (int j = 0; j < emitted; ++j) {
+                    const tile_id id =
+                        decode_tile(t0 + j * stride, num_pid_m, num_pid_n, WGM);
+                    for (int b = 0; b < bands; ++b) {
+                        const int row0 = id.tm * BM + b * EB;
+                        const int dest = m3::owner_of_row(row0, slice);
+                        const int lrow = (row0 - dest * slice) / EB;
+#if HK_GEMM_RS_MI300X_NEGATIVE_CONTROLS
+                        // DROP-PUBLICATION control: this consumer MUST time out
+                        // without reading. Production cannot see this code.
+                        if ((g.ctrl_flags & m3::CTRL_DROP_PUBLICATION) &&
+                            me == g.ctrl_rank && dest == g.ctrl_arg0) {
+                            continue;
+                        }
+#endif
+                        m3::publish_band_epoch(
+                            sig, sig_peers, dest, me,
+                            m3::SIGNAL_GUARD_U32 +
+                                m3::ready_idx(me, lrow, id.tn, lrows, cols),
+                            ep);
+                    }
                 }
             }
+#if HK_GEMM_RS_MI300X_NEGATIVE_CONTROLS
+            if (publish_early) m3::release_payload_system();
+#endif
         }
         return;
     }
