@@ -49,11 +49,19 @@ docker exec dhk-gemmrs bash $ON/tools/m2_report.sh 2>&1 | tee "$L/m2_report.log"
 grep -qE 'Error|Traceback|No such file' "$L/m2_report.log" && fail "M2 (report could not read its inputs)"
 # Every instantiation reachable from dispatch_gemm_rs_mi300x must appear in the
 # metadata table with a resource tuple. Count DISTINCT instantiations, not
-# config rows: rows 4 and 5 share <256,256,32,false>, and since exp_04 retiled
-# row 1 onto the pre-existing generic template, row 1 shares <32,64,64,false>.
-# That is 6 today. UPDATE M2_EXPECT whenever the dispatch table changes -- an
-# expectation that is too high blocks every ladder, too low makes M2 vacuous.
-M2_EXPECT=6
+# config rows: rows 4 and 5 still share <256,256,32,false>.
+#
+# exp_14 (E4b) retiled rows 1, 2 and 3 onto <32,64,128,f>, <64,128,64,f> and
+# <128,192,32,t>. Row 1 no longer shares the generic template, which the
+# generic row still needs in both tail variants, so the count went 6 -> 7:
+#   <32,64,128,f> <64,128,64,f> <128,192,32,t> <256,256,32,f> <256,256,32,t>
+#   <32,64,64,f> <32,64,64,t>          (the last two are the generic row)
+# exp_14 also adds rows 101-107, but ONLY behind -DHK_GEMM_RS_MI300X_TILE_SWEEP,
+# which neither build.sh nor m1_build.sh defines -- so they are deliberately
+# absent from this count and from the graded binary.
+# UPDATE M2_EXPECT whenever the dispatch table changes -- an expectation that is
+# too high blocks every ladder, too low makes M2 vacuous.
+M2_EXPECT=7
 rows=$(sed -n '/metadata table/,/ordering ops/p' "$L/m2_report.log" | grep -cE 'tail=[01]')
 echo "  M2 metadata rows: $rows (expect $M2_EXPECT)"
 [ "$rows" -ge "$M2_EXPECT" ] || fail "M2 (table has $rows rows, expected $M2_EXPECT; if the dispatch table changed, update M2_EXPECT in this script)"

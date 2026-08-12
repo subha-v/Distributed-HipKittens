@@ -2,6 +2,133 @@
 
 ## Session 2 — 2026-08-11 overnight (optimization session)
 
+- **WIN, exp_14 / E4b: the tile table re-swept under the round model. Three rows
+  moved — shape 1 `32/64/64 → 32/64/128` (−1.7%), shape 2 `64/64/64 → 64/128/64`
+  (−24.7%, the largest single win of the project) and shape 3
+  `128/256/32 → 128/192/32` (−6.3%) — for a paired geomean of −5.9%.** Graded,
+  same run against frozen rank-1: the ratio goes **1.137× → 1.098×** (ours
+  345.15, anchor 314.46). Full ladder passed: M2 **7/7** instantiations with 0
+  AGPRs / 0 scratch / 0 VGPR spills (`M2_EXPECT` 6 → 7), M3 17/17 at both
+  tolerances, M4 3/3, M5 600 epochs. Detail in `exp_14_tile_waves/result.md`.
+
+  **The correction that made the sweep productive: `waves` alone is not a time.**
+  E4's round-counting carries to the tile dimension only if you multiply waves by
+  a per-tile cost, and there are three candidates for it that disagree —
+  `waves·BM·BN` (MFMA-bound, and algebraically identical to the fill criterion),
+  `waves·k_iters` (overhead-bound), and `1/BM + 1/BN` (global bytes). Shape 6
+  measures ~4700 cycles per k-iteration against ~2050 of MFMA, so **the
+  overhead-bound column is the LARGER half**, and raising `BK` — the only knob
+  that cuts iteration count at constant MFMA work and constant total bytes — is
+  where both large wins came from. A sweep that ranked only by fill would have
+  found nothing: four of six rows are already within 6% of their fill floor.
+  **Also: on a 1-wave row a low "last-wave fill" is not idle waste, it is a tile
+  that is bigger than it needs to be.** Same arithmetic, but only the second
+  reading explains why 71% fill was worth attacking on shape 3 while another
+  1-wave point at 53% fill would have been worse.
+
+  **The model earned credibility on ORDERING and lost it on SIZING.** Its argmin
+  was the measured argmin on all three swept rows and it correctly said "no
+  candidate" on the other three; its magnitudes were off by 2–12× (shape 1
+  predicted −10..−25%, measured −1.7%; shape 3 predicted −0..−3%, measured
+  −6.3%). Sizing needs the per-shape non-mainloop fraction, which is not in the
+  geometry — and M7 already prints the cheap proxy: shape 1 is `bound = HOST` at
+  `×SOL = 10.16`, i.e. its whole mainloop is ~2–4 µs of ~63 µs, so no `BK` change
+  could ever have paid −25% there. **Read `bound`/`×SOL` before predicting a
+  mainloop win.**
+
+  **Two designed controls, and they disagree about which column outranks which.**
+  Shape 3's `64/192/64` has *identical* `waves·BM·BN` and *identical*
+  `waves·k_iters` to the winner and differs only in traffic (1.78×): it was 6.2%
+  slower, 15/15 disjoint — so traffic is load-bearing and "shrink the tile to buy
+  fill" is not free. But shape 2's `64/192/64` has *better* traffic (0.67 vs
+  0.75) and lost 7.6 points to the winner on `waves·BM·BN` alone. **There is no
+  global ordering of the two; both must be carried.**
+
+  **Rows 4/5/6 have no tile-table headroom, and that is now a load-bearing
+  fact** because they carry the whole remaining graded gap (1.120×/1.286×/1.208×).
+  Each is the argmin of all 38 legal points for its shape and shape 6 sits
+  *exactly* at the wave-cost floor (1024 tiles = 4 × 256 NG, 100% fill). Shape 5
+  cannot reach 1 wave at all: it needs `BM·BN ≥ 123362` = **241 accumulator
+  VGPRs** (`rt_fl<BM/2,BN/4>` = `BM·BN/512`) against a budget already 246 full.
+  And all three are **pinned against the LDS cap** — `(BM+BN)·BK = 512·32 =
+  16384` is exactly the limit — so `BK` cannot rise and their `waves·k_iters` of
+  16/112/464 is untouchable from this table. That is ~640 µs of non-MFMA
+  mainloop on shape 6 alone, and reaching it means making the **double** buffer
+  stop costing 2×. **E1, not E4.**
+
+  Corrected from exp_04's ledger entry: **occupancy is irrelevant on this
+  kernel.** The grid is exactly `CU_COUNT = 304` CTAs on 304 CUs, so LDS never
+  buys a second resident CTA and exists purely as a cap. exp_04 kept shape 2 at
+  `64/64/64` partly to protect "the only row at 2 CTAs/CU"; there was nothing to
+  protect, and that row was the biggest win on the board.
+
+  Also retired: exp_04's conclusion that **"the tile-table axis is close to
+  exhausted"** and that shape 3 was release-tax-bound. Both were true of the
+  kernel as it stood — the analysis correctly gated further tiling on E3 — and
+  both stopped being true once E3 landed and once `BK` was recognised as the
+  live knob rather than tile *count*.
+
+- **TRAP: the per-allocation measurement bias has a systematic ALLOCATION-ORDER
+  component, not just a random one.** exp_14's null twin came out negative in
+  **10 of 10** forward draws on shape 1 (median −0.91%), which is not symmetric
+  noise. `T` is constructed first and `T*` last; reversing the construction order
+  for five more draws flipped the sign and made the pooled contrast set straddle
+  zero ([−2.59, −0.25] → [−2.59, +2.42]). Every candidate is constructed
+  *between* the two, so using the T-vs-T\* contrast as the floor is conservative
+  for candidates — but **a sweep that only ever runs one construction order is
+  measuring a biased null and systematically under-credits every arm built after
+  the reference.** Reverse the order on half the draws (`SWEEP_REVERSE=1`).
+
+- **TRAP: full-range disjointness gets STRICTER as draws accumulate.** A range
+  only grows, so shape 1's candidate was "confirmed" at 5 draws and
+  "unconfirmed" at 10 **on the same data with the same effect size**. That is a
+  defect of the criterion, not evidence against the effect. The unit of evidence
+  is still one draw (samples inside a process share one `hipMalloc` draw and are
+  not independent), and the right statistic is still the within-draw contrast
+  with the twin supplying its null distribution — but score it with an **exact
+  rank-sum** test, which uses all the ordering information and is monotone in
+  evidence, and keep disjointness as the stronger secondary claim. Shape 1:
+  ranges overlap at one of 15 points, `p_ranksum = 0.0013`.
+
+- **TRAP: `<64,64,128>` computes wrong results with no error bit** — reproducible
+  in 15 of 15 draws at `max|diff| ≈ 2.6e-2` against `max|ref| = 9.47e-2`. It is
+  **not** a failed LDS reservation and **not** a launch that did not happen: the
+  epoch cells read 1 on every scheduled CTA and the output is non-zero on all 8
+  ranks, so it ran to completion and computed the wrong thing. (Worth
+  distinguishing: an output left at its initial zeros reports
+  `max|diff| = max|ref|`, which is indistinguishable through a tolerance check
+  and means the opposite. `diagnose_dead()` separates them from the epoch cell.)
+  LDS at the 65536 cap is not the cause — `64/192/64` is also exactly 65536 and
+  correct — and `BK=128` is not the cause — `32/64/128` is landed. The pair
+  differs only in the A fragment: `rt_bf<32,64>` versus `rt_bf<16,64>`, and
+  `rt_bf<32,64>` is the only shape in the tree with both height ≥ 2 and width
+  ≥ 4. Undiagnosed by choice (it was the pre-registered *loser* of its pair).
+  **Same class as the `acquire_frags` reordering bug: any future widening of `BK`
+  or `BM` must re-run M3 rather than assume the mainloop is shape-agnostic.**
+
+- **TRAP, found by exp_14 and it invalidates a whole validation asset:
+  `gemm_rs_mi300x_static_checks.py` has been DEAD SINCE exp_02.** It raises on the
+  first failed requirement, and its very first per-row check asserts the reducer
+  column still matches RadeonFlow's inherited `32/48/48/48/32/8`. exp_02 replaced
+  that with uniform `NR=32` — the first landed win of the session — so the suite
+  has aborted at assertion #1 ever since and **none of its ~20 gates has run all
+  session.** `exp_14_tile_waves/static_probe.py` re-runs every gate with
+  `require` collecting instead of raising: 7 failures total, 5 of them stale NR
+  expectations (rows 2/3/4 from exp_02, rows 1/6 from exp_13), 2 pre-existing
+  gate-19 control-binding complaints, and **0 tile or dispatch failures**.
+  This is the mirror image of the M2 lesson already in HANDOFF — *a gate that has
+  never failed is not evidence* — and the same reasoning applies to **a gate that
+  always fails on line 1**. Not repaired by exp_14: the fix is to the
+  `num_reducer_ctas` expectations, an axis exp_14 was barred from touching.
+
+- **Latent OOB read removed as a side effect.** At shape 3's old `BN=256`,
+  `col_count = 12` against `2880/256 = 11.25`, and the last B tile's
+  `load_issue` read rows 2880..3071 of a 2880-row `w` — 192 rows, 138 KB past
+  the end of the tensor, on every shape-3 call all session. Benign (those columns
+  are never emitted, `vt` clamps them) and it never faulted, but real.
+  `2880/192 = 15` exactly, so `even_n` is now true and the read is gone.
+  **Ragged `N` is not only a padding cost; it is an out-of-bounds operand read.**
+
 - **WIN, exp_13 / E4 re-opened: `NUM_REDUCER_CTAS` was NOT settled. Two rows
   moved — shape 1 32 → 56 (−15.4%) and shape 6 32 → 48 (−4.9%) — for a paired
   geomean of −3.6%.** Graded, same run against frozen rank-1: ours 353.59 →
@@ -464,6 +591,66 @@
   before/after comparison at all.
   Shape 1 was subject to the same bug but did not move: at m=64 it is
   latency-bound at ~181 µs, so tile geometry is not what sets its time.
+
+- **WIN: E4b tile re-sweep by wave count. Graded gap to rank-1 1.137× →
+  1.098×, and we now WIN shape 1 outright at 0.850×.** Landed rows 1/2/3 →
+  `32/64/128`, `64/128/64`, `128/192/32`. Paired **−5.9%** (M7 means
+  222.17 → 207.18 µs, but rows 4-6 moved −3% with unchanged code, so the paired
+  figure is the trustworthy one). Best-of-arm vector now
+  `62.38 / 64.52 / 83.75 / 198.71 / 613.70 / 1616.63`.
+  Per-shape graded ratio: **0.850** / 1.072 / 1.102 / 1.120 / 1.286 / 1.208.
+  Our absolute number moved only −1.0% because shape 3's pool was globally slow
+  (ours +13.6%, rank-1 +16.4% **in the same processes**) — which is exactly what
+  the same-run anchor exists to absorb, and a good demonstration of why the
+  paired design is not optional here.
+  M2 now **7/7** instantiations, zero AGPRs, zero scratch, **zero VGPR spills**.
+  M3 17/17 at both tolerances, M4 3/3, M5 600 epochs.
+
+- **A real out-of-bounds read was removed as a side effect.** At `BN=256`
+  shape 3's last B tile read **192 rows past the end of a 2880-row operand on
+  every call**. `2880/192 = 15` exactly, so `128/192/32` is both faster and
+  correct where the old tile was neither.
+
+- **`<64,64,128>` computed WRONG results at `1e-2` with no error bit set** and
+  was caught only by M3. Second time this session a mainloop-adjacent change has
+  produced silent numerical corruption that the protocol's own error bits do not
+  see. The 17-shape correctness gate is not a formality.
+
+- **The round-counting model ORDERS candidates reliably and SIZES them badly.**
+  Its argmin was the measured argmin on all three swept rows, and it correctly
+  said "no candidate" on the other three — but magnitudes were off by 2-12× in
+  both directions.
+  Two corrections to the model itself:
+  1. **Waves alone is not a time.** Shape 6 spends ~4700 cycles per k-iteration
+     against ~2050 of MFMA, so `waves × k_iters` is the *larger* term, and both
+     big wins were pure iteration-count reductions at constant MFMA work. A
+     fill-only criterion would have produced an empty sweep.
+  2. **There is no global ordering between the MFMA and traffic terms.** Two
+     designed controls proved it: shape 3's control lost 6.2% to 1.78× traffic
+     at identical time-model values, while shape 2's control lost 7.6 points
+     with *better* traffic.
+  And one discipline lesson: shape 1 was predicted at −25% and delivered −1.7%,
+  because M7 already labelled that row `bound = HOST` at 10.16× SOL — its whole
+  mainloop is ~2-4 µs of ~63 µs. **Read `bound` and `×SOL` before predicting a
+  mainloop win.**
+
+- **The null-arm floor is WORSE than published, and part of it is allocation
+  ORDER, not just allocation identity.** Pooled twin ranges came in at
+  **3.48 / 0.93 / 1.61 %** for shapes 1-3 against published floors of
+  1.34 / 0.56 / 0.61 — 2-2.6× worse. Worse, the twin contrast was negative in
+  **10 of 10 forward draws** on shape 1 (median −0.91%) and **flipped sign when
+  the arm construction order was reversed**. So a single-order sweep measures a
+  biased null and systematically under-credits every arm built after the
+  reference. **Construct arms in both orders, or the floor itself is biased.**
+
+- **VALIDATION GAP: `gemm_rs_mi300x_static_checks.py` has been DEAD since
+  exp_02.** Its first requirement asserts the reducer column still matches
+  RadeonFlow's inherited values — which exp_02 deliberately changed — and it
+  *raises* there, so **none of its ~20 downstream gates has run this session.**
+  Re-run collecting instead of raising: zero tile/dispatch failures, so nothing
+  was actually broken, but ~20 checks have been silently absent while the shape
+  table was rewritten three times. A guard that fails closed on its own first
+  assertion is indistinguishable from one that passes.
 
 - **WIN: E4 re-opened and the boundary DID move — but on only two shapes, and
   for a reason opposite to the one that motivated re-opening.** Landed table:

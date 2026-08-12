@@ -70,6 +70,28 @@ module exports only `gemm_rs_mi300x`, the control module only
 - LDS is requested dynamically, so `group_segment_fixed_size` reads 0 in the
   metadata; the real per-CTA figure is `2*(BM+BN)*BK*2` as tabulated.
 
+**SUPERSEDED — current M2, after exp_03 (register relief) and exp_14 (retile).**
+Seven distinct instantiations, and the two findings above that read as defects
+are both gone: **no VGPR spills and no scratch anywhere**, and `AGPRs: 0` is now
+a closed question rather than a lead (unified register file — re-classing cannot
+add registers; see HANDOFF's closed axes).
+
+| BM/BN/BK | rows | VGPR | AGPR | scratch B | VGPR spill | SGPR spill | LDS B |
+|---|---|---|---|---|---|---|---|
+| 32/64/128 | 1 (exp_14) | 98 | 0 | 0 | 0 | 54 | 49152 |
+| 64/128/64 | 2 (exp_14) | 104 | 0 | 0 | 0 | 60 | 49152 |
+| 128/192/32 +tail | 3 (exp_14) | 136 | 0 | 0 | 0 | 79 | 40960 |
+| 256/256/32 | 4, 5 | 246 | 0 | 0 | 0 | 63 | 65536 |
+| 256/256/32 +tail | 6 | 248 | 0 | 0 | 0 | 79 | 65536 |
+| 32/64/64 | generic | 91 | 0 | 0 | 0 | 58 | 24576 |
+| 32/64/64 +tail | generic | 92 | 0 | 0 | 0 | 88 | 24576 |
+
+`M2_EXPECT` in `tools/gate_ladder.sh` is **7**. The residency note above still
+holds and is now sharper: the grid is exactly `CU_COUNT = 304` CTAs on 304 CUs,
+so LDS can never buy a second resident CTA and the reported occupancy figure is
+not a lever — **LDS is purely a cap**, and it is the cap that pins `BK = 32` on
+rows 4/5/6.
+
 ISA properties, verified in context rather than by counting:
 
 - Emit lowers to 16-byte stores: `global_store_dwordx4` / `flat_store_dwordx4`

@@ -66,13 +66,53 @@ struct shape_config {
 
 struct shape_entry { shape_key key; shape_config cfg; };
 
+// exp_14 (E4b) re-swept BM/BN/BK with the same round-counting model, against an
+// exhaustive enumeration of the legal space (see experiments/exp_14_tile_waves).
+// The correction that made the sweep productive: `waves` alone is not a cost,
+// because moving the tile also moves what ONE tile body costs. Three columns
+// have to be minimized together, and they disagree:
+//
+//   waves * BM*BN   MFMA-bound cost. Equals (M*N/NG)/avg_fill, i.e. this IS the
+//                   fill criterion, expressed as a time.
+//   waves * k_iters OVERHEAD-bound cost. Every k-iteration pays a full
+//                   __syncthreads(), a vmcnt(0), an lgkmcnt(0) and an LDS round
+//                   trip whatever the tile size, and shape 6 measures ~4700
+//                   cycles/iteration against ~2050 of MFMA -- so this is the
+//                   LARGER half, and raising BK is the only knob that cuts it at
+//                   constant MFMA work and constant total bytes.
+//   1/BM + 1/BN     global bytes, which is what buying fill with a smaller tile
+//                   actually costs. Measured, not assumed: on row 3 an arm with
+//                   identical waves*BM*BN AND identical waves*k_iters but 1.78x
+//                   the traffic was 6.2% SLOWER in 15 of 15 draws.
+//
+//   row 1: 32/64/64 -> 32/64/128. Same 224 tiles, same 1 wave, same 90% fill,
+//     same 112 columns (so the NR=56 reduce optimum is untouched); k_iters
+//     36 -> 18. +1.7% best, p=0.0013 by rank test over 15 allocation draws --
+//     real but under this row's own null-arm floor, which is why it needed 15.
+//   row 2: 64/64/64 -> 64/128/64. 512 tiles/2 waves -> 256 tiles/1 wave at
+//     identical MFMA work, k_iters unchanged at 24 so waves*k_iters halves,
+//     traffic 0.75x, and red_tiles 64 -> 32 so reduce rounds fall 2 -> 1.
+//     +32.8%, disjoint over 15 draws. The largest single win of the project.
+//   row 3: 128/256/32 -> 128/192/32. 2880/192 = 15 EXACTLY, so this also
+//     removes 6.7% of ragged-N padding and an out-of-bounds read: at BN=256 the
+//     last B tile's load_issue reads rows 2880..3071 of a 2880-row operand.
+//     192 tiles/71% fill -> 240/88%. +6.8%, disjoint over 15 draws.
+//   rows 4, 5, 6: UNCHANGED, and that is a result rather than an omission. Each
+//     is the argmin of the composite over all 38 legal points for its shape,
+//     and row 6 sits exactly at the waves*BM*BN floor (1024 tiles = 4 x 256 NG,
+//     100% fill). Row 5's 88% last-wave fill is NOT recoverable: one wave would
+//     need BM*BN >= 123362, i.e. 241 accumulator VGPRs. All three are also
+//     pinned against the LDS cap -- (BM+BN)*BK = 512*32 = 16384 is exactly the
+//     limit -- so BK cannot rise on the three largest rows and their
+//     waves*k_iters, the larger half of the mainloop, is untouchable from this
+//     table. That is an E1 (double-buffer) problem, not a tile-table one.
 inline constexpr std::array<shape_entry, 6> scored_shapes{{
-    {{  64, 7168, 2304, false}, { 32,  64, 64, 56, 1}},
-    {{ 512, 4096, 1536,  true}, { 64,  64, 64, 32, 2}},
-    {{2048, 2880,  360,  true}, {128, 256, 32, 32, 3}},
-    {{4096, 4096,  512, false}, {256, 256, 32, 32, 4}},
-    {{8192, 4096, 1792,  true}, {256, 256, 32, 32, 5}},
-    {{8192, 8192, 3696, false}, {256, 256, 32, 48, 6}},
+    {{  64, 7168, 2304, false}, { 32,  64, 128, 56, 1}},
+    {{ 512, 4096, 1536,  true}, { 64, 128,  64, 32, 2}},
+    {{2048, 2880,  360,  true}, {128, 192,  32, 32, 3}},
+    {{4096, 4096,  512, false}, {256, 256,  32, 32, 4}},
+    {{8192, 4096, 1792,  true}, {256, 256,  32, 32, 5}},
+    {{8192, 8192, 3696, false}, {256, 256,  32, 48, 6}},
 }};
 
 // Generic fallback row (correctness path for every other evaluator-legal

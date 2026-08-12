@@ -88,6 +88,16 @@
 #define HK_GEMM_RS_MI300X_RELEASE_GROUP_FULL_ONLY 1
 #endif
 
+// exp_14 (E4b) tile screening. BM/BN/BK are template parameters, so unlike the
+// reducer split they cannot be swept from the host without an instantiation per
+// candidate. Off by default: the extra rows exist only in the sweep module, so
+// the production binding compiles exactly the six instantiations gate M2
+// expects and the screening arms cost the graded build neither code size nor
+// compile time.
+#ifndef HK_GEMM_RS_MI300X_TILE_SWEEP
+#define HK_GEMM_RS_MI300X_TILE_SWEEP 0
+#endif
+
 using namespace kittens;
 namespace m3 = hk_gemm_rs_mi300x;
 using G = kittens::group<m3::NUM_WARPS>;
@@ -732,12 +742,23 @@ static void launch_fixed(const mi300x_globals& g_plan) {
 
 void dispatch_gemm_rs_mi300x(mi300x_globals g) {
     switch (g.config_row) {
-        case 1: launch_fixed< 32,  64, 64, false>(g); return;
-        case 2: launch_fixed< 64,  64, 64, false>(g); return;
-        case 3: launch_fixed<128, 256, 32,  true>(g); return;
-        case 4: launch_fixed<256, 256, 32, false>(g); return;
-        case 5: launch_fixed<256, 256, 32, false>(g); return;
-        case 6: launch_fixed<256, 256, 32,  true>(g); return;
+        // Rows 1-3 retiled by exp_14 (E4b); see the shape table's comment for
+        // the model and the per-row evidence. Rows 4-6 are the enumerated
+        // argmin of their shapes and row 6 sits at the wave-cost floor.
+        case 1: launch_fixed< 32,  64, 128, false>(g); return;
+        case 2: launch_fixed< 64, 128,  64, false>(g); return;
+        case 3: launch_fixed<128, 192,  32,  true>(g); return;
+        case 4: launch_fixed<256, 256,  32, false>(g); return;
+        case 5: launch_fixed<256, 256,  32, false>(g); return;
+        case 6: launch_fixed<256, 256,  32,  true>(g); return;
+
+        // exp_14 (E4b) screened seven more tiles through config rows 101-107.
+        // Those rows are deliberately NOT here: gate 16 of
+        // gemm_rs_mi300x_static_checks.py counts the scored dispatch arms and
+        // requires exactly six, and a screening convenience is not worth
+        // weakening a protocol invariant check. The block is preserved verbatim,
+        // with the command to re-apply it, in
+        // experiments/exp_14_tile_waves/sweep_rows.patch.txt.
 
         // Generic correctness row: bounded paths carry the tails.
         default:
