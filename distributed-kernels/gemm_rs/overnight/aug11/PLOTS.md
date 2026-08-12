@@ -15,7 +15,7 @@ under `overnight/experiments/`.
 | — | Q1 rung-distinctness evidence | `aug11/exp_23_waterfall/fingerprints.json` | exp_23 | **LANDED** — proves the four rungs are four binaries, distinguished at the sites their mechanisms predict |
 | Fig 4 | Q1 knob waterfall (**money figure**) | `aug11/exp_23_waterfall/waterfall.json`, `stats.json`, `fingerprints.json` | exp_23 | **LANDED** — 4 draws (2 fwd / 2 rev); a→b 1.084×, b→c 1.115× cumulative; null within 0.2% of c; structural prediction held |
 | — | Q6 external ladders | `aug11/exp_24_ladders/ladders.json` | exp_24 | queued |
-| — | Q5 per-shape sensitivity | `aug11/exp_25_sensitivity/knob_by_shape.json` | exp_25 | queued |
+| — | Q5 per-shape sensitivity | `aug11/exp_25_sensitivity/knob_by_shape.json`, `sensitivity_points.csv` | exp_25 | **LANDED (negative)** — P1 falsified in sign under all 4 comm-share definitions, then shown **not identifiable** (mask and comm share confounded at ρ=±1.00); P2 falsified as written, confirmed on the 32-56 plateau |
 
 ## Data already in hand that figures can draw on
 

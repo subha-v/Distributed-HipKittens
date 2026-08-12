@@ -74,7 +74,9 @@ status=0
 for phase in $PHASES; do
   say "########## phase: $phase ##########"
   t0=$(date -u +%s)
-  docker exec dhk-gemmrs bash "$EXP/run_sweep.sh" "$phase"
+  # The frozen, CR-stripped copy when go_campaign.sh made one, so a concurrent push
+  # cannot rewrite this chain mid-run (see the hazard note in go_campaign.sh).
+  docker exec dhk-gemmrs bash "${RUNDIR:-$EXP}/run_sweep.sh" "$phase"
   prc=$?
   say "phase $phase exit=$prc after $(( $(date -u +%s) - t0 ))s"
   if [ "$prc" != "0" ]; then

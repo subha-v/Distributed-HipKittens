@@ -607,6 +607,13 @@ from its shipped NR up to 48 — and falls off a cliff below 32. So the correct
 claim is not "placement is flat everywhere" but: **the reducer count has a floor
 it must clear, and above that floor it is flat.**
 
+> **Superseded in one detail by exp_25**: the `NR=8 1.392× / NR=16 1.141× /
+> NR=32 1.023× / NR=48 0.992×` ordering must NOT be read as ranking NR=48 above
+> NR=32 or above the shipped table. Shape 6's `nr32 vs c` contrast was labelled
+> "RESOLVED slower" but sits **inside its 4.44% floor**, so it is unresolved, and
+> **no shape resolves NR=48 against NR=32**. A plateau cannot rank its own points.
+> The resolved content of rung (d) is the **cliff below 32**, nothing above it.
+
 **And the reason matters more than the curve.** The reducers are not a
 communication pool at all — they are the **owner-side reduce**, which must run on
 the owner. Below ~32 you are starving a computation, not under-provisioning
@@ -715,6 +722,91 @@ retroactively and strongly vindicates forcing `RELEASE_GROUP_PERSHAPE` to defaul
 0** — had it shipped default-on, this fault would have been in every experiment's
 binary tonight, and its first symptom would have been an unexplained fault in
 some *other* experiment.
+
+## exp_25 VERDICT — Q5's premise is FALSIFIED in sign, and then NOT IDENTIFIABLE
+
+No GPU time; derived entirely from exp_20 and exp_23 with both inputs' sha256
+recorded, and the activity flags re-derived from `m, n, bm, bn, nr` alone and
+checked against both sources for all six shapes (`--check` PASSED).
+
+### P1 — "order and granularity deltas grow with communication share": FALSIFIED
+
+**The deltas are largest where communication share is LOWEST.** Spearman ρ over
+the four non-host-bound shapes, for a→b: **−0.40 / −0.80 / −1.00 / −0.80** under
+four different comm-share definitions; for b→c: −1.00 / −0.80 / −0.40 / −0.80.
+**The sign is not definition-dependent, only the strength is.** The primary
+definition is `D3 = (full − GEMM)/full`, chosen because it is a single cut top and
+bottom and has a closed form: flops per egress byte is `8K/7`, so comm share is a
+function of **K alone**.
+
+### And then the deeper result: P1 is NOT IDENTIFIABLE from these six shapes
+
+Across shapes 3-6 the set orders **identically** by `K` and by `tiles/NG`
+(ρ = **+1.00**), while comm share is monotone in `K` (ρ = **−1.00**). So **the
+structural mask that decides whether a knob can act at all is perfectly
+confounded with comm share** on the graded shape set. No amount of extra draws
+fixes that — **P1 cannot be tested on this shape family at any n**, and reporting
+a correlation for it would be reporting the confound.
+
+**The regression is also ill-posed on its own terms.** Shape 6's order rung is
+worth **1.39× the entire communication pool that survives at rung c** (775 µs of
+gain against 560 µs of pool) and granularity is worth **13.4× the release pool**
+(201 vs 15 µs). The knob **destroys the very share you would regress against** —
+which is a restatement of the superadditivity finding: the rungs are
+order-dependent, so "share at the final config" is not the independent variable it
+looks like.
+
+**How few shapes inform each claim, stated because it is the point.** Shapes 1-2
+are host-bound and excluded (shape 1 has three negative deltas; the five cuts
+price only 4.9% and 9.5% of their wall), leaving **n=4** — at which the smallest
+possible two-sided p is **0.083**, so nothing is fitted and `coefficient` is
+`null` in the JSON with the reason inline. For the question that actually matters
+— *given the knob is active, does its value scale with comm share* — it is
+**n=2** for order (shape 5 at share 0.525 → +15.11%; shape 6 at 0.392 → +42.11%)
+and **n=1** for granularity. That is not a trend and is not presented as one.
+
+**What replaces P1**: among the two active shapes the delta tracks **producer
+rounds** (`tiles/NG` 1.88 → 4.00, a 2.8× larger delta) while comm share *falls*.
+The right claim is a **task-graph** claim, not a communication-intensity one.
+
+### P2 — "the NR curve is flat everywhere": FALSIFIED as written, CONFIRMED on the plateau (n=6)
+
+Flat from NR=32 up on shapes 2-6 and from NR=48 on shape 1, every point inside
+that shape's widened floor. NR=8 resolved slower on **6 of 6** shapes (−13.75% to
+−51.48%), NR=16 on 5 of 6. **The plateau edge is not constant** — it is 48 on
+shape 1 — which is precisely why the shipped table is `56/32/32/32/32/48` rather
+than a single number.
+
+The cliff correlates +0.60 with reduce share and +0.80 with not-GEMM share but
+**0.00 with `egress/full`**, all indistinguishable at n=4 — so **the mechanism
+carries the claim, not the correlation**: at NR=8 the owner-side reduce needs 16
+rounds instead of 3.
+
+### Five places this contradicts the paper's current story
+
+Worth carrying to the paper rather than smoothing over:
+
+1. **Q5's registration is wrong for GEMM-RS.** Repairing it converts it from a
+   communication-intensity claim into a task-graph claim.
+2. **The two operators do not instance one trend.** The MoE side registers "small
+   M shifts value toward signal coarsening", while here coarsening is
+   *arithmetically impossible* except on the **largest** shape.
+3. **The knobs cannot reach the most communication-bound shape.** Shape 4 is
+   **42.4% egress** and **no rung touches it**; shapes 3 and 4 are irrecoverable
+   at any release setting, since at 1 tile/CTA there is nothing to group.
+4. **At the winner, the not-GEMM share is only 0.392 (shape 6) and 0.525 (shape
+   5)** — which *supports* Q3's "the frontier moves back into single-GPU GEMM
+   quality", and means Q1's ladder is best read as **history, not a map**.
+5. **An input inconsistency in exp_23's own output** (see the correction below).
+
+### CORRECTION to exp_23's NR reading, and to what I recorded earlier
+
+exp_23 labelled shape 6's `nr32 vs c` contrast "RESOLVED slower" while the effect
+sits **inside that shape's 4.44% floor**. It is **unresolved**. Consequently the
+`NR=48 vs NR=32` geomean ordering — which I earlier repeated as "NR=48 0.992×,
+i.e. better than shipped" — **is not resolvable on any shape**, and no claim that
+uniform NR=48 beats the shipped per-shape table is supported. The flatness of the
+32-56 plateau is exactly the reason: a plateau cannot rank its own points.
 
 ## Measurement discipline carried into the figure work
 

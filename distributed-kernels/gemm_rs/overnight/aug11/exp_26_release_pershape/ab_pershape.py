@@ -41,10 +41,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
 import harness_lib as H                                   # noqa: E402
 from harness_lib import rt, WORLD, GemmRS                 # noqa: E402
 
-ARMS = ["ps0", "ps1", "rg2c", "ps0b"]
+ARMS = ["ps0", "ps1", "ps2", "rg2c", "ps0b"]
 BASE = "ps0"
 NULL_ARM = "ps0b"
-CANDIDATE = "ps1"
+CANDIDATE = os.environ.get("AB_CANDIDATE", "ps2")
 
 SCORED = [
     (64, 7168, 18432, False, 1234),
@@ -79,6 +79,8 @@ def expected_rgroup(arm, ppc):
         return 4 if ppc >= 4 else 1
     if arm == "ps1":
         return max(1, min(4, ppc))
+    if arm == "ps2":
+        return 4 if ppc >= 4 else (2 if ppc >= 2 else 1)
     if arm == "rg2c":
         return 2 if ppc >= 2 else 1
     return None

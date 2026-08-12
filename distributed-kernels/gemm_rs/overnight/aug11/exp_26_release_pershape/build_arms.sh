@@ -34,13 +34,14 @@ spec_flags() {
   case "$1" in
     ps0|ps0b) echo "4 1 0" ;;
     ps1)      echo "4 1 1" ;;
+    ps2)      echo "4 1 2" ;;
     rg2c)     echo "2 1 0" ;;
     *) echo "unknown arm $1" >&2; return 1 ;;
   esac
 }
 
 fail=0
-for spec in ${@:-ps0 ps1 rg2c ps0b}; do
+for spec in ${@:-ps0 ps1 ps2 rg2c ps0b}; do
   read -r rg full pershape <<<"$(spec_flags "$spec")" || { fail=1; continue; }
   name=gemm_rs_mi300x_$spec
   echo "########## building $name (RG=$rg FULL_ONLY=$full PERSHAPE=$pershape) ##########"
@@ -74,7 +75,7 @@ done
 
 echo
 echo "########## arm resource tuples (VGPR / scratch / spill must not move) ##########"
-for spec in ${@:-ps0 ps1 rg2c ps0b}; do
+for spec in ${@:-ps0 ps1 ps2 rg2c ps0b}; do
   echo "-- arm $spec --"
   # Anchor on `remark: ` rather than on the start of the line: the -Rpass lines
   # carry a file:line prefix, so `^ *VGPRs:` silently matched nothing and the
@@ -86,8 +87,8 @@ for spec in ${@:-ps0 ps1 rg2c ps0b}; do
 done
 
 echo
-echo "########## .so sha256 (ps0 vs ps0b must DIFFER only by build nondeterminism; ps0 vs ps1 must differ) ##########"
-for spec in ${@:-ps0 ps1 rg2c ps0b}; do
+echo "########## .so sha256 ##########"
+for spec in ${@:-ps0 ps1 ps2 rg2c ps0b}; do
   sha256sum "$OUT/gemm_rs_mi300x_$spec.so" 2>/dev/null | sed 's#'"$OUT"'/##'
 done
 

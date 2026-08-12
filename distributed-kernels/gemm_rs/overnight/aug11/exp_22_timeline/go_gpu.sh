@@ -38,7 +38,11 @@ bash "$ON/tools/gpu_lease.sh" status 2>/dev/null | head -12
 echo
 echo "===== clocks pinned, recorded around every measurement ====="
 bash "$ON/tools/set_clocks.sh" pin 1900 2>&1 | tail -3
-rocm-smi --showclocks 2>/dev/null | tee "$E22/clocks_before.txt" | head -12
+# --showclocks reports the INSTANTANEOUS clock, which reads ~120 MHz whenever
+# the query lands on an idle GPU even with the perf level forced. --showperflevel
+# is what says whether the pin took, so record both.
+rocm-smi --showperflevel --showclocks 2>/dev/null \
+  | tee "$E22/clocks_before.txt" | grep -Ei "perf|sclk" | head -20
 
 # ---------------------------------------------------------------------------
 # NODE SANITY, FIRST AND GATING. exp_22 is the first campaign after the
@@ -53,9 +57,18 @@ rocm-smi --showclocks 2>/dev/null | tee "$E22/clocks_before.txt" | head -12
 # ---------------------------------------------------------------------------
 echo
 echo "############ node sanity: M7 vector at the ratchet build ############"
-setsid timeout 2400 docker exec -w "$E22" dhk-gemmrs \
-  env PYTHONPATH="$ON/harness" \
-  python3 -u "$ON/harness/m7_bench.py" 3 50 2>&1 | tail -32
+# EXP22_REUSE_M7=1 re-scores an M7 run already taken under a lease in this
+# session rather than paying for it twice. The bench is the expensive part; the
+# comparison is free, and the first pass's comparison was against the wrong
+# statistic (best-of-arm rather than the mean-geomean M7 actually prints).
+if [ "${EXP22_REUSE_M7:-0}" = "1" ] && [ -f "$E22/m7_results.json" ]; then
+  echo "reusing $E22/m7_results.json (taken under this session's lease):"
+  ls -l "$E22/m7_results.json"
+else
+  setsid timeout 2400 docker exec -w "$E22" dhk-gemmrs \
+    env PYTHONPATH="$ON/harness" \
+    python3 -u "$ON/harness/m7_bench.py" 3 50 2>&1 | tail -32
+fi
 docker exec -w "$E22" dhk-gemmrs python3 -u "$E22/sanity_check.py" \
   "$E22/m7_results.json" --json "$E22/sanity.json"
 sanity_rc=$?
@@ -88,7 +101,8 @@ if [ "$WHAT" = "b" ] || [ "$WHAT" = "all" ]; then
   echo "arm (b) exit=$?"
 fi
 
-rocm-smi --showclocks 2>/dev/null | tee "$E22/clocks_after.txt" | head -12
+rocm-smi --showperflevel --showclocks 2>/dev/null \
+  | tee "$E22/clocks_after.txt" | grep -Ei "perf|sclk" | head -20
 
 echo
 echo "############ bin + validate (CPU) ############"

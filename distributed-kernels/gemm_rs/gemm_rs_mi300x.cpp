@@ -98,11 +98,15 @@
 // the release pushes 13.1% of L2 writebacks on the first and 56.4% on the
 // second.
 //
-// So take the group size to be min(RELEASE_GROUP, tiles_per_cta) instead. Both
-// terms are already computed; the cap and every invariant of the group loop are
-// untouched. Per graded shape the effective group goes 1/1/1/1/1/4 -> 1/1/1/1/
-// 2/4: only 8192x4096x14336 moves, and the four one-tile rows are arithmetically
-// pinned to 1 either way, which makes them controls rather than collateral.
+// So let the group size fall to what the shape can actually fill. Both terms are
+// already computed; the cap and every invariant of the group loop are untouched.
+// Per graded shape the effective group goes 1/1/1/1/1/4 -> 1/1/1/1/2/4: only
+// 8192x4096x14336 moves, and the four one-tile rows are arithmetically pinned to
+// 1 either way, which makes them controls rather than collateral.
+//
+// HOW that is spelled turns out to matter as much as the rule. See the value
+// list on the macro below: `min(RELEASE_GROUP, tiles_per_cta)` is the obvious
+// spelling and it is measurably the wrong one.
 //
 // What this rule does NOT do is revive the arm E3 rejected. rgroup <= the tile
 // count of the CTA that owns the most, so no CTA ever waits on a tile that does
@@ -129,8 +133,27 @@
 // as 1, which would have silently redefined the production binary for every
 // other experiment building from this file tonight, including the waterfall's
 // rung (c) "shipped binary" reference arm. exp_26 turns it on explicitly with
-// -DHK_GEMM_RS_MI300X_RELEASE_GROUP_PERSHAPE=1; the default stays 0 until its
+// -DHK_GEMM_RS_MI300X_RELEASE_GROUP_PERSHAPE=<n>; the default stays 0 until its
 // result.md says otherwise.
+//
+// Values -- two spellings of the same rule, which do NOT measure the same:
+//
+//   0  the incumbent step rule, `tiles_per_cta >= RELEASE_GROUP ? RG : 1`.
+//   1  `min(RELEASE_GROUP, tiles_per_cta)`, the obvious spelling. It makes
+//      rgroup an arbitrary value in [1, RG] where the incumbent made it a
+//      member of the two-element set {1, RG}, and the compiler prices that:
+//      +2 VGPRs on five of the seven instantiations (246 -> 248 and 248 -> 250
+//      on the 256x256 rows, which sit against the 256 arch cap) and a different
+//      schedule everywhere, at unchanged occupancy, spills and ordering-op
+//      counts. exp_09 recorded the same class of effect from the same variable:
+//      folded constant, known bound and runtime value are three schedules.
+//   2  the same rule spelled as a descending select over a COMPILE-TIME LADDER
+//      of group sizes, so rgroup is again one of a handful of literals.
+//
+// The ladder is `{RELEASE_GROUP, 2, 1}` -- a strict generalization of the
+// incumbent, one rung added. A CTA owning 3 tiles takes the 2 rung and its last
+// group is truncated to 1 by `emitted`, the same conservative treatment every
+// short CTA already gets.
 #ifndef HK_GEMM_RS_MI300X_RELEASE_GROUP_PERSHAPE
 #define HK_GEMM_RS_MI300X_RELEASE_GROUP_PERSHAPE 0
 #endif
@@ -466,7 +489,17 @@ void gemm_rs_mi300x_kernel(const mi300x_globals g) {
         // special-cased per config row.
         const int tiles_per_cta = (tiles + stride - 1) / stride;
 #if HK_GEMM_RS_MI300X_RELEASE_GROUP_FULL_ONLY
-#if HK_GEMM_RS_MI300X_RELEASE_GROUP_PERSHAPE
+#if HK_GEMM_RS_MI300X_RELEASE_GROUP_PERSHAPE == 2
+        // The ladder spelling. Every arm of this select is a compile-time
+        // literal, so rgroup stays a member of {RELEASE_GROUP, 2, 1} exactly as
+        // the incumbent kept it a member of {RELEASE_GROUP, 1} -- which is what
+        // keeps the schedule and the register budget where they were. The
+        // second rung is guarded by the cap so RELEASE_GROUP = 1 still collapses
+        // to the behaviour-preserving control arm.
+        const int rgroup =
+            tiles_per_cta >= RELEASE_GROUP ? RELEASE_GROUP
+            : ((RELEASE_GROUP >= 2 && tiles_per_cta >= 2) ? 2 : 1);
+#elif HK_GEMM_RS_MI300X_RELEASE_GROUP_PERSHAPE == 1
         // min(cap, tiles_per_cta), floored at 1. The floor is not defensive
         // decoration: rgroup == 0 makes `t0 += rgroup * stride` an infinite
         // loop, and it is the only value of this expression that does not

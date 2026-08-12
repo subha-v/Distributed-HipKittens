@@ -114,7 +114,7 @@ Since then two more landed:
 | exp_22 | per-layer resource timeline (NanoFlow v2 Fig 10 analog) | Fig 3 / Q4 | **instrumented + parity gate PASSED** (flag-off byte-identical, 7/7); arms (a)+(b) on GPU |
 | exp_23 | knob waterfall — **the money figure** | Fig 4 / Q1 | **LANDED** — all 6 shapes, 4 draws, 192/192 arms correct at both tolerances; a→c **1.113×** (1.082× order × 1.028× granularity); structural prediction held |
 | exp_24 | external ladders refresh | Q6 | queued |
-| exp_25 | per-shape sensitivity readout | Q5 | queued (derives from exp_20 + exp_23) |
+| exp_25 | per-shape sensitivity readout | Q5 | **LANDED — a negative, and a sharp one.** Q5's premise is falsified in sign AND not identifiable on this shape family |
 
 Figure specs distilled from the sibling MI350X branch (read-only, via
 `git show`) are in `aug11/FIGURE_SPECS.md` — including the ten MI350X-only
@@ -122,6 +122,30 @@ facts (76.8/537.6 GB/s ceilings, 256-CU grids, gfx950 occupancy claims,
 `s_memrealtime` tick rate) that must be **re-measured on gfx942** rather than
 quoted. `docs/distributed/PAPER.md` was found and its Q1-Q6 definitions are
 captured there.
+
+## FOR THE PAPER — five things GEMM-RS contradicts, from exp_25
+
+These should reach the paper rather than be smoothed over. All five are measured.
+
+1. **Q5's premise is falsified in sign**: order and granularity deltas are largest
+   where communication share is **lowest**, under all four definitions of share.
+2. **Q5 is also not identifiable on the graded shape family.** Shapes 3-6 order
+   identically by `K` and by `tiles/NG` (ρ = +1.00) while comm share is monotone
+   in `K` (ρ = −1.00), so the structural mask that decides whether a knob can act
+   is **perfectly confounded** with the variable Q5 wants to regress against. More
+   draws cannot fix a confound. The repaired claim is a **task-graph** claim:
+   among the two shapes where order is active, the delta tracks producer rounds
+   (`tiles/NG` 1.88 → 4.00) while comm share falls.
+3. **The two operators do not instance one trend.** The MoE side registers "small
+   M shifts value toward signal coarsening"; on GEMM-RS coarsening is
+   *arithmetically impossible* except on the **largest** shape.
+4. **The knobs cannot reach the most communication-bound shape.** Shape 4 is
+   42.4% egress and no rung touches it; shapes 3 and 4 cannot group releases at
+   any setting, because at 1 tile/CTA there is nothing to group.
+5. **Q3 is supported and Q1 should be reframed.** At the winner the not-GEMM share
+   is only **0.392** (shape 6) and **0.525** (shape 5), so the frontier really has
+   moved back into single-GPU GEMM quality — and the waterfall is best presented
+   as **history, not a map**, especially since its rungs compose superadditively.
 
 ## THE STATISTICS RULE CHANGED TONIGHT — apply it to every delta
 

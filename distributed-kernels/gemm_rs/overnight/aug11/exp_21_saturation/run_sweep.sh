@@ -11,6 +11,9 @@ set -uo pipefail
 
 REPO=/home/subvadla/dhk
 EXP=$REPO/distributed-kernels/gemm_rs/overnight/aug11/exp_21_saturation
+# Artifacts always land in EXP; the driver itself may be a frozen per-run copy, so a
+# push landing mid-sweep cannot rewrite the interpreter's input (see go_campaign.sh).
+PY=${SAT_PY:-$(dirname "${BASH_SOURCE[0]}")/run_saturation.py}
 LOGS=$EXP/logs
 mkdir -p "$LOGS"
 MODE=${1:-full}
@@ -47,11 +50,11 @@ case "$MODE" in
 esac
 
 echo
-echo "########## launching: python3 run_saturation.py $ARGS ##########"
+echo "########## launching: python3 $PY $ARGS ##########"
 echo "log: $LOG"
 cd "$EXP"
 setsid timeout --signal=TERM --kill-after=120 7200 \
-  python3 "$EXP/run_saturation.py" $ARGS >"$LOG" 2>&1
+  python3 "$PY" $ARGS >"$LOG" 2>&1
 rc=$?
 echo "sweep exit=$rc"
 echo

@@ -1,0 +1,1976 @@
+{
+  "experiment": "aug11/exp_25_sensitivity",
+  "what": "per-shape sensitivity readout (paper Q5): each waterfall rung's delta per shape, beside that shape's measured communication share and its own measured noise floor, with structural activity separated from sensitivity",
+  "generated_utc": "2026-08-12T10:45:49Z",
+  "gpu_runs": 0,
+  "derivation": "pure analysis over exp_20 and exp_23; no new measurement",
+  "inputs": {
+    "ablation": {
+      "path": "aug11/exp_20_attribution/ablation.json",
+      "sha256": "e51f46368e44867130b637082e7e07260616e364de662292eceb5240277baf25"
+    },
+    "waterfall": {
+      "path": "aug11/exp_23_waterfall/waterfall.json",
+      "sha256": "6b8faedac947040bbaf9028bbccf4ffa9498bb8a0a03defa37e2c4a381009750"
+    },
+    "stats": {
+      "path": "aug11/exp_23_waterfall/stats.json",
+      "sha256": "f2041bba1fc0bdf909cf07065a7602ec498212cd8a33ea71ce8e9521145a50dd"
+    }
+  },
+  "protocol": "pipelined, one process driving 8 devices, which is NOT the official evaluator's topology; exp_20 at 40 iters/cell, exp_23 at 4 allocation draws x 8-arm rotation, best+median only (means are unusable on this node)",
+  "comm_share_definitions": {
+    "D1_egress_over_full": "stages_us.egress / full_us",
+    "D2_egress_sync_release_over_full": "(egress + sync + release) / full_us",
+    "D3_full_minus_gemm_over_full": "(full_us - stages_us.gemm) / full_us",
+    "D4_comm_over_priced_pools": "(egress + sync + release) / sum(all five stage deltas)",
+    "why_four": "exp_20's cuts are single-cut deltas: they OVERLAP and do not partition full_us (stage_sum_over_full runs 0.05-1.02), so egress/full is not a clean share and no single definition is canonical. All four are reported.",
+    "primary": "D3_full_minus_gemm_over_full",
+    "why_primary": "numerator and denominator come from the same single cut, so it cannot be inflated by double-counting overlapping pools, and it is monotone in the shape's own arithmetic (8K/7 flops per egress byte)"
+  },
+  "caveats": [
+    "Single-cut stage deltas overlap and are NOT a budget; a share built from them is a ratio of overlapping quantities, never a partition.",
+    "Shapes 1 and 2 are HOST-bound; no comm share is computed for them and they enter no correlation. n = 4.",
+    "A rung delta of ~0 on a structurally inert shape is arithmetic, not a sensitivity measurement.",
+    "Rung deltas are measured at the configuration the rung starts from, while the comm share is measured at the LADDER'S TOP (rung c). The knob changes the very share it would be regressed against, so the regression in P1 is ill-posed as well as underpowered.",
+    "exp_23 proved one null twin under-measures the floor: two identically-configured shape-6 arms differed by up to 4.44% consistently in both construction orders. Every floor here is the widened union-of-pairs floor."
+  ],
+  "shapes": [
+    {
+      "shape_index": 1,
+      "shape": "64x7168x18432",
+      "m": 64,
+      "n": 7168,
+      "k": 18432,
+      "has_bias": false,
+      "geometry": {
+        "bm": 32,
+        "bn": 64,
+        "bk": 128,
+        "num_reducer_ctas": 56,
+        "num_gemm_ctas": 248,
+        "grid_ctas": 304,
+        "tiles": 224,
+        "tiles_per_cta": 1,
+        "producer_waves": 1,
+        "last_wave_fill": 0.9032,
+        "k_local": 2304,
+        "k_iters": 18,
+        "waves_x_k_iters": 18,
+        "lds_double_buffer_bytes": 49152,
+        "at_64kb_lds_cap": false,
+        "effective_release_group": 1
+      },
+      "derived_arithmetic": {
+        "flops": 16911433728.0,
+        "egress_bytes_mb": 0.802816,
+        "flops_per_egress_byte": 21065.14285714286,
+        "flops_per_egress_byte_closed_form": 21065.14285714286,
+        "note_closed_form": "flops/egress byte = 2MNK / ((7/8) MN 2) = 8K/7 exactly, so the compute-per-communicated-byte axis of the graded set is a function of K alone. M and N enter only through the tile count.",
+        "tiles_over_ng": 0.9032258064516129
+      },
+      "attribution": {
+        "full_us": 67.1,
+        "stages_us": {
+          "gemm": 2.5,
+          "egress": 2.6,
+          "reduce": -0.3,
+          "sync": -1.0,
+          "release": -0.5
+        },
+        "stage_share_of_full": {
+          "gemm": 0.0373,
+          "egress": 0.0387,
+          "reduce": -0.0045,
+          "sync": -0.0149,
+          "release": -0.0075
+        },
+        "stage_clears_exp20_floor": {
+          "gemm": true,
+          "egress": true,
+          "reduce": false,
+          "sync": false,
+          "release": false
+        },
+        "stage_sum_over_full": 0.0492,
+        "x_sol": 10.39,
+        "m7_bound": "HOST",
+        "m7_host_issue_us_per_op": 62.34
+      },
+      "comm_share": {
+        "usable_for_correlation": false,
+        "exclusion_reason": "HOST-bound: bound=HOST at 10.39x SOL (62.34 us of issue inside a 66.41 us wall); 3 of 5 stage deltas negative; all 5 inside the 2.34 us floor; the five cuts price only 4.9% of wall time",
+        "D1_egress_over_full": null,
+        "D2_egress_sync_release_over_full": null,
+        "D3_full_minus_gemm_over_full": null,
+        "D4_comm_over_priced_pools": null,
+        "stage_sum_over_full": 0.049180327868852465
+      },
+      "floors": {
+        "exp20_allocation_floor_pct": 3.48,
+        "exp20_allocation_floor_us": 2.34,
+        "exp23_widened_floor_pct": 2.8156231428849043,
+        "exp23_widened_floor_us": 1.7615431212989185,
+        "exp23_single_pair_floor_pct": 2.8156231428849043,
+        "exp23_null_pairs": [
+          "null vs c"
+        ],
+        "which_is_used": "exp23_widened_floor_pct for every rung and NR verdict; it is measured in the run that produced those ratios, over the union of all identically-configured pairs"
+      },
+      "arm_medians_us": {
+        "a": 63.2956437766552,
+        "b": 63.904946049054466,
+        "c": 62.563170989354454,
+        "null": 61.63882091641426
+      },
+      "arm_bests_us": {
+        "a": 61.28113716840744,
+        "b": 62.079826990763344,
+        "c": 60.407581428686775,
+        "null": 60.024584333101906
+      },
+      "rungs": {
+        "a_to_b": {
+          "mechanism": "WGM destination-spreading task order; differs from the constant WGM=4 only where tiles > num_gemm_ctas",
+          "structurally_active": false,
+          "gain_median_pct": -0.595466384090948,
+          "gain_best_pct": -0.9849230704411904,
+          "gain_median_per_draw_range_pct": [
+            -2.099010445613736,
+            0.6471842470804345
+          ],
+          "delta_us_from_pooled_medians": -0.6093022723992689,
+          "delta_us_from_pooled_bests": -0.7986898223559038,
+          "floor_pct": 2.8156231428849043,
+          "floor_us": 1.7993224504052898,
+          "beyond_floor": false,
+          "verdict": "UNRESOLVED",
+          "resolved": false,
+          "note_delta_us": "the percentages are exp_23's within-draw paired contrasts; delta_us is recomputed from the pooled medians/bests and is therefore only approximately their product with the wall",
+          "vs_pools_at_rung_c": {
+            "comm_pool_us_D2_numerator": 1.1,
+            "target_pool": "egress",
+            "target_pool_us": 2.6,
+            "target_pool_clears_exp20_floor": true,
+            "delta_over_comm_pool": -0.5539111567266081,
+            "delta_over_target_pool": -0.23434702784587266,
+            "delta_over_full_at_rung_c": -0.00973899280941092,
+            "note": "the pools are exp_20's single-cut deltas at rung c; a ratio > 1 means the rung's win exceeds the pool that survives at the winner, i.e. the knob removed the pool it would otherwise be regressed against"
+          }
+        },
+        "b_to_c": {
+          "mechanism": "grouped release, RELEASE_GROUP=4 with FULL_ONLY=1; rgroup collapses to 1 unless tiles_per_cta >= 4",
+          "structurally_active": false,
+          "gain_median_pct": 1.7356928516390036,
+          "gain_best_pct": 3.463096508689778,
+          "gain_median_per_draw_range_pct": [
+            0.692486256024516,
+            3.331559765064407
+          ],
+          "delta_us_from_pooled_medians": 1.3417750597000122,
+          "delta_us_from_pooled_bests": 1.6722455620765686,
+          "floor_pct": 2.8156231428849043,
+          "floor_us": 1.7615431212989185,
+          "beyond_floor": false,
+          "verdict": "UNRESOLVED",
+          "resolved": false,
+          "note_delta_us": "the percentages are exp_23's within-draw paired contrasts; delta_us is recomputed from the pooled medians/bests and is therefore only approximately their product with the wall",
+          "vs_pools_at_rung_c": {
+            "comm_pool_us_D2_numerator": 1.1,
+            "target_pool": "release",
+            "target_pool_us": -0.5,
+            "target_pool_clears_exp20_floor": false,
+            "delta_over_comm_pool": 1.2197955088181929,
+            "delta_over_target_pool": -2.6835501194000244,
+            "delta_over_full_at_rung_c": 0.021446723982841667,
+            "note": "the pools are exp_20's single-cut deltas at rung c; a ratio > 1 means the rung's win exceeds the pool that survives at the winner, i.e. the knob removed the pool it would otherwise be regressed against"
+          }
+        }
+      },
+      "nr_curve": {
+        "shipped_nr": 56,
+        "reference_arm": "rung c at this shape's shipped NR",
+        "points": [
+          {
+            "nr": 8,
+            "num_gemm_ctas": 296,
+            "is_shipped_config": false,
+            "median_us": 129.29432094097137,
+            "best_us": 128.54702770709991,
+            "gain_median_pct_vs_shipped": -51.48432068175164,
+            "gain_best_pct_vs_shipped": -52.4086518251945,
+            "within_widened_floor": false,
+            "beyond_floor": true,
+            "verdict": "RESOLVED slower",
+            "is_null_pair": false,
+            "contrast_key": "nr8 vs c",
+            "verdict_conflicts_with_widened_floor": false
+          },
+          {
+            "nr": 16,
+            "num_gemm_ctas": 288,
+            "is_shipped_config": false,
+            "median_us": 87.04774702588716,
+            "best_us": 86.711881061395,
+            "gain_median_pct_vs_shipped": -28.11255112136864,
+            "gain_best_pct_vs_shipped": -29.553715854221934,
+            "within_widened_floor": false,
+            "beyond_floor": true,
+            "verdict": "RESOLVED slower",
+            "is_null_pair": false,
+            "contrast_key": "nr16 vs c",
+            "verdict_conflicts_with_widened_floor": false
+          },
+          {
+            "nr": 32,
+            "num_gemm_ctas": 272,
+            "is_shipped_config": false,
+            "median_us": 67.88802643616995,
+            "best_us": 66.815751294295,
+            "gain_median_pct_vs_shipped": -7.9647299443074475,
+            "gain_best_pct_vs_shipped": -9.140608767723723,
+            "within_widened_floor": false,
+            "beyond_floor": true,
+            "verdict": "RESOLVED slower",
+            "is_null_pair": false,
+            "contrast_key": "nr32 vs c",
+            "verdict_conflicts_with_widened_floor": false
+          },
+          {
+            "nr": 48,
+            "num_gemm_ctas": 256,
+            "is_shipped_config": false,
+            "median_us": 62.64636913935344,
+            "best_us": 61.669088900089264,
+            "gain_median_pct_vs_shipped": 0.09848810232178096,
+            "gain_best_pct_vs_shipped": -1.0335159386200499,
+            "within_widened_floor": true,
+            "beyond_floor": false,
+            "verdict": "UNRESOLVED",
+            "is_null_pair": false,
+            "contrast_key": "nr48 vs c",
+            "verdict_conflicts_with_widened_floor": false
+          }
+        ],
+        "plateau_points_nr_ge_32": [
+          32,
+          48
+        ],
+        "flat_from_nr32_upward": false,
+        "plateau_lower_edge_nr": 48,
+        "plateau_max_abs_gain_pct": 7.9647299443074475,
+        "points_within_widened_floor": [
+          48
+        ],
+        "points_resolved_slower": [
+          8,
+          16,
+          32
+        ],
+        "cliff_points_nr_lt_32": [
+          8,
+          16
+        ],
+        "cliff_all_resolved_slower": true,
+        "cliff_worst_gain_pct": -51.48432068175164
+      },
+      "knob_structurally_active": {
+        "order_a_to_b": false,
+        "granularity_b_to_c": false,
+        "nr_reduction_below_plateau": true
+      }
+    },
+    {
+      "shape_index": 2,
+      "shape": "512x4096x12288",
+      "m": 512,
+      "n": 4096,
+      "k": 12288,
+      "has_bias": true,
+      "geometry": {
+        "bm": 64,
+        "bn": 128,
+        "bk": 64,
+        "num_reducer_ctas": 32,
+        "num_gemm_ctas": 272,
+        "grid_ctas": 304,
+        "tiles": 256,
+        "tiles_per_cta": 1,
+        "producer_waves": 1,
+        "last_wave_fill": 0.9412,
+        "k_local": 1536,
+        "k_iters": 24,
+        "waves_x_k_iters": 24,
+        "lds_double_buffer_bytes": 49152,
+        "at_64kb_lds_cap": false,
+        "effective_release_group": 1
+      },
+      "derived_arithmetic": {
+        "flops": 51539607552.0,
+        "egress_bytes_mb": 3.670016,
+        "flops_per_egress_byte": 14043.42857142857,
+        "flops_per_egress_byte_closed_form": 14043.42857142857,
+        "note_closed_form": "flops/egress byte = 2MNK / ((7/8) MN 2) = 8K/7 exactly, so the compute-per-communicated-byte axis of the graded set is a function of K alone. M and N enter only through the tile count.",
+        "tiles_over_ng": 0.9411764705882353
+      },
+      "attribution": {
+        "full_us": 67.5,
+        "stages_us": {
+          "gemm": 1.1,
+          "egress": 2.6,
+          "reduce": -0.8,
+          "sync": 2.6,
+          "release": 0.9
+        },
+        "stage_share_of_full": {
+          "gemm": 0.0163,
+          "egress": 0.0385,
+          "reduce": -0.0119,
+          "sync": 0.0385,
+          "release": 0.0133
+        },
+        "stage_clears_exp20_floor": {
+          "gemm": true,
+          "egress": true,
+          "reduce": true,
+          "sync": true,
+          "release": true
+        },
+        "stage_sum_over_full": 0.0948,
+        "x_sol": 8.24,
+        "m7_bound": "device",
+        "m7_host_issue_us_per_op": 62.43
+      },
+      "comm_share": {
+        "usable_for_correlation": false,
+        "exclusion_reason": "HOST-bound against its median (62.43 us of issue inside a 67.80 us median wall); 1 of 5 stage deltas negative; the five cuts price only 9.5% of wall time",
+        "D1_egress_over_full": null,
+        "D2_egress_sync_release_over_full": null,
+        "D3_full_minus_gemm_over_full": null,
+        "D4_comm_over_priced_pools": null,
+        "stage_sum_over_full": 0.09481481481481482
+      },
+      "floors": {
+        "exp20_allocation_floor_pct": 0.93,
+        "exp20_allocation_floor_us": 0.63,
+        "exp23_widened_floor_pct": 2.0879775848652526,
+        "exp23_widened_floor_us": 1.3794508289390208,
+        "exp23_single_pair_floor_pct": 2.0879775848652526,
+        "exp23_null_pairs": [
+          "null vs c",
+          "nr32 vs c"
+        ],
+        "which_is_used": "exp23_widened_floor_pct for every rung and NR verdict; it is measured in the run that produced those ratios, over the union of all identically-configured pairs"
+      },
+      "arm_medians_us": {
+        "a": 66.02224707603455,
+        "b": 65.96555560827255,
+        "c": 66.06636196374893,
+        "null": 64.8978129029274
+      },
+      "arm_bests_us": {
+        "a": 64.25422430038452,
+        "b": 64.58336114883423,
+        "c": 64.81783092021942,
+        "null": 64.56032395362854
+      },
+      "rungs": {
+        "a_to_b": {
+          "mechanism": "WGM destination-spreading task order; differs from the constant WGM=4 only where tiles > num_gemm_ctas",
+          "structurally_active": false,
+          "gain_median_pct": -0.2888501353739581,
+          "gain_best_pct": -1.2697356765305257,
+          "gain_median_per_draw_range_pct": [
+            -0.6647288756952086,
+            0.3618876823833439
+          ],
+          "delta_us_from_pooled_medians": 0.05669146776199341,
+          "delta_us_from_pooled_bests": -0.32913684844970703,
+          "floor_pct": 2.0879775848652526,
+          "floor_us": 1.3773460148325545,
+          "beyond_floor": false,
+          "verdict": "UNRESOLVED",
+          "resolved": false,
+          "note_delta_us": "the percentages are exp_23's within-draw paired contrasts; delta_us is recomputed from the pooled medians/bests and is therefore only approximately their product with the wall",
+          "vs_pools_at_rung_c": {
+            "comm_pool_us_D2_numerator": 6.1000000000000005,
+            "target_pool": "egress",
+            "target_pool_us": 2.6,
+            "target_pool_clears_exp20_floor": true,
+            "delta_over_comm_pool": 0.009293683239671049,
+            "delta_over_target_pool": 0.021804410677689772,
+            "delta_over_full_at_rung_c": 0.0008580988278588794,
+            "note": "the pools are exp_20's single-cut deltas at rung c; a ratio > 1 means the rung's win exceeds the pool that survives at the winner, i.e. the knob removed the pool it would otherwise be regressed against"
+          }
+        },
+        "b_to_c": {
+          "mechanism": "grouped release, RELEASE_GROUP=4 with FULL_ONLY=1; rgroup collapses to 1 unless tiles_per_cta >= 4",
+          "structurally_active": false,
+          "gain_median_pct": -0.07804855335241112,
+          "gain_best_pct": -0.33690204483298736,
+          "gain_median_per_draw_range_pct": [
+            -0.3895518076120985,
+            0.23644816278318714
+          ],
+          "delta_us_from_pooled_medians": -0.1008063554763794,
+          "delta_us_from_pooled_bests": -0.23446977138519287,
+          "floor_pct": 2.0879775848652526,
+          "floor_us": 1.3794508289390208,
+          "beyond_floor": false,
+          "verdict": "UNRESOLVED",
+          "resolved": false,
+          "note_delta_us": "the percentages are exp_23's within-draw paired contrasts; delta_us is recomputed from the pooled medians/bests and is therefore only approximately their product with the wall",
+          "vs_pools_at_rung_c": {
+            "comm_pool_us_D2_numerator": 6.1000000000000005,
+            "target_pool": "release",
+            "target_pool_us": 0.9,
+            "target_pool_clears_exp20_floor": true,
+            "delta_over_comm_pool": -0.016525632045308096,
+            "delta_over_target_pool": -0.11200706164042154,
+            "delta_over_full_at_rung_c": -0.00152583481941525,
+            "note": "the pools are exp_20's single-cut deltas at rung c; a ratio > 1 means the rung's win exceeds the pool that survives at the winner, i.e. the knob removed the pool it would otherwise be regressed against"
+          }
+        }
+      },
+      "nr_curve": {
+        "shipped_nr": 32,
+        "reference_arm": "rung c at this shape's shipped NR",
+        "points": [
+          {
+            "nr": 8,
+            "num_gemm_ctas": 296,
+            "is_shipped_config": false,
+            "median_us": 88.26056122779846,
+            "best_us": 87.81516551971436,
+            "gain_median_pct_vs_shipped": -24.997042724052847,
+            "gain_best_pct_vs_shipped": -26.12551851108273,
+            "within_widened_floor": false,
+            "beyond_floor": true,
+            "verdict": "RESOLVED slower",
+            "is_null_pair": false,
+            "contrast_key": "nr8 vs c",
+            "verdict_conflicts_with_widened_floor": false
+          },
+          {
+            "nr": 16,
+            "num_gemm_ctas": 288,
+            "is_shipped_config": false,
+            "median_us": 72.62880355119705,
+            "best_us": 71.95305824279785,
+            "gain_median_pct_vs_shipped": -8.940013267905183,
+            "gain_best_pct_vs_shipped": -10.052472968800235,
+            "within_widened_floor": false,
+            "beyond_floor": true,
+            "verdict": "RESOLVED slower",
+            "is_null_pair": false,
+            "contrast_key": "nr16 vs c",
+            "verdict_conflicts_with_widened_floor": false
+          },
+          {
+            "nr": 32,
+            "num_gemm_ctas": 272,
+            "is_shipped_config": true,
+            "median_us": 65.48735499382019,
+            "best_us": 64.30011987686157,
+            "gain_median_pct_vs_shipped": 0.6915862100455528,
+            "gain_best_pct_vs_shipped": 0.38258206895601665,
+            "within_widened_floor": true,
+            "beyond_floor": false,
+            "verdict": "NULL PAIR (floor estimate, not a result)",
+            "is_null_pair": true,
+            "contrast_key": "nr32 vs c *shipped",
+            "verdict_conflicts_with_widened_floor": false
+          },
+          {
+            "nr": 48,
+            "num_gemm_ctas": 256,
+            "is_shipped_config": false,
+            "median_us": 65.87712466716766,
+            "best_us": 64.12836909294128,
+            "gain_median_pct_vs_shipped": 0.3477422467691116,
+            "gain_best_pct_vs_shipped": 1.10880818232455,
+            "within_widened_floor": true,
+            "beyond_floor": false,
+            "verdict": "UNRESOLVED",
+            "is_null_pair": false,
+            "contrast_key": "nr48 vs c",
+            "verdict_conflicts_with_widened_floor": false
+          }
+        ],
+        "plateau_points_nr_ge_32": [
+          32,
+          48
+        ],
+        "flat_from_nr32_upward": true,
+        "plateau_lower_edge_nr": 32,
+        "plateau_max_abs_gain_pct": 0.6915862100455528,
+        "points_within_widened_floor": [
+          32,
+          48
+        ],
+        "points_resolved_slower": [
+          8,
+          16
+        ],
+        "cliff_points_nr_lt_32": [
+          8,
+          16
+        ],
+        "cliff_all_resolved_slower": true,
+        "cliff_worst_gain_pct": -24.997042724052847
+      },
+      "knob_structurally_active": {
+        "order_a_to_b": false,
+        "granularity_b_to_c": false,
+        "nr_reduction_below_plateau": true
+      }
+    },
+    {
+      "shape_index": 3,
+      "shape": "2048x2880x2880",
+      "m": 2048,
+      "n": 2880,
+      "k": 2880,
+      "has_bias": true,
+      "geometry": {
+        "bm": 128,
+        "bn": 192,
+        "bk": 32,
+        "num_reducer_ctas": 32,
+        "num_gemm_ctas": 272,
+        "grid_ctas": 304,
+        "tiles": 240,
+        "tiles_per_cta": 1,
+        "producer_waves": 1,
+        "last_wave_fill": 0.8824,
+        "k_local": 360,
+        "k_iters": 12,
+        "waves_x_k_iters": 12,
+        "lds_double_buffer_bytes": 40960,
+        "at_64kb_lds_cap": false,
+        "effective_release_group": 1
+      },
+      "derived_arithmetic": {
+        "flops": 33973862400.0,
+        "egress_bytes_mb": 10.32192,
+        "flops_per_egress_byte": 3291.4285714285716,
+        "flops_per_egress_byte_closed_form": 3291.4285714285716,
+        "note_closed_form": "flops/egress byte = 2MNK / ((7/8) MN 2) = 8K/7 exactly, so the compute-per-communicated-byte axis of the graded set is a function of K alone. M and N enter only through the tile count.",
+        "tiles_over_ng": 0.8823529411764706
+      },
+      "attribution": {
+        "full_us": 87.7,
+        "stages_us": {
+          "gemm": 16.2,
+          "egress": 20.6,
+          "reduce": 7.9,
+          "sync": 16.2,
+          "release": 6.5
+        },
+        "stage_share_of_full": {
+          "gemm": 0.1847,
+          "egress": 0.2349,
+          "reduce": 0.0901,
+          "sync": 0.1847,
+          "release": 0.0741
+        },
+        "stage_clears_exp20_floor": {
+          "gemm": true,
+          "egress": true,
+          "reduce": true,
+          "sync": true,
+          "release": true
+        },
+        "stage_sum_over_full": 0.7685,
+        "x_sol": 3.81,
+        "m7_bound": "device",
+        "m7_host_issue_us_per_op": 62.15
+      },
+      "comm_share": {
+        "usable_for_correlation": true,
+        "exclusion_reason": null,
+        "D1_egress_over_full": 0.23489167616875714,
+        "D2_egress_sync_release_over_full": 0.4937286202964652,
+        "D3_full_minus_gemm_over_full": 0.8152793614595211,
+        "D4_comm_over_priced_pools": 0.6424332344213649,
+        "stage_sum_over_full": 0.7685290763968073
+      },
+      "floors": {
+        "exp20_allocation_floor_pct": 1.61,
+        "exp20_allocation_floor_us": 1.41,
+        "exp23_widened_floor_pct": 1.741992017853644,
+        "exp23_widened_floor_us": 1.4712431988727661,
+        "exp23_single_pair_floor_pct": 0.34320609396998325,
+        "exp23_null_pairs": [
+          "null vs c",
+          "nr32 vs c"
+        ],
+        "which_is_used": "exp23_widened_floor_pct for every rung and NR verdict; it is measured in the run that produced those ratios, over the union of all identically-configured pairs"
+      },
+      "arm_medians_us": {
+        "a": 85.07264405488968,
+        "b": 85.63042432069778,
+        "c": 84.45751667022705,
+        "null": 84.46656167507172
+      },
+      "arm_bests_us": {
+        "a": 83.2718163728714,
+        "b": 85.03340184688568,
+        "c": 83.56545865535736,
+        "null": 83.91433954238892
+      },
+      "rungs": {
+        "a_to_b": {
+          "mechanism": "WGM destination-spreading task order; differs from the constant WGM=4 only where tiles > num_gemm_ctas",
+          "structurally_active": false,
+          "gain_median_pct": -0.6376299233842031,
+          "gain_best_pct": -0.5678347542899753,
+          "gain_median_per_draw_range_pct": [
+            -2.7624468850220296,
+            0.3536472771323629
+          ],
+          "delta_us_from_pooled_medians": -0.5577802658081055,
+          "delta_us_from_pooled_bests": -1.7615854740142822,
+          "floor_pct": 1.741992017853644,
+          "floor_us": 1.4916751565207609,
+          "beyond_floor": false,
+          "verdict": "UNRESOLVED",
+          "resolved": false,
+          "note_delta_us": "the percentages are exp_23's within-draw paired contrasts; delta_us is recomputed from the pooled medians/bests and is therefore only approximately their product with the wall",
+          "vs_pools_at_rung_c": {
+            "comm_pool_us_D2_numerator": 43.3,
+            "target_pool": "egress",
+            "target_pool_us": 20.6,
+            "target_pool_clears_exp20_floor": true,
+            "delta_over_comm_pool": -0.012881761335060173,
+            "delta_over_target_pool": -0.0270767119324323,
+            "delta_over_full_at_rung_c": -0.006604270262716996,
+            "note": "the pools are exp_20's single-cut deltas at rung c; a ratio > 1 means the rung's win exceeds the pool that survives at the winner, i.e. the knob removed the pool it would otherwise be regressed against"
+          }
+        },
+        "b_to_c": {
+          "mechanism": "grouped release, RELEASE_GROUP=4 with FULL_ONLY=1; rgroup collapses to 1 unless tiles_per_cta >= 4",
+          "structurally_active": false,
+          "gain_median_pct": 1.405506481972274,
+          "gain_best_pct": 1.210402558694057,
+          "gain_median_per_draw_range_pct": [
+            0.3777152146049678,
+            2.524634406856552
+          ],
+          "delta_us_from_pooled_medians": 1.1729076504707336,
+          "delta_us_from_pooled_bests": 1.4679431915283203,
+          "floor_pct": 1.741992017853644,
+          "floor_us": 1.4712431988727661,
+          "beyond_floor": false,
+          "verdict": "UNRESOLVED",
+          "resolved": false,
+          "note_delta_us": "the percentages are exp_23's within-draw paired contrasts; delta_us is recomputed from the pooled medians/bests and is therefore only approximately their product with the wall",
+          "vs_pools_at_rung_c": {
+            "comm_pool_us_D2_numerator": 43.3,
+            "target_pool": "release",
+            "target_pool_us": 6.5,
+            "target_pool_clears_exp20_floor": true,
+            "delta_over_comm_pool": 0.02708793650047884,
+            "delta_over_target_pool": 0.18044733084165132,
+            "delta_over_full_at_rung_c": 0.01388754603158024,
+            "note": "the pools are exp_20's single-cut deltas at rung c; a ratio > 1 means the rung's win exceeds the pool that survives at the winner, i.e. the knob removed the pool it would otherwise be regressed against"
+          }
+        }
+      },
+      "nr_curve": {
+        "shipped_nr": 32,
+        "reference_arm": "rung c at this shape's shipped NR",
+        "points": [
+          {
+            "nr": 8,
+            "num_gemm_ctas": 296,
+            "is_shipped_config": false,
+            "median_us": 116.29138886928558,
+            "best_us": 115.13595283031464,
+            "gain_median_pct_vs_shipped": -27.262581941662013,
+            "gain_best_pct_vs_shipped": -27.11787135475209,
+            "within_widened_floor": false,
+            "beyond_floor": true,
+            "verdict": "RESOLVED slower",
+            "is_null_pair": false,
+            "contrast_key": "nr8 vs c",
+            "verdict_conflicts_with_widened_floor": false
+          },
+          {
+            "nr": 16,
+            "num_gemm_ctas": 288,
+            "is_shipped_config": false,
+            "median_us": 94.92237120866776,
+            "best_us": 93.92549097537994,
+            "gain_median_pct_vs_shipped": -11.044760660524883,
+            "gain_best_pct_vs_shipped": -10.995315348992289,
+            "within_widened_floor": false,
+            "beyond_floor": true,
+            "verdict": "RESOLVED slower",
+            "is_null_pair": false,
+            "contrast_key": "nr16 vs c",
+            "verdict_conflicts_with_widened_floor": false
+          },
+          {
+            "nr": 32,
+            "num_gemm_ctas": 272,
+            "is_shipped_config": true,
+            "median_us": 84.571972489357,
+            "best_us": 83.48691463470459,
+            "gain_median_pct_vs_shipped": -0.04454885156726651,
+            "gain_best_pct_vs_shipped": 0.02115588729885154,
+            "within_widened_floor": true,
+            "beyond_floor": false,
+            "verdict": "NULL PAIR (floor estimate, not a result)",
+            "is_null_pair": true,
+            "contrast_key": "nr32 vs c *shipped",
+            "verdict_conflicts_with_widened_floor": false
+          },
+          {
+            "nr": 48,
+            "num_gemm_ctas": 256,
+            "is_shipped_config": false,
+            "median_us": 83.94686132669449,
+            "best_us": 83.52050185203552,
+            "gain_median_pct_vs_shipped": 0.4769844083394703,
+            "gain_best_pct_vs_shipped": 0.5637387249517178,
+            "within_widened_floor": true,
+            "beyond_floor": false,
+            "verdict": "UNRESOLVED",
+            "is_null_pair": false,
+            "contrast_key": "nr48 vs c",
+            "verdict_conflicts_with_widened_floor": false
+          }
+        ],
+        "plateau_points_nr_ge_32": [
+          32,
+          48
+        ],
+        "flat_from_nr32_upward": true,
+        "plateau_lower_edge_nr": 32,
+        "plateau_max_abs_gain_pct": 0.4769844083394703,
+        "points_within_widened_floor": [
+          32,
+          48
+        ],
+        "points_resolved_slower": [
+          8,
+          16
+        ],
+        "cliff_points_nr_lt_32": [
+          8,
+          16
+        ],
+        "cliff_all_resolved_slower": true,
+        "cliff_worst_gain_pct": -27.262581941662013
+      },
+      "knob_structurally_active": {
+        "order_a_to_b": false,
+        "granularity_b_to_c": false,
+        "nr_reduction_below_plateau": true
+      }
+    },
+    {
+      "shape_index": 4,
+      "shape": "4096x4096x4096",
+      "m": 4096,
+      "n": 4096,
+      "k": 4096,
+      "has_bias": false,
+      "geometry": {
+        "bm": 256,
+        "bn": 256,
+        "bk": 32,
+        "num_reducer_ctas": 32,
+        "num_gemm_ctas": 272,
+        "grid_ctas": 304,
+        "tiles": 256,
+        "tiles_per_cta": 1,
+        "producer_waves": 1,
+        "last_wave_fill": 0.9412,
+        "k_local": 512,
+        "k_iters": 16,
+        "waves_x_k_iters": 16,
+        "lds_double_buffer_bytes": 65536,
+        "at_64kb_lds_cap": true,
+        "effective_release_group": 1
+      },
+      "derived_arithmetic": {
+        "flops": 137438953472.0,
+        "egress_bytes_mb": 29.360128,
+        "flops_per_egress_byte": 4681.142857142857,
+        "flops_per_egress_byte_closed_form": 4681.142857142857,
+        "note_closed_form": "flops/egress byte = 2MNK / ((7/8) MN 2) = 8K/7 exactly, so the compute-per-communicated-byte axis of the graded set is a function of K alone. M and N enter only through the tile count.",
+        "tiles_over_ng": 0.9411764705882353
+      },
+      "attribution": {
+        "full_us": 203.5,
+        "stages_us": {
+          "gemm": 38.5,
+          "egress": 86.2,
+          "reduce": 18.9,
+          "sync": 31.7,
+          "release": 18.3
+        },
+        "stage_share_of_full": {
+          "gemm": 0.1892,
+          "egress": 0.4236,
+          "reduce": 0.0929,
+          "sync": 0.1558,
+          "release": 0.0899
+        },
+        "stage_clears_exp20_floor": {
+          "gemm": true,
+          "egress": true,
+          "reduce": true,
+          "sync": true,
+          "release": true
+        },
+        "stage_sum_over_full": 0.9514,
+        "x_sol": 3.1,
+        "m7_bound": "device",
+        "m7_host_issue_us_per_op": 62.06
+      },
+      "comm_share": {
+        "usable_for_correlation": true,
+        "exclusion_reason": null,
+        "D1_egress_over_full": 0.4235872235872236,
+        "D2_egress_sync_release_over_full": 0.6692874692874694,
+        "D3_full_minus_gemm_over_full": 0.8108108108108109,
+        "D4_comm_over_priced_pools": 0.703512396694215,
+        "stage_sum_over_full": 0.9513513513513513
+      },
+      "floors": {
+        "exp20_allocation_floor_pct": 2.41,
+        "exp20_allocation_floor_us": 4.9,
+        "exp23_widened_floor_pct": 0.8474073793903081,
+        "exp23_widened_floor_us": 1.6880872876219828,
+        "exp23_single_pair_floor_pct": 0.2835799891304003,
+        "exp23_null_pairs": [
+          "null vs c",
+          "nr32 vs c"
+        ],
+        "which_is_used": "exp23_widened_floor_pct for every rung and NR verdict; it is measured in the run that produced those ratios, over the union of all identically-configured pairs"
+      },
+      "arm_medians_us": {
+        "a": 198.90228286385536,
+        "b": 198.92837541798752,
+        "c": 199.20611133178076,
+        "null": 198.8265197724104
+      },
+      "arm_bests_us": {
+        "a": 197.7176715930303,
+        "b": 197.88735856612524,
+        "c": 197.9549415409565,
+        "null": 197.47211287419
+      },
+      "rungs": {
+        "a_to_b": {
+          "mechanism": "WGM destination-spreading task order; differs from the constant WGM=4 only where tiles > num_gemm_ctas",
+          "structurally_active": false,
+          "gain_median_pct": -0.020965531469291365,
+          "gain_best_pct": -0.05864727234342615,
+          "gain_median_per_draw_range_pct": [
+            -0.5663596880229438,
+            0.22008843431615688
+          ],
+          "delta_us_from_pooled_medians": -0.026092554132162604,
+          "delta_us_from_pooled_bests": -0.16968697309494019,
+          "floor_pct": 0.8474073793903081,
+          "floor_us": 1.685733732993282,
+          "beyond_floor": false,
+          "verdict": "UNRESOLVED",
+          "resolved": false,
+          "note_delta_us": "the percentages are exp_23's within-draw paired contrasts; delta_us is recomputed from the pooled medians/bests and is therefore only approximately their product with the wall",
+          "vs_pools_at_rung_c": {
+            "comm_pool_us_D2_numerator": 136.20000000000002,
+            "target_pool": "egress",
+            "target_pool_us": 86.2,
+            "target_pool_clears_exp20_floor": true,
+            "delta_over_comm_pool": -0.00019157528731396917,
+            "delta_over_target_pool": -0.00030269784376058705,
+            "delta_over_full_at_rung_c": -0.00013098269906340908,
+            "note": "the pools are exp_20's single-cut deltas at rung c; a ratio > 1 means the rung's win exceeds the pool that survives at the winner, i.e. the knob removed the pool it would otherwise be regressed against"
+          }
+        },
+        "b_to_c": {
+          "mechanism": "grouped release, RELEASE_GROUP=4 with FULL_ONLY=1; rgroup collapses to 1 unless tiles_per_cta >= 4",
+          "structurally_active": false,
+          "gain_median_pct": 0.05288359576479107,
+          "gain_best_pct": 0.11641413145699886,
+          "gain_median_per_draw_range_pct": [
+            -0.6972731986837233,
+            0.7356788241960288
+          ],
+          "delta_us_from_pooled_medians": -0.2777359137932365,
+          "delta_us_from_pooled_bests": -0.06758297483125375,
+          "floor_pct": 0.8474073793903081,
+          "floor_us": 1.6880872876219828,
+          "beyond_floor": false,
+          "verdict": "UNRESOLVED",
+          "resolved": false,
+          "note_delta_us": "the percentages are exp_23's within-draw paired contrasts; delta_us is recomputed from the pooled medians/bests and is therefore only approximately their product with the wall",
+          "vs_pools_at_rung_c": {
+            "comm_pool_us_D2_numerator": 136.20000000000002,
+            "target_pool": "release",
+            "target_pool_us": 18.3,
+            "target_pool_clears_exp20_floor": true,
+            "delta_over_comm_pool": -0.002039177046940062,
+            "delta_over_target_pool": -0.01517682589034079,
+            "delta_over_full_at_rung_c": -0.0013942138217369403,
+            "note": "the pools are exp_20's single-cut deltas at rung c; a ratio > 1 means the rung's win exceeds the pool that survives at the winner, i.e. the knob removed the pool it would otherwise be regressed against"
+          }
+        }
+      },
+      "nr_curve": {
+        "shipped_nr": 32,
+        "reference_arm": "rung c at this shape's shipped NR",
+        "points": [
+          {
+            "nr": 8,
+            "num_gemm_ctas": 296,
+            "is_shipped_config": false,
+            "median_us": 264.1855894277493,
+            "best_us": 262.7197963496049,
+            "gain_median_pct_vs_shipped": -24.547218723186774,
+            "gain_best_pct_vs_shipped": -24.626629136242315,
+            "within_widened_floor": false,
+            "beyond_floor": true,
+            "verdict": "RESOLVED slower",
+            "is_null_pair": false,
+            "contrast_key": "nr8 vs c",
+            "verdict_conflicts_with_widened_floor": false
+          },
+          {
+            "nr": 16,
+            "num_gemm_ctas": 288,
+            "is_shipped_config": false,
+            "median_us": 220.80961304406327,
+            "best_us": 219.2933422823747,
+            "gain_median_pct_vs_shipped": -9.796903626990467,
+            "gain_best_pct_vs_shipped": -9.848634076955898,
+            "within_widened_floor": false,
+            "beyond_floor": true,
+            "verdict": "RESOLVED slower",
+            "is_null_pair": false,
+            "contrast_key": "nr16 vs c",
+            "verdict_conflicts_with_widened_floor": false
+          },
+          {
+            "nr": 32,
+            "num_gemm_ctas": 272,
+            "is_shipped_config": true,
+            "median_us": 199.80516905585924,
+            "best_us": 198.01377008358637,
+            "gain_median_pct_vs_shipped": -0.11849956090259073,
+            "gain_best_pct_vs_shipped": -0.16428051291704215,
+            "within_widened_floor": true,
+            "beyond_floor": false,
+            "verdict": "NULL PAIR (floor estimate, not a result)",
+            "is_null_pair": true,
+            "contrast_key": "nr32 vs c *shipped",
+            "verdict_conflicts_with_widened_floor": false
+          },
+          {
+            "nr": 48,
+            "num_gemm_ctas": 256,
+            "is_shipped_config": false,
+            "median_us": 198.43635770181814,
+            "best_us": 197.21932088335356,
+            "gain_median_pct_vs_shipped": 0.3449488541700796,
+            "gain_best_pct_vs_shipped": 0.3780498138990285,
+            "within_widened_floor": true,
+            "beyond_floor": false,
+            "verdict": "UNRESOLVED",
+            "is_null_pair": false,
+            "contrast_key": "nr48 vs c",
+            "verdict_conflicts_with_widened_floor": false
+          }
+        ],
+        "plateau_points_nr_ge_32": [
+          32,
+          48
+        ],
+        "flat_from_nr32_upward": true,
+        "plateau_lower_edge_nr": 32,
+        "plateau_max_abs_gain_pct": 0.3449488541700796,
+        "points_within_widened_floor": [
+          32,
+          48
+        ],
+        "points_resolved_slower": [
+          8,
+          16
+        ],
+        "cliff_points_nr_lt_32": [
+          8,
+          16
+        ],
+        "cliff_all_resolved_slower": true,
+        "cliff_worst_gain_pct": -24.547218723186774
+      },
+      "knob_structurally_active": {
+        "order_a_to_b": false,
+        "granularity_b_to_c": false,
+        "nr_reduction_below_plateau": true
+      }
+    },
+    {
+      "shape_index": 5,
+      "shape": "8192x4096x14336",
+      "m": 8192,
+      "n": 4096,
+      "k": 14336,
+      "has_bias": true,
+      "geometry": {
+        "bm": 256,
+        "bn": 256,
+        "bk": 32,
+        "num_reducer_ctas": 32,
+        "num_gemm_ctas": 272,
+        "grid_ctas": 304,
+        "tiles": 512,
+        "tiles_per_cta": 2,
+        "producer_waves": 2,
+        "last_wave_fill": 0.8824,
+        "k_local": 1792,
+        "k_iters": 56,
+        "waves_x_k_iters": 112,
+        "lds_double_buffer_bytes": 65536,
+        "at_64kb_lds_cap": true,
+        "effective_release_group": 1
+      },
+      "derived_arithmetic": {
+        "flops": 962072674304.0,
+        "egress_bytes_mb": 58.720256,
+        "flops_per_egress_byte": 16384.0,
+        "flops_per_egress_byte_closed_form": 16384.0,
+        "note_closed_form": "flops/egress byte = 2MNK / ((7/8) MN 2) = 8K/7 exactly, so the compute-per-communicated-byte axis of the graded set is a function of K alone. M and N enter only through the tile count.",
+        "tiles_over_ng": 1.8823529411764706
+      },
+      "attribution": {
+        "full_us": 641.9,
+        "stages_us": {
+          "gemm": 305.2,
+          "egress": 179.7,
+          "reduce": 51.7,
+          "sync": 52.9,
+          "release": 65.4
+        },
+        "stage_share_of_full": {
+          "gemm": 0.4755,
+          "egress": 0.28,
+          "reduce": 0.0805,
+          "sync": 0.0824,
+          "release": 0.1019
+        },
+        "stage_clears_exp20_floor": {
+          "gemm": true,
+          "egress": true,
+          "reduce": true,
+          "sync": true,
+          "release": true
+        },
+        "stage_sum_over_full": 1.0203,
+        "x_sol": 4.9,
+        "m7_bound": "device",
+        "m7_host_issue_us_per_op": 62.36
+      },
+      "comm_share": {
+        "usable_for_correlation": true,
+        "exclusion_reason": null,
+        "D1_egress_over_full": 0.27995014799813056,
+        "D2_egress_sync_release_over_full": 0.4642467674092538,
+        "D3_full_minus_gemm_over_full": 0.52453653217012,
+        "D4_comm_over_priced_pools": 0.45503130248892965,
+        "stage_sum_over_full": 1.0202523757594641
+      },
+      "floors": {
+        "exp20_allocation_floor_pct": 2.17,
+        "exp20_allocation_floor_us": 13.93,
+        "exp23_widened_floor_pct": 4.972466664701458,
+        "exp23_widened_floor_us": 31.939398799424282,
+        "exp23_single_pair_floor_pct": 3.9771140333176636,
+        "exp23_null_pairs": [
+          "null vs c",
+          "nr32 vs c"
+        ],
+        "which_is_used": "exp23_widened_floor_pct for every rung and NR verdict; it is measured in the run that produced those ratios, over the union of all identically-configured pairs"
+      },
+      "arm_medians_us": {
+        "a": 751.9111658136051,
+        "b": 652.6757963001728,
+        "c": 642.3250461618105,
+        "null": 657.6539327700932
+      },
+      "arm_bests_us": {
+        "a": 743.8811163107554,
+        "b": 634.0866287549337,
+        "c": 624.9421586592993,
+        "null": 625.6033976872762
+      },
+      "rungs": {
+        "a_to_b": {
+          "mechanism": "WGM destination-spreading task order; differs from the constant WGM=4 only where tiles > num_gemm_ctas",
+          "structurally_active": true,
+          "gain_median_pct": 15.108866983177283,
+          "gain_best_pct": 15.183488243106192,
+          "gain_median_per_draw_range_pct": [
+            12.572124337917412,
+            19.06514710756082
+          ],
+          "delta_us_from_pooled_medians": 99.23536951343226,
+          "delta_us_from_pooled_bests": 109.79448755582166,
+          "floor_pct": 4.972466664701458,
+          "floor_us": 32.45408639960088,
+          "beyond_floor": true,
+          "verdict": "RESOLVED faster",
+          "resolved": true,
+          "note_delta_us": "the percentages are exp_23's within-draw paired contrasts; delta_us is recomputed from the pooled medians/bests and is therefore only approximately their product with the wall",
+          "vs_pools_at_rung_c": {
+            "comm_pool_us_D2_numerator": 298.0,
+            "target_pool": "egress",
+            "target_pool_us": 179.7,
+            "target_pool_clears_exp20_floor": true,
+            "delta_over_comm_pool": 0.3330045956826586,
+            "delta_over_target_pool": 0.5522279883886048,
+            "delta_over_full_at_rung_c": 0.15449400596537458,
+            "note": "the pools are exp_20's single-cut deltas at rung c; a ratio > 1 means the rung's win exceeds the pool that survives at the winner, i.e. the knob removed the pool it would otherwise be regressed against"
+          }
+        },
+        "b_to_c": {
+          "mechanism": "grouped release, RELEASE_GROUP=4 with FULL_ONLY=1; rgroup collapses to 1 unless tiles_per_cta >= 4",
+          "structurally_active": false,
+          "gain_median_pct": 0.7893479853107455,
+          "gain_best_pct": 0.7461726741088248,
+          "gain_median_per_draw_range_pct": [
+            -1.2679174290365025,
+            4.696465988539211
+          ],
+          "delta_us_from_pooled_medians": 10.350750138362287,
+          "delta_us_from_pooled_bests": 9.14447009563446,
+          "floor_pct": 4.972466664701458,
+          "floor_us": 31.939398799424282,
+          "beyond_floor": false,
+          "verdict": "UNRESOLVED",
+          "resolved": false,
+          "note_delta_us": "the percentages are exp_23's within-draw paired contrasts; delta_us is recomputed from the pooled medians/bests and is therefore only approximately their product with the wall",
+          "vs_pools_at_rung_c": {
+            "comm_pool_us_D2_numerator": 298.0,
+            "target_pool": "release",
+            "target_pool_us": 65.4,
+            "target_pool_clears_exp20_floor": true,
+            "delta_over_comm_pool": 0.03473406086698754,
+            "delta_over_target_pool": 0.1582683507394845,
+            "delta_over_full_at_rung_c": 0.016114504953859125,
+            "note": "the pools are exp_20's single-cut deltas at rung c; a ratio > 1 means the rung's win exceeds the pool that survives at the winner, i.e. the knob removed the pool it would otherwise be regressed against"
+          }
+        }
+      },
+      "nr_curve": {
+        "shipped_nr": 32,
+        "reference_arm": "rung c at this shape's shipped NR",
+        "points": [
+          {
+            "nr": 8,
+            "num_gemm_ctas": 296,
+            "is_shipped_config": false,
+            "median_us": 749.8008509476979,
+            "best_us": 735.794318219026,
+            "gain_median_pct_vs_shipped": -13.748229001124528,
+            "gain_best_pct_vs_shipped": -13.841724519381742,
+            "within_widened_floor": false,
+            "beyond_floor": true,
+            "verdict": "RESOLVED slower",
+            "is_null_pair": false,
+            "contrast_key": "nr8 vs c",
+            "verdict_conflicts_with_widened_floor": false
+          },
+          {
+            "nr": 16,
+            "num_gemm_ctas": 288,
+            "is_shipped_config": false,
+            "median_us": 679.216564943393,
+            "best_us": 661.9803607463837,
+            "gain_median_pct_vs_shipped": -5.007652073397378,
+            "gain_best_pct_vs_shipped": -5.035481035417815,
+            "within_widened_floor": false,
+            "beyond_floor": true,
+            "verdict": "UNRESOLVED",
+            "is_null_pair": false,
+            "contrast_key": "nr16 vs c",
+            "verdict_conflicts_with_widened_floor": false
+          },
+          {
+            "nr": 32,
+            "num_gemm_ctas": 272,
+            "is_shipped_config": true,
+            "median_us": 654.7280587255955,
+            "best_us": 629.677064716816,
+            "gain_median_pct_vs_shipped": -2.372066093857933,
+            "gain_best_pct_vs_shipped": -2.454580752466268,
+            "within_widened_floor": true,
+            "beyond_floor": false,
+            "verdict": "NULL PAIR (floor estimate, not a result)",
+            "is_null_pair": true,
+            "contrast_key": "nr32 vs c *shipped",
+            "verdict_conflicts_with_widened_floor": false
+          },
+          {
+            "nr": 48,
+            "num_gemm_ctas": 256,
+            "is_shipped_config": false,
+            "median_us": 639.2496017118295,
+            "best_us": 612.8144760926565,
+            "gain_median_pct_vs_shipped": 0.43879497756870167,
+            "gain_best_pct_vs_shipped": 0.4585785398727671,
+            "within_widened_floor": true,
+            "beyond_floor": false,
+            "verdict": "UNRESOLVED",
+            "is_null_pair": false,
+            "contrast_key": "nr48 vs c",
+            "verdict_conflicts_with_widened_floor": false
+          }
+        ],
+        "plateau_points_nr_ge_32": [
+          32,
+          48
+        ],
+        "flat_from_nr32_upward": true,
+        "plateau_lower_edge_nr": 32,
+        "plateau_max_abs_gain_pct": 2.372066093857933,
+        "points_within_widened_floor": [
+          32,
+          48
+        ],
+        "points_resolved_slower": [
+          8
+        ],
+        "cliff_points_nr_lt_32": [
+          8,
+          16
+        ],
+        "cliff_all_resolved_slower": false,
+        "cliff_worst_gain_pct": -13.748229001124528
+      },
+      "knob_structurally_active": {
+        "order_a_to_b": true,
+        "granularity_b_to_c": false,
+        "nr_reduction_below_plateau": true
+      }
+    },
+    {
+      "shape_index": 6,
+      "shape": "8192x8192x29568",
+      "m": 8192,
+      "n": 8192,
+      "k": 29568,
+      "has_bias": false,
+      "geometry": {
+        "bm": 256,
+        "bn": 256,
+        "bk": 32,
+        "num_reducer_ctas": 48,
+        "num_gemm_ctas": 256,
+        "grid_ctas": 304,
+        "tiles": 1024,
+        "tiles_per_cta": 4,
+        "producer_waves": 4,
+        "last_wave_fill": 1.0,
+        "k_local": 3696,
+        "k_iters": 116,
+        "waves_x_k_iters": 464,
+        "lds_double_buffer_bytes": 65536,
+        "at_64kb_lds_cap": true,
+        "effective_release_group": 4
+      },
+      "derived_arithmetic": {
+        "flops": 3968549781504.0,
+        "egress_bytes_mb": 117.440512,
+        "flops_per_egress_byte": 33792.0,
+        "flops_per_egress_byte_closed_form": 33792.0,
+        "note_closed_form": "flops/egress byte = 2MNK / ((7/8) MN 2) = 8K/7 exactly, so the compute-per-communicated-byte axis of the graded set is a function of K alone. M and N enter only through the tile count.",
+        "tiles_over_ng": 4.0
+      },
+      "attribution": {
+        "full_us": 1632.5,
+        "stages_us": {
+          "gemm": 992.2,
+          "egress": 376.0,
+          "reduce": 79.8,
+          "sync": 168.6,
+          "release": 15.0
+        },
+        "stage_share_of_full": {
+          "gemm": 0.6078,
+          "egress": 0.2303,
+          "reduce": 0.0489,
+          "sync": 0.1033,
+          "release": 0.0092
+        },
+        "stage_clears_exp20_floor": {
+          "gemm": true,
+          "egress": true,
+          "reduce": true,
+          "sync": true,
+          "release": false
+        },
+        "stage_sum_over_full": 0.9994,
+        "x_sol": 4.3,
+        "m7_bound": "device",
+        "m7_host_issue_us_per_op": 63.68
+      },
+      "comm_share": {
+        "usable_for_correlation": true,
+        "exclusion_reason": null,
+        "D1_egress_over_full": 0.23032159264931087,
+        "D2_egress_sync_release_over_full": 0.3427871362940276,
+        "D3_full_minus_gemm_over_full": 0.39222052067381313,
+        "D4_comm_over_priced_pools": 0.3429762196616818,
+        "stage_sum_over_full": 0.9994486983154671
+      },
+      "floors": {
+        "exp20_allocation_floor_pct": 4.28,
+        "exp20_allocation_floor_us": 69.87,
+        "exp23_widened_floor_pct": 4.436012719229665,
+        "exp23_widened_floor_us": 72.73408021208208,
+        "exp23_single_pair_floor_pct": 1.1024849864755382,
+        "exp23_null_pairs": [
+          "null vs c",
+          "nr48 vs c"
+        ],
+        "which_is_used": "exp23_widened_floor_pct for every rung and NR verdict; it is measured in the run that produced those ratios, over the union of all identically-configured pairs"
+      },
+      "arm_medians_us": {
+        "a": 2615.417465567589,
+        "b": 1840.330995619297,
+        "c": 1639.6274045109749,
+        "null": 1635.8698159456253
+      },
+      "arm_bests_us": {
+        "a": 2595.0462371110916,
+        "b": 1801.7788976430893,
+        "c": 1609.7882390022278,
+        "null": 1601.5778481960297
+      },
+      "rungs": {
+        "a_to_b": {
+          "mechanism": "WGM destination-spreading task order; differs from the constant WGM=4 only where tiles > num_gemm_ctas",
+          "structurally_active": true,
+          "gain_median_pct": 42.10858581808448,
+          "gain_best_pct": 42.5788257546851,
+          "gain_median_per_draw_range_pct": [
+            40.47783540756234,
+            44.79297941152165
+          ],
+          "delta_us_from_pooled_medians": 775.0864699482918,
+          "delta_us_from_pooled_bests": 793.2673394680023,
+          "floor_pct": 4.436012719229665,
+          "floor_us": 81.63731704159794,
+          "beyond_floor": true,
+          "verdict": "RESOLVED faster",
+          "resolved": true,
+          "note_delta_us": "the percentages are exp_23's within-draw paired contrasts; delta_us is recomputed from the pooled medians/bests and is therefore only approximately their product with the wall",
+          "vs_pools_at_rung_c": {
+            "comm_pool_us_D2_numerator": 559.6,
+            "target_pool": "egress",
+            "target_pool_us": 376.0,
+            "target_pool_clears_exp20_floor": true,
+            "delta_over_comm_pool": 1.3850723194215364,
+            "delta_over_target_pool": 2.061400186032691,
+            "delta_over_full_at_rung_c": 0.4727210998156403,
+            "note": "the pools are exp_20's single-cut deltas at rung c; a ratio > 1 means the rung's win exceeds the pool that survives at the winner, i.e. the knob removed the pool it would otherwise be regressed against"
+          }
+        },
+        "b_to_c": {
+          "mechanism": "grouped release, RELEASE_GROUP=4 with FULL_ONLY=1; rgroup collapses to 1 unless tiles_per_cta >= 4",
+          "structurally_active": true,
+          "gain_median_pct": 12.224034680153284,
+          "gain_best_pct": 12.346326441784239,
+          "gain_median_per_draw_range_pct": [
+            10.975099240435892,
+            12.980283128119673
+          ],
+          "delta_us_from_pooled_medians": 200.70359110832214,
+          "delta_us_from_pooled_bests": 191.9906586408615,
+          "floor_pct": 4.436012719229665,
+          "floor_us": 72.73408021208208,
+          "beyond_floor": true,
+          "verdict": "RESOLVED faster",
+          "resolved": true,
+          "note_delta_us": "the percentages are exp_23's within-draw paired contrasts; delta_us is recomputed from the pooled medians/bests and is therefore only approximately their product with the wall",
+          "vs_pools_at_rung_c": {
+            "comm_pool_us_D2_numerator": 559.6,
+            "target_pool": "release",
+            "target_pool_us": 15.0,
+            "target_pool_clears_exp20_floor": false,
+            "delta_over_comm_pool": 0.3586554523022197,
+            "delta_over_target_pool": 13.380239407221476,
+            "delta_over_full_at_rung_c": 0.12240804865553144,
+            "note": "the pools are exp_20's single-cut deltas at rung c; a ratio > 1 means the rung's win exceeds the pool that survives at the winner, i.e. the knob removed the pool it would otherwise be regressed against"
+          }
+        }
+      },
+      "nr_curve": {
+        "shipped_nr": 48,
+        "reference_arm": "rung c at this shape's shipped NR",
+        "points": [
+          {
+            "nr": 8,
+            "num_gemm_ctas": 296,
+            "is_shipped_config": false,
+            "median_us": 2021.02679759264,
+            "best_us": 1998.2679933309555,
+            "gain_median_pct_vs_shipped": -18.801181747192494,
+            "gain_best_pct_vs_shipped": -19.22963232991129,
+            "within_widened_floor": false,
+            "beyond_floor": true,
+            "verdict": "RESOLVED slower",
+            "is_null_pair": false,
+            "contrast_key": "nr8 vs c",
+            "verdict_conflicts_with_widened_floor": false
+          },
+          {
+            "nr": 16,
+            "num_gemm_ctas": 288,
+            "is_shipped_config": false,
+            "median_us": 1793.1647971272469,
+            "best_us": 1769.5457488298416,
+            "gain_median_pct_vs_shipped": -8.870415589290147,
+            "gain_best_pct_vs_shipped": -9.207704624652996,
+            "within_widened_floor": false,
+            "beyond_floor": true,
+            "verdict": "RESOLVED slower",
+            "is_null_pair": false,
+            "contrast_key": "nr16 vs c",
+            "verdict_conflicts_with_widened_floor": false
+          },
+          {
+            "nr": 32,
+            "num_gemm_ctas": 272,
+            "is_shipped_config": false,
+            "median_us": 1695.2770575881004,
+            "best_us": 1673.4755039215088,
+            "gain_median_pct_vs_shipped": -3.5256596254194417,
+            "gain_best_pct_vs_shipped": -3.4213213506566973,
+            "within_widened_floor": true,
+            "beyond_floor": false,
+            "verdict": "RESOLVED slower",
+            "is_null_pair": false,
+            "contrast_key": "nr32 vs c",
+            "verdict_conflicts_with_widened_floor": true
+          },
+          {
+            "nr": 48,
+            "num_gemm_ctas": 256,
+            "is_shipped_config": true,
+            "median_us": 1580.480970442295,
+            "best_us": 1547.016054391861,
+            "gain_median_pct_vs_shipped": 3.9163159031895045,
+            "gain_best_pct_vs_shipped": 4.126042762678816,
+            "within_widened_floor": true,
+            "beyond_floor": false,
+            "verdict": "NULL PAIR (floor estimate, not a result)",
+            "is_null_pair": true,
+            "contrast_key": "nr48 vs c *shipped",
+            "verdict_conflicts_with_widened_floor": false
+          }
+        ],
+        "plateau_points_nr_ge_32": [
+          32,
+          48
+        ],
+        "flat_from_nr32_upward": true,
+        "plateau_lower_edge_nr": 32,
+        "plateau_max_abs_gain_pct": 3.9163159031895045,
+        "points_within_widened_floor": [
+          32,
+          48
+        ],
+        "points_resolved_slower": [
+          8,
+          16,
+          32
+        ],
+        "cliff_points_nr_lt_32": [
+          8,
+          16
+        ],
+        "cliff_all_resolved_slower": true,
+        "cliff_worst_gain_pct": -18.801181747192494
+      },
+      "knob_structurally_active": {
+        "order_a_to_b": true,
+        "granularity_b_to_c": true,
+        "nr_reduction_below_plateau": true
+      }
+    }
+  ],
+  "correlations": {
+    "n_shapes_entering": 4,
+    "shapes_entering": [
+      3,
+      4,
+      5,
+      6
+    ],
+    "shapes_excluded": {
+      "1": "HOST-bound: bound=HOST at 10.39x SOL (62.34 us of issue inside a 66.41 us wall); 3 of 5 stage deltas negative; all 5 inside the 2.34 us floor; the five cuts price only 4.9% of wall time",
+      "2": "HOST-bound against its median (62.43 us of issue inside a 67.80 us median wall); 1 of 5 stage deltas negative; the five cuts price only 9.5% of wall time"
+    },
+    "min_attainable_two_sided_p_at_this_n": 0.08333333333333333,
+    "why_no_fit": "n=4. A perfect rank reversal cannot reach p<0.05 at n=4 (2/4! = 0.083), so no coefficient here is inferential and no line is fitted. Ordering statements only.",
+    "by_definition": {
+      "D1_egress_over_full": {
+        "a_to_b_mask_variant": {
+          "spearman_rho": -0.3999999999999999,
+          "pearson_r": -0.5076113608488397,
+          "n": 4,
+          "points": [
+            {
+              "shape_index": 3,
+              "comm_share": 0.23489167616875714,
+              "gain_median_pct": -0.6376299233842031,
+              "structurally_active": false,
+              "resolved": false
+            },
+            {
+              "shape_index": 4,
+              "comm_share": 0.4235872235872236,
+              "gain_median_pct": -0.020965531469291365,
+              "structurally_active": false,
+              "resolved": false
+            },
+            {
+              "shape_index": 5,
+              "comm_share": 0.27995014799813056,
+              "gain_median_pct": 15.108866983177283,
+              "structurally_active": true,
+              "resolved": true
+            },
+            {
+              "shape_index": 6,
+              "comm_share": 0.23032159264931087,
+              "gain_median_pct": 42.10858581808448,
+              "structurally_active": true,
+              "resolved": true
+            }
+          ],
+          "interpretation": "MASK VARIANT: includes shapes where the knob is arithmetically inert, so this measures the structural mask, not sensitivity. Unresolved entries are noise, not zeros."
+        },
+        "b_to_c_mask_variant": {
+          "spearman_rho": -0.9999999999999998,
+          "pearson_r": -0.5369360612608343,
+          "n": 4,
+          "points": [
+            {
+              "shape_index": 3,
+              "comm_share": 0.23489167616875714,
+              "gain_median_pct": 1.405506481972274,
+              "structurally_active": false,
+              "resolved": false
+            },
+            {
+              "shape_index": 4,
+              "comm_share": 0.4235872235872236,
+              "gain_median_pct": 0.05288359576479107,
+              "structurally_active": false,
+              "resolved": false
+            },
+            {
+              "shape_index": 5,
+              "comm_share": 0.27995014799813056,
+              "gain_median_pct": 0.7893479853107455,
+              "structurally_active": false,
+              "resolved": false
+            },
+            {
+              "shape_index": 6,
+              "comm_share": 0.23032159264931087,
+              "gain_median_pct": 12.224034680153284,
+              "structurally_active": true,
+              "resolved": true
+            }
+          ],
+          "interpretation": "MASK VARIANT: includes shapes where the knob is arithmetically inert, so this measures the structural mask, not sensitivity. Unresolved entries are noise, not zeros."
+        },
+        "shape_order_most_comm_first": [
+          4,
+          5,
+          3,
+          6
+        ],
+        "order_active_shapes_are_the_two_lowest_comm": false,
+        "comm_share_rank_of_order_active_shapes": {
+          "5": 2,
+          "6": 4
+        }
+      },
+      "D2_egress_sync_release_over_full": {
+        "a_to_b_mask_variant": {
+          "spearman_rho": -0.7999999999999998,
+          "pearson_r": -0.832495326922778,
+          "n": 4,
+          "points": [
+            {
+              "shape_index": 3,
+              "comm_share": 0.4937286202964652,
+              "gain_median_pct": -0.6376299233842031,
+              "structurally_active": false,
+              "resolved": false
+            },
+            {
+              "shape_index": 4,
+              "comm_share": 0.6692874692874694,
+              "gain_median_pct": -0.020965531469291365,
+              "structurally_active": false,
+              "resolved": false
+            },
+            {
+              "shape_index": 5,
+              "comm_share": 0.4642467674092538,
+              "gain_median_pct": 15.108866983177283,
+              "structurally_active": true,
+              "resolved": true
+            },
+            {
+              "shape_index": 6,
+              "comm_share": 0.3427871362940276,
+              "gain_median_pct": 42.10858581808448,
+              "structurally_active": true,
+              "resolved": true
+            }
+          ],
+          "interpretation": "MASK VARIANT: includes shapes where the knob is arithmetically inert, so this measures the structural mask, not sensitivity. Unresolved entries are noise, not zeros."
+        },
+        "b_to_c_mask_variant": {
+          "spearman_rho": -0.7999999999999998,
+          "pearson_r": -0.7903519698300503,
+          "n": 4,
+          "points": [
+            {
+              "shape_index": 3,
+              "comm_share": 0.4937286202964652,
+              "gain_median_pct": 1.405506481972274,
+              "structurally_active": false,
+              "resolved": false
+            },
+            {
+              "shape_index": 4,
+              "comm_share": 0.6692874692874694,
+              "gain_median_pct": 0.05288359576479107,
+              "structurally_active": false,
+              "resolved": false
+            },
+            {
+              "shape_index": 5,
+              "comm_share": 0.4642467674092538,
+              "gain_median_pct": 0.7893479853107455,
+              "structurally_active": false,
+              "resolved": false
+            },
+            {
+              "shape_index": 6,
+              "comm_share": 0.3427871362940276,
+              "gain_median_pct": 12.224034680153284,
+              "structurally_active": true,
+              "resolved": true
+            }
+          ],
+          "interpretation": "MASK VARIANT: includes shapes where the knob is arithmetically inert, so this measures the structural mask, not sensitivity. Unresolved entries are noise, not zeros."
+        },
+        "shape_order_most_comm_first": [
+          4,
+          3,
+          5,
+          6
+        ],
+        "order_active_shapes_are_the_two_lowest_comm": true,
+        "comm_share_rank_of_order_active_shapes": {
+          "5": 3,
+          "6": 4
+        }
+      },
+      "D3_full_minus_gemm_over_full": {
+        "a_to_b_mask_variant": {
+          "spearman_rho": -0.9999999999999998,
+          "pearson_r": -0.9475630080291517,
+          "n": 4,
+          "points": [
+            {
+              "shape_index": 3,
+              "comm_share": 0.8152793614595211,
+              "gain_median_pct": -0.6376299233842031,
+              "structurally_active": false,
+              "resolved": false
+            },
+            {
+              "shape_index": 4,
+              "comm_share": 0.8108108108108109,
+              "gain_median_pct": -0.020965531469291365,
+              "structurally_active": false,
+              "resolved": false
+            },
+            {
+              "shape_index": 5,
+              "comm_share": 0.52453653217012,
+              "gain_median_pct": 15.108866983177283,
+              "structurally_active": true,
+              "resolved": true
+            },
+            {
+              "shape_index": 6,
+              "comm_share": 0.39222052067381313,
+              "gain_median_pct": 42.10858581808448,
+              "structurally_active": true,
+              "resolved": true
+            }
+          ],
+          "interpretation": "MASK VARIANT: includes shapes where the knob is arithmetically inert, so this measures the structural mask, not sensitivity. Unresolved entries are noise, not zeros."
+        },
+        "b_to_c_mask_variant": {
+          "spearman_rho": -0.3999999999999999,
+          "pearson_r": -0.7652909741711049,
+          "n": 4,
+          "points": [
+            {
+              "shape_index": 3,
+              "comm_share": 0.8152793614595211,
+              "gain_median_pct": 1.405506481972274,
+              "structurally_active": false,
+              "resolved": false
+            },
+            {
+              "shape_index": 4,
+              "comm_share": 0.8108108108108109,
+              "gain_median_pct": 0.05288359576479107,
+              "structurally_active": false,
+              "resolved": false
+            },
+            {
+              "shape_index": 5,
+              "comm_share": 0.52453653217012,
+              "gain_median_pct": 0.7893479853107455,
+              "structurally_active": false,
+              "resolved": false
+            },
+            {
+              "shape_index": 6,
+              "comm_share": 0.39222052067381313,
+              "gain_median_pct": 12.224034680153284,
+              "structurally_active": true,
+              "resolved": true
+            }
+          ],
+          "interpretation": "MASK VARIANT: includes shapes where the knob is arithmetically inert, so this measures the structural mask, not sensitivity. Unresolved entries are noise, not zeros."
+        },
+        "shape_order_most_comm_first": [
+          3,
+          4,
+          5,
+          6
+        ],
+        "order_active_shapes_are_the_two_lowest_comm": true,
+        "comm_share_rank_of_order_active_shapes": {
+          "5": 3,
+          "6": 4
+        }
+      },
+      "D4_comm_over_priced_pools": {
+        "a_to_b_mask_variant": {
+          "spearman_rho": -0.7999999999999998,
+          "pearson_r": -0.9421212976662564,
+          "n": 4,
+          "points": [
+            {
+              "shape_index": 3,
+              "comm_share": 0.6424332344213649,
+              "gain_median_pct": -0.6376299233842031,
+              "structurally_active": false,
+              "resolved": false
+            },
+            {
+              "shape_index": 4,
+              "comm_share": 0.703512396694215,
+              "gain_median_pct": -0.020965531469291365,
+              "structurally_active": false,
+              "resolved": false
+            },
+            {
+              "shape_index": 5,
+              "comm_share": 0.45503130248892965,
+              "gain_median_pct": 15.108866983177283,
+              "structurally_active": true,
+              "resolved": true
+            },
+            {
+              "shape_index": 6,
+              "comm_share": 0.3429762196616818,
+              "gain_median_pct": 42.10858581808448,
+              "structurally_active": true,
+              "resolved": true
+            }
+          ],
+          "interpretation": "MASK VARIANT: includes shapes where the knob is arithmetically inert, so this measures the structural mask, not sensitivity. Unresolved entries are noise, not zeros."
+        },
+        "b_to_c_mask_variant": {
+          "spearman_rho": -0.7999999999999998,
+          "pearson_r": -0.7864710530611316,
+          "n": 4,
+          "points": [
+            {
+              "shape_index": 3,
+              "comm_share": 0.6424332344213649,
+              "gain_median_pct": 1.405506481972274,
+              "structurally_active": false,
+              "resolved": false
+            },
+            {
+              "shape_index": 4,
+              "comm_share": 0.703512396694215,
+              "gain_median_pct": 0.05288359576479107,
+              "structurally_active": false,
+              "resolved": false
+            },
+            {
+              "shape_index": 5,
+              "comm_share": 0.45503130248892965,
+              "gain_median_pct": 0.7893479853107455,
+              "structurally_active": false,
+              "resolved": false
+            },
+            {
+              "shape_index": 6,
+              "comm_share": 0.3429762196616818,
+              "gain_median_pct": 12.224034680153284,
+              "structurally_active": true,
+              "resolved": true
+            }
+          ],
+          "interpretation": "MASK VARIANT: includes shapes where the knob is arithmetically inert, so this measures the structural mask, not sensitivity. Unresolved entries are noise, not zeros."
+        },
+        "shape_order_most_comm_first": [
+          4,
+          3,
+          5,
+          6
+        ],
+        "order_active_shapes_are_the_two_lowest_comm": true,
+        "comm_share_rank_of_order_active_shapes": {
+          "5": 3,
+          "6": 4
+        }
+      }
+    },
+    "active_only": {
+      "a_to_b": {
+        "knob": "order",
+        "n_active_and_usable": 2,
+        "coefficient": null,
+        "why_none": "n=2. Two points define a slope by construction and one point defines nothing. No correlation is computed.",
+        "points": [
+          {
+            "shape_index": 5,
+            "shape": "8192x4096x14336",
+            "D1_egress_over_full": 0.27995014799813056,
+            "D2_egress_sync_release_over_full": 0.4642467674092538,
+            "D3_full_minus_gemm_over_full": 0.52453653217012,
+            "D4_comm_over_priced_pools": 0.45503130248892965,
+            "gain_median_pct": 15.108866983177283,
+            "delta_us": 99.23536951343226,
+            "tiles_over_ng": 1.8823529411764706,
+            "tiles_per_cta": 2,
+            "k": 14336
+          },
+          {
+            "shape_index": 6,
+            "shape": "8192x8192x29568",
+            "D1_egress_over_full": 0.23032159264931087,
+            "D2_egress_sync_release_over_full": 0.3427871362940276,
+            "D3_full_minus_gemm_over_full": 0.39222052067381313,
+            "D4_comm_over_priced_pools": 0.3429762196616818,
+            "gain_median_pct": 42.10858581808448,
+            "delta_us": 775.0864699482918,
+            "tiles_over_ng": 4.0,
+            "tiles_per_cta": 4,
+            "k": 29568
+          }
+        ]
+      },
+      "b_to_c": {
+        "knob": "granularity",
+        "n_active_and_usable": 1,
+        "coefficient": null,
+        "why_none": "n=1. Two points define a slope by construction and one point defines nothing. No correlation is computed.",
+        "points": [
+          {
+            "shape_index": 6,
+            "shape": "8192x8192x29568",
+            "D1_egress_over_full": 0.23032159264931087,
+            "D2_egress_sync_release_over_full": 0.3427871362940276,
+            "D3_full_minus_gemm_over_full": 0.39222052067381313,
+            "D4_comm_over_priced_pools": 0.3429762196616818,
+            "gain_median_pct": 12.224034680153284,
+            "delta_us": 200.70359110832214,
+            "tiles_over_ng": 4.0,
+            "tiles_per_cta": 4,
+            "k": 29568
+          }
+        ]
+      }
+    },
+    "collinearity": {
+      "spearman_k_vs_tiles_over_ng": 0.9999999999999998,
+      "spearman_k_vs_D3_full_minus_gemm_over_full": -0.9999999999999998,
+      "shapes": [
+        3,
+        4,
+        5,
+        6
+      ],
+      "k_values": [
+        2880,
+        4096,
+        14336,
+        29568
+      ],
+      "tiles_over_ng_values": [
+        0.8823529411764706,
+        0.9411764705882353,
+        1.8823529411764706,
+        4.0
+      ],
+      "interpretation": "Comm share is a function of K (8K/7 flops per egress byte); knob activity is a function of tiles/NG, i.e. of M*N over the tile area and the producer count. Across the four usable graded shapes these two axes are rank-identical, so the structural mask and the comm share are perfectly confounded and cannot be separated by this shape set at any n."
+    },
+    "nr_cliff_axis": {
+      "y": "absolute NR=8 penalty, % vs that shape's shipped NR",
+      "n": 4,
+      "spearman_vs_reduce_share": 0.5999999999999999,
+      "spearman_vs_D3_full_minus_gemm_over_full": 0.7999999999999998,
+      "spearman_vs_D1_egress_over_full": 0.0,
+      "points": [
+        {
+          "shape_index": 3,
+          "reduce_share": 0.0901,
+          "nr8_penalty_pct": -27.262581941662013
+        },
+        {
+          "shape_index": 4,
+          "reduce_share": 0.0929,
+          "nr8_penalty_pct": -24.547218723186774
+        },
+        {
+          "shape_index": 5,
+          "reduce_share": 0.0805,
+          "nr8_penalty_pct": -13.748229001124528
+        },
+        {
+          "shape_index": 6,
+          "reduce_share": 0.0489,
+          "nr8_penalty_pct": -18.801181747192494
+        }
+      ],
+      "interpretation": "Reported so the NR cliff is not silently attributed to the communication share. It correlates with the reduce share (+0.60) and with the not-GEMM share (+0.80) and NOT AT ALL with egress/full (0.00) - but at n=4 these three are statistically indistinguishable and NONE of them is a claim. The load-bearing argument for the cliff is mechanical, not correlational: the reducers run the owner-side reduce, and NR=8 makes shape 6's reduce take 16 rounds instead of 3."
+    }
+  }
+}
