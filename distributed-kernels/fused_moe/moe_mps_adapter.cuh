@@ -260,7 +260,8 @@ __host__ __device__ __forceinline__ bool config_is_valid(config c) {
         // exp_21 modes 12/13: physical g must be 1 (there are no push groups)
         // and the only legal extra bit is the 0x10 dual-write detector.
         if ((c.group_slices & kRemoteAccumGMask) != 1u) return false;
-        if ((c.group_slices & ~(kRemoteAccumGMask | kRemoteAccumDetectBit)) != 0u)
+        if ((c.group_slices &
+             ~(kRemoteAccumGMask | kRemoteAccumDetectBit | 0x20u)) != 0u)
             return false;
         // Part is never written in modes 12/13, so a remote-part pull has
         // nothing to read: forbid rather than silently corrupt.

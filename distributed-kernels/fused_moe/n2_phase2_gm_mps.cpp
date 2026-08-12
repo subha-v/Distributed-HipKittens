@@ -147,6 +147,16 @@ __device__ __forceinline__ void epilogue_write(
                   2u;
           kittens::distributed::accumulate_peer_bf162(
               reinterpret_cast<void*>(a), d);
+          if (m7_throttle) {
+            // g-bit 0x20: cap the epilogue's outstanding remote RMWs at 8 per
+            // thread per JMAX group -- tests whether the +313 us M7 cost of the
+            // remote-atomic stream is RATE-shaped (recovers at lower depth) or
+            // a fixed per-op price (no recovery at any depth). exp_20's §2b
+            // predicts the former for an unthrottled stream.
+#if defined(__HIP_DEVICE_COMPILE__)
+            asm volatile("s_waitcnt vmcnt(8)" ::: "memory");
+#endif
+          }
           if (dual) {   // detector: keep the local tower in exact lock-step
             __hip_bfloat162* pl = reinterpret_cast<__hip_bfloat162*>(
                 OUT + static_cast<std::size_t>(xtok[i]) * kHidden + col_base +
@@ -231,6 +241,7 @@ N2_P2_QUAL void N2_P2_NAME(
   int m7_sh = 0;
   unsigned int m7_tok_mask = 0u;
   bool m7_dual = false;
+  bool m7_throttle = false;
 #ifdef N2GM_TASK_DONE_HOOK
   {
     const unsigned long long m7cfg =
@@ -258,6 +269,7 @@ N2_P2_QUAL void N2_P2_NAME(
       m7_peer_tab = m7tab;
       m7_dual = hk_moe::mps::detect_dual(
           hk_moe::mps::decode_config(m7cfg));
+      m7_throttle = ((m7cfg >> 8) & 0x20ull) != 0ull;
       // The first epilogue reads the table at the END of task 0; the task
       // loop's own LDS-fill __syncthreads() orders the fill before it, so no
       // extra barrier is spent here.
