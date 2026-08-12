@@ -210,6 +210,11 @@ mtime $(date -Is -r "$ON/harness/build/$f")"
 stage_arms() {
   say "=== stage arms ==="
   local common="eval.py task.py utils.py reference.py"
+  # `local arm` even though this is a loop variable: an unlocalized `for arm in ...`
+  # leaves arm="rank1" in the global scope after the loop, which is precisely what
+  # eval_arm's expansion bug picked up. Localize the enabler as well as fixing the
+  # bug, so the same mistake cannot silently return via a different function.
+  local arm f
   for arm in ours reference rank1; do
     mkdir -p "$CB/$arm/.tmp"
     for f in $common; do cp "$SRC/$f" "$CB/$arm/$f"; done
@@ -300,6 +305,14 @@ instrument_a() {
 # before the next arm runs.
 capture() {  # capture <arm> <dest>
   local arm="$1" dest="$2"
+  # Assert the label matches the destination. The mislabelling bug fixed in eval_arm
+  # produced files that were perfectly well-formed and simply attributed to the
+  # wrong arm, which no schema or count check can detect -- so check the one thing
+  # that was actually wrong, cheaply, on every capture.
+  if [ "$(basename "$dest")" != "$arm" ]; then
+    say "FATAL: capture would file arm '$arm' under '$(basename "$dest")' ($dest)"
+    return 1
+  fi
   mkdir -p "$dest"
   cp "$CB/$arm"/*.popcorn.txt "$dest/" 2>/dev/null
   cp "$CB/$arm"/*.stdout.txt  "$dest/" 2>/dev/null
@@ -325,7 +338,22 @@ drain() {
 }
 
 eval_arm() {  # eval_arm <arm> <rotation>
-  local arm="$1" rot="$2" dest="$RAW/eval/rot${rot}/${arm}"
+  # These MUST be three separate `local` statements. Bash expands every assignment
+  # word passed to the `local` builtin BEFORE the builtin performs any of them, so
+  #     local arm="$1" rot="$2" dest="$RAW/eval/rot${rot}/${arm}"
+  # expanded ${arm} and ${rot} from the enclosing scope, not from $1/$2. `arm` was
+  # a stale GLOBAL left behind by stage_arms' unlocalized `for arm in ...` loop
+  # (value "rank1") and `rot` came from instrument_b's loop variable, so dest was
+  # rot0/rank1 for EVERY arm: all three arms captured into one directory, each
+  # overwriting the last. Caught at 08:12 by sha256-ing the captured popcorn against
+  # the driver's output directory -- rot0/rank1/benchmark.popcorn.txt was byte
+  # identical to compbench/ours/benchmark.popcorn.txt, i.e. OUR numbers filed as
+  # rank-1's. The parser would have accepted it: the file is well-formed, has six
+  # complete shape blocks and the right specs. Only the label was wrong, which is
+  # the one error a schema check cannot catch.
+  local arm="$1"
+  local rot="$2"
+  local dest="$RAW/eval/rot${rot}/${arm}"
   hr; say "instrument B rot=$rot arm=$arm"
   echo "preflight kfd pids: [$(kfd_pids)]  fds: $(kfd_fds)"
   drain
