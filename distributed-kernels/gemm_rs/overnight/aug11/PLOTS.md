@@ -9,7 +9,7 @@ under `overnight/experiments/`.
 
 | paper fig | question | data file | experiment | status |
 |---|---|---|---|---|
-| — | Q3 bottleneck attribution | `aug11/exp_20_attribution/ablation.json`, `counters.json` | exp_20 | **running** |
+| — | Q3 bottleneck attribution | `aug11/exp_20_attribution/ablation.json`, `counters.json` | exp_20 | **LANDED** — 6 shapes × 5 stages, freshness gate +0.96% |
 | Fig 2 | Q4 saturation vs CTA count | `aug11/exp_21_saturation/saturation.json` | exp_21 | queued |
 | Fig 3 | Q4 per-layer resource timeline | `aug11/exp_22_timeline/events.json`, `timeline_bins.csv` | exp_22 | queued |
 | Fig 4 | Q1 knob waterfall (**money figure**) | `aug11/exp_23_waterfall/waterfall.json` | exp_23 | queued |

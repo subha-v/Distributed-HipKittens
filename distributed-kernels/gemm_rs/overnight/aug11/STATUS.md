@@ -2,6 +2,29 @@
 
 Updated after every experiment. Newest first.
 
+## The refreshed profile (exp_20) — read this before picking any target
+
+Single-cut ablation deltas at the current best, µs per world-8 operation. They
+overlap and need not sum to `full`.
+
+| shape | full | GEMM | XGMI | sync | reduce | release |
+|---|---|---|---|---|---|---|
+| 64×7168×18432 | 67.1 | 2.5 | 2.6 | −1.0 | −0.3 | −0.5 |
+| 512×4096×12288 | 67.5 | 1.1 | 2.6 | 2.6 | −0.8 | 0.9 |
+| 2048×2880×2880 | 87.7 | 16.2 | 20.6 | 16.2 | 7.9 | 6.5 |
+| 4096×4096×4096 | 203.5 | 38.5 | **86.2** | 31.7 | 18.9 | 18.3 |
+| 8192×4096×14336 | 641.9 | **305.2** | 179.7 | 52.9 | 51.7 | **65.4** |
+| 8192×8192×29568 | 1632.5 | **992.2** | 376.0 | 168.7 | 79.8 | 15.1 |
+
+Shapes 1-2 are `HOST`-bound; their deltas are at or below the allocation-noise
+floor and several are negative. No device pool is resolvable there.
+
+**The ranking that matters** (shapes 5 and 6 carry the whole graded gap):
+GEMM mainloop **992 µs** on shape 6 and **305 µs** on shape 5 — dominant, 60.8%
+and 47.5%. Then XGMI (376 / 180), then sync (169 / 53). Release has collapsed to
+0.9% on shape 6 but is **10.2% on shape 5**, because grouping is switched off
+wherever a CTA owns fewer than 4 tiles — see LESSONS.
+
 ## Where the kernel stands
 
 | denominator | value | note |
@@ -65,7 +88,7 @@ Since then two more landed:
 
 | # | experiment | paper figure | status |
 |---|---|---|---|
-| exp_20 | bottleneck attribution refresh | Q3 | **running** (GPU) |
+| exp_20 | bottleneck attribution refresh | Q3 | **DONE** — freshness gate passed (+0.96%) |
 | exp_21 | saturation vs CTA count (NanoFlow Fig 7 analog) | Fig 2 / Q4 | **building** (greenfield ubench) |
 | exp_22 | per-layer resource timeline (NanoFlow v2 Fig 10 analog) | Fig 3 / Q4 | queued — needs new kernel instrumentation |
 | exp_23 | knob waterfall — **the money figure** | Fig 4 / Q1 | **building** (4 rung binaries + fingerprints) |

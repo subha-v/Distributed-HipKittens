@@ -95,6 +95,57 @@ it in the same commit. The repair (re-anchored to executable code at exact
 indentation, with the rationale in-file) is behaviour-preserving: the six cuts
 are the same six cuts.
 
+## exp_20 VERDICT — the refreshed profile, and it re-ranks the night
+
+Ablation at the current best config (WGM spreading, `RELEASE_GROUP=4`,
+NR = 56/32/32/32/32/48, tiles 32/64/128 · 64/128/64 · 128/192/32 · 256/256/32 ×3),
+40 iterations, single-cut deltas (they overlap and need not sum). Freshness gate
+**PASSED**: shape 6 `full` = 1632.5 µs against the expected ~1617 µs, +0.96%.
+
+| shape | full | GEMM | XGMI | sync | reduce | release |
+|---|---|---|---|---|---|---|
+| 64×7168×18432 | 67.1 | 2.5 | 2.6 | −1.0 | −0.3 | −0.5 |
+| 512×4096×12288 | 67.5 | 1.1 | 2.6 | 2.6 | −0.8 | 0.9 |
+| 2048×2880×2880 | 87.7 | 16.2 | 20.6 | 16.2 | 7.9 | 6.5 |
+| 4096×4096×4096 | 203.5 | 38.5 | **86.2** | 31.7 | 18.9 | 18.3 |
+| 8192×4096×14336 | 641.9 | **305.2** | 179.7 | 52.9 | 51.7 | **65.4** |
+| 8192×8192×29568 | 1632.5 | **992.2** | 376.0 | 168.7 | 79.8 | 15.1 |
+
+Shapes 1 and 2 are `HOST`-bound and every one of their deltas is at or below
+the allocation-noise floor — several are **negative**. Do not mine them for a
+mechanism conclusion; the correct reading is "no device pool is resolvable
+here", not "the mainloop is free".
+
+**Four things changed versus the table this replaces** (stale: shape 6 total
+2861.7 with GEMM 1317.8 / XGMI 919.7 / release 250.3 / sync 246.9 / reduce
+219.5; HANDOFF's later reading: total 1777.9 with GEMM 1142.8 / XGMI 412.4):
+
+1. **The release pool is essentially GONE on shape 6: 250.3 → 134.9 → 15.1 µs.**
+   E3's signal coarsening removed ~94% of its own pool. This is a clean paper
+   data point — a pure signal-granularity change, moving zero bytes, retiring
+   the term it targeted almost completely.
+2. **GEMM is now dominant by a wide margin, 60.8% of shape 6** (up from a 46%
+   share), even though it FELL in absolute terms, 1317.8 → 992.2 µs. Everything
+   around it shrank faster. On shape 5 it is 305.2 of 641.9 (47.5%). These are
+   exactly the two shapes carrying the entire remaining graded gap to rank-1.
+3. **XGMI fell 919.7 → 376.0 µs on shape 6** and is now 23%. It is still the
+   largest pool on shape 4, where it is **42.4%** — the profile is not uniform
+   across shapes and a single ranking would hide that.
+4. **`sync` (168.7 µs, 10.3%) has overtaken both reduce and release on shape 6**
+   and is now the second-largest non-GEMM term.
+
+**Release grouping is active on exactly ONE of the six shapes, and the
+attribution proves the other five are paying for it.** The rule is
+`rgroup = tiles_per_cta >= RELEASE_GROUP ? RELEASE_GROUP : 1` with
+`RELEASE_GROUP = 4` (`gemm_rs_mi300x.cpp:335-340`), and
+`tiles_per_cta = ceil(tiles / NG)` is **1/1/1/1/2/4** at the current table. So
+shape 6 groups and gets release = 15.1 µs, while shape 5 does not and pays
+**65.4 µs = 10.2% of its total** — far outside its ~2.2% noise floor. Shapes 3
+and 4 pay 6.5 and 18.3 µs. Whether that is recoverable depends on whether
+`FULL_ONLY=0` or `RELEASE_GROUP=2` is a measured negative at the CURRENT
+geometry or only at exp_05's; that is being checked before any GPU time is
+spent, because the kill rule forbids re-litigating a measured negative.
+
 ## Measurement discipline carried into the figure work
 
 - **The harness bias is per-allocation AND partly allocation-ORDER, not
