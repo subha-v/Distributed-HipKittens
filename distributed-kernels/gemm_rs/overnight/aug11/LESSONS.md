@@ -1579,6 +1579,64 @@ Artifacts: `exp_21_saturation/{saturation.json,knees.json,saturation.csv,ceiling
   than trusting a synced aggregate. A `.json` in a synced tree is not a
   durable artifact.
 
+## exp_24 addendum — the paired `ours`/`ours_prev` test: allocation order is a first-order confounder
+
+- **Which arm is allocated FIRST changes shape 5 by up to 5.85%, and it flips the
+  sign of the A/B.** Same two binaries (`torch.equal` on all 8 ranks), same pool,
+  same balanced within-round ordering, 336 paired rounds per cell:
+  `ours`-first gives −3.11% pipelined at 336/336 wins; `ours`-last gives +5.85%
+  at 0/336. Both p≈1e-101. A p of 1e-101 that reverses when you permute the
+  setup measures the instrument, not the kernel — and perfect internal
+  consistency is the *signature* of an artifact, since noise widens rather than
+  reverses. Arm allocation happens once per process, before round 1, so **no
+  within-round permutation can decorrelate it**; only running both orders can.
+- **The false positive reproduced on identical code.** On 8192×8192×29568 both
+  arms compile to `rgroup` 4 — the same computation — and the `ours`-first
+  arrangement reports −1.67% against a null of −0.14%, clearing its own null by
+  10×. exp_26's −6.56% was measured in that arrangement's single-process analog.
+- **exp_26's shape-5 win is WITHDRAWN.** It does not reproduce in any
+  configuration; best case −3.11%, in the configuration that fabricates the row-6
+  false positive. Order-balanced — the only estimate whose residual is measured,
+  on the five shapes where both arms compile identically and truth is exactly 0 —
+  shape 5 is **+1.37% pipelined / +1.12% graded SLOWER**, against worst control
+  residuals of 0.64% / 0.36%. Recommendation: revert `PERSHAPE` to 0 on
+  burden-of-proof grounds; never to 1. Formally the pre-registered outcome is
+  INDETERMINATE (orders disagree in sign), so the tree was left at 2 for the
+  parent's call.
+- **Use the identical-code shapes as free null arms.** Five of six graded shapes
+  have `tiles_per_cta` ∈ {1, 4}, where the PERSHAPE=0 and PERSHAPE=2 rules agree,
+  so the same run that tests shape 5 measures its own bias five more times. Any
+  A/B whose knob is inert on some shapes should be run on them too — it converts
+  a control you would have to argue for into one you measure.
+- **With few arms, balance the ordering by construction, not in expectation.**
+  Three arms → 3! = 6 permutations → one block is *all six*, blocks repeated,
+  block sequence shuffled. Every ordered pair balanced exactly, residual pinning
+  zero. The 5-rep random shuffle left 2 of 6 shapes with an accidentally pinned
+  pair; enumeration cannot.
+- **Corrected null floors** (identical code, 336 rounds/cell, complete-permutation
+  ordering) mean 0.51% graded / 0.60% pipelined, vs 1.62% graded under the cyclic
+  defect. But the floor **depends on the positions the two arms occupy** (shape 5:
+  0.93% at positions 1↔3, 1.52% at 3↔1), so a floor quoted without the arms'
+  allocation positions is incomplete.
+- **The ladder's headline ratios need a disclosed caveat.** `ARM_SPECS`
+  constructs in a fixed order, so `ours` has been allocated first in every ladder
+  run all night, and position 1 vs 3 is worth 0.9–1.5% on shape 5 in our favour.
+  Inside the ±2% floor, does not overturn 1.1165× graded / 1.1111× pipelined, but
+  systematic and in our favour: disclose until the ladder is re-run with
+  allocation order rotated across launches.
+- **An extension module only exports `PyInit_<its own name>`.** Loading one `.so`
+  under a second name fails outright, which is why each arm needs a separately
+  named build — and why a null arm sharing one `.so` (as the ladder's does) is
+  structurally easier than a treatment arm that cannot: one dlopen, shared C++
+  globals, one IPC exchange. It understates the floor.
+- **Catching an exception to write a diagnostic also swallows the exit status.**
+  The smoke run died in all 8 ranks on an import error and still printed
+  `exit codes: [0]*8`; the runner's all-zero check would have called a total
+  failure a pass. Workers now `os._exit(1)` after writing the error JSON. Same
+  class as the CRLF build that printed "sha differs" for a module it never wrote:
+  **assert the artifact, not the log line.** A 4-minute smoke test caught it and
+  saved a 25-minute campaign.
+
 ## Open validation gap
 
 - **`gemm_rs_mi300x_static_checks.py` has been dead since exp_02.** Its first

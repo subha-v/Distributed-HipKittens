@@ -1,0 +1,134 @@
+################ integrity ################
+  ab_s0_fwd: 8/8 ranks  shape=64x7168x18432  alloc=['ours', 'ours_prev', 'ours_null']  rounds=42
+      geometry tiles=224 producers=248 tiles/CTA=1   rgroup={'ours': 1, 'ours_prev': 1, 'ours_null': 1}  distinct=False
+      torch.equal all ranks: True   blocks of 6 permutations   modules={'ours': 'gemm_rs_mi300x_ab2', 'ours_prev': 'gemm_rs_mi300x_ab0', 'ours_null': 'gemm_rs_mi300x_ab2b'}
+  ab_s0_rev: 8/8 ranks  shape=64x7168x18432  alloc=['ours_null', 'ours_prev', 'ours']  rounds=42
+      geometry tiles=224 producers=248 tiles/CTA=1   rgroup={'ours_null': 1, 'ours_prev': 1, 'ours': 1}  distinct=False
+      torch.equal all ranks: True   blocks of 6 permutations   modules={'ours_null': 'gemm_rs_mi300x_ab2b', 'ours_prev': 'gemm_rs_mi300x_ab0', 'ours': 'gemm_rs_mi300x_ab2'}
+  ab_s1_fwd: 8/8 ranks  shape=512x4096x12288  alloc=['ours', 'ours_prev', 'ours_null']  rounds=42
+      geometry tiles=256 producers=272 tiles/CTA=1   rgroup={'ours': 1, 'ours_prev': 1, 'ours_null': 1}  distinct=False
+      torch.equal all ranks: True   blocks of 6 permutations   modules={'ours': 'gemm_rs_mi300x_ab2', 'ours_prev': 'gemm_rs_mi300x_ab0', 'ours_null': 'gemm_rs_mi300x_ab2b'}
+  ab_s1_rev: 8/8 ranks  shape=512x4096x12288  alloc=['ours_null', 'ours_prev', 'ours']  rounds=42
+      geometry tiles=256 producers=272 tiles/CTA=1   rgroup={'ours_null': 1, 'ours_prev': 1, 'ours': 1}  distinct=False
+      torch.equal all ranks: True   blocks of 6 permutations   modules={'ours_null': 'gemm_rs_mi300x_ab2b', 'ours_prev': 'gemm_rs_mi300x_ab0', 'ours': 'gemm_rs_mi300x_ab2'}
+  ab_s2_fwd: 8/8 ranks  shape=2048x2880x2880  alloc=['ours', 'ours_prev', 'ours_null']  rounds=42
+      geometry tiles=240 producers=272 tiles/CTA=1   rgroup={'ours': 1, 'ours_prev': 1, 'ours_null': 1}  distinct=False
+      torch.equal all ranks: True   blocks of 6 permutations   modules={'ours': 'gemm_rs_mi300x_ab2', 'ours_prev': 'gemm_rs_mi300x_ab0', 'ours_null': 'gemm_rs_mi300x_ab2b'}
+  ab_s2_rev: 8/8 ranks  shape=2048x2880x2880  alloc=['ours_null', 'ours_prev', 'ours']  rounds=42
+      geometry tiles=240 producers=272 tiles/CTA=1   rgroup={'ours_null': 1, 'ours_prev': 1, 'ours': 1}  distinct=False
+      torch.equal all ranks: True   blocks of 6 permutations   modules={'ours_null': 'gemm_rs_mi300x_ab2b', 'ours_prev': 'gemm_rs_mi300x_ab0', 'ours': 'gemm_rs_mi300x_ab2'}
+  ab_s3_fwd: 8/8 ranks  shape=4096x4096x4096  alloc=['ours', 'ours_prev', 'ours_null']  rounds=42
+      geometry tiles=256 producers=272 tiles/CTA=1   rgroup={'ours': 1, 'ours_prev': 1, 'ours_null': 1}  distinct=False
+      torch.equal all ranks: True   blocks of 6 permutations   modules={'ours': 'gemm_rs_mi300x_ab2', 'ours_prev': 'gemm_rs_mi300x_ab0', 'ours_null': 'gemm_rs_mi300x_ab2b'}
+  ab_s3_rev: 8/8 ranks  shape=4096x4096x4096  alloc=['ours_null', 'ours_prev', 'ours']  rounds=42
+      geometry tiles=256 producers=272 tiles/CTA=1   rgroup={'ours_null': 1, 'ours_prev': 1, 'ours': 1}  distinct=False
+      torch.equal all ranks: True   blocks of 6 permutations   modules={'ours_null': 'gemm_rs_mi300x_ab2b', 'ours_prev': 'gemm_rs_mi300x_ab0', 'ours': 'gemm_rs_mi300x_ab2'}
+  ab_s4_fwd: 8/8 ranks  shape=8192x4096x14336  alloc=['ours', 'ours_prev', 'ours_null']  rounds=42
+      geometry tiles=512 producers=272 tiles/CTA=2   rgroup={'ours': 2, 'ours_prev': 1, 'ours_null': 2}  distinct=True
+      torch.equal all ranks: True   blocks of 6 permutations   modules={'ours': 'gemm_rs_mi300x_ab2', 'ours_prev': 'gemm_rs_mi300x_ab0', 'ours_null': 'gemm_rs_mi300x_ab2b'}
+  ab_s4_rev: 8/8 ranks  shape=8192x4096x14336  alloc=['ours_null', 'ours_prev', 'ours']  rounds=42
+      geometry tiles=512 producers=272 tiles/CTA=2   rgroup={'ours_null': 2, 'ours_prev': 1, 'ours': 2}  distinct=True
+      torch.equal all ranks: True   blocks of 6 permutations   modules={'ours_null': 'gemm_rs_mi300x_ab2b', 'ours_prev': 'gemm_rs_mi300x_ab0', 'ours': 'gemm_rs_mi300x_ab2'}
+  ab_s5_fwd: 8/8 ranks  shape=8192x8192x29568  alloc=['ours', 'ours_prev', 'ours_null']  rounds=42
+      geometry tiles=1024 producers=256 tiles/CTA=4   rgroup={'ours': 4, 'ours_prev': 4, 'ours_null': 4}  distinct=False
+      torch.equal all ranks: True   blocks of 6 permutations   modules={'ours': 'gemm_rs_mi300x_ab2', 'ours_prev': 'gemm_rs_mi300x_ab0', 'ours_null': 'gemm_rs_mi300x_ab2b'}
+  ab_s5_rev: 8/8 ranks  shape=8192x8192x29568  alloc=['ours_null', 'ours_prev', 'ours']  rounds=42
+      geometry tiles=1024 producers=256 tiles/CTA=4   rgroup={'ours_null': 4, 'ours_prev': 4, 'ours': 4}  distinct=False
+      torch.equal all ranks: True   blocks of 6 permutations   modules={'ours_null': 'gemm_rs_mi300x_ab2b', 'ours_prev': 'gemm_rs_mi300x_ab0', 'ours': 'gemm_rs_mi300x_ab2'}
+
+################ paired deltas: (ours - ours_prev) / ours_prev ################
+negative == the shipped PERSHAPE=2 rule is FASTER (exp_26's sign)
+                       run      proto   median%    mean%        wins          p    null%          verdict
+                 ab_s0_fwd  pipelined     -0.48    -0.54   286/336     2.54e-41    -0.46      ours FASTER
+                 ab_s0_fwd     graded     -0.05    -0.20   174/336     5.49e-01    +0.09      inside null
+                 ab_s0_rev  pipelined     +0.66    +0.73    27/336     7.99e-62    +0.18      ours SLOWER
+                 ab_s0_rev     graded     +0.10    +0.09   154/336     1.41e-01    +0.12      inside null
+                 ab_s1_fwd  pipelined     +0.68    +0.64    17/336     2.49e-73    +0.59      ours SLOWER
+                 ab_s1_fwd     graded     +0.43    +0.25    78/336     1.23e-23    +0.18      ours SLOWER
+                 ab_s1_rev  pipelined     -0.84    -0.92   322/336     3.04e-77    +0.22      ours FASTER
+                 ab_s1_rev     graded     -0.13    -0.13   191/336     1.40e-02    -0.31      inside null
+                 ab_s2_fwd  pipelined     -0.12    -0.07   199/336     8.49e-04    +0.24      inside null
+                 ab_s2_fwd     graded     -0.51    -0.36   256/336     1.31e-22    -0.16      ours FASTER
+                 ab_s2_rev  pipelined     +0.37    +0.44    88/336     8.87e-19    +0.46      inside null
+                 ab_s2_rev     graded     -0.09    -0.13   190/336     1.89e-02    +0.13      inside null
+                 ab_s3_fwd  pipelined     -0.04    -0.08   185/336     7.17e-02    +0.56      inside null
+                 ab_s3_fwd     graded     +0.05    +0.01   155/336     1.73e-01    +0.42      inside null
+                 ab_s3_rev  pipelined     -0.61    -0.54   264/336     6.83e-27    -0.47      ours FASTER
+                 ab_s3_rev     graded     -0.72    -0.73   290/336     1.98e-44    -0.76      inside null
+                 ab_s4_fwd  pipelined     -3.11    -3.17   336/336    1.43e-101    -0.93      ours FASTER
+                 ab_s4_fwd     graded     -2.92    -2.95   336/336    1.43e-101    -1.11      ours FASTER
+                 ab_s4_rev  pipelined     +5.85    +5.79     0/336    1.43e-101    +1.52      ours SLOWER
+                 ab_s4_rev     graded     +5.17    +5.15     0/336    1.43e-101    +1.43      ours SLOWER
+                 ab_s5_fwd  pipelined     -1.67    -1.60   305/336     9.61e-58    -0.14      ours FASTER
+                 ab_s5_fwd     graded     -1.49    -1.42   313/336     3.52e-66    -0.02      ours FASTER
+                 ab_s5_rev  pipelined     +0.39    +0.43   120/336     1.82e-07    +1.45      inside null
+                 ab_s5_rev     graded     +0.78    +0.67    84/336     1.22e-20    +0.41      ours SLOWER
+
+################ the corrected null floors, both protocols ################
+ours vs ours_null, per-round paired median magnitude. These supersede
+the floors quoted all night, which were inflated by the cyclic-order
+defect (a full rotation still pins every arm PAIR at a fixed offset).
+             shape  alloc   graded%  pipelined%
+     64x7168x18432    fwd      0.09        0.46
+     64x7168x18432    rev      0.12        0.18
+    512x4096x12288    fwd      0.18        0.59
+    512x4096x12288    rev      0.31        0.22
+    2048x2880x2880    fwd      0.16        0.24
+    2048x2880x2880    rev      0.13        0.46
+    4096x4096x4096    fwd      0.42        0.56
+    4096x4096x4096    rev      0.76        0.47
+   8192x4096x14336    fwd      1.11        0.93
+   8192x4096x14336    rev      1.43        1.52
+   8192x8192x29568    fwd      0.02        0.14
+   8192x8192x29568    rev      0.41        1.45
+
+################ THE VERDICT ON SHAPE 5 ################
+      graded      ours-first: median -2.92%  wins 336/336  p=1.43e-101  null -1.11%  -> ours FASTER
+      graded ours_null-first: median +5.17%  wins 0/336  p=1.43e-101  null +1.43%  -> ours SLOWER
+   pipelined      ours-first: median -3.11%  wins 336/336  p=1.43e-101  null -0.93%  -> ours FASTER
+   pipelined ours_null-first: median +5.85%  wins 0/336  p=1.43e-101  null +1.52%  -> ours SLOWER
+
+  PRE-REGISTERED OUTCOME: INDETERMINATE (allocation orders disagree: ['ours FASTER', 'ours SLOWER'])
+  -> no change on this evidence; report as unresolved.
+
+################ controls: the five shapes where the arms agree ################
+rgroup identical there, so the arms are the same computation and any
+delta is this instrument's bias, measured five more times.
+       64x7168x18432  pipelined median   -0.48%  null   -0.46%
+       64x7168x18432  pipelined median   +0.66%  null   +0.18%
+      512x4096x12288  pipelined median   +0.68%  null   +0.59%
+      512x4096x12288  pipelined median   -0.84%  null   +0.22%
+      2048x2880x2880  pipelined median   -0.12%  null   +0.24%
+      2048x2880x2880  pipelined median   +0.37%  null   +0.46%
+      4096x4096x4096  pipelined median   -0.04%  null   +0.56%
+      4096x4096x4096  pipelined median   -0.61%  null   -0.47%
+     8192x8192x29568  pipelined median   -1.67%  null   -0.14%  <-- BIAS above the null on identical code
+     8192x8192x29568  pipelined median   +0.39%  null   +1.45%
+
+################ order-balanced estimate, and its measured residual ################
+mean of the two allocation orders. On the five shapes where the arms
+are the same computation the true value is 0, so their spread IS the
+residual bias of this balancing.
+ #              shape      proto     fwd%     rev%  balanced%  arms distinct
+ 1      64x7168x18432     graded    -0.05    +0.10      +0.03          False
+ 1      64x7168x18432  pipelined    -0.48    +0.66      +0.09          False
+ 2     512x4096x12288     graded    +0.43    -0.13      +0.15          False
+ 2     512x4096x12288  pipelined    +0.68    -0.84      -0.08          False
+ 3     2048x2880x2880     graded    -0.51    -0.09      -0.30          False
+ 3     2048x2880x2880  pipelined    -0.12    +0.37      +0.12          False
+ 4     4096x4096x4096     graded    +0.05    -0.72      -0.34          False
+ 4     4096x4096x4096  pipelined    -0.04    -0.61      -0.33          False
+ 5    8192x4096x14336     graded    -2.92    +5.17      +1.12           True
+ 5    8192x4096x14336  pipelined    -3.11    +5.85      +1.37           True
+ 6    8192x8192x29568     graded    -1.49    +0.78      -0.36          False
+ 6    8192x8192x29568  pipelined    -1.67    +0.39      -0.64          False
+
+  pipelined: control residual (5 shapes, truth = 0) mean -0.17%, worst |0.64|%
+  pipelined: shape 5 order-balanced +1.37%  -> ABOVE the worst control residual
+  pipelined: exp_26 claimed -6.56%; order-balanced estimate is +1.37%
+
+  graded: control residual (5 shapes, truth = 0) mean -0.16%, worst |0.36|%
+  graded: shape 5 order-balanced +1.12%  -> ABOVE the worst control residual
+  graded: exp_26 claimed -6.56%; order-balanced estimate is +1.12%
+
+wrote /home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_24_ladders/ab_prev.json

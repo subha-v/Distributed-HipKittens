@@ -21,10 +21,29 @@ seven queue items produced data; exp_22's third arm is the only piece still owed
    floor) and **+2.87% pipelined** (outside floor, i.e. *worse*) — a ~9.5-point
    disagreement **including the sign**. Gap to rank-1: **1.1165× graded / 1.1111×
    pipelined**, both **inside the ±2% ratio floor** versus the previous 1.0971× /
-   1.1189×. **No movement.** The decisive same-run paired test (`ours_prev` as a
-   sixth arm in one pool) is running. `PERSHAPE=2` stays meanwhile only because it
-   is bit-identical to the incumbent with an unchanged register tuple, so it risks
-   nothing while the question is settled.
+   1.1189×. **No movement.**
+
+   **The decisive same-run paired test has now RUN, and exp_26's win is
+   WITHDRAWN** (`exp_24_ladders/result_ab_prev.md`). Both binaries in one pool,
+   `torch.equal` on all 8 ranks, `rgroup` 2 vs 1 verified from each arm's own
+   build, 336 paired rounds per cell. The answer: **which arm is allocated first
+   changes shape 5 by up to 5.85% and flips the sign of the A/B** — `ours`-first
+   −3.11% at 336/336 wins, `ours`-last +5.85% at 0/336, both p≈1e-101. The same
+   arrangement fabricates −1.67% on shape 6, where the two arms compile to the
+   *same* `rgroup` and are therefore the same computation. Order-balanced against
+   a residual measured on the five identical-code shapes, shape 5 is **+1.37%
+   pipelined / +1.12% graded SLOWER** — no 6.56% win in any configuration.
+   **Recommendation: revert `PERSHAPE` to 0** (never to 1). Formally the
+   pre-registered outcome is INDETERMINATE because the two orders disagree in
+   sign, so the tree is **left at PERSHAPE=2 pending that call**; it stays
+   harmless meanwhile, being bit-identical to the incumbent with an unchanged
+   register tuple.
+
+   **Caveat this creates for every ladder number:** `ARM_SPECS` constructs arms in
+   a fixed order, so `ours` was allocated first in every ladder run tonight, and
+   position 1 vs 3 is worth 0.9–1.5% on shape 5 in our favour. Inside the ±2%
+   floor, so 1.1165× / 1.1111× stand, but it is systematic and favours us until
+   the ladder is re-run with allocation order rotated across launches.
 
 3. **A single instrument defect explains three separate "mysteries" from tonight**,
    and it inflated the noise floors this whole session quoted — see LESSONS,

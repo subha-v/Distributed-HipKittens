@@ -1,0 +1,55 @@
+########## gemm_rs_mi300x_ab0 (RG=4 FULL_ONLY=1 PERSHAPE=0) ##########
+  OK   410248 B  sha 3d1145fc8a549eea
+  init symbol: PyInit_gemm_rs_mi300x_ab0
+########## gemm_rs_mi300x_ab2 (RG=4 FULL_ONLY=1 PERSHAPE=2) ##########
+  OK   410280 B  sha 7a4f8c5689de0e66
+  init symbol: PyInit_gemm_rs_mi300x_ab2
+########## gemm_rs_mi300x_ab2b (RG=4 FULL_ONLY=1 PERSHAPE=2) ##########
+  OK   410288 B  sha 980900cb67ad0b34
+  init symbol: PyInit_gemm_rs_mi300x_ab2b
+
+########## the arms must be distinguishable in the right way ##########
+  ab0  3d1145fc8a549eea  410248 B
+  ab2  7a4f8c5689de0e66  410280 B
+  ab2b 980900cb67ad0b34  410288 B
+  OK: ab0 != ab2, so the two arms really are different code
+
+########## resource tuples (must not move between the arms) ##########
+-- ab0 (82 log lines) --
+          7 VGPRs Spill: 0 [-Rpass-analysis=kernel-resource-usage]
+          7 SGPRs: 106 [-Rpass-analysis=kernel-resource-usage]
+          7 ScratchSize [bytes/lane]: 0 [-Rpass-analysis=kernel-resource-usage]
+          7 AGPRs: 0 [-Rpass-analysis=kernel-resource-usage]
+          2 SGPRs Spill: 79 [-Rpass-analysis=kernel-resource-usage]
+          2 Occupancy [waves/SIMD]: 5 [-Rpass-analysis=kernel-resource-usage]
+          2 Occupancy [waves/SIMD]: 4 [-Rpass-analysis=kernel-resource-usage]
+          2 Occupancy [waves/SIMD]: 2 [-Rpass-analysis=kernel-resource-usage]
+          1 VGPRs: 98 [-Rpass-analysis=kernel-resource-usage]
+          1 VGPRs: 92 [-Rpass-analysis=kernel-resource-usage]
+-- ab2 (82 log lines) --
+          7 VGPRs Spill: 0 [-Rpass-analysis=kernel-resource-usage]
+          7 SGPRs: 106 [-Rpass-analysis=kernel-resource-usage]
+          7 ScratchSize [bytes/lane]: 0 [-Rpass-analysis=kernel-resource-usage]
+          7 AGPRs: 0 [-Rpass-analysis=kernel-resource-usage]
+          2 SGPRs Spill: 79 [-Rpass-analysis=kernel-resource-usage]
+          2 Occupancy [waves/SIMD]: 5 [-Rpass-analysis=kernel-resource-usage]
+          2 Occupancy [waves/SIMD]: 4 [-Rpass-analysis=kernel-resource-usage]
+          2 Occupancy [waves/SIMD]: 2 [-Rpass-analysis=kernel-resource-usage]
+          1 VGPRs: 98 [-Rpass-analysis=kernel-resource-usage]
+          1 VGPRs: 92 [-Rpass-analysis=kernel-resource-usage]
+-- ab2b (82 log lines) --
+          7 VGPRs Spill: 0 [-Rpass-analysis=kernel-resource-usage]
+          7 SGPRs: 106 [-Rpass-analysis=kernel-resource-usage]
+          7 ScratchSize [bytes/lane]: 0 [-Rpass-analysis=kernel-resource-usage]
+          7 AGPRs: 0 [-Rpass-analysis=kernel-resource-usage]
+          2 SGPRs Spill: 79 [-Rpass-analysis=kernel-resource-usage]
+          2 Occupancy [waves/SIMD]: 5 [-Rpass-analysis=kernel-resource-usage]
+          2 Occupancy [waves/SIMD]: 4 [-Rpass-analysis=kernel-resource-usage]
+          2 Occupancy [waves/SIMD]: 2 [-Rpass-analysis=kernel-resource-usage]
+          1 VGPRs: 98 [-Rpass-analysis=kernel-resource-usage]
+          1 VGPRs: 92 [-Rpass-analysis=kernel-resource-usage]
+
+ab0  PERSHAPE=0  3d1145fc8a549eea825e2d1ca60a0ca45e8365f527b4118c80db7f1681bfcf67
+ab2  PERSHAPE=2  7a4f8c5689de0e6637839da4e270ce3b149a10470a6bafd7945a109bd192bf4f
+ab2b PERSHAPE=2  980900cb67ad0b3486eb117a57d88684d99d4c2558287999af32c94ac4de1915
+########## BUILD COMPLETE ##########
