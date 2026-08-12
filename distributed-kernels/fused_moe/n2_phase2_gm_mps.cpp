@@ -98,7 +98,7 @@ __device__ __forceinline__ void epilogue_write(
     __hip_bfloat16* __restrict__ OUT,
     const unsigned long long* __restrict__ peer_tab,
     unsigned long long slot_off, int maxtok_sh, unsigned int tok_mask,
-    bool dual) {
+    bool dual, bool throttle) {
   // PHASE 1 (write, MFMA layout): lane 16q+r holds sorted rows {r, 16+r}.
 #pragma unroll
   for (int m = 0; m < 2; ++m) {
@@ -147,7 +147,7 @@ __device__ __forceinline__ void epilogue_write(
                   2u;
           kittens::distributed::accumulate_peer_bf162(
               reinterpret_cast<void*>(a), d);
-          if (m7_throttle) {
+          if (throttle) {
             // g-bit 0x20: cap the epilogue's outstanding remote RMWs at 8 per
             // thread per JMAX group -- tests whether the +313 us M7 cost of the
             // remote-atomic stream is RATE-shaped (recovers at lower depth) or
@@ -529,14 +529,14 @@ N2_P2_QUAL void N2_P2_NAME(
                         xtok, T, q, r, rowh, dcol,
                         static_cast<std::size_t>(kChunkN) * nc + kWaveCols2 * wv,
                         OUT, m7_peer_tab, m7_slot_off, m7_sh, m7_tok_mask,
-                        m7_dual);
+                        m7_dual, m7_throttle);
       epilogue_write<3>(xp_lds[wv],
                         *reinterpret_cast<racc(*)[3][2]>(&acc[sb][4]), sw2, lv2,
                         xtok, T, q, r, rowh, dcol,
                         static_cast<std::size_t>(kChunkN) * nc +
                             kWaveCols2 * wv + 64,
                         OUT, m7_peer_tab, m7_slot_off, m7_sh, m7_tok_mask,
-                        m7_dual);
+                        m7_dual, m7_throttle);
     }
     // MPS-DELTA (2): per-thread VMEM drain BEFORE the task-end barrier. The
     // epilogue's global_atomic_pk_add_bf16 stores are asynchronous;
