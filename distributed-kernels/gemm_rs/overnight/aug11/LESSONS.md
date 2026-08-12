@@ -1017,6 +1017,74 @@ exp_24 lost only shape 2, preserved in
 `exp_24_ladders/logs/full_run.partial_shape2.log` (157 result lines), and needs a
 liveness-aware runner before it restarts regardless.
 
+## exp_22 arm (a) — the RCCL baseline has ZERO overlap, and that IS the figure
+
+The reference GEMM+RCCL epoch on shape 5, from a `rocprofv3` kernel trace, median
+epoch, **three strictly serialized intervals with zero overlap**:
+
+| interval | µs | share of 527.9 µs |
+|---|---:|---:|
+| rocBLAS `Cijk_*` (GEMM) | 243.2 | 46.1% |
+| bias | 43.4 | 8.2% |
+| RCCL reduce-scatter | **241.3** | **45.7%** |
+
+**The width of the RCCL block is the communication share of the layer: 45.7%.**
+That is the paper's opening measurement for this operator, and it is the exact
+contrast Fig 3 exists to draw — the baseline's three resource strips are *mutually
+exclusive*, so nothing is hidden behind anything.
+
+**"Report, don't bucket" caught the most important kernel in the arm.**
+`ncclDevKernel_Generic_2` — **30 dispatches, 11.07 ms**, i.e. the entire
+communication phase — matched **no** seed classification rule, because ROCm's RCCL
+exports **upstream NCCL symbol names**. A silent fallback would have shipped an
+**empty xGMI strip** and the figure would have shown the baseline doing no
+communication at all. Zero unclassified names after two corrections derived from
+the observed set.
+
+A second, quieter trap in the same arm: `__amd_rocclr_copyBuffer` /
+`fillBufferAligned`, **1418 dispatches** of runtime allocator blits. Left in the
+segmentation they cut the trace into **718 fragments** and aborted the first
+capture; they are now class `runtime`, excluded from segmentation and reported
+rather than dropped.
+
+**Tick rate now has two independent calibrations that share no machinery beyond
+the instruction itself**: exp_21's `s_memrealtime` = **99.7366 MHz** (10.0264
+ns/tick, 5 reps, spread 0.0101%, two-stage against `steady_clock`) versus
+exp_22's in-situ regression of span-in-ticks against `hipEvent` µs, with a 1%
+agree/disagree verdict recorded in `tick_rate.json`. Both sit **−0.264% from the
+sibling's declared gfx950 100 MHz** — close enough that the sibling's assumption
+was harmless, but it is now measured here rather than inherited.
+
+## THE SANITY GATE I SPECIFIED WAS WRONG — best-of-arm is not a mean
+
+I told exp_22 to verify the node by checking shape 5 against **613.70 µs**. It
+measured 646.10 and aborted the run. **My instruction was the error**, and it is
+the trap already recorded in this very file: **the `62.38 / 64.52 / 83.75 /
+198.71 / 613.70 / 1616.63` vector is BEST-of-arm, while `m7_bench.py` prints
+MEANS.** exp_05's own table records shape 5 as `613.70 / 645.93` = best/median.
+
+Re-scored like-for-like, the node is fine:
+
+| statistic | measured | recorded | delta |
+|---|---:|---:|---:|
+| geomean of M7 means | 207.76 µs | 207.18 µs | **+0.28%** |
+| shape 5 mean | 648.11 µs | 645.93 (recorded median) | **+0.34%** |
+| shape 5 vs same-config range | 648.11 | 644.71-669.39 | inside |
+
+Two refinements worth keeping. **A best over three rotations is a weaker order
+statistic than a best pooled over a multi-arm campaign**, so comparing them
+systematically penalises the smaller run — the recorded bests are not reproducible
+targets for a 3-rotation M7. And the **mixed sign is the tell**: five shapes
+drifted *up* 1-5% while shape 6 drifted *down* 2.9%, which no node degradation
+produces. A real regression moves everything one way.
+
+**So the stale KFD entry's predicted nil timing effect is now CONFIRMED, not
+assumed**, and every number taken after the incident stands.
+
+**Rule for every future sanity gate: state the statistic, not just the number.**
+Compare mean to mean, best to best, median to median, and say which the reference
+value is.
+
 ## Measurement discipline carried into the figure work
 
 - **The harness bias is per-allocation AND partly allocation-ORDER, not

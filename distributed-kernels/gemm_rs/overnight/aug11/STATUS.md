@@ -189,9 +189,16 @@ live 4096³ bf16 matmul with 190 of 192 GiB free at idle temps and power.
 
 - `gpu_lease.sh` now reports it as `KFD STALE pids (… ignored)` and no longer
   blocks the queue on it. **Do not signal it; do not `steal` the lease.**
-- **Every campaign run after the incident must re-verify a known value before
-  its numbers are trusted** — shape 5's pipelined best is ~613.7 µs, and the
-  full best-of-arm vector is `62.38 / 64.52 / 83.75 / 198.71 / 613.70 / 1616.63`.
+- **Every campaign run after the incident must re-verify a known value before its
+  numbers are trusted — and must compare LIKE STATISTIC TO LIKE STATISTIC.** The
+  vector `62.38 / 64.52 / 83.75 / 198.71 / 613.70 / 1616.63` is **best-of-arm**,
+  while `m7_bench.py` prints **means**; shape 5 is `613.70 / 645.93` = best/median.
+  Comparing an M7 mean against the best-of-arm value spuriously fails the gate,
+  which is exactly what happened once tonight. Reference figures for **means**:
+  geomean **207.18 µs**, shape 5 mean ~**645.93 µs**.
+  **The node has since been CONFIRMED healthy on this statistic: +0.28% on the
+  geomean of means**, so the stale KFD entry's nil timing effect is measured, not
+  assumed, and every post-incident number stands.
 - **exp_26 is BLOCKED on that fault**, which is a correctness matter, not an
   obstacle. Separate the two hypotheses before measuring anything: the `rgroup`
   change itself, versus M9's harness (shape 5 had to be added to its `CASES` and
