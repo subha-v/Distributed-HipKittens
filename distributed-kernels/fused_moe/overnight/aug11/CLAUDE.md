@@ -98,6 +98,41 @@ Stretch (only if the queue above is green): the Megatron/PyTorch+RCCL eager
 arm (paper Q6) — an eager dispatch→GEMM→combine reference through the same
 harness shapes, giving the literature-comparable denominator.
 
+## Phase 2 — when the figure queue is done, the optimization loop RESUMES
+
+Getting every plot is not the end of the night; it is the checkpoint where
+the standing objective takes back over: **widen the margin over `production`
+toward 0.80× (6,172 µs) and beyond**, with the full aug10 ratchet discipline.
+The figure data tells you where to strike — exp_33's attribution is the
+profile of the current winner, and every figure experiment doubles as a
+profiling pass. The live optimization queue, in expected-value order (all
+pre-analyzed in `STATUS.md` — read the relevant section before building):
+
+1. **exp_27 — delete M5's scale transpose, point M6 at `sc_stage`**
+   (predicted −130…−190 µs, three models agree; the gate is BIT-EXACT
+   output, stronger than any tolerance; composes with exp_24's deletion so
+   the whole `zero_part_scale_transpose` loop dies).
+2. **exp_26 mask ladder on GPU** (mask 0/4/1/5; mask 4 is free at
+   donor-identical resources; judge on the M6 phase stamp, 3–9σ expected;
+   predicted 75–200 µs).
+3. **exp_31 — phase-2 VMEM hint fix** (`14 + kGM`, one line, same
+   parameterization class as phase 1's; M7 is 2,660 µs).
+4. **nc-major task reorder** if it did not land in the waterfall (lifts the
+   combine's unblockable fraction 17%→85%; it is also paper Fig 6 data).
+5. **mode 14 C/flush tuning** at the exp_34 winner; then re-run exp_33
+   attribution on the new ratchet and pick the next largest term.
+6. If all of the above land: M6's K-loop is still ~84% stalled — spawn a
+   research+implementer pair on the software-pipeline depth (the one-K-step
+   pipeline against a ~9,800-cycle iteration is the biggest single pool of
+   cycles left in the kernel).
+
+Loop rule: after every landed optimization, update the ratchet, append to
+LESSONS.md, commit+push, re-run the phase stamps, and pick the next target
+from the NEW profile — never from tonight's stale one. If a build blocks,
+fall back to the next item; if the GPU is busy with a campaign, do CPU-side
+builds/ISA work for the next item in parallel. **The night has no done
+state.**
+
 ## Deliverable discipline — this is a figure-producing night
 
 - Every experiment folder gets `plan.md` (if not already present), `result.md`

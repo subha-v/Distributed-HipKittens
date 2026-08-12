@@ -31,6 +31,16 @@ Operating rules, non-negotiable:
 - One GPU job at a time; the node checkout is the arm; bump
   `K0P6_MPS_SRC_REV` on any `.cuh`-adjacent change.
 
+**When the figure queue is complete, you are not done.** Phase 2 of the
+charter takes over: resume the auto-research loop — profile the current
+winner (the attribution stamps you just produced ARE the profile), pick the
+largest term, and keep optimizing toward 0.80× with the full ratchet
+discipline (exp_27 scale-transpose deletion, exp_26 mask ladder, exp_31
+phase-2 hint fix, nc-major, mode-14 tuning, then the M6 K-loop pipeline —
+the ordered queue with predictions is in the charter). Re-profile after
+every landed win and choose the next target from the new profile. Getting
+all the plots is a checkpoint, not a termination condition.
+
 The morning read must show: which paper figures now have data, the numbers
 behind each, what died, and a bigger measured margin over `production` than
-the night began with if the queue allowed it.
+the night began with.
