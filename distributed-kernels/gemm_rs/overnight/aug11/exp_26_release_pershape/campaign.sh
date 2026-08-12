@@ -25,15 +25,17 @@ bash "$LEASE" acquire exp_26 10800 || { echo "CAMPAIGN ABORTED: no lease"; exit 
 trap release EXIT
 
 # ---------------------------------------------------------------------------
-# 1. M9 re-aimed at shape 5 -- the ONLY shape whose group size this change
-#    moves, and the one the stock case list no longer covers since exp_14
-#    retiled row 2 to 1 tile per CTA. Ordered first because it is the gate that
-#    is specific to this change.
+# 1. M9 against a VALID golden. The stock gate's frozen golden predates exp_14's
+#    retile of rows 1-3: on row 2 its tile map differs from the plan's, and on
+#    row 3 it reads 192 rows past the end of B, which is what took the memory
+#    access fault at 10:05Z and wedged the node. See m9_vs_incumbent.py's
+#    docstring and golden_audit.sh for the tables. Re-running the stock gate
+#    would only fault the node again, so it is deliberately NOT re-run.
 # ---------------------------------------------------------------------------
-stage "M9 (shape-5 aimed): poisoned heap, bitwise golden, CTRL_PUBLISH_EARLY"
-docker exec -w $ON/harness dhk-gemmrs timeout 3600 \
-  python3 -u "$D/m9_shape5.py" 2>&1 | tee "$D/logs/m9_shape5.log"
-echo "m9_shape5 exit: ${PIPESTATUS[0]}"
+stage "M9 vs incumbent golden: poisoned heap, bitwise, CTRL_PUBLISH_EARLY"
+docker exec -w $ON/harness dhk-gemmrs timeout 5400 \
+  python3 -u "$D/m9_vs_incumbent.py" 2>&1 | tee "$D/logs/m9_vs_incumbent.log"
+echo "m9_vs_incumbent exit: ${PIPESTATUS[0]}"
 
 # ---------------------------------------------------------------------------
 # 2. The paired A/B in both allocation orders -- the decisive measurement.
@@ -46,16 +48,6 @@ for dir in 0 1; do
     | tee "$D/logs/$name.log"
   echo "$name exit: ${PIPESTATUS[0]}"
 done
-
-# ---------------------------------------------------------------------------
-# 3. The stock M9 gate, completing the mandated ladder. It faulted at 10:05Z on
-#    2048x2880x2880 -- a 1-tile-per-CTA row where this change is a behavioural
-#    no-op -- so this re-run is also the test of whether that fault reproduces.
-# ---------------------------------------------------------------------------
-stage "M9 (stock case list), re-run after the 10:05Z fault"
-docker exec -w $ON/harness dhk-gemmrs timeout 5400 \
-  python3 -u m9_stale_slot.py 2>&1 | tee "$D/logs/m9_full.log"
-echo "m9_full exit: ${PIPESTATUS[0]}"
 
 stage "done"
 echo "CAMPAIGN COMPLETE"

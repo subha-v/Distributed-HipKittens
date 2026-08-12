@@ -111,7 +111,7 @@ Since then two more landed:
 |---|---|---|---|
 | exp_20 | bottleneck attribution refresh | Q3 | **DONE** — freshness gate passed (+0.96%) |
 | exp_21 | saturation vs CTA count (NanoFlow Fig 7 analog) | Fig 2 / Q4 | **building** (greenfield ubench) |
-| exp_22 | per-layer resource timeline (NanoFlow v2 Fig 10 analog) | Fig 3 / Q4 | queued — needs new kernel instrumentation |
+| exp_22 | per-layer resource timeline (NanoFlow v2 Fig 10 analog) | Fig 3 / Q4 | **instrumented + parity gate PASSED** (flag-off byte-identical, 7/7); arms (a)+(b) on GPU |
 | exp_23 | knob waterfall — **the money figure** | Fig 4 / Q1 | **LANDED** — a→b **1.084×**, a→c **1.115×**, null within **0.2%** of c; structural prediction held; NR flatness falsified in a useful way |
 | exp_24 | external ladders refresh | Q6 | queued |
 | exp_25 | per-shape sensitivity readout | Q5 | queued (derives from exp_20 + exp_23) |
@@ -122,6 +122,25 @@ facts (76.8/537.6 GB/s ceilings, 256-CU grids, gfx950 occupancy claims,
 `s_memrealtime` tick rate) that must be **re-measured on gfx942** rather than
 quoted. `docs/distributed/PAPER.md` was found and its Q1-Q6 definitions are
 captured there.
+
+## Node state — read before believing any timing taken after 05:15
+
+A stale KFD entry (pid 3001610) holds ~1.25 GB/GPU and will not clear. It is a
+**corpse, not a tenant**: the orphaned exp_26 M9 run took a
+`VM_L2_PROTECTION_FAULT`, died, and wedged in `exit_mm`, where it has no address
+space and therefore cannot dispatch a kernel or be signalled. All 8 GPUs pass a
+live 4096³ bf16 matmul with 190 of 192 GiB free at idle temps and power.
+
+- `gpu_lease.sh` now reports it as `KFD STALE pids (… ignored)` and no longer
+  blocks the queue on it. **Do not signal it; do not `steal` the lease.**
+- **Every campaign run after the incident must re-verify a known value before
+  its numbers are trusted** — shape 5's pipelined best is ~613.7 µs, and the
+  full best-of-arm vector is `62.38 / 64.52 / 83.75 / 198.71 / 613.70 / 1616.63`.
+- **exp_26 is BLOCKED on that fault**, which is a correctness matter, not an
+  obstacle. Separate the two hypotheses before measuring anything: the `rgroup`
+  change itself, versus M9's harness (shape 5 had to be added to its `CASES` and
+  its golden was already stale after the exp_14 retile). Run the **unmodified**
+  kernel through the same extended M9 first — it is the cheaper hypothesis.
 
 ## Session infrastructure notes
 
