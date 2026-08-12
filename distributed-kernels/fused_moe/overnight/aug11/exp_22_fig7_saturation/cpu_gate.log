@@ -1,0 +1,108 @@
+############ BUILD + RESOURCE + ISA ############
+#define E22_SRC_REV 8
+exit=0 secs=3 errors=0
+note: _Z13sat_kernel_d46Params: 2 SGPR spill(s) (to VGPR lanes; scratch is 0)
+note: _Z13sat_kernel_d86Params: 26 SGPR spill(s) (to VGPR lanes; scratch is 0)
+CPU_GATE: PASS (LDS >= 98304 in all depths, occupancy 1, zero scratch, zero VGPR spill, d1/d4/d8 present)
+asm exit=0 lines=11217
+ISA_GATE: PASS
+
+############ GRID CENSUS ############
+tier=quick points=9
+    hbm      3
+    mfma     1
+    xgmi     5
+                   1
+    concurrent     2
+    isolated       5
+    reserved_only  2
+tier=plan points=244
+    hbm      18
+    mfma     16
+    xgmi     210
+                   1
+    concurrent     76
+    isolated       92
+    reserved_only  76
+tier=full points=303
+    hbm      18
+    mfma     16
+    xgmi     269
+                   1
+    concurrent     83
+    isolated       144
+    reserved_only  76
+
+############ DUPLICATE KEY CHECK ############
+tier=quick duplicate_keys=0
+tier=plan duplicate_keys=0
+tier=full duplicate_keys=0
+
+############ SUMMARIZER SELF-TEST ############
+  world A (saturates early, payload rides free):
+    H1_mlp4        SUPPORTED
+    H1_mlp8        SUPPORTED
+    H2_mlp1        SUPPORTED
+    H2_mlp4        SUPPORTED
+    H2_mlp8        SUPPORTED
+    H3             REFUTED_PAYLOAD_RIDES_FREE
+    H4_shape256    SUPPORTED
+    H4_shape4      SUPPORTED
+  world B (bandwidth-limited, interference):
+    H1_mlp4        REFUTED_NEVER_REACHED
+    H1_mlp8        REFUTED_NEVER_REACHED
+    H2_mlp1        PLATEAU_BELOW_75PCT
+    H2_mlp4        PLATEAU_BELOW_75PCT
+    H2_mlp8        PLATEAU_BELOW_75PCT
+    H3             SUPPORTED
+    H4_shape256    REFUTED
+    H4_shape4      REFUTED
+  [PASS] H1 flips
+  [PASS] H1 falsifier fires only in B
+  [PASS] H2 flips
+  [PASS] H3 flips
+  [PASS] H4 flips
+  [PASS] knees found in A
+  [PASS] compute slowdown computed
+  [PASS] protocol ratio computed
+  [PASS] overlap flag honoured
+SELFTEST_SUMMARIZE: PASS
+
+############ END-TO-END DRY RUN (no GPU touched) ############
+emitted=244  (expect 244)
+every line is valid JSON
+wrote /home/subvadla/e22/out/dry.json (244 points)
+
+--- knees (smallest C reaching 90%% of plateau) ---
+  hbm|mlp0|na|concurrent|p0|g0|n1|rb14336|per_cta      knee=128   plateau=  5213.32 monotone=True
+  hbm|mlp0|na|isolated|p0|g0|n1|rb14336|per_cta        knee=128   plateau=  5269.17 monotone=True
+  mfma|mlp256|na|isolated|p0|g0|n1|rb14336|per_cta     knee=224   plateau=  1800.00 monotone=True
+  mfma|mlp4|na|isolated|p0|g0|n1|rb14336|per_cta       knee=224   plateau=  1800.00 monotone=True
+  xgmi|mlp1|rr7|concurrent|p0|g0|n1|rb14336|per_cta    knee=16    plateau=   497.20 monotone=True
+  xgmi|mlp1|rr7|isolated|p0|g0|n1|rb14336|per_cta      knee=16    plateau=   502.52 monotone=True
+  xgmi|mlp1|single|concurrent|p0|g0|n1|rb14336|per_cta knee=16    plateau=    71.03 monotone=True
+  xgmi|mlp1|single|isolated|p0|g0|n1|rb14336|per_cta   knee=16    plateau=    71.79 monotone=True
+  xgmi|mlp4|rr7|concurrent|p0|g0|n1|rb14336|per_cta    knee=16    plateau=   497.20 monotone=True
+  xgmi|mlp4|rr7|concurrent|p1|g16|n1|rb14336|per_cta   knee=16    plateau=   273.46 monotone=True
+  xgmi|mlp4|rr7|concurrent|p1|g2|n1|rb14336|per_cta    knee=16    plateau=   273.46 monotone=True
+  xgmi|mlp4|rr7|isolated|p0|g0|n1|rb14336|per_cta      knee=16    plateau=   502.52 monotone=True
+  xgmi|mlp4|rr7|isolated|p1|g16|n1|rb14336|per_cta     knee=16    plateau=   276.39 monotone=True
+  xgmi|mlp4|rr7|isolated|p1|g2|n1|rb14336|per_cta      knee=16    plateau=   276.39 monotone=True
+  xgmi|mlp4|single|concurrent|p0|g0|n1|rb14336|per_cta knee=16    plateau=    71.03 monotone=True
+  xgmi|mlp4|single|concurrent|p1|g16|n1|rb14336|per_cta knee=16    plateau=    39.07 monotone=True
+  xgmi|mlp4|single|concurrent|p1|g2|n1|rb14336|per_cta knee=16    plateau=    39.07 monotone=True
+  xgmi|mlp4|single|isolated|p0|g0|n1|rb14336|per_cta   knee=16    plateau=    71.79 monotone=True
+  xgmi|mlp4|single|isolated|p1|g16|n1|rb14336|per_cta  knee=16    plateau=    39.48 monotone=True
+  xgmi|mlp4|single|isolated|p1|g2|n1|rb14336|per_cta   knee=16    plateau=    39.48 monotone=True
+  xgmi|mlp8|rr7|concurrent|p0|g0|n1|rb14336|per_cta    knee=16    plateau=   497.20 monotone=True
+  xgmi|mlp8|rr7|isolated|p0|g0|n1|rb14336|per_cta      knee=16    plateau=   502.52 monotone=True
+  xgmi|mlp8|single|concurrent|p0|g0|n1|rb14336|per_cta knee=16    plateau=    71.03 monotone=True
+  xgmi|mlp8|single|isolated|p0|g0|n1|rb14336|per_cta   knee=16    plateau=    71.79 monotone=True
+
+--- hypotheses ---
+  H1_mlp4        REFUTED                  {'ctas_needed': 16, 'verdict': 'REFUTED', 'best_value': 73.3612, 'best_peak_fraction': 0.95522, 'falsifier_triggered': False}
+--- resume check: rerun must add 0 points ---
+after_rerun=244  (must still be 244)
+records tagged dry_run: 244
+
+############ DONE ############

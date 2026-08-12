@@ -1,0 +1,1441 @@
+{
+  "schema_version": "exp33-phase-stamps-1",
+  "experiment": "exp_33 bottleneck attribution at the ratchet (paper Q3)",
+  "generated_utc": "2026-08-12T09:21:53Z",
+  "commit": {
+    "repo_head": "ca5b683f420e4985e8d2a790fe086419ab6730f1",
+    "branch": "codex/distributed-hipkittens-scaffold",
+    "K0P6_MPS_SRC_REV": 26,
+    "K0P6_MPS_ASCALE_TM": 1,
+    "mps_build_identity_per_rotation": [
+      {
+        "campaign": "e33a",
+        "jit_dir": "5635a2f2a370",
+        "hsaco_sha256": "a6e4189ce224dc8a74e3d266497f0ca62442557bcf8e9d952e577ecbec90385e",
+        "source_sha256": "e957bd00b48d72106e2ca26219f38343a163962972c6a03b3cbb68db5db54f22"
+      },
+      {
+        "campaign": "e33b",
+        "jit_dir": "5635a2f2a370",
+        "hsaco_sha256": "a6e4189ce224dc8a74e3d266497f0ca62442557bcf8e9d952e577ecbec90385e",
+        "source_sha256": "e957bd00b48d72106e2ca26219f38343a163962972c6a03b3cbb68db5db54f22"
+      }
+    ],
+    "build_identity_note": "Authoritative identity is the in-container record pf6mps.hsaco_sha256 in each rank JSON, NOT the host-side `latest/` symlink stamp (which screen.sh samples outside the run and which flipped between samples here). All 10 rotations across both campaigns loaded ONE build (jit 5635a2f2a370, hsaco a6e4189ce224..., source e957bd00b48d...), so the two campaigns are true replicates and pooling them is sound. summary.json's kernel_hsaco_sha256/kernel_source_sha256 are empty dicts in this harness build and must not be used."
+  },
+  "config": {
+    "K0_MPS_CFG": "C=16,g=353,mode=12,flush_rows=16,timestamps=1",
+    "arms": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+    ],
+    "K0_MOK_ARMS": "production,pf6gm_mega,mps_mega",
+    "campaigns": [
+      {
+        "tag": "e33a",
+        "output_root": "/home/subvadla/k0-mok-e33a/1_C16g353mode12flush_rows16timestamps1_20260812T085807Z",
+        "log": "/home/subvadla/overnight-scratch/e33a_1_C16g353mode12flush_rows16timestamps1_20260812T085807Z.log",
+        "run_count": 5,
+        "arm_p50_us_median": {
+          "production": 7703.58,
+          "pf6gm_mega": 6883.97,
+          "mps_mega": 6487.53
+        }
+      },
+      {
+        "tag": "e33b",
+        "output_root": "/home/subvadla/k0-mok-e33b/1_C16g353mode12flush_rows16timestamps1_20260812T090435Z",
+        "log": "/home/subvadla/overnight-scratch/e33b_1_C16g353mode12flush_rows16timestamps1_20260812T090435Z.log",
+        "run_count": 5,
+        "arm_p50_us_median": {
+          "production": 7708.82,
+          "pf6gm_mega": 6899.49,
+          "mps_mega": 6496.63
+        }
+      }
+    ],
+    "rotations_total": 10,
+    "warmup_iters": 500,
+    "timed_iters": 100,
+    "soak_iters": 600,
+    "K0_MOK_POISON_OUT": 1,
+    "K0_SPIN_LIMIT": 2000000,
+    "mps_config_decoded": {
+      "C": 16,
+      "g": 353,
+      "mode": 12,
+      "flush_rows": 16,
+      "pull_fallback": 0,
+      "timestamps": 1,
+      "word": 26039050512
+    },
+    "shape": {
+      "K0_T": 4096,
+      "K0_BLK": 128,
+      "K0_WARP": 16,
+      "K0_PF6GM_G": 3,
+      "route": "default (K0_SYNTH_ROUTE unset)",
+      "seed": 0
+    },
+    "node": {
+      "host": "gbt350-odcdh2-c05-1",
+      "gpus": 8,
+      "arch": "gfx950 (MI350X)"
+    }
+  },
+  "units": {
+    "tick_us": 0.01,
+    "tick_note": "1 device tick = 0.01 us (100 MHz wall clock; the 2.2 GHz shader clock is the WRONG divisor)"
+  },
+  "caveats": [
+    "FINAL-SOAK-EPOCH: every [MPS TS] value is a running device MAX that is never reset, so after the 600-epoch soak the stamps describe the FINAL SOAK EPOCH, not a timed iteration. Do not sum them and compare to arm_p50_us; the phase table and the end-to-end p50 are different measurements of the same kernel.",
+    "1 tick = 0.01 us. Every *_us number derived from stamps is ticks x 0.01.",
+    "RANK-0 ONLY for every mps_mega phase: the stamp print block is inside `if rank == 0:` and the state is never all-reduced, so no rank-max variant exists. The reported value is the CTA-max within rank 0.",
+    "pf6gm_mega emits NO phase stamps (different kernel, no mps_state), so the specified M7 epilogue surcharge M7(mps)-M7(pf6gm) is not computable in this campaign; two clearly-labelled cross-path proxies are given under derived.",
+    "production's phase split is a DIFFERENT instrument: HIP-event brackets around 5 eager reps with a host barrier between reps, with the rank MAX taken independently per stage. Summing the three rank-max stages over-counts (max of sums <= sum of maxes) -- their sum exceeds production's p50 by ~7%.",
+    "service_drain overlaps M7 and combine and must NOT be added into the stacked bar.",
+    "dispatch_M0toM2 is NOT stamped in this build; only an instrument-mixed residual estimate is available.",
+    "The two campaigns are identical replicates (same commit, same cfg, same seed, K0_SYNTH_ROUTE unset); rotations are pooled for the phase statistics and per-campaign medians are kept for drift inspection."
+  ],
+  "resolution": {
+    "stamp_sigma_prior_us": {
+      "M6": 4.8,
+      "plan": 4.7,
+      "source": "prior aug11 work (exp_24/exp_28)"
+    },
+    "screen_vs_campaign": "screens resolve ~6.6% end-to-end; phase stamps resolve ~1%"
+  },
+  "gates": {
+    "mok_gate_pass_counts": {
+      "production": {
+        "True": 10,
+        "other": 0
+      },
+      "pf6gm_mega": {
+        "True": 10,
+        "other": 0
+      },
+      "mps_mega": {
+        "True": 10,
+        "other": 0
+      }
+    },
+    "mok_gate_failures": [],
+    "control_fails_values": [
+      "True"
+    ],
+    "soak": [
+      {
+        "completed": "600/600",
+        "pperr": 0,
+        "poison": 0,
+        "poison_epoch": -1,
+        "pass": "True"
+      },
+      {
+        "completed": "600/600",
+        "pperr": 0,
+        "poison": 0,
+        "poison_epoch": -1,
+        "pass": "True"
+      },
+      {
+        "completed": "600/600",
+        "pperr": 0,
+        "poison": 0,
+        "poison_epoch": -1,
+        "pass": "True"
+      },
+      {
+        "completed": "600/600",
+        "pperr": 0,
+        "poison": 0,
+        "poison_epoch": -1,
+        "pass": "True"
+      },
+      {
+        "completed": "600/600",
+        "pperr": 0,
+        "poison": 0,
+        "poison_epoch": -1,
+        "pass": "True"
+      },
+      {
+        "completed": "600/600",
+        "pperr": 0,
+        "poison": 0,
+        "poison_epoch": -1,
+        "pass": "True"
+      },
+      {
+        "completed": "600/600",
+        "pperr": 0,
+        "poison": 0,
+        "poison_epoch": -1,
+        "pass": "True"
+      },
+      {
+        "completed": "600/600",
+        "pperr": 0,
+        "poison": 0,
+        "poison_epoch": -1,
+        "pass": "True"
+      },
+      {
+        "completed": "600/600",
+        "pperr": 0,
+        "poison": 0,
+        "poison_epoch": -1,
+        "pass": "True"
+      },
+      {
+        "completed": "600/600",
+        "pperr": 0,
+        "poison": 0,
+        "poison_epoch": -1,
+        "pass": "True"
+      }
+    ],
+    "poison_selftest": [
+      [
+        "mps_mega",
+        "True",
+        "57344"
+      ],
+      [
+        "pf6gm_mega",
+        "True",
+        "57344"
+      ]
+    ],
+    "poison_survivor_values": [
+      0
+    ],
+    "pperr_max": 0,
+    "all_green": true
+  },
+  "peer_wait": {
+    "instrument": "[MPS SPIN] chunk_poll -- M2's per-(source,chunk) dispatch poll, a running max over warmup + timed + all 600 soak epochs, never reset",
+    "success_max": [
+      0,
+      1
+    ],
+    "success_max_all_rotations": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0
+    ],
+    "fail_max": [
+      0
+    ],
+    "fail_max_all_rotations": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "limit": 2000000,
+    "interpretation": "fail_max = 0 in every rotation and success_max = 1 (max over 10 rotations), against a spin limit of 2,000,000. Each rotation's counter covers 500 warmup + 100 timed + 600 soak epochs, so a maximum of 1 poll iteration(s) EVER means M2 essentially never waits on a peer chunk: dispatch peer wait is ~0 at this shape, reproducing exp_10's zero-peer-wait result at routing std=0."
+  },
+  "arms": {
+    "production": {
+      "p50_us": 7708.28,
+      "p50_us_source": "summary.json arm_p50_us[arm]: median of index-aligned MAX(rank) p50 over rotations",
+      "p50_us_values_per_rotation": [
+        7697.44,
+        7709.46,
+        7698.98,
+        7703.58,
+        7711.62,
+        7712.18,
+        7708.82,
+        7706.88,
+        7712.56,
+        7707.74
+      ],
+      "p50_us_per_campaign_median": [
+        7703.58,
+        7708.82
+      ],
+      "p50_us_rank0": 7705.27,
+      "p50_us_rank0_source": "median over rotations of median(mok_eager.arms[arm].local_us) from rank0 JSON",
+      "ratio_vs_production": 1.0,
+      "ratio_vs_production_rank0": 1.0,
+      "phases": {
+        "dispatch": {
+          "phase": "dispatch",
+          "source": "[K0PF PROFILE] production / rank JSON stage_profile.production (HIP-event, K0_STAGE_REPS=5 eager reps, per-stage dist MAX over ranks)",
+          "us_rank_max": 918.7,
+          "us_rank0": 902.85,
+          "n": 10,
+          "stderr": 2.01,
+          "sd": 6.36,
+          "stderr_rank0": 1.93,
+          "stderr_pct_of_mean": 0.22,
+          "values_us_rank_max": [
+            919.21,
+            915.45,
+            931.69,
+            918.65,
+            918.37,
+            907.05,
+            921.49,
+            921.93,
+            913.29,
+            919.89
+          ],
+          "values_us_rank0": [
+            901.41,
+            903.13,
+            915.05,
+            900.53,
+            906.65,
+            901.97,
+            900.09,
+            899.53,
+            892.01,
+            908.13
+          ]
+        },
+        "gemm": {
+          "phase": "gemm",
+          "source": "[K0PF PROFILE] production / rank JSON stage_profile.production (HIP-event, K0_STAGE_REPS=5 eager reps, per-stage dist MAX over ranks)",
+          "us_rank_max": 5945.49,
+          "us_rank0": 5904.68,
+          "n": 10,
+          "stderr": 7.64,
+          "sd": 24.15,
+          "stderr_rank0": 6.2,
+          "stderr_pct_of_mean": 0.13,
+          "values_us_rank_max": [
+            5933.74,
+            5932.98,
+            5918.06,
+            5943.5,
+            5940.34,
+            5988.62,
+            5938.9,
+            5975.1,
+            5915.74,
+            5967.94
+          ],
+          "values_us_rank0": [
+            5892.74,
+            5897.42,
+            5893.7,
+            5907.18,
+            5933.98,
+            5921.86,
+            5886.66,
+            5936.78,
+            5894.7,
+            5881.74
+          ]
+        },
+        "combine": {
+          "phase": "combine",
+          "source": "[K0PF PROFILE] production / rank JSON stage_profile.production (HIP-event, K0_STAGE_REPS=5 eager reps, per-stage dist MAX over ranks)",
+          "us_rank_max": 1356.02,
+          "us_rank0": 978.41,
+          "n": 10,
+          "stderr": 11.68,
+          "sd": 36.94,
+          "stderr_rank0": 8.71,
+          "stderr_pct_of_mean": 0.86,
+          "values_us_rank_max": [
+            1365.05,
+            1311.17,
+            1381.05,
+            1404.65,
+            1410.86,
+            1364.61,
+            1323.05,
+            1329.61,
+            1308.09,
+            1362.05
+          ],
+          "values_us_rank0": [
+            999.65,
+            967.81,
+            952.65,
+            1030.37,
+            952.45,
+            992.37,
+            946.61,
+            991.61,
+            954.97,
+            995.65
+          ]
+        }
+      },
+      "stage_sums": {
+        "stage_sum_us_rank_max": 8220.21,
+        "stage_sum_us_rank0": 7785.94,
+        "stage_sum_vs_p50_pct_rank_max": 6.64,
+        "stage_sum_vs_p50_pct_rank0": 1.05,
+        "note": "the three rank-max stages sum ABOVE production's p50 because the rank MAX is taken independently per stage (max-of-sums <= sum-of-maxes); the rank-0 sum is much closer to the rank-0 p50",
+        "combine_rank_spread_pct": 38.59
+      },
+      "phase_instrument": "stage_profile.production (dispatch / gemm / combine), 3 coarse phases only",
+      "phase_note": "the MPS stamp instrument does not exist for production (AITER/MoRI); this harness-native eager stage profile is the only per-phase signal it has, and it is NOT comparable tick-for-tick with the mps_mega device stamps"
+    },
+    "pf6gm_mega": {
+      "p50_us": 6893.23,
+      "p50_us_source": "summary.json arm_p50_us[arm]: median of index-aligned MAX(rank) p50 over rotations",
+      "p50_us_values_per_rotation": [
+        6919.05,
+        6957.71,
+        6883.97,
+        6876.77,
+        6869.45,
+        6886.97,
+        6882.37,
+        6899.49,
+        6938.13,
+        6930.61
+      ],
+      "p50_us_per_campaign_median": [
+        6883.97,
+        6899.49
+      ],
+      "p50_us_rank0": 6865.56,
+      "p50_us_rank0_source": "median over rotations of median(mok_eager.arms[arm].local_us) from rank0 JSON",
+      "ratio_vs_production": 0.8943,
+      "ratio_vs_production_rank0": 0.891,
+      "phases": {
+        "dispatch_M0toM2": {
+          "phase": "dispatch_M0toM2",
+          "us_rank_max": null,
+          "us_rank0": null,
+          "n": 0,
+          "stderr": null,
+          "reason": "unavailable by construction: pf6gm_mega is a different kernel (k0pf6gm_mega, descriptor desc_gm) and is not passed the mps_state timestamp block, so it emits no phase stamps. The only per-phase instrument for pf6gm_mega is the K0_PF6GM_DECOMP cumulative-prefix path (ab.py:5228), and K0_PF6GM_DECOMP is absent from run_campaign.sh's -e forwarding list, so it cannot be reached through the campaign. Enabling it is a one-line harness edit that exp_33 does not own."
+        },
+        "plan_M3toM5": {
+          "phase": "plan_M3toM5",
+          "us_rank_max": null,
+          "us_rank0": null,
+          "n": 0,
+          "stderr": null,
+          "reason": "unavailable by construction: pf6gm_mega is a different kernel (k0pf6gm_mega, descriptor desc_gm) and is not passed the mps_state timestamp block, so it emits no phase stamps. The only per-phase instrument for pf6gm_mega is the K0_PF6GM_DECOMP cumulative-prefix path (ab.py:5228), and K0_PF6GM_DECOMP is absent from run_campaign.sh's -e forwarding list, so it cannot be reached through the campaign. Enabling it is a one-line harness edit that exp_33 does not own."
+        },
+        "M6_gemm1": {
+          "phase": "M6_gemm1",
+          "us_rank_max": null,
+          "us_rank0": null,
+          "n": 0,
+          "stderr": null,
+          "reason": "unavailable by construction: pf6gm_mega is a different kernel (k0pf6gm_mega, descriptor desc_gm) and is not passed the mps_state timestamp block, so it emits no phase stamps. The only per-phase instrument for pf6gm_mega is the K0_PF6GM_DECOMP cumulative-prefix path (ab.py:5228), and K0_PF6GM_DECOMP is absent from run_campaign.sh's -e forwarding list, so it cannot be reached through the campaign. Enabling it is a one-line harness edit that exp_33 does not own."
+        },
+        "M7_gemm2_total": {
+          "phase": "M7_gemm2_total",
+          "us_rank_max": null,
+          "us_rank0": null,
+          "n": 0,
+          "stderr": null,
+          "reason": "unavailable by construction: pf6gm_mega is a different kernel (k0pf6gm_mega, descriptor desc_gm) and is not passed the mps_state timestamp block, so it emits no phase stamps. The only per-phase instrument for pf6gm_mega is the K0_PF6GM_DECOMP cumulative-prefix path (ab.py:5228), and K0_PF6GM_DECOMP is absent from run_campaign.sh's -e forwarding list, so it cannot be reached through the campaign. Enabling it is a one-line harness edit that exp_33 does not own."
+        },
+        "M7_gemm_proper": {
+          "phase": "M7_gemm_proper",
+          "us_rank_max": null,
+          "us_rank0": null,
+          "n": 0,
+          "stderr": null,
+          "reason": "unavailable by construction: pf6gm_mega is a different kernel (k0pf6gm_mega, descriptor desc_gm) and is not passed the mps_state timestamp block, so it emits no phase stamps. The only per-phase instrument for pf6gm_mega is the K0_PF6GM_DECOMP cumulative-prefix path (ab.py:5228), and K0_PF6GM_DECOMP is absent from run_campaign.sh's -e forwarding list, so it cannot be reached through the campaign. Enabling it is a one-line harness edit that exp_33 does not own."
+        },
+        "M7_epilogue_surcharge": {
+          "phase": "M7_epilogue_surcharge",
+          "us_rank_max": null,
+          "us_rank0": null,
+          "n": 0,
+          "stderr": null,
+          "reason": "unavailable by construction: pf6gm_mega is a different kernel (k0pf6gm_mega, descriptor desc_gm) and is not passed the mps_state timestamp block, so it emits no phase stamps. The only per-phase instrument for pf6gm_mega is the K0_PF6GM_DECOMP cumulative-prefix path (ab.py:5228), and K0_PF6GM_DECOMP is absent from run_campaign.sh's -e forwarding list, so it cannot be reached through the campaign. Enabling it is a one-line harness edit that exp_33 does not own."
+        },
+        "combine_M8M9": {
+          "phase": "combine_M8M9",
+          "us_rank_max": null,
+          "us_rank0": null,
+          "n": 0,
+          "stderr": null,
+          "reason": "unavailable by construction: pf6gm_mega is a different kernel (k0pf6gm_mega, descriptor desc_gm) and is not passed the mps_state timestamp block, so it emits no phase stamps. The only per-phase instrument for pf6gm_mega is the K0_PF6GM_DECOMP cumulative-prefix path (ab.py:5228), and K0_PF6GM_DECOMP is absent from run_campaign.sh's -e forwarding list, so it cannot be reached through the campaign. Enabling it is a one-line harness edit that exp_33 does not own."
+        }
+      },
+      "phase_instrument": null,
+      "phase_note": "unavailable by construction: pf6gm_mega is a different kernel (k0pf6gm_mega, descriptor desc_gm) and is not passed the mps_state timestamp block, so it emits no phase stamps. The only per-phase instrument for pf6gm_mega is the K0_PF6GM_DECOMP cumulative-prefix path (ab.py:5228), and K0_PF6GM_DECOMP is absent from run_campaign.sh's -e forwarding list, so it cannot be reached through the campaign. Enabling it is a one-line harness edit that exp_33 does not own."
+    },
+    "mps_mega": {
+      "p50_us": 6493.83,
+      "p50_us_source": "summary.json arm_p50_us[arm]: median of index-aligned MAX(rank) p50 over rotations",
+      "p50_us_values_per_rotation": [
+        6491.36,
+        6487.53,
+        6480.49,
+        6485.45,
+        6508.39,
+        6496.29,
+        6481.47,
+        6496.63,
+        6497.61,
+        6521.17
+      ],
+      "p50_us_per_campaign_median": [
+        6487.53,
+        6496.63
+      ],
+      "p50_us_rank0": 6458.44,
+      "p50_us_rank0_source": "median over rotations of median(mok_eager.arms[arm].local_us) from rank0 JSON",
+      "ratio_vs_production": 0.8424,
+      "ratio_vs_production_rank0": 0.8382,
+      "phases": {
+        "dispatch_M0toM2": {
+          "phase": "dispatch_M0toM2",
+          "source": "residual (not stamped)",
+          "us_rank_max": null,
+          "us_rank_max_reason": "unavailable by construction: the [MPS TS]/[MPS SPIN] block in e004pf_k0pf_ab.py is inside `if rank == 0:` and reads pf6_state['mps_state'], which is never all-reduced and never written to the per-rank JSON. The value given is the device CTA-max WITHIN rank 0, not a cross-rank max.",
+          "us_rank0": null,
+          "n": 0,
+          "stderr": null,
+          "reason": "the 8-slot stamp layout has no kernel-start stamp: the former KSTART slot now holds M5_DONE, and FIRST_READY_inv is a MIN stamp over all 600 soak epochs so it cannot be differenced against final-epoch stamps. See derived.dispatch_M0toM2_residual_estimate_us for the instrument-mixed residual."
+        },
+        "plan_M3toM5": {
+          "phase": "plan_M3toM5",
+          "source": "[MPS TS SPLIT] plan_M3toM5 = M5_DONE - M2_DONE",
+          "us_rank_max": null,
+          "us_rank_max_reason": "unavailable by construction: the [MPS TS]/[MPS SPIN] block in e004pf_k0pf_ab.py is inside `if rank == 0:` and reads pf6_state['mps_state'], which is never all-reduced and never written to the per-rank JSON. The value given is the device CTA-max WITHIN rank 0, not a cross-rank max.",
+          "us_rank0": 372.79,
+          "n": 10,
+          "stderr": 0.67,
+          "sd": 2.11,
+          "values_us": [
+            376.08,
+            374.44,
+            370.78,
+            372.88,
+            370.53,
+            375.43,
+            371.12,
+            372.64,
+            370.22,
+            373.73
+          ],
+          "share_of_interior_pct": 6.37,
+          "share_of_p50_pct": 5.74,
+          "stderr_pct_of_mean": 0.18,
+          "us_rank0_is_cta_max_within_rank0": true
+        },
+        "M6_gemm1": {
+          "phase": "M6_gemm1",
+          "source": "[MPS TS SPLIT] M6 = M6_DONE - M5_DONE",
+          "us_rank_max": null,
+          "us_rank_max_reason": "unavailable by construction: the [MPS TS]/[MPS SPIN] block in e004pf_k0pf_ab.py is inside `if rank == 0:` and reads pf6_state['mps_state'], which is never all-reduced and never written to the per-rank JSON. The value given is the device CTA-max WITHIN rank 0, not a cross-rank max.",
+          "us_rank0": 2453.3,
+          "n": 10,
+          "stderr": 2.51,
+          "sd": 7.95,
+          "values_us": [
+            2458.0,
+            2450.52,
+            2470.98,
+            2444.49,
+            2455.75,
+            2451.2,
+            2454.56,
+            2455.29,
+            2449.89,
+            2442.32
+          ],
+          "share_of_interior_pct": 41.92,
+          "share_of_p50_pct": 37.78,
+          "stderr_pct_of_mean": 0.1,
+          "us_rank0_is_cta_max_within_rank0": true
+        },
+        "M7_gemm2_total": {
+          "phase": "M7_gemm2_total",
+          "source": "[MPS TS DELTA] M7 = M7_DONE - M6_DONE",
+          "us_rank_max": null,
+          "us_rank_max_reason": "unavailable by construction: the [MPS TS]/[MPS SPIN] block in e004pf_k0pf_ab.py is inside `if rank == 0:` and reads pf6_state['mps_state'], which is never all-reduced and never written to the per-rank JSON. The value given is the device CTA-max WITHIN rank 0, not a cross-rank max.",
+          "us_rank0": 2701.84,
+          "n": 10,
+          "stderr": 23.74,
+          "sd": 75.06,
+          "values_us": [
+            2736.71,
+            2806.98,
+            2705.83,
+            2583.02,
+            2688.29,
+            2724.41,
+            2777.72,
+            2663.59,
+            2749.01,
+            2582.83
+          ],
+          "share_of_interior_pct": 46.17,
+          "share_of_p50_pct": 41.61,
+          "stderr_pct_of_mean": 0.88,
+          "us_rank0_is_cta_max_within_rank0": true
+        },
+        "M7_gemm_proper": {
+          "phase": "M7_gemm_proper",
+          "source": "not measurable in this arm",
+          "us_rank_max": null,
+          "us_rank0": null,
+          "n": 0,
+          "stderr": null,
+          "reason": "requires M7 of pf6gm_mega as the payload-free reference; unavailable by construction: pf6gm_mega is a different kernel (k0pf6gm_mega, descriptor desc_gm) and is not passed the mps_state timestamp block, so it emits no phase stamps. The only per-phase instrument for pf6gm_mega is the K0_PF6GM_DECOMP cumulative-prefix path (ab.py:5228), and K0_PF6GM_DECOMP is absent from run_campaign.sh's -e forwarding list, so it cannot be reached through the campaign. Enabling it is a one-line harness edit that exp_33 does not own."
+        },
+        "M7_epilogue_surcharge": {
+          "phase": "M7_epilogue_surcharge",
+          "source": "M7(mps_mega) - M7(pf6gm_mega)",
+          "us_rank_max": null,
+          "us_rank0": null,
+          "n": 0,
+          "stderr": null,
+          "reason": "the specified same-arm difference is not computable: unavailable by construction: pf6gm_mega is a different kernel (k0pf6gm_mega, descriptor desc_gm) and is not passed the mps_state timestamp block, so it emits no phase stamps. The only per-phase instrument for pf6gm_mega is the K0_PF6GM_DECOMP cumulative-prefix path (ab.py:5228), and K0_PF6GM_DECOMP is absent from run_campaign.sh's -e forwarding list, so it cannot be reached through the campaign. Enabling it is a one-line harness edit that exp_33 does not own. See derived.m7_epilogue_surcharge_proxy_us for two cross-path proxy estimates."
+        },
+        "combine_M8M9": {
+          "phase": "combine_M8M9",
+          "source": "[MPS TS DELTA] combine = REDUCE_DONE - M7_DONE",
+          "us_rank_max": null,
+          "us_rank_max_reason": "unavailable by construction: the [MPS TS]/[MPS SPIN] block in e004pf_k0pf_ab.py is inside `if rank == 0:` and reads pf6_state['mps_state'], which is never all-reduced and never written to the per-rank JSON. The value given is the device CTA-max WITHIN rank 0, not a cross-rank max.",
+          "us_rank0": 324.21,
+          "n": 10,
+          "stderr": 21.12,
+          "sd": 66.78,
+          "values_us": [
+            267.81,
+            236.54,
+            280.04,
+            440.92,
+            308.2,
+            295.59,
+            319.63,
+            366.61,
+            301.23,
+            425.55
+          ],
+          "share_of_interior_pct": 5.54,
+          "share_of_p50_pct": 4.99,
+          "stderr_pct_of_mean": 6.51,
+          "us_rank0_is_cta_max_within_rank0": true
+        },
+        "service_drain": {
+          "phase": "service_drain",
+          "source": "[MPS TS DELTA] servicedrain = DRAIN - M6_DONE (overlaps M7/combine; NOT additive)",
+          "us_rank_max": null,
+          "us_rank_max_reason": "unavailable by construction: the [MPS TS]/[MPS SPIN] block in e004pf_k0pf_ab.py is inside `if rank == 0:` and reads pf6_state['mps_state'], which is never all-reduced and never written to the per-rank JSON. The value given is the device CTA-max WITHIN rank 0, not a cross-rank max.",
+          "us_rank0": 2810.88,
+          "n": 10,
+          "stderr": 22.45,
+          "sd": 70.98,
+          "values_us": [
+            2859.29,
+            2914.0,
+            2801.86,
+            2727.18,
+            2786.21,
+            2841.18,
+            2874.36,
+            2756.42,
+            2857.96,
+            2690.3
+          ],
+          "share_of_interior_pct": 48.03,
+          "share_of_p50_pct": 43.29,
+          "stderr_pct_of_mean": 0.8,
+          "us_rank0_is_cta_max_within_rank0": true
+        },
+        "interior_M3toM9": {
+          "phase": "interior_M3toM9",
+          "source": "[MPS TS DELTA] m2_to_end = REDUCE_DONE - M2_DONE (sum of plan+M6+M7+combine)",
+          "us_rank_max": null,
+          "us_rank_max_reason": "unavailable by construction: the [MPS TS]/[MPS SPIN] block in e004pf_k0pf_ab.py is inside `if rank == 0:` and reads pf6_state['mps_state'], which is never all-reduced and never written to the per-rank JSON. The value given is the device CTA-max WITHIN rank 0, not a cross-rank max.",
+          "us_rank0": 5852.14,
+          "n": 10,
+          "stderr": 9.56,
+          "sd": 30.23,
+          "values_us": [
+            5838.6,
+            5868.48,
+            5827.63,
+            5841.31,
+            5822.77,
+            5846.63,
+            5923.03,
+            5858.13,
+            5870.35,
+            5824.43
+          ],
+          "share_of_interior_pct": 100.0,
+          "share_of_p50_pct": 90.12,
+          "stderr_pct_of_mean": 0.16,
+          "us_rank0_is_cta_max_within_rank0": true
+        }
+      },
+      "phase_instrument": "[MPS TS] / [MPS TS SPLIT] / [MPS TS DELTA] device stamps, rank 0, final soak epoch",
+      "stacked_bar_phases": [
+        "dispatch_M0toM2",
+        "plan_M3toM5",
+        "M6_gemm1",
+        "M7_gemm2_total",
+        "combine_M8M9"
+      ],
+      "stacked_bar_note": "these five partition the kernel; service_drain and interior_M3toM9 are diagnostics that overlap them"
+    }
+  },
+  "supplementary": {
+    "pf_full_stage_profile_us": {
+      "note": "the non-megakernel pf path measured in the same runs; n2_p1/n2_p2 are the payload-free GEMM-1/GEMM-2 donor bodies, used as the surcharge proxy",
+      "maxrank": {
+        "plan": {
+          "mean": 506.79,
+          "sd": 3.5,
+          "stderr": 1.11,
+          "n": 10,
+          "values": [
+            505.64,
+            512.36,
+            504.64,
+            510.52,
+            509.56,
+            500.49,
+            506.08,
+            504.49,
+            508.81,
+            505.33
+          ]
+        },
+        "quant": {
+          "mean": 32.25,
+          "sd": 0.47,
+          "stderr": 0.15,
+          "n": 10,
+          "values": [
+            31.56,
+            32.44,
+            31.72,
+            32.44,
+            33.0,
+            32.56,
+            31.72,
+            32.0,
+            32.52,
+            32.52
+          ]
+        },
+        "b1": {
+          "mean": 46.73,
+          "sd": 7.19,
+          "stderr": 2.27,
+          "n": 10,
+          "values": [
+            36.68,
+            45.36,
+            49.8,
+            48.2,
+            40.24,
+            38.28,
+            51.44,
+            44.96,
+            60.28,
+            52.04
+          ]
+        },
+        "gather": {
+          "mean": 2071.29,
+          "sd": 61.67,
+          "stderr": 19.5,
+          "n": 10,
+          "values": [
+            2148.3,
+            2081.66,
+            1986.58,
+            2070.74,
+            1942.54,
+            2117.42,
+            2094.9,
+            2097.78,
+            2069.34,
+            2103.62
+          ]
+        },
+        "zero": {
+          "mean": 128.55,
+          "sd": 37.07,
+          "stderr": 11.72,
+          "n": 10,
+          "values": [
+            181.72,
+            199.36,
+            96.56,
+            144.08,
+            101.2,
+            138.92,
+            96.24,
+            96.76,
+            116.6,
+            114.04
+          ]
+        },
+        "n2_p1": {
+          "mean": 3295.8,
+          "sd": 15.59,
+          "stderr": 4.93,
+          "n": 10,
+          "values": [
+            3293.19,
+            3297.03,
+            3318.35,
+            3308.11,
+            3261.87,
+            3289.83,
+            3300.23,
+            3285.03,
+            3309.79,
+            3294.55
+          ]
+        },
+        "n2_p2": {
+          "mean": 1885.0,
+          "sd": 8.66,
+          "stderr": 2.74,
+          "n": 10,
+          "values": [
+            1878.94,
+            1878.1,
+            1884.26,
+            1880.34,
+            1885.3,
+            1884.94,
+            1900.82,
+            1900.14,
+            1880.3,
+            1876.82
+          ]
+        },
+        "b2": {
+          "mean": 827.26,
+          "sd": 70.6,
+          "stderr": 22.33,
+          "n": 10,
+          "values": [
+            917.77,
+            817.21,
+            739.57,
+            826.73,
+            719.17,
+            835.45,
+            918.57,
+            770.65,
+            825.57,
+            901.97
+          ]
+        },
+        "combine": {
+          "mean": 1249.34,
+          "sd": 19.16,
+          "stderr": 6.06,
+          "n": 10,
+          "values": [
+            1227.01,
+            1264.25,
+            1236.57,
+            1232.13,
+            1238.93,
+            1269.25,
+            1250.49,
+            1254.81,
+            1286.05,
+            1233.89
+          ]
+        }
+      },
+      "rank0": {
+        "plan": {
+          "mean": 497.7,
+          "sd": 1.86,
+          "stderr": 0.59,
+          "n": 10,
+          "values": [
+            498.25,
+            496.28,
+            498.12,
+            496.89,
+            501.6,
+            498.56,
+            498.76,
+            496.13,
+            494.81,
+            497.57
+          ]
+        },
+        "quant": {
+          "mean": 30.86,
+          "sd": 0.21,
+          "stderr": 0.07,
+          "n": 10,
+          "values": [
+            30.92,
+            31.2,
+            30.6,
+            30.72,
+            30.76,
+            30.8,
+            30.88,
+            31.04,
+            30.56,
+            31.12
+          ]
+        },
+        "b1": {
+          "mean": 37.55,
+          "sd": 9.9,
+          "stderr": 3.13,
+          "n": 10,
+          "values": [
+            31.48,
+            35.2,
+            30.2,
+            46.84,
+            37.88,
+            26.92,
+            40.56,
+            29.84,
+            60.28,
+            36.28
+          ]
+        },
+        "gather": {
+          "mean": 1321.25,
+          "sd": 54.45,
+          "stderr": 17.22,
+          "n": 10,
+          "values": [
+            1306.77,
+            1312.01,
+            1288.37,
+            1437.9,
+            1273.93,
+            1340.49,
+            1260.73,
+            1388.69,
+            1293.93,
+            1309.69
+          ]
+        },
+        "zero": {
+          "mean": 91.59,
+          "sd": 1.98,
+          "stderr": 0.62,
+          "n": 10,
+          "values": [
+            91.88,
+            94.6,
+            90.0,
+            88.44,
+            91.84,
+            91.4,
+            91.4,
+            89.52,
+            94.52,
+            92.32
+          ]
+        },
+        "n2_p1": {
+          "mean": 3244.53,
+          "sd": 12.21,
+          "stderr": 3.86,
+          "n": 10,
+          "values": [
+            3250.67,
+            3239.71,
+            3242.35,
+            3272.75,
+            3233.27,
+            3239.47,
+            3236.91,
+            3246.83,
+            3252.75,
+            3230.55
+          ]
+        },
+        "n2_p2": {
+          "mean": 1858.3,
+          "sd": 8.41,
+          "stderr": 2.66,
+          "n": 10,
+          "values": [
+            1847.54,
+            1853.06,
+            1855.94,
+            1852.42,
+            1865.18,
+            1863.46,
+            1863.58,
+            1870.46,
+            1865.46,
+            1845.94
+          ]
+        },
+        "b2": {
+          "mean": 823.49,
+          "sd": 69.14,
+          "stderr": 21.86,
+          "n": 10,
+          "values": [
+            904.05,
+            817.21,
+            739.57,
+            802.69,
+            719.17,
+            835.45,
+            918.57,
+            770.65,
+            825.57,
+            901.97
+          ]
+        },
+        "combine": {
+          "mean": 1197.8,
+          "sd": 18.06,
+          "stderr": 5.71,
+          "n": 10,
+          "values": [
+            1185.13,
+            1193.13,
+            1174.29,
+            1182.53,
+            1188.17,
+            1204.73,
+            1186.53,
+            1227.37,
+            1219.85,
+            1216.21
+          ]
+        }
+      }
+    }
+  },
+  "derived": {
+    "identity_check_us": {
+      "note": "plan_M3toM5 + M6 + M7 + combine must equal m2_to_end exactly",
+      "sum_of_parts_mean": 5852.14,
+      "m2_to_end_mean": 5852.14,
+      "max_abs_per_rotation_residual_us": 0.0
+    },
+    "dispatch_M0toM2_residual_estimate_us": {
+      "value": 641.69,
+      "share_of_p50_pct": 9.88,
+      "reference_archived_pf6gm_M0_M1_M2_us": 768.0,
+      "reference_source": "[PF6GM DECOMP] M0_retire_zero + M1_qpush + M2_stream_verify ~= 15.9 + 552.7 + 205.4 from the donor tree exp_58 archive (2026-08-06, different commit) -- an order-of-magnitude sanity check on the residual, not a measurement of this arm",
+      "formula": "arm_p50_us[mps_mega].median (timed iteration, rank-max) - interior_M3toM9 (final soak epoch, rank-0 CTA-max)",
+      "caveat": "INSTRUMENT-MIXED and DERIVED, not measured: it differences a timed-iteration rank-max total against a soak-epoch rank-0 interior. It absorbs M0+M1+M2, kernel launch, and epoch skew. Treat as an upper bound on dispatch, good to ~100 us at best."
+    },
+    "M7_plus_combine_coupled_block_us": {
+      "value": 3026.05,
+      "stderr": 10.16,
+      "sd": 32.14,
+      "n": 10,
+      "values": [
+        3004.52,
+        3043.52,
+        2985.87,
+        3023.94,
+        2996.49,
+        3020.0,
+        3097.35,
+        3030.2,
+        3050.24,
+        3008.38
+      ],
+      "share_of_interior_pct": 51.71,
+      "share_of_p50_pct": 46.6,
+      "stderr_pct_of_mean": 0.34,
+      "sd_if_independent_us": 100.47,
+      "sd_if_independent_note": "sqrt(sd_M7^2 + sd_combine^2): what the sum's sd would be if the two phases were independent. The observed sd is far smaller, which is the quantitative form of the coupling.",
+      "pearson_r_M7_vs_combine": -0.9038,
+      "note": "M7 and combine are strongly anti-correlated: their sum is far tighter than either term, so the M7_DONE/REDUCE_DONE split point is jitter, and M7+combine is the schedulable unit."
+    },
+    "m7_epilogue_surcharge_proxy_us": {
+      "specified_formula": "M7(mps_mega) - M7(pf6gm_mega)  [NOT COMPUTABLE, see arms.pf6gm_mega]",
+      "proxy_A_same_run_pf_full_n2_p2": {
+        "value": 816.84,
+        "minuend_us": 2701.84,
+        "subtrahend_us": 1885.0,
+        "subtrahend_us_rank0": 1858.3,
+        "value_using_rank0_subtrahend": 843.54,
+        "subtrahend_source": "stage_profile.pf_full.n2_p2 measured in THESE SAME runs (payload-free GEMM-2, the same donor n2_phase2 body pf6gm_mega's M7 runs)",
+        "confidence": "medium"
+      },
+      "proxy_B_archived_pf6gm_decomp": {
+        "value": 897.86,
+        "subtrahend_us": 1803.98,
+        "subtrahend_source": "[PF6GM DECOMP] M7_n2_phase2 archived in the donor tree (k0_fused_moe/experiments/exp_58_residual_attribution, 2026-08-06, a DIFFERENT commit) -- cross-run, not same-run",
+        "confidence": "low"
+      },
+      "subtrahend_agreement_pct": 4.49,
+      "surcharge_band_us": [
+        816.84,
+        897.86
+      ],
+      "surcharge_pct_of_M7_band": [
+        30.23,
+        33.23
+      ],
+      "caveat": "Both proxies mix instruments: the minuend is a device wall-clock delta from the final soak epoch, the subtrahend is a HIP-event measure of a separately launched kernel with barriers outside the window. Read the surcharge as 'several hundred us, order 700-900', not as a calibrated number."
+    },
+    "gemm_dominance": {
+      "M6_plus_M7_share_of_interior_pct": 88.09,
+      "M6_plus_M7_us": 5155.14,
+      "note": "the two GEMM phases as a single share of the measured interior M3-M9"
+    },
+    "reproducibility": {
+      "ratchet_recorded_us": 6482.7,
+      "ratchet_recorded_source": "aug11 STATUS.md / commit ca5b683f subject (exp_27 ascale token-major)",
+      "per_campaign_mps_p50_us": {
+        "e33a": 6487.53,
+        "e33b": 6496.63
+      },
+      "per_campaign_delta_vs_recorded_pct": {
+        "e33a": 0.07,
+        "e33b": 0.21
+      },
+      "between_campaign_spread_pct": {
+        "production": 0.07,
+        "pf6gm_mega": 0.23,
+        "mps_mega": 0.14
+      }
+    },
+    "first_ready_decoded": {
+      "note": "FIRST_READY_inv is stored complemented for min-tracking; FIRST_READY = 2**64 - FIRST_READY_inv. It is a MIN over all 600 soak epochs, so it must NOT be differenced against the final-epoch max stamps. Recorded raw only.",
+      "per_rotation": [
+        {
+          "campaign": "e33a",
+          "run": 1,
+          "first_ready_inv": 18446626660302426680,
+          "first_ready_decoded": 117413407124936
+        },
+        {
+          "campaign": "e33a",
+          "run": 2,
+          "first_ready_inv": 18446626656649915676,
+          "first_ready_decoded": 117417059635940
+        },
+        {
+          "campaign": "e33a",
+          "run": 3,
+          "first_ready_inv": 18446626653013240519,
+          "first_ready_decoded": 117420696311097
+        },
+        {
+          "campaign": "e33a",
+          "run": 4,
+          "first_ready_inv": 18446626649220313980,
+          "first_ready_decoded": 117424489237636
+        },
+        {
+          "campaign": "e33a",
+          "run": 5,
+          "first_ready_inv": 18446626645571038305,
+          "first_ready_decoded": 117428138513311
+        },
+        {
+          "campaign": "e33b",
+          "run": 1,
+          "first_ready_inv": 18446626621964529387,
+          "first_ready_decoded": 117451745022229
+        },
+        {
+          "campaign": "e33b",
+          "run": 2,
+          "first_ready_inv": 18446626618312409318,
+          "first_ready_decoded": 117455397142298
+        },
+        {
+          "campaign": "e33b",
+          "run": 3,
+          "first_ready_inv": 18446626614588591834,
+          "first_ready_decoded": 117459120959782
+        },
+        {
+          "campaign": "e33b",
+          "run": 4,
+          "first_ready_inv": 18446626610498947092,
+          "first_ready_decoded": 117463210604524
+        },
+        {
+          "campaign": "e33b",
+          "run": 5,
+          "first_ready_inv": 18446626606887822639,
+          "first_ready_decoded": 117466821728977
+        }
+      ]
+    }
+  },
+  "per_rotation_raw": [
+    {
+      "campaign": "e33a",
+      "run": 1,
+      "arm_order": "production,pf6gm_mega,mps_mega",
+      "raw_stamps": {
+        "FIRST_READY_inv": 18446626660302426680,
+        "LAST_READY": 117413407409183,
+        "DRAIN": 117413407421367,
+        "M7_DONE": 117413407409109,
+        "REDUCE_DONE": 117413407435890,
+        "M5_DONE": 117413406889638,
+        "M2_DONE": 117413406852030,
+        "M6_DONE": 117413407135438
+      },
+      "plan_M3toM5_us": 376.08,
+      "M6_us": 2458.0,
+      "planM6_us": 2834.08,
+      "M7_us": 2736.71,
+      "combine_us": 267.81,
+      "servicedrain_us": 2859.29,
+      "m2_to_end_us": 5838.6,
+      "spin_success_max": 0,
+      "spin_fail_max": 0,
+      "spin_limit": 2000000
+    },
+    {
+      "campaign": "e33a",
+      "run": 2,
+      "arm_order": "pf6gm_mega,mps_mega,production",
+      "raw_stamps": {
+        "FIRST_READY_inv": 18446626656649915676,
+        "LAST_READY": 117417059928511,
+        "DRAIN": 117417059939208,
+        "M7_DONE": 117417059928506,
+        "REDUCE_DONE": 117417059952160,
+        "M5_DONE": 117417059402756,
+        "M2_DONE": 117417059365312,
+        "M6_DONE": 117417059647808
+      },
+      "plan_M3toM5_us": 374.44,
+      "M6_us": 2450.52,
+      "planM6_us": 2824.96,
+      "M7_us": 2806.98,
+      "combine_us": 236.54,
+      "servicedrain_us": 2914.0,
+      "m2_to_end_us": 5868.4800000000005,
+      "spin_success_max": 0,
+      "spin_fail_max": 0,
+      "spin_limit": 2000000
+    },
+    {
+      "campaign": "e33a",
+      "run": 3,
+      "arm_order": "mps_mega,production,pf6gm_mega",
+      "raw_stamps": {
+        "FIRST_READY_inv": 18446626653013240519,
+        "LAST_READY": 117420696593616,
+        "DRAIN": 117420696603139,
+        "M7_DONE": 117420696593536,
+        "REDUCE_DONE": 117420696621540,
+        "M5_DONE": 117420696075855,
+        "M2_DONE": 117420696038777,
+        "M6_DONE": 117420696322953
+      },
+      "plan_M3toM5_us": 370.78000000000003,
+      "M6_us": 2470.98,
+      "planM6_us": 2841.76,
+      "M7_us": 2705.83,
+      "combine_us": 280.04,
+      "servicedrain_us": 2801.86,
+      "m2_to_end_us": 5827.63,
+      "spin_success_max": 0,
+      "spin_fail_max": 0,
+      "spin_limit": 2000000
+    },
+    {
+      "campaign": "e33a",
+      "run": 4,
+      "arm_order": "production,pf6gm_mega,mps_mega",
+      "raw_stamps": {
+        "FIRST_READY_inv": 18446626649220313980,
+        "LAST_READY": 117424489511038,
+        "DRAIN": 117424489521244,
+        "M7_DONE": 117424489506828,
+        "REDUCE_DONE": 117424489550920,
+        "M5_DONE": 117424489004077,
+        "M2_DONE": 117424488966789,
+        "M6_DONE": 117424489248526
+      },
+      "plan_M3toM5_us": 372.88,
+      "M6_us": 2444.4900000000002,
+      "planM6_us": 2817.37,
+      "M7_us": 2583.02,
+      "combine_us": 440.92,
+      "servicedrain_us": 2727.18,
+      "m2_to_end_us": 5841.31,
+      "spin_success_max": 0,
+      "spin_fail_max": 0,
+      "spin_limit": 2000000
+    },
+    {
+      "campaign": "e33a",
+      "run": 5,
+      "arm_order": "pf6gm_mega,mps_mega,production",
+      "raw_stamps": {
+        "FIRST_READY_inv": 18446626645571038305,
+        "LAST_READY": 117428138793215,
+        "DRAIN": 117428138802991,
+        "M7_DONE": 117428138793199,
+        "REDUCE_DONE": 117428138824019,
+        "M5_DONE": 117428138278795,
+        "M2_DONE": 117428138241742,
+        "M6_DONE": 117428138524370
+      },
+      "plan_M3toM5_us": 370.53000000000003,
+      "M6_us": 2455.75,
+      "planM6_us": 2826.28,
+      "M7_us": 2688.29,
+      "combine_us": 308.2,
+      "servicedrain_us": 2786.21,
+      "m2_to_end_us": 5822.77,
+      "spin_success_max": 0,
+      "spin_fail_max": 0,
+      "spin_limit": 2000000
+    },
+    {
+      "campaign": "e33b",
+      "run": 1,
+      "arm_order": "production,pf6gm_mega,mps_mega",
+      "raw_stamps": {
+        "FIRST_READY_inv": 18446626621964529387,
+        "LAST_READY": 117451745306115,
+        "DRAIN": 117451745317649,
+        "M7_DONE": 117451745305972,
+        "REDUCE_DONE": 117451745335531,
+        "M5_DONE": 117451744788411,
+        "M2_DONE": 117451744750868,
+        "M6_DONE": 117451745033531
+      },
+      "plan_M3toM5_us": 375.43,
+      "M6_us": 2451.2000000000003,
+      "planM6_us": 2826.63,
+      "M7_us": 2724.41,
+      "combine_us": 295.59000000000003,
+      "servicedrain_us": 2841.18,
+      "m2_to_end_us": 5846.63,
+      "spin_success_max": 0,
+      "spin_fail_max": 0,
+      "spin_limit": 2000000
+    },
+    {
+      "campaign": "e33b",
+      "run": 2,
+      "arm_order": "pf6gm_mega,mps_mega,production",
+      "raw_stamps": {
+        "FIRST_READY_inv": 18446626618312409318,
+        "LAST_READY": 117455397431994,
+        "DRAIN": 117455397441635,
+        "M7_DONE": 117455397431971,
+        "REDUCE_DONE": 117455397463934,
+        "M5_DONE": 117455396908743,
+        "M2_DONE": 117455396871631,
+        "M6_DONE": 117455397154199
+      },
+      "plan_M3toM5_us": 371.12,
+      "M6_us": 2454.56,
+      "planM6_us": 2825.68,
+      "M7_us": 2777.7200000000003,
+      "combine_us": 319.63,
+      "servicedrain_us": 2874.36,
+      "m2_to_end_us": 5923.03,
+      "spin_success_max": 0,
+      "spin_fail_max": 0,
+      "spin_limit": 2000000
+    },
+    {
+      "campaign": "e33b",
+      "run": 3,
+      "arm_order": "mps_mega,production,pf6gm_mega",
+      "raw_stamps": {
+        "FIRST_READY_inv": 18446626614588591834,
+        "LAST_READY": 117459121237532,
+        "DRAIN": 117459121246754,
+        "M7_DONE": 117459121237471,
+        "REDUCE_DONE": 117459121274132,
+        "M5_DONE": 117459120725583,
+        "M2_DONE": 117459120688319,
+        "M6_DONE": 117459120971112
+      },
+      "plan_M3toM5_us": 372.64,
+      "M6_us": 2455.29,
+      "planM6_us": 2827.93,
+      "M7_us": 2663.59,
+      "combine_us": 366.61,
+      "servicedrain_us": 2756.42,
+      "m2_to_end_us": 5858.13,
+      "spin_success_max": 1,
+      "spin_fail_max": 0,
+      "spin_limit": 2000000
+    },
+    {
+      "campaign": "e33b",
+      "run": 4,
+      "arm_order": "production,pf6gm_mega,mps_mega",
+      "raw_stamps": {
+        "FIRST_READY_inv": 18446626610498947092,
+        "LAST_READY": 117463210890220,
+        "DRAIN": 117463210901044,
+        "M7_DONE": 117463210890149,
+        "REDUCE_DONE": 117463210920272,
+        "M5_DONE": 117463210370259,
+        "M2_DONE": 117463210333237,
+        "M6_DONE": 117463210615248
+      },
+      "plan_M3toM5_us": 370.22,
+      "M6_us": 2449.89,
+      "planM6_us": 2820.11,
+      "M7_us": 2749.01,
+      "combine_us": 301.23,
+      "servicedrain_us": 2857.96,
+      "m2_to_end_us": 5870.35,
+      "spin_success_max": 0,
+      "spin_fail_max": 0,
+      "spin_limit": 2000000
+    },
+    {
+      "campaign": "e33b",
+      "run": 5,
+      "arm_order": "pf6gm_mega,mps_mega,production",
+      "raw_stamps": {
+        "FIRST_READY_inv": 18446626606887822639,
+        "LAST_READY": 117466822000317,
+        "DRAIN": 117466822008936,
+        "M7_DONE": 117466821998189,
+        "REDUCE_DONE": 117466822040744,
+        "M5_DONE": 117466821495674,
+        "M2_DONE": 117466821458301,
+        "M6_DONE": 117466821739906
+      },
+      "plan_M3toM5_us": 373.73,
+      "M6_us": 2442.32,
+      "planM6_us": 2816.05,
+      "M7_us": 2582.83,
+      "combine_us": 425.55,
+      "servicedrain_us": 2690.3,
+      "m2_to_end_us": 5824.43,
+      "spin_success_max": 0,
+      "spin_fail_max": 0,
+      "spin_limit": 2000000
+    }
+  ]
+}

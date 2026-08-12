@@ -1,0 +1,20 @@
+[09:04:34Z] SCREEN e33b start -- 1 config(s), arms=production,pf6gm_mega,mps_mega, iters=w500t100p5
+host: gbt350-odcdh2-c05-1
+[09:04:34Z] node idle: no torchrun/mpirun, no non-gpuagent KFD process
+[09:04:34Z] syncing node checkout to origin/codex/distributed-hipkittens-scaffold (once, before the first run)
+node source : ca5b683f aug11: RATCHET 0.8522 -> 0.8408 (6,482.7us, exp_27 ascale token-major); record that out is not bit-reproducible in ANY arm and that stats must cluster by run not by rank
+node HEAD   : ca5b683f420e4985e8d2a790fe086419ab6730f1
+node branch : codex/distributed-hipkittens-scaffold
+SRC_REV     : 26
+mps hsaco @batch start: 2026-08-12 07:11:19|be7b189d458d
+[09:04:35Z] === [1/1] C=16,g=353,mode=12,flush_rows=16,timestamps=1
+[09:04:36Z] mps hsaco BEFORE: 2026-08-12 07:11:19|be7b189d458d
+[09:07:43Z] mps hsaco AFTER : 2026-08-12 07:10:16|5635a2f2a370  (rc=0)
+[09:07:43Z]   -> CHANGED: mps_mega was rebuilt for this run
+SCREEN 1,2026-08-12T09:07:43Z,"C=16,g=353,mode=12,flush_rows=16,timestamps=1",OK,w500t100p5,ca5b683f,26,7708.8,6899.5,6496.6,0.8428,0.9416,0.8950,True,0.039062,0.008293,True,0,True,600/600,2816.1,2582.8,425.6,2690.3,5824.4,373.7,2442.3,0,0,valid_diagnostic,True,5635a2f2a370,aed6f3108063,2026-08-12 07:11:19|be7b189d458d,2026-08-12 07:10:16|5635a2f2a370,0,1_C16g353mode12flush_rows16timestamps1_20260812T090435Z,""
+[09:07:43Z] === SCREEN e33b DONE ===
+mps hsaco @batch end: 2026-08-12 07:10:16|5635a2f2a370
+
+===== /home/subvadla/overnight-scratch/screen_e33b.csv =====
+idx,utc,cfg,status,iters,head,src_rev,prod_us,pf6gm_us,mps_us,ratio_vs_prod,ratio_vs_pf6gm,pf6gm_vs_prod,gate_pass,gate_max_abs,gate_rel,control_fails,pperr,soak,soak_epochs,ts_planM6_us,ts_M7_us,ts_combine_us,ts_servicedrain_us,ts_m2_to_end_us,ts_planM3toM5_us,ts_M6_us,spin_ok_max,spin_fail_max,eager_status,eager_gate_ok,mps_hsaco,jit_log,hsaco_before,hsaco_after,rc,outdir,note
+1,2026-08-12T09:07:43Z,"C=16,g=353,mode=12,flush_rows=16,timestamps=1",OK,w500t100p5,ca5b683f,26,7708.8,6899.5,6496.6,0.8428,0.9416,0.8950,True,0.039062,0.008293,True,0,True,600/600,2816.1,2582.8,425.6,2690.3,5824.4,373.7,2442.3,0,0,valid_diagnostic,True,5635a2f2a370,aed6f3108063,2026-08-12 07:11:19|be7b189d458d,2026-08-12 07:10:16|5635a2f2a370,0,1_C16g353mode12flush_rows16timestamps1_20260812T090435Z,""

@@ -1,7 +1,10 @@
 # aug11 overnight — status and plan
 
-Live document. Updated as each experiment lands. The append-only ledger is
-`../experiments/LESSONS.md`; per-experiment detail is in `exp_N_*/result.md`.
+Live document. Updated as each experiment lands. The append-only ledger for
+tonight is **`LESSONS.md` in this folder** (aug10's remains at
+`../aug10/experiments/LESSONS.md`); the paper-figure ledger is **`PLOTS.md` in
+this folder — that is the morning read**; per-experiment detail is in
+`exp_N_*/result.md`.
 
 ## Where we start
 
@@ -12,6 +15,156 @@ Live document. Updated as each experiment lands. The append-only ledger is
 | **`mps_mega` mode 12, `C=16 g=33 flush_rows=16`** | **6,685.5 / 6,683.1** | **0.866** |
 
 Target: **0.80× ≈ 6,172 µs**, i.e. **−513 µs** from the ratchet.
+
+## THE FIGURE NIGHT LANDED (exp_33 + exp_35, pinned at `ca5b683f`)
+
+Two campaigns' worth of paper evidence, no tree mutation, all gates green in
+every rotation. **The ratchet reproduced** and the profile of the winner
+changed hands.
+
+| | exp_33 (n=10) | exp_35 (12 campaigns, 60 rotations) |
+|---|---:|---:|
+| `production` | 7,708.3 | 7,709.2 (sd 4.1 = **0.05 %**) |
+| `pf6gm_mega` | 6,893.2 (0.8942) | 6,900.2 (sd 15.5, **0.8950**) |
+| **`mps_mega` ratchet** `C=16 g=353 mode=12 flush_rows=16` | **6,493.8 (0.8424)** | **6,495.8 (sd 6.9, 0.8422)** |
+
+exp_33's two campaigns read 6,487.5 and 6,496.6 against the recorded 6,482.7 —
+**+0.07 % and +0.21 %**. Two independent experiments agree to **2.0 µs**.
+`production` is stable to 0.05 % across 12 campaigns, so it is effectively a
+constant denominator. **Remaining to 0.80× (≈6,167 µs at tonight's
+`production`): −327 µs.**
+
+### exp_33 — the authoritative profile of the winner (paper Q3)
+
+Device stamps, **rank-0 CTA-max**, final soak epoch, n=10, 1 tick = 0.01 µs.
+**This table supersedes the budget table in §"The budget, and why the queue is
+ordered the way it is".**
+
+| phase | µs | stderr | % of interior |
+|---|---:|---:|---:|
+| plan M3–M5 | 372.79 | 0.67 | 6.4 % |
+| **M6 GEMM-1** | **2,453.30** | 2.51 | **41.9 %** |
+| **M7 GEMM-2** | **2,701.84** | 23.74 | **46.2 %** |
+| — of which epilogue surcharge | ~817–898 *(proxy)* | — | ~14–15 % |
+| combine M8/M9 | 324.21 | 21.12 | 5.5 % |
+| **interior M3–M9** | **5,852.14** | 9.56 | 100 % |
+| *M7 + combine (coupled, r = −0.904)* | *3,026.05* | *10.16* | *51.7 %* |
+
+**M7 is now the bottleneck, not M6** — exp_27's ascale change moved the ranking.
+The two GEMMs are **88.1 % of the interior**. `plan + M6 + M7 + combine =
+interior` closes to **0.0 µs in all 10 rotations**. The residual
+`p50 − interior = 641.7 µs` is dispatch M0–M2 + launch + epoch skew, is
+instrument-mixed, and is an upper bound good to ~100 µs.
+
+Four things this profile settles:
+
+1. **Plan is done as a target** (372.8 µs / 6.4 %) and **combine is not a target
+   either** — its 324 µs is M7's slack, anti-correlated at **r = −0.904**, sum
+   3,026.1 ±10.2 with sd 32.1 against the 100.5 µs independence would predict.
+   Attacking combine alone moves the time, it does not delete it. Any claimed
+   combine win under ~60 µs measured alone is noise.
+2. **The M7 epilogue surcharge is a PROXY, not a measurement** — `pf6gm_mega`
+   emits no stamps (different kernel, never handed `mps_state`), and
+   `K0_PF6GM_DECOMP` is **absent from `run_campaign.sh`'s `-e` forwarding list**.
+   Two proxies with independent subtrahends agree to 4.5 % (1,885.0 ±2.74
+   same-run `pf_full.n2_p2` vs 1,803.98 archived). **The one-line harness edit
+   that forwards `K0_PF6GM_DECOMP` is the highest-value harness change
+   outstanding.**
+3. **Rank-max does not exist for MPS phase stamps.** The print block sits inside
+   `if rank == 0:` and is never all-reduced — "rank-max" in every older note
+   means CTA-max within rank 0.
+4. **`[MPS SPIN]` = 0/0** in all 10 rotations (`success_max ≤ 1` against a
+   2,000,000 limit, over 500 + 100 + 600 epochs): dispatch peer wait is ~0 and
+   exp_10 reproduces exactly. A fact about the shape at routing std = 0, which is
+   why exp_36's skew sweep is the only experiment that can re-admit a pool.
+
+`production` also has a phase signal, contrary to pre-registration: dispatch
+918.70 ±2.01 / gemm 5,945.49 ±7.64 / combine 1,356.02 ±11.68 (rank-max, genuine
+cross-rank all-reduce). Its combine carries the largest rank spread measured
+tonight (1,356 rank-max vs 978 rank-0, **+38 %**) — the all-to-all skew the
+megakernel arms hide inside their epilogue. The rank-max stages sum to +6.6 %
+above its p50 because the max is taken independently per stage.
+
+### exp_35 — the knob waterfall (paper Q1, the money figure)
+
+Same commit for every rung, `production` an arm in all 12 campaigns, campaigns
+alternating `c, b, c, b` in each of two batches so node drift cannot be
+confounded with the mechanism.
+
+| rung | what is added | config | p50 µs | sd | ratio | Δ vs prev |
+|---|---|---|---:|---:|---:|---:|
+| **a** | homogeneous baseline (`pf6gm_mega`) | — | 6,900.2 | 15.5 | 0.8950 | — |
+| **b** | + epilogue-carried payload, **throttle OFF** | `C=16,g=65,mode=12,flush_rows=16` | 7,110.8 | 13.7 | 0.9226 | **+210.6** |
+| **c** | + **injection bound** (depth 4) — the ratchet | `C=16,g=353,mode=12,flush_rows=16` | 6,495.8 | 6.9 | 0.8422 | **−615.0** |
+| d | + coarse arrival signals (mode 14) | — | `null` | | | `pending_exp_34` |
+| e | + nc-major producer task order | — | `null` | | | `not_built` |
+
+**With `C` held fixed at 16, one scheduling bit moves end-to-end by −615.0 µs —
+1.52× the entire (a)→(c) gap of −404.4 µs — while relocating the payload into
+the producer's epilogue *without* that bound costs +210.6 µs against a baseline
+that carries no payload at all.** That is the paper's central claim measured
+directly. `t = −80.2` on (b)→(c); the per-campaign ranges of (b) and (c) are
+**disjoint by 598 µs**. Phase attribution of the −615: **M7 −467.8, combine
+−116.9**, plan −1.5 (M6's −47.0 is codegen drift — the throttle is a
+compile-time specialization, so (b) and (c) are different `.hsaco` from the same
+pinned source). **92 % of the move is M7 + combine**, exactly where the
+epilogue's remote RMWs live.
+
+**The two knobs are not independent and must never be reported as additive.**
+
+Two structural facts derived from source and proved three ways (descriptor dump
+of the word the kernel actually read, the exp_24 depth-16/32 mechanism
+signature, and a fail-closed negative control that raised
+`K0P6_MPS_ERR_CONFIG`):
+
+- **The `g` bit layout for modes 12/13:** `0x000F` physical g (must be 1),
+  `0x0010` dual-write detect, **`0x0020` throttle ENABLE**, `0x0040` skip the
+  dead `part` zero-fill, **`0x0300` depth select (00→8, 01→4, 10→16, 11→32)**,
+  `0xFC00` reserved-and-rejected. **There is no "disabled" code point inside
+  `0x300`** — `config_is_valid` rejects a nonzero depth selector with the enable
+  bit clear — so `g=65` is the **unique legal throttle-bits-only neighbour** of
+  `g=353` and rung (b) is genuinely one-variable. (`g=321` is refused.)
+- **`C = 0` is illegal in mode 12** (`moe_mps_adapter.cuh:373`, and
+  `mode_is_stream` includes 12/13). The waterfall therefore **cannot** drive CTA
+  dedication to zero inside a single arm; the only C=0 point available is rung
+  (a), a different kernel. **Driving that axis to zero requires mode 14** — which
+  makes exp_34 a blocker for exp_37 / paper Q2 as well as for rung (d).
+
+Honest weakness, recorded: **step (a)→(b) is not single-variable and cannot be
+made one** — rung (a) is a different kernel with no MPS protocol, so that step
+bundles the mode-12 transport, the C=16 pool, and the per-row protocol. Step
+(b)→(c) is strictly single-variable.
+
+### Queue state after tonight's figure block
+
+| item | state |
+|---|---|
+| exp_32 NaN poison | **LANDED** — `K0_MOK_POISON_OUT` on, poison selftest and survivors=0 green in every rotation of exp_33 and exp_35 |
+| **exp_33** attribution (Q3) | **DONE** — `exp_33_attribution/phase_stamps.json`, `exp33-phase-stamps-1` |
+| **exp_35** waterfall (Q1) | **PARTIAL, 3 rungs of 5** — `exp_35_waterfall/waterfall.json`, `exp35.waterfall.1`; (d) and (e) are `null` rows with `blocked_by`, so the figure completes in place without re-running (a)–(c) |
+| **exp_34** mode 14 | **BUILT, CPU GATE GREEN, NOT RUN.** Resource tuple byte-identical to the ratchet on every gated field with mode 14 in the build: SGPR 106 / VGPR 256 / AGPR 256 / scratch 128 B / LDS 155,496 / MFMA 180 / `pk_add_bf16` 282, zero scratch ops in either MFMA span; `K0P6_MPS_SRC_REV` 26 → 27. **Owes: protocol review, then the full GPU gate ladder.** First config `C=0,g=353,mode=14,flush_rows=16`. Band 5,990–6,440; **above 6,568 falsifies**; the number is **BANKED, not ratcheted**. Debit to price in: 96/282 `pk_add_bf16` acquire a scratch op within 40 instructions ahead (exp_26 measured this exact migration at +2.81 µs, t = 0.61 — a null), so mode 14 vs 12 is not ISA-clean single-variable |
+| **exp_22** saturation (Q4a) | **BUILT, CPU GATE GREEN, DATA IN FLIGHT** — standalone `e22_saturation.hip`; the sweep is ~3 min of GPU; `saturation.json` not yet written |
+| exp_23 timeline (Q4b) | **PENDING** — plan + design written, no instrument built |
+| exp_36 sensitivity (Q5) | **PENDING** — std = 0 anchor column already measured (`[MPS SPIN]` 0/0) |
+| exp_37 placement (Q2) | **PENDING, and its C=0 arm is hard-blocked on exp_34** |
+| Q6 external ladders | **NOT STARTED** (stretch) |
+
+**Phase 2 re-pointed by exp_33's profile.** The optimization queue inherited
+from the pre-exp_27 profile is aimed at the wrong phase. In expected-value order
+now: (1) **mode 14** — the direct attack on the ~820–900 µs surcharge, and the
+first evidence that a win of that size is *physically available* inside M7
+rather than assumed; (2) **exp_31, the phase-2 VMEM hint `14 + kGM`** — one
+line, aimed at the other ~1,880 µs of M7; (3) **exp_26's mask ladder and the M6
+software-pipeline depth** — M6's 2,453.3 µs is the second-largest term and has
+the *tightest* stamp (stderr 2.51 µs), so it is the cheapest phase to judge a
+change on; (4) **nc-major task reorder**, which is also paper Fig-6 data. Plan
+and combine are both closed as targets.
+
+`[method]` **A campaign on this node costs ~3.5 minutes, not ~20.** exp_35 ran
+12 campaigns / 60 rotations in one window; exp_33 ran n=10 plus builds in 19
+minutes of wall clock. Every prior session scheduled against ~20 min and
+under-ran the GPU by ~5×. Budget many more arms per night, and prefer a second
+replicate campaign over any argument about noise.
 
 ## RATCHET MOVED AGAIN (exp_27, `f113d73f`) — **0.8408× production**
 
@@ -111,6 +264,11 @@ tonight over six repeats of the identical config: `ratio_vs_prod` σ = **0.52 %*
 
 ## The budget, and why the queue is ordered the way it is
 
+> **SUPERSEDED by exp_33** (see §"THE FIGURE NIGHT LANDED"). The table below has
+> M6 ~2,588 ahead of M7 ~2,660 at screen resolution; measured at n=10 the order
+> is **M7 2,701.8 ±23.7 > M6 2,453.3 ±2.5**, and the M6-first ordering this
+> section justifies is therefore wrong. Kept for the reasoning, not the numbers.
+
 Approximate phase costs at the ratchet (rank-max stamps, screens):
 
 | phase | µs | note |
@@ -158,6 +316,10 @@ later documents re-read that control as a measurement. **No design may assume
 M6 has idle CTAs.**
 
 ## The queue
+
+> **SUPERSEDED.** This is the aug10-era queue; exp_24, exp_26, exp_27, exp_28,
+> exp_25 and exp_29 have all since resolved. The live queue state is the table in
+> §"THE FIGURE NIGHT LANDED" → "Queue state after tonight's figure block".
 
 | # | experiment | targets | mechanism | risk |
 |---|---|---|---|---|

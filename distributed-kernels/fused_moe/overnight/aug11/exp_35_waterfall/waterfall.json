@@ -1,0 +1,1717 @@
+{
+ "schema_version": "exp35.waterfall.1",
+ "experiment": "exp_35 knob waterfall (paper Fig 4 / Q1)",
+ "generated_utc": "2026-08-12T10:08:52Z",
+ "commit": "ca5b683f",
+ "commit_full": "ca5b683f420e4985e8d2a790fe086419ab6730f1",
+ "node": "gbt350-odcdh2-c05-1 (8x MI350X, gfx950)",
+ "harness": {
+  "driver": "benchmarks/mok_synthetic_prefill/run_campaign.sh via tools/screen.sh",
+  "arms": "production,pf6gm_mega,mps_mega",
+  "warmup_iters": 500,
+  "timed_iters": 100,
+  "rotations_per_campaign": 5,
+  "soak_iters": 600,
+  "T": 4096,
+  "route": "default (std=0)",
+  "seed": 0,
+  "src_rev": 26,
+  "K0P6_MPS_ASCALE_TM": 1
+ },
+ "statistic": "arm_p50_us[arm].median = median over the campaign's 5 runs of that run's MAX-over-8-ranks p50. Clustering is by RUN, never by (run, rank): the 8 ranks of a run share one input.",
+ "g_field_bit_layout": {
+  "source": "moe_mps_adapter.cuh:55-105 (packing), :224-265 (bit table), :338-375 (validator)",
+  "packing": "g is 16 bits SPLIT across the packed uint64: low byte at word[8:16), high byte at word[34:42). The split exists because passing g>0xFF to the old encoder overflowed bit 16 into the MODE field and still validated (g=0x121 -> mode|=1, decoded back as g=0x21).",
+  "bits": {
+   "0x000F": "physical g (must be 1 in modes 12/13)",
+   "0x0010": "dual-write lost-update detector",
+   "0x0020": "epilogue remote-RMW throttle ENABLE  <-- THE THROTTLE SWITCH",
+   "0x0040": "exp_24 A: skip the dead `part` zero-fill in M5",
+   "0x0080": "reserved (rejected)",
+   "0x0300": "throttle DEPTH select: 00->8, 01->4, 10->16, 11->32",
+   "0xFC00": "reserved (rejected)"
+  },
+  "unthrottled_encoding": "clear 0x20. There is NO 'disabled' code point inside the 0x300 depth field; disabling is the enable bit, and config_is_valid (:356-359) REJECTS a nonzero depth selector when the enable bit is clear. So the unique legal 'throttle bits only' neighbour of g=353 (0x161) is g=65 (0x041), not g=321 (0x141).",
+  "rung_c_g": {
+   "decimal": 353,
+   "hex": "0x161",
+   "physical_g": 1,
+   "detect": 0,
+   "throttle_enable": 1,
+   "skip_part_zero": 1,
+   "depth_sel": 1,
+   "depth": 4
+  },
+  "rung_b_g": {
+   "decimal": 65,
+   "hex": "0x041",
+   "physical_g": 1,
+   "detect": 0,
+   "throttle_enable": 0,
+   "skip_part_zero": 1,
+   "depth_sel": 0,
+   "depth": "n/a (throttle off)"
+  },
+  "empirical_proof": {
+   "1_descriptor_dump": {
+    "method": "K0_MPS_DESC_DUMP=1 dumps the mps descriptor as the host handed it to the kernel; slot K0P6_D_MPS_CFG=62 is the packed word that k0pf6gm_device_tile_mps.hip:702 feeds to decode_config()",
+    "rung_c_word": "26039050512 (0x6100c6110)",
+    "rung_b_word": "8859173136 (0x2100c4110)",
+    "predicted_by_encode_config": "identical, bit for bit, for both",
+    "mode_field_readback": 12,
+    "why_it_matters": "mode==12 in the readback is the direct check that the historical g-overflow-into-mode bug is NOT present"
+   },
+   "2_mechanism_signature": {
+    "method": "timestamps=1 phase stamps, throttle ON vs OFF",
+    "M7_us_throttled_vs_unthrottled": "see rungs b/c phase_stamps",
+    "independent_expectation": "exp_24 measured depth 16 and 32 returning M7 to the UNTHROTTLED cost at +462 and +370 us vs the depth-4 ratchet; a genuinely unthrottled config must land in that band",
+    "one_variable_check": "plan_M3toM5 and M6 must be UNCHANGED between the two rungs -- the throttle lives only in the phase-2 epilogue"
+   },
+   "3_fail_closed_negative_control": {
+    "config": "C=16,g=321,mode=12,flush_rows=16,timestamps=1",
+    "expectation": "REJECTED by config_is_valid (depth selector, enable clear)",
+    "observed": "FAIL:rc23 / missing-rank-json, every gate VOID -- the device guard at .hip:719 raised K0P6_MPS_ERR_CONFIG (1<<28) and returned before producing output",
+    "conclusion": "g=321 is not a legal rung, which is exactly why rung (b) is g=65",
+    "note": "EXPECTED failure. Not a rung, not a candidate regression."
+   }
+  }
+ },
+ "attribution": {
+  "total_gap_us_pf6gm_to_ratchet": -404.4,
+  "step_a_to_b_us": 210.6,
+  "step_b_to_c_us": -615.0,
+  "share_of_total_explained_by_payload_transport_alone_pct": -52.1,
+  "share_of_total_explained_by_injection_bound_pct": 152.1,
+  "reading": "the epilogue-carried payload ALONE is a REGRESSION against the homogeneous baseline; the entire win, and then some, is carried by the injection bound -- i.e. by a scheduling decision, not by moving the payload and not by dedicating CTAs (C=16 is held FIXED across rungs b and c)",
+  "cta_dedication_axis": "cannot be driven to zero inside mode 12: config_is_valid rejects C=0 for every mode in mode_is_stream, which includes 12 and 13 (moe_mps_adapter.cuh:373). The only C=0 point available is rung (a) itself, a different kernel. Isolating the dedication axis needs mode 14 (exp_37, C in {0,8,16})."
+ },
+ "caveats": [
+  "Rung (a) -> (b) is NOT a single-variable step and cannot be made one: the homogeneous baseline is a different kernel (pf6gm_mega) with no MPS protocol at all, so that step bundles the mode-12 remote-accumulate transport, the C=16 service pool, and the per-row completion protocol. Rung (b) -> (c) IS strictly single-variable: same arm, same commit, same C, same flush_rows, one g bit.",
+  "The throttle is a COMPILE-TIME specialization (four s_waitcnt vmcnt(N) instantiations, moe_mps_adapter.cuh:260-261), so rungs (b) and (c) resolve to different .hsaco builds (be7b189d458d vs 5635a2f2a370) from the SAME pinned source at ca5b683f. That is the mechanism, not a confound.",
+  "C=0 is illegal in mode 12 (moe_mps_adapter.cuh:373), so this waterfall cannot separate 'dedicated comm CTAs' from 'mode-12 transport' inside a single arm. What it CAN show is that with C held fixed at 16, one scheduling bit moves end-to-end by more than the entire (a)->(c) gap.",
+  "Phase stamps are device MAX stamps from the final soak epoch, not from a timed iteration; they are a phase story, not an additive budget.",
+  "Rungs (d) and (e) are unmeasured: no binary for either existed at ca5b683f.",
+  "out is not bit-reproducible in ANY arm (see STATUS.md at this commit); correctness is the [MOK GATE] tolerance gate plus the NaN-poison detector, not a bit compare."
+ ],
+ "rungs": [
+  {
+   "rung_id": "a",
+   "label": "homogeneous baseline (no dedicated comm CTAs, no epilogue-carried payload)",
+   "arm": "pf6gm_mega",
+   "config": "n/a (arm has no MPS config; K0_PF6GM_G=3)",
+   "mechanisms_present": [],
+   "status": "measured",
+   "n_campaigns": 8,
+   "arm_p50_us": {
+    "per_campaign_median": [
+     6879.8,
+     6873.4,
+     6918.0,
+     6900.5,
+     6897.8,
+     6912.4,
+     6909.7,
+     6900.0
+    ],
+    "median": 6900.2,
+    "stdev": 15.5,
+    "min": 6873.4,
+    "max": 6918.0
+   },
+   "production_p50_us_same_run": {
+    "per_campaign": [
+     7711.9,
+     7712.7,
+     7705.7,
+     7717.9,
+     7710.3,
+     7707.9,
+     7708.2,
+     7705.6
+    ],
+    "median": 7709.2,
+    "stdev": 4.1
+   },
+   "ratio_vs_production": {
+    "per_campaign": [
+     0.8921,
+     0.8912,
+     0.8978,
+     0.8941,
+     0.8946,
+     0.8968,
+     0.8964,
+     0.8955
+    ],
+    "median": 0.895,
+    "note": "paired same-run against production in all 8 campaigns"
+   },
+   "delta_us_vs_pf6gm_mega_paired_same_run": null,
+   "delta_us_vs_previous_rung": null,
+   "phase_stamps": null,
+   "gates_green": true,
+   "phase_stamps_note": "none exist: the [MPS TS] rings are compiled into the mps kernel only, so the homogeneous baseline has no phase stamps in this harness"
+  },
+  {
+   "rung_id": "b",
+   "label": "+ epilogue-carried payload (mode 12 remote-accumulate), injection throttle DISABLED",
+   "arm": "mps_mega",
+   "config": "C=16,g=65,mode=12,flush_rows=16,timestamps=1",
+   "mechanisms_present": [
+    "physical_g=1",
+    "skip_dead_part_zero (0x40)",
+    "throttle_enable=0 (0x20 CLEAR)",
+    "depth_sel=0 (0x300 forced clear: config_is_valid rejects a selector without the enable bit)"
+   ],
+   "status": "measured",
+   "n_campaigns": 4,
+   "arm_p50_us": {
+    "per_campaign_median": [
+     7105.1,
+     7134.8,
+     7106.5,
+     7115.0
+    ],
+    "median": 7110.8,
+    "stdev": 13.7,
+    "min": 7105.1,
+    "max": 7134.8
+   },
+   "production_p50_us_same_run": {
+    "per_campaign": [
+     7710.3,
+     7707.9,
+     7708.2,
+     7705.6
+    ],
+    "median": 7708.0,
+    "stdev": 1.9
+   },
+   "ratio_vs_production": {
+    "per_campaign": [
+     0.9215,
+     0.9256,
+     0.9219,
+     0.9234
+    ],
+    "median": 0.9226
+   },
+   "delta_us_vs_pf6gm_mega_paired_same_run": {
+    "per_campaign": [
+     207.3,
+     222.4,
+     196.8,
+     215.0
+    ],
+    "median": 211.2,
+    "stdev": 11.0
+   },
+   "delta_us_vs_previous_rung": 210.6,
+   "phase_stamps": {
+    "note": "device MAX stamps from the FINAL SOAK epoch, 1 tick = 0.01 us; they do NOT sum to arm_p50_us",
+    "plan_M3toM5_us": 374.4,
+    "M6_us": 2491.2,
+    "M7_us": 3140.9,
+    "combine_us": 461.9,
+    "service_drain_us": 3223.0,
+    "mps_spin_success_max": 0.0,
+    "mps_spin_fail_max": 0.0,
+    "n_samples": 20
+   },
+   "gates_green": true
+  },
+  {
+   "rung_id": "c",
+   "label": "+ injection bound (remote-RMW throttle ON, depth 4) -- the current ratchet",
+   "arm": "mps_mega",
+   "config": "C=16,g=353,mode=12,flush_rows=16,timestamps=1",
+   "mechanisms_present": [
+    "physical_g=1",
+    "skip_dead_part_zero (0x40)",
+    "throttle_enable=1 (0x20 SET)",
+    "depth_sel=1 (0x300 -> depth 4)"
+   ],
+   "status": "measured",
+   "n_campaigns": 4,
+   "arm_p50_us": {
+    "per_campaign_median": [
+     6492.6,
+     6499.0,
+     6506.8,
+     6492.1
+    ],
+    "median": 6495.8,
+    "stdev": 6.9,
+    "min": 6492.1,
+    "max": 6506.8
+   },
+   "production_p50_us_same_run": {
+    "per_campaign": [
+     7711.9,
+     7712.7,
+     7705.7,
+     7717.9
+    ],
+    "median": 7712.3,
+    "stdev": 5.0
+   },
+   "ratio_vs_production": {
+    "per_campaign": [
+     0.8419,
+     0.8426,
+     0.8444,
+     0.8412
+    ],
+    "median": 0.8422
+   },
+   "delta_us_vs_pf6gm_mega_paired_same_run": {
+    "per_campaign": [
+     -387.2,
+     -374.4,
+     -411.2,
+     -408.4
+    ],
+    "median": -397.8,
+    "stdev": 17.6
+   },
+   "delta_us_vs_previous_rung": -615.0,
+   "phase_stamps": {
+    "note": "device MAX stamps from the FINAL SOAK epoch, 1 tick = 0.01 us; they do NOT sum to arm_p50_us",
+    "plan_M3toM5_us": 372.9,
+    "M6_us": 2444.2,
+    "M7_us": 2673.1,
+    "combine_us": 345.0,
+    "service_drain_us": 2758.5,
+    "mps_spin_success_max": 0.0,
+    "mps_spin_fail_max": 0.0,
+    "n_samples": 20
+   },
+   "gates_green": true
+  },
+  {
+   "rung_id": "d",
+   "label": "+ coarse arrival signals (mode 14: one grid barrier + 8 per-source arrival publishes)",
+   "arm": "mps_mega",
+   "config": null,
+   "status": "pending_exp_34",
+   "mechanisms_present": null,
+   "n_campaigns": 0,
+   "arm_p50_us": null,
+   "production_p50_us_same_run": null,
+   "ratio_vs_production": null,
+   "delta_us_vs_previous_rung": null,
+   "delta_us_vs_pf6gm_mega_paired_same_run": null,
+   "phase_stamps": null,
+   "gates_green": null,
+   "blocked_by": "mode 14 is being built by another agent (exp_34); no binary existed at ca5b683f",
+   "pre_registered_band_us": [
+    5990,
+    6440
+   ]
+  },
+  {
+   "rung_id": "e",
+   "label": "+ nc-major producer task order",
+   "arm": "mps_mega",
+   "config": null,
+   "status": "not_built",
+   "mechanisms_present": null,
+   "n_campaigns": 0,
+   "arm_p50_us": null,
+   "production_p50_us_same_run": null,
+   "ratio_vs_production": null,
+   "delta_us_vs_previous_rung": null,
+   "delta_us_vs_pf6gm_mega_paired_same_run": null,
+   "phase_stamps": null,
+   "gates_green": null,
+   "blocked_by": "the producer task-order reorder (exp_30 companion) does not exist in any commit"
+  }
+ ],
+ "campaigns_raw": [
+  {
+   "run_id": "1_C16g353mode12flush_rows16timestamps1_20260812T093520Z",
+   "cfg": "C=16,g=353,mode=12,flush_rows=16,timestamps=1",
+   "gates_green": true,
+   "pperr_max": 0,
+   "arm_p50_us": {
+    "mps_mega": {
+     "median": 6492.6,
+     "values": [
+      6482.0,
+      6492.6,
+      6504.2,
+      6499.8,
+      6491.6
+     ]
+    },
+    "pf6gm_mega": {
+     "median": 6879.8,
+     "values": [
+      6900.4,
+      6896.9,
+      6876.5,
+      6852.8,
+      6879.8
+     ]
+    },
+    "production": {
+     "median": 7711.9,
+     "values": [
+      7700.8,
+      7711.9,
+      7728.8,
+      7730.7,
+      7698.0
+     ]
+    }
+   },
+   "gate_lines": {
+    "mok_gate": [
+     "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008293 pass=True",
+     "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+     "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008293 pass=True",
+     "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008294 pass=True"
+    ],
+    "mark": [
+     "[MARK] control_fails=True"
+    ],
+    "poison_selftest": [
+     "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+     "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+    ],
+    "poison": [
+     "[POISON] eager arm=mps_mega survivors=0",
+     "[POISON] eager arm=pf6gm_mega survivors=0",
+     "[POISON] post_timing arm=mps_mega survivors=0",
+     "[POISON] post_timing arm=pf6gm_mega survivors=0"
+    ],
+    "soak": [
+     "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True"
+    ],
+    "eager": [
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"mps_mega/production_p50\": 0.8415576285336257, \"pf6gm_mega/production_p50\": 0.8897257777187004, \"mps_mega/production_p95\": 0.8411590144854288, \"pf6gm_mega/production_p95\": 0.8911085324966875} gate_ok=True",
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"pf6gm_mega/production_p50\": 0.886433455019613, \"mps_mega/production_p50\": 0.8407785865866706, \"pf6gm_mega/production_p95\": 0.8861707513067049, \"mps_mega/production_p95\": 0.8404092477454266} gate_ok=True",
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"pf6gm_mega/production_p50\": 0.893716755398431, \"mps_mega/production_p50\": 0.8432823818288299, \"pf6gm_mega/production_p95\": 0.8912592583712838, \"mps_mega/production_p95\": 0.845233860221103} gate_ok=True",
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"pf6gm_mega/production_p50\": 0.8943155004804451, \"mps_mega/production_p50\": 0.8418893757317933, \"pf6gm_mega/production_p95\": 0.8960069942872975, \"mps_mega/production_p95\": 0.8434815675837146} gate_ok=True",
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"pf6gm_mega/production_p50\": 0.8960719084565039, \"mps_mega/production_p50\": 0.8417364718849266, \"pf6gm_mega/production_p95\": 0.895200773947884, \"mps_mega/production_p95\": 0.8373403076046219} gate_ok=True"
+    ]
+   },
+   "ts_delta": {
+    "planM6": {
+     "median_us": 2817.5,
+     "values_us": [
+      2811.8,
+      2817.5,
+      2863.6,
+      2821.0,
+      2808.3
+     ],
+     "n": 5
+    },
+    "M7": {
+     "median_us": 2667.4,
+     "values_us": [
+      2659.9,
+      2667.4,
+      2766.2,
+      2661.5,
+      2704.8
+     ],
+     "n": 5
+    },
+    "combine": {
+     "median_us": 339.3,
+     "values_us": [
+      357.5,
+      329.2,
+      271.7,
+      396.4,
+      339.3
+     ],
+     "n": 5
+    },
+    "servicedrain": {
+     "median_us": 2729.5,
+     "values_us": [
+      2729.5,
+      2724.9,
+      2866.5,
+      2718.9,
+      2764.4
+     ],
+     "n": 5
+    },
+    "m2_to_end": {
+     "median_us": 5852.4,
+     "values_us": [
+      5829.2,
+      5814.1,
+      5901.5,
+      5878.9,
+      5852.4
+     ],
+     "n": 5
+    }
+   },
+   "ts_split": {
+    "plan_M3toM5": {
+     "median_us": 373.1,
+     "values_us": [
+      371.6,
+      373.1,
+      384.2,
+      374.6,
+      370.9
+     ],
+     "n": 5
+    },
+    "M6": {
+     "median_us": 2444.4,
+     "values_us": [
+      2440.3,
+      2444.4,
+      2479.3,
+      2446.4,
+      2437.4
+     ],
+     "n": 5
+    }
+   },
+   "spin": {
+    "success_max": {
+     "median_us": 0.0,
+     "values_us": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "n": 5
+    },
+    "fail_max": {
+     "median_us": 0.0,
+     "values_us": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "n": 5
+    }
+   }
+  },
+  {
+   "run_id": "1_C16g353mode12flush_rows16timestamps1_20260812T095440Z",
+   "cfg": "C=16,g=353,mode=12,flush_rows=16,timestamps=1",
+   "gates_green": true,
+   "pperr_max": 0,
+   "arm_p50_us": {
+    "mps_mega": {
+     "median": 6506.8,
+     "values": [
+      6511.6,
+      6509.0,
+      6472.0,
+      6506.8,
+      6500.0
+     ]
+    },
+    "pf6gm_mega": {
+     "median": 6918.0,
+     "values": [
+      6894.9,
+      6914.1,
+      6959.9,
+      6918.0,
+      6922.8
+     ]
+    },
+    "production": {
+     "median": 7705.7,
+     "values": [
+      7704.3,
+      7711.9,
+      7711.5,
+      7705.7,
+      7704.7
+     ]
+    }
+   },
+   "gate_lines": {
+    "mok_gate": [
+     "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008293 pass=True",
+     "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008293 pass=True",
+     "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008294 pass=True"
+    ],
+    "mark": [
+     "[MARK] control_fails=True"
+    ],
+    "poison_selftest": [
+     "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+     "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+    ],
+    "poison": [
+     "[POISON] eager arm=mps_mega survivors=0",
+     "[POISON] eager arm=pf6gm_mega survivors=0",
+     "[POISON] post_timing arm=mps_mega survivors=0",
+     "[POISON] post_timing arm=pf6gm_mega survivors=0"
+    ],
+    "soak": [
+     "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True"
+    ],
+    "eager": [
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"mps_mega/production_p50\": 0.8392765047540043, \"pf6gm_mega/production_p50\": 0.90253624087924, \"mps_mega/production_p95\": 0.8411435168910459, \"pf6gm_mega/production_p95\": 0.9030923852339514} gate_ok=True",
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"pf6gm_mega/production_p50\": 0.8949360302419372, \"mps_mega/production_p50\": 0.8451817911631285, \"pf6gm_mega/production_p95\": 0.8933918652439091, \"mps_mega/production_p95\": 0.8468864036223026} gate_ok=True",
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"pf6gm_mega/production_p50\": 0.8965505002971167, \"mps_mega/production_p50\": 0.8440282609107639, \"pf6gm_mega/production_p95\": 0.8949488982056947, \"mps_mega/production_p95\": 0.8435248742083743} gate_ok=True",
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"pf6gm_mega/production_p50\": 0.8977782831400323, \"mps_mega/production_p50\": 0.8444200736075594, \"pf6gm_mega/production_p95\": 0.8990044769389215, \"mps_mega/production_p95\": 0.844802179748366} gate_ok=True",
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"pf6gm_mega/production_p50\": 0.8985056023280087, \"mps_mega/production_p50\": 0.8436348771801486, \"pf6gm_mega/production_p95\": 0.8962274679955218, \"mps_mega/production_p95\": 0.8450927721108833} gate_ok=True"
+    ]
+   },
+   "ts_delta": {
+    "planM6": {
+     "median_us": 2820.7,
+     "values_us": [
+      2820.7,
+      2823.4,
+      2811.7,
+      2826.2,
+      2808.6
+     ],
+     "n": 5
+    },
+    "M7": {
+     "median_us": 2763.1,
+     "values_us": [
+      2789.2,
+      2763.1,
+      2600.2,
+      2643.2,
+      2787.0
+     ],
+     "n": 5
+    },
+    "combine": {
+     "median_us": 298.5,
+     "values_us": [
+      220.1,
+      298.5,
+      431.4,
+      350.6,
+      268.2
+     ],
+     "n": 5
+    },
+    "servicedrain": {
+     "median_us": 2860.5,
+     "values_us": [
+      2886.8,
+      2860.5,
+      2674.9,
+      2782.7,
+      2897.7
+     ],
+     "n": 5
+    },
+    "m2_to_end": {
+     "median_us": 5843.2,
+     "values_us": [
+      5829.9,
+      5884.9,
+      5843.2,
+      5820.1,
+      5863.8
+     ],
+     "n": 5
+    }
+   },
+   "ts_split": {
+    "plan_M3toM5": {
+     "median_us": 371.8,
+     "values_us": [
+      379.3,
+      371.8,
+      366.4,
+      375.1,
+      369.9
+     ],
+     "n": 5
+    },
+    "M6": {
+     "median_us": 2445.2,
+     "values_us": [
+      2441.3,
+      2451.6,
+      2445.2,
+      2451.1,
+      2438.7
+     ],
+     "n": 5
+    }
+   },
+   "spin": {
+    "success_max": {
+     "median_us": 0.0,
+     "values_us": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "n": 5
+    },
+    "fail_max": {
+     "median_us": 0.0,
+     "values_us": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "n": 5
+    }
+   }
+  },
+  {
+   "run_id": "2_C16g65mode12flush_rows16timestamps1_20260812T093825Z",
+   "cfg": "C=16,g=65,mode=12,flush_rows=16,timestamps=1",
+   "gates_green": true,
+   "pperr_max": 0,
+   "arm_p50_us": {
+    "mps_mega": {
+     "median": 7105.1,
+     "values": [
+      7097.6,
+      7070.3,
+      7113.3,
+      7105.1,
+      7126.0
+     ]
+    },
+    "pf6gm_mega": {
+     "median": 6897.8,
+     "values": [
+      6880.1,
+      6907.6,
+      6897.8,
+      6904.9,
+      6893.1
+     ]
+    },
+    "production": {
+     "median": 7710.3,
+     "values": [
+      7710.3,
+      7701.5,
+      7711.8,
+      7707.6,
+      7725.9
+     ]
+    }
+   },
+   "gate_lines": {
+    "mok_gate": [
+     "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+     "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008293 pass=True",
+     "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008294 pass=True"
+    ],
+    "mark": [
+     "[MARK] control_fails=True"
+    ],
+    "poison_selftest": [
+     "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+     "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+    ],
+    "poison": [
+     "[POISON] eager arm=mps_mega survivors=0",
+     "[POISON] eager arm=pf6gm_mega survivors=0",
+     "[POISON] post_timing arm=mps_mega survivors=0",
+     "[POISON] post_timing arm=pf6gm_mega survivors=0"
+    ],
+    "soak": [
+     "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True"
+    ],
+    "eager": [
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"mps_mega/production_p50\": 0.9223937131732689, \"pf6gm_mega/production_p50\": 0.8944414919681825, \"mps_mega/production_p95\": 0.9367257541424774, \"pf6gm_mega/production_p95\": 0.8949132536562309} gate_ok=True",
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"pf6gm_mega/production_p50\": 0.8922056209718144, \"mps_mega/production_p50\": 0.9223564431280957, \"pf6gm_mega/production_p95\": 0.8940718367524862, \"mps_mega/production_p95\": 0.9386736128826906} gate_ok=True",
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"pf6gm_mega/production_p50\": 0.8923241638696731, \"mps_mega/production_p50\": 0.9205413543636703, \"pf6gm_mega/production_p95\": 0.8955170585997603, \"mps_mega/production_p95\": 0.9277988729087715} gate_ok=True",
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"pf6gm_mega/production_p50\": 0.8958451999087608, \"mps_mega/production_p50\": 0.9218222122989966, \"pf6gm_mega/production_p95\": 0.8952022883090043, \"mps_mega/production_p95\": 0.9362001506864496} gate_ok=True",
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"pf6gm_mega/production_p50\": 0.8969156458023999, \"mps_mega/production_p50\": 0.9180310893115674, \"pf6gm_mega/production_p95\": 0.8973095561509045, \"mps_mega/production_p95\": 0.9351794441777473} gate_ok=True"
+    ]
+   },
+   "ts_delta": {
+    "planM6": {
+     "median_us": 2871.8,
+     "values_us": [
+      2871.8,
+      2877.8,
+      2872.1,
+      2843.0,
+      2857.4
+     ],
+     "n": 5
+    },
+    "M7": {
+     "median_us": 3123.6,
+     "values_us": [
+      3089.4,
+      3123.6,
+      3175.4,
+      3078.9,
+      3144.3
+     ],
+     "n": 5
+    },
+    "combine": {
+     "median_us": 434.5,
+     "values_us": [
+      434.5,
+      324.4,
+      608.3,
+      487.9,
+      422.9
+     ],
+     "n": 5
+    },
+    "servicedrain": {
+     "median_us": 3226.6,
+     "values_us": [
+      3147.9,
+      3247.2,
+      3253.6,
+      3128.0,
+      3226.6
+     ],
+     "n": 5
+    },
+    "m2_to_end": {
+     "median_us": 6409.8,
+     "values_us": [
+      6395.7,
+      6325.8,
+      6655.8,
+      6409.8,
+      6424.5
+     ],
+     "n": 5
+    }
+   },
+   "ts_split": {
+    "plan_M3toM5": {
+     "median_us": 373.8,
+     "values_us": [
+      377.4,
+      371.1,
+      375.7,
+      373.8,
+      369.6
+     ],
+     "n": 5
+    },
+    "M6": {
+     "median_us": 2494.5,
+     "values_us": [
+      2494.5,
+      2506.7,
+      2496.4,
+      2469.2,
+      2487.8
+     ],
+     "n": 5
+    }
+   },
+   "spin": {
+    "success_max": {
+     "median_us": 0.0,
+     "values_us": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "n": 5
+    },
+    "fail_max": {
+     "median_us": 0.0,
+     "values_us": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "n": 5
+    }
+   }
+  },
+  {
+   "run_id": "2_C16g65mode12flush_rows16timestamps1_20260812T095743Z",
+   "cfg": "C=16,g=65,mode=12,flush_rows=16,timestamps=1",
+   "gates_green": true,
+   "pperr_max": 0,
+   "arm_p50_us": {
+    "mps_mega": {
+     "median": 7106.5,
+     "values": [
+      7106.5,
+      7106.2,
+      7128.4,
+      7123.7,
+      7086.8
+     ]
+    },
+    "pf6gm_mega": {
+     "median": 6909.7,
+     "values": [
+      6877.4,
+      6872.9,
+      6912.4,
+      6909.7,
+      6923.2
+     ]
+    },
+    "production": {
+     "median": 7708.2,
+     "values": [
+      7726.2,
+      7714.0,
+      7702.1,
+      7690.8,
+      7708.2
+     ]
+    }
+   },
+   "gate_lines": {
+    "mok_gate": [
+     "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008293 pass=True",
+     "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+     "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008293 pass=True"
+    ],
+    "mark": [
+     "[MARK] control_fails=True"
+    ],
+    "poison_selftest": [
+     "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+     "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+    ],
+    "poison": [
+     "[POISON] eager arm=mps_mega survivors=0",
+     "[POISON] eager arm=pf6gm_mega survivors=0",
+     "[POISON] post_timing arm=mps_mega survivors=0",
+     "[POISON] post_timing arm=pf6gm_mega survivors=0"
+    ],
+    "soak": [
+     "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True"
+    ],
+    "eager": [
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"mps_mega/production_p50\": 0.9255056635437465, \"pf6gm_mega/production_p50\": 0.8974586603544384, \"mps_mega/production_p95\": 0.937359955968642, \"pf6gm_mega/production_p95\": 0.8982452878577615} gate_ok=True",
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"pf6gm_mega/production_p50\": 0.8901438741604244, \"mps_mega/production_p50\": 0.9197965386488497, \"pf6gm_mega/production_p95\": 0.8918692928252997, \"mps_mega/production_p95\": 0.9375238053897973} gate_ok=True",
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"pf6gm_mega/production_p50\": 0.8909709404052019, \"mps_mega/production_p50\": 0.9212149658101597, \"pf6gm_mega/production_p95\": 0.8918116145319563, \"mps_mega/production_p95\": 0.9333679013729343} gate_ok=True",
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"pf6gm_mega/production_p50\": 0.8981596430951193, \"mps_mega/production_p50\": 0.9193760864116757, \"pf6gm_mega/production_p95\": 0.8973434387058232, \"mps_mega/production_p95\": 0.9349797364270453} gate_ok=True",
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"pf6gm_mega/production_p50\": 0.8984336707241126, \"mps_mega/production_p50\": 0.9262645892141737, \"pf6gm_mega/production_p95\": 0.8962225919074966, \"mps_mega/production_p95\": 0.9383671377896716} gate_ok=True"
+    ]
+   },
+   "ts_delta": {
+    "planM6": {
+     "median_us": 2870.6,
+     "values_us": [
+      2847.6,
+      2870.6,
+      2860.8,
+      2875.6,
+      2879.4
+     ],
+     "n": 5
+    },
+    "M7": {
+     "median_us": 3128.7,
+     "values_us": [
+      3128.7,
+      3082.1,
+      3092.9,
+      3209.7,
+      3225.8
+     ],
+     "n": 5
+    },
+    "combine": {
+     "median_us": 541.2,
+     "values_us": [
+      550.1,
+      626.9,
+      541.2,
+      450.6,
+      384.0
+     ],
+     "n": 5
+    },
+    "servicedrain": {
+     "median_us": 3187.9,
+     "values_us": [
+      3187.9,
+      3140.4,
+      3147.5,
+      3284.0,
+      3296.9
+     ],
+     "n": 5
+    },
+    "m2_to_end": {
+     "median_us": 6526.4,
+     "values_us": [
+      6526.4,
+      6579.6,
+      6495.0,
+      6536.0,
+      6489.1
+     ],
+     "n": 5
+    }
+   },
+   "ts_split": {
+    "plan_M3toM5": {
+     "median_us": 377.0,
+     "values_us": [
+      370.7,
+      373.9,
+      377.0,
+      379.1,
+      380.8
+     ],
+     "n": 5
+    },
+    "M6": {
+     "median_us": 2496.5,
+     "values_us": [
+      2476.9,
+      2496.7,
+      2483.8,
+      2496.5,
+      2498.6
+     ],
+     "n": 5
+    }
+   },
+   "spin": {
+    "success_max": {
+     "median_us": 0.0,
+     "values_us": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "n": 5
+    },
+    "fail_max": {
+     "median_us": 0.0,
+     "values_us": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "n": 5
+    }
+   }
+  },
+  {
+   "run_id": "3_C16g353mode12flush_rows16timestamps1_20260812T094132Z",
+   "cfg": "C=16,g=353,mode=12,flush_rows=16,timestamps=1",
+   "gates_green": true,
+   "pperr_max": 0,
+   "arm_p50_us": {
+    "mps_mega": {
+     "median": 6499.0,
+     "values": [
+      6477.9,
+      6502.2,
+      6499.5,
+      6499.0,
+      6490.5
+     ]
+    },
+    "pf6gm_mega": {
+     "median": 6873.4,
+     "values": [
+      6926.4,
+      6942.4,
+      6870.6,
+      6873.4,
+      6868.9
+     ]
+    },
+    "production": {
+     "median": 7712.7,
+     "values": [
+      7714.4,
+      7712.7,
+      7713.9,
+      7699.7,
+      7694.1
+     ]
+    }
+   },
+   "gate_lines": {
+    "mok_gate": [
+     "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008293 pass=True",
+     "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008294 pass=True"
+    ],
+    "mark": [
+     "[MARK] control_fails=True"
+    ],
+    "poison_selftest": [
+     "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+     "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+    ],
+    "poison": [
+     "[POISON] eager arm=mps_mega survivors=0",
+     "[POISON] eager arm=pf6gm_mega survivors=0",
+     "[POISON] post_timing arm=mps_mega survivors=0",
+     "[POISON] post_timing arm=pf6gm_mega survivors=0"
+    ],
+    "soak": [
+     "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True"
+    ],
+    "eager": [
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"mps_mega/production_p50\": 0.8425652693068724, \"pf6gm_mega/production_p50\": 0.8906763855383629, \"mps_mega/production_p95\": 0.8442588598844203, \"pf6gm_mega/production_p95\": 0.8906667588157438} gate_ok=True",
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"pf6gm_mega/production_p50\": 0.8926778675081619, \"mps_mega/production_p50\": 0.8440625058542535, \"pf6gm_mega/production_p95\": 0.892906007005949, \"mps_mega/production_p95\": 0.844874171658181} gate_ok=True",
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"pf6gm_mega/production_p50\": 0.8927525904566236, \"mps_mega/production_p50\": 0.8435684267611524, \"pf6gm_mega/production_p95\": 0.8930239428692784, \"mps_mega/production_p95\": 0.8431109430986442} gate_ok=True",
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"pf6gm_mega/production_p50\": 0.89785446661328, \"mps_mega/production_p50\": 0.8397154898308627, \"pf6gm_mega/production_p95\": 0.8957747746686389, \"mps_mega/production_p95\": 0.8398822208116664} gate_ok=True",
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"pf6gm_mega/production_p50\": 0.9001273067528901, \"mps_mega/production_p50\": 0.8430546659209347, \"pf6gm_mega/production_p95\": 0.9044013646877221, \"mps_mega/production_p95\": 0.8434927451336455} gate_ok=True"
+    ]
+   },
+   "ts_delta": {
+    "planM6": {
+     "median_us": 2816.3,
+     "values_us": [
+      2819.1,
+      2813.2,
+      2806.2,
+      2816.3,
+      2829.5
+     ],
+     "n": 5
+    },
+    "M7": {
+     "median_us": 2661.8,
+     "values_us": [
+      2627.2,
+      2648.9,
+      2661.8,
+      2699.3,
+      2732.0
+     ],
+     "n": 5
+    },
+    "combine": {
+     "median_us": 409.4,
+     "values_us": [
+      409.4,
+      446.4,
+      540.8,
+      379.9,
+      304.3
+     ],
+     "n": 5
+    },
+    "servicedrain": {
+     "median_us": 2749.9,
+     "values_us": [
+      2717.2,
+      2749.9,
+      2729.8,
+      2790.7,
+      2840.2
+     ],
+     "n": 5
+    },
+    "m2_to_end": {
+     "median_us": 5895.4,
+     "values_us": [
+      5855.7,
+      5908.4,
+      6008.8,
+      5895.4,
+      5865.8
+     ],
+     "n": 5
+    }
+   },
+   "ts_split": {
+    "plan_M3toM5": {
+     "median_us": 373.7,
+     "values_us": [
+      373.7,
+      376.1,
+      367.7,
+      371.4,
+      379.7
+     ],
+     "n": 5
+    },
+    "M6": {
+     "median_us": 2444.8,
+     "values_us": [
+      2445.4,
+      2437.1,
+      2438.5,
+      2444.8,
+      2449.8
+     ],
+     "n": 5
+    }
+   },
+   "spin": {
+    "success_max": {
+     "median_us": 0.0,
+     "values_us": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "n": 5
+    },
+    "fail_max": {
+     "median_us": 0.0,
+     "values_us": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "n": 5
+    }
+   }
+  },
+  {
+   "run_id": "3_C16g353mode12flush_rows16timestamps1_20260812T100052Z",
+   "cfg": "C=16,g=353,mode=12,flush_rows=16,timestamps=1",
+   "gates_green": true,
+   "pperr_max": 0,
+   "arm_p50_us": {
+    "mps_mega": {
+     "median": 6492.1,
+     "values": [
+      6488.4,
+      6491.4,
+      6492.7,
+      6497.9,
+      6492.1
+     ]
+    },
+    "pf6gm_mega": {
+     "median": 6900.5,
+     "values": [
+      6893.2,
+      6913.4,
+      6870.9,
+      6900.5,
+      6939.6
+     ]
+    },
+    "production": {
+     "median": 7717.9,
+     "values": [
+      7691.0,
+      7724.7,
+      7737.3,
+      7717.9,
+      7712.2
+     ]
+    }
+   },
+   "gate_lines": {
+    "mok_gate": [
+     "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008293 pass=True",
+     "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+     "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008293 pass=True"
+    ],
+    "mark": [
+     "[MARK] control_fails=True"
+    ],
+    "poison_selftest": [
+     "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+     "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+    ],
+    "poison": [
+     "[POISON] eager arm=mps_mega survivors=0",
+     "[POISON] eager arm=pf6gm_mega survivors=0",
+     "[POISON] post_timing arm=mps_mega survivors=0",
+     "[POISON] post_timing arm=pf6gm_mega survivors=0"
+    ],
+    "soak": [
+     "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True"
+    ],
+    "eager": [
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"mps_mega/production_p50\": 0.8391441461137473, \"pf6gm_mega/production_p50\": 0.8880168296685677, \"mps_mega/production_p95\": 0.8378973306491753, \"pf6gm_mega/production_p95\": 0.8897400388327639} gate_ok=True",
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"pf6gm_mega/production_p50\": 0.8940863424967497, \"mps_mega/production_p50\": 0.84193163227344, \"pf6gm_mega/production_p95\": 0.8937139236444482, \"mps_mega/production_p95\": 0.8433451393565832} gate_ok=True",
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"pf6gm_mega/production_p50\": 0.8949675590278409, \"mps_mega/production_p50\": 0.8403346822768684, \"pf6gm_mega/production_p95\": 0.8966011310426604, \"mps_mega/production_p95\": 0.8433770452954152} gate_ok=True",
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"pf6gm_mega/production_p50\": 0.8962747691502748, \"mps_mega/production_p50\": 0.8436359819448767, \"pf6gm_mega/production_p95\": 0.8960258922223021, \"mps_mega/production_p95\": 0.8450447764124919} gate_ok=True",
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"pf6gm_mega/production_p50\": 0.8998194277333775, \"mps_mega/production_p50\": 0.8417935917712714, \"pf6gm_mega/production_p95\": 0.9008091036239055, \"mps_mega/production_p95\": 0.842613593937621} gate_ok=True"
+    ]
+   },
+   "ts_delta": {
+    "planM6": {
+     "median_us": 2816.7,
+     "values_us": [
+      2808.5,
+      2816.7,
+      2816.9,
+      2814.3,
+      2818.6
+     ],
+     "n": 5
+    },
+    "M7": {
+     "median_us": 2678.7,
+     "values_us": [
+      2654.5,
+      2678.7,
+      2726.8,
+      2732.4,
+      2666.3
+     ],
+     "n": 5
+    },
+    "combine": {
+     "median_us": 312.3,
+     "values_us": [
+      425.8,
+      372.0,
+      248.7,
+      304.6,
+      312.3
+     ],
+     "n": 5
+    },
+    "servicedrain": {
+     "median_us": 2752.6,
+     "values_us": [
+      2720.3,
+      2752.6,
+      2825.4,
+      2851.8,
+      2721.6
+     ],
+     "n": 5
+    },
+    "m2_to_end": {
+     "median_us": 5851.3,
+     "values_us": [
+      5888.9,
+      5867.4,
+      5792.5,
+      5851.3,
+      5797.1
+     ],
+     "n": 5
+    }
+   },
+   "ts_split": {
+    "plan_M3toM5": {
+     "median_us": 372.8,
+     "values_us": [
+      372.1,
+      372.8,
+      370.0,
+      372.9,
+      375.2
+     ],
+     "n": 5
+    },
+    "M6": {
+     "median_us": 2443.3,
+     "values_us": [
+      2436.5,
+      2443.9,
+      2446.9,
+      2441.4,
+      2443.3
+     ],
+     "n": 5
+    }
+   },
+   "spin": {
+    "success_max": {
+     "median_us": 0.0,
+     "values_us": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "n": 5
+    },
+    "fail_max": {
+     "median_us": 0.0,
+     "values_us": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "n": 5
+    }
+   }
+  },
+  {
+   "run_id": "4_C16g65mode12flush_rows16timestamps1_20260812T094437Z",
+   "cfg": "C=16,g=65,mode=12,flush_rows=16,timestamps=1",
+   "gates_green": true,
+   "pperr_max": 0,
+   "arm_p50_us": {
+    "mps_mega": {
+     "median": 7134.8,
+     "values": [
+      7153.5,
+      7139.4,
+      7113.6,
+      7134.8,
+      7106.9
+     ]
+    },
+    "pf6gm_mega": {
+     "median": 6912.4,
+     "values": [
+      6907.2,
+      6912.4,
+      6964.5,
+      6933.4,
+      6895.8
+     ]
+    },
+    "production": {
+     "median": 7707.9,
+     "values": [
+      7707.9,
+      7705.1,
+      7700.7,
+      7708.7,
+      7720.0
+     ]
+    }
+   },
+   "gate_lines": {
+    "mok_gate": [
+     "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008293 pass=True",
+     "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+     "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008293 pass=True",
+     "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008294 pass=True"
+    ],
+    "mark": [
+     "[MARK] control_fails=True"
+    ],
+    "poison_selftest": [
+     "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+     "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+    ],
+    "poison": [
+     "[POISON] eager arm=mps_mega survivors=0",
+     "[POISON] eager arm=pf6gm_mega survivors=0",
+     "[POISON] post_timing arm=mps_mega survivors=0",
+     "[POISON] post_timing arm=pf6gm_mega survivors=0"
+    ],
+    "soak": [
+     "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True"
+    ],
+    "eager": [
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"mps_mega/production_p50\": 0.9237694466992494, \"pf6gm_mega/production_p50\": 0.9044071929822063, \"mps_mega/production_p95\": 0.9344577653029281, \"pf6gm_mega/production_p95\": 0.9015530411986082} gate_ok=True",
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"pf6gm_mega/production_p50\": 0.8932391900920689, \"mps_mega/production_p50\": 0.9205919799944892, \"pf6gm_mega/production_p95\": 0.8944478696038195, \"mps_mega/production_p95\": 0.9374721860581172} gate_ok=True",
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"pf6gm_mega/production_p50\": 0.8961087439201734, \"mps_mega/production_p50\": 0.928068296103201, \"pf6gm_mega/production_p95\": 0.895808440284546, \"mps_mega/production_p95\": 0.9414226349513553} gate_ok=True",
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"pf6gm_mega/production_p50\": 0.8971117884692099, \"mps_mega/production_p50\": 0.9265703677821787, \"pf6gm_mega/production_p95\": 0.8961978493582806, \"mps_mega/production_p95\": 0.9391794397824832} gate_ok=True",
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"pf6gm_mega/production_p50\": 0.8994218614127628, \"mps_mega/production_p50\": 0.9255432544333092, \"pf6gm_mega/production_p95\": 0.9015867009159609, \"mps_mega/production_p95\": 0.9395473257965666} gate_ok=True"
+    ]
+   },
+   "ts_delta": {
+    "planM6": {
+     "median_us": 2847.6,
+     "values_us": [
+      2869.0,
+      2846.7,
+      2885.2,
+      2847.6,
+      2843.8
+     ],
+     "n": 5
+    },
+    "M7": {
+     "median_us": 3182.0,
+     "values_us": [
+      3136.1,
+      3272.5,
+      3267.1,
+      3149.1,
+      3182.0
+     ],
+     "n": 5
+    },
+    "combine": {
+     "median_us": 417.4,
+     "values_us": [
+      473.2,
+      388.9,
+      417.4,
+      403.1,
+      430.4
+     ],
+     "n": 5
+    },
+    "servicedrain": {
+     "median_us": 3233.9,
+     "values_us": [
+      3201.6,
+      3342.9,
+      3349.0,
+      3219.4,
+      3233.9
+     ],
+     "n": 5
+    },
+    "m2_to_end": {
+     "median_us": 6478.3,
+     "values_us": [
+      6478.3,
+      6508.2,
+      6569.7,
+      6399.7,
+      6456.3
+     ],
+     "n": 5
+    }
+   },
+   "ts_split": {
+    "plan_M3toM5": {
+     "median_us": 376.7,
+     "values_us": [
+      376.7,
+      370.1,
+      381.5,
+      374.8,
+      377.6
+     ],
+     "n": 5
+    },
+    "M6": {
+     "median_us": 2476.6,
+     "values_us": [
+      2492.3,
+      2476.6,
+      2503.7,
+      2472.7,
+      2466.2
+     ],
+     "n": 5
+    }
+   },
+   "spin": {
+    "success_max": {
+     "median_us": 0.0,
+     "values_us": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "n": 5
+    },
+    "fail_max": {
+     "median_us": 0.0,
+     "values_us": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "n": 5
+    }
+   }
+  },
+  {
+   "run_id": "4_C16g65mode12flush_rows16timestamps1_20260812T100356Z",
+   "cfg": "C=16,g=65,mode=12,flush_rows=16,timestamps=1",
+   "gates_green": true,
+   "pperr_max": 0,
+   "arm_p50_us": {
+    "mps_mega": {
+     "median": 7115.0,
+     "values": [
+      7148.3,
+      7141.0,
+      7099.3,
+      7115.0,
+      7087.3
+     ]
+    },
+    "pf6gm_mega": {
+     "median": 6900.0,
+     "values": [
+      6892.9,
+      6890.8,
+      6900.0,
+      6916.7,
+      6914.7
+     ]
+    },
+    "production": {
+     "median": 7705.6,
+     "values": [
+      7705.6,
+      7707.6,
+      7721.7,
+      7699.7,
+      7705.2
+     ]
+    }
+   },
+   "gate_lines": {
+    "mok_gate": [
+     "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008293 pass=True",
+     "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+     "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008293 pass=True"
+    ],
+    "mark": [
+     "[MARK] control_fails=True"
+    ],
+    "poison_selftest": [
+     "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+     "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+    ],
+    "poison": [
+     "[POISON] eager arm=mps_mega survivors=0",
+     "[POISON] eager arm=pf6gm_mega survivors=0",
+     "[POISON] post_timing arm=mps_mega survivors=0",
+     "[POISON] post_timing arm=pf6gm_mega survivors=0"
+    ],
+    "soak": [
+     "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True"
+    ],
+    "eager": [
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"mps_mega/production_p50\": 0.9193925965877727, \"pf6gm_mega/production_p50\": 0.8935846023490657, \"mps_mega/production_p95\": 0.933013838813246, \"pf6gm_mega/production_p95\": 0.896659861632514} gate_ok=True",
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"pf6gm_mega/production_p50\": 0.8940180495505492, \"mps_mega/production_p50\": 0.9264902151124293, \"pf6gm_mega/production_p95\": 0.8949839353699595, \"mps_mega/production_p95\": 0.9371896289564017} gate_ok=True",
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"pf6gm_mega/production_p50\": 0.8945252571432531, \"mps_mega/production_p50\": 0.9276702143037837, \"pf6gm_mega/production_p95\": 0.894821484701148, \"mps_mega/production_p95\": 0.9358321954658715} gate_ok=True",
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"pf6gm_mega/production_p50\": 0.8974032340152079, \"mps_mega/production_p50\": 0.9198091909738879, \"pf6gm_mega/production_p95\": 0.9000440840808267, \"mps_mega/production_p95\": 0.9275706450676134} gate_ok=True",
+     "[MOK SYNTHETIC EAGER] status=valid_diagnostic ratios={\"pf6gm_mega/production_p50\": 0.8982991568690406, \"mps_mega/production_p50\": 0.924056253567311, \"pf6gm_mega/production_p95\": 0.8957839776066022, \"mps_mega/production_p95\": 0.9315775180407571} gate_ok=True"
+    ]
+   },
+   "ts_delta": {
+    "planM6": {
+     "median_us": 2864.2,
+     "values_us": [
+      2869.7,
+      2835.1,
+      2865.7,
+      2863.4,
+      2864.2
+     ],
+     "n": 5
+    },
+    "M7": {
+     "median_us": 3137.6,
+     "values_us": [
+      3120.3,
+      3092.4,
+      3164.4,
+      3137.6,
+      3357.9
+     ],
+     "n": 5
+    },
+    "combine": {
+     "median_us": 489.4,
+     "values_us": [
+      538.2,
+      514.1,
+      489.4,
+      476.3,
+      385.8
+     ],
+     "n": 5
+    },
+    "servicedrain": {
+     "median_us": 3218.2,
+     "values_us": [
+      3244.5,
+      3146.7,
+      3218.2,
+      3190.4,
+      3457.3
+     ],
+     "n": 5
+    },
+    "m2_to_end": {
+     "median_us": 6519.4,
+     "values_us": [
+      6528.2,
+      6441.6,
+      6519.4,
+      6477.3,
+      6607.9
+     ],
+     "n": 5
+    }
+   },
+   "ts_split": {
+    "plan_M3toM5": {
+     "median_us": 373.9,
+     "values_us": [
+      376.2,
+      372.9,
+      373.9,
+      372.8,
+      374.0
+     ],
+     "n": 5
+    },
+    "M6": {
+     "median_us": 2490.6,
+     "values_us": [
+      2493.4,
+      2462.2,
+      2491.8,
+      2490.6,
+      2490.2
+     ],
+     "n": 5
+    }
+   },
+   "spin": {
+    "success_max": {
+     "median_us": 0.0,
+     "values_us": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "n": 5
+    },
+    "fail_max": {
+     "median_us": 0.0,
+     "values_us": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "n": 5
+    }
+   }
+  }
+ ]
+}

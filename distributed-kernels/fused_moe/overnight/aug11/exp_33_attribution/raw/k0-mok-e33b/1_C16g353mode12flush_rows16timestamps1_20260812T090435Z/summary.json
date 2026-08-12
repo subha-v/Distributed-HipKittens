@@ -1,0 +1,995 @@
+{
+  "arm_order_counts": {
+    "mps_mega,production,pf6gm_mega": 1,
+    "pf6gm_mega,mps_mega,production": 2,
+    "production,pf6gm_mega,mps_mega": 2
+  },
+  "arm_p50_us": {
+    "mps_mega": {
+      "max": 6521.169900894165,
+      "median": 6496.627569198608,
+      "min": 6481.46653175354,
+      "values": [
+        6496.285438537598,
+        6481.46653175354,
+        6496.627569198608,
+        6497.608423233032,
+        6521.169900894165
+      ]
+    },
+    "pf6gm_mega": {
+      "max": 6938.133001327515,
+      "median": 6899.492025375366,
+      "min": 6882.371187210083,
+      "values": [
+        6886.969089508057,
+        6882.371187210083,
+        6899.492025375366,
+        6938.133001327515,
+        6930.613994598389
+      ]
+    },
+    "production": {
+      "max": 7712.562084197998,
+      "median": 7708.8189125061035,
+      "min": 7706.8798542022705,
+      "values": [
+        7712.177991867065,
+        7708.8189125061035,
+        7706.8798542022705,
+        7712.562084197998,
+        7707.743167877197
+      ]
+    }
+  },
+  "arm_p95_us": {
+    "mps_mega": {
+      "max": 6588.403868675232,
+      "median": 6577.742171287537,
+      "min": 6555.177164077759,
+      "values": [
+        6577.742171287537,
+        6555.177164077759,
+        6582.363867759705,
+        6567.9930210113525,
+        6588.403868675232
+      ]
+    },
+    "pf6gm_mega": {
+      "max": 7023.785161972046,
+      "median": 6978.759074211121,
+      "min": 6947.972846031189,
+      "values": [
+        6947.972846031189,
+        6964.274907112122,
+        6978.759074211121,
+        7023.785161972046,
+        7003.567051887512
+      ]
+    },
+    "production": {
+      "max": 7800.707149505615,
+      "median": 7792.114233970642,
+      "min": 7784.839868545532,
+      "values": [
+        7800.707149505615,
+        7792.114233970642,
+        7784.839868545532,
+        7788.0420207977295,
+        7794.289922714233
+      ]
+    }
+  },
+  "candidate_production_p50": {
+    "mps_mega": {
+      "max": 0.8460543843847578,
+      "median": 0.8424708096088792,
+      "min": 0.8407859369012527,
+      "values": [
+        0.8423412225947461,
+        0.8407859369012527,
+        0.8429646876688032,
+        0.8424708096088792,
+        0.8460543843847578
+      ]
+    },
+    "pf6gm_mega": {
+      "max": 0.8995886095416743,
+      "median": 0.895238041321396,
+      "min": 0.8927919134336825,
+      "values": [
+        0.8929992405220368,
+        0.8927919134336825,
+        0.895238041321396,
+        0.8995886095416743,
+        0.8991755230613322
+      ]
+    }
+  },
+  "candidate_production_p95": {
+    "mps_mega": {
+      "max": 0.8455361932819705,
+      "median": 0.8433432952045876,
+      "min": 0.8412578367370039,
+      "values": [
+        0.8432238315348646,
+        0.8412578367370039,
+        0.8455361932819705,
+        0.8433432952045876,
+        0.8452859636995551
+      ]
+    },
+    "pf6gm_mega": {
+      "max": 0.9018679076480637,
+      "median": 0.8964550577859202,
+      "min": 0.8906849998171679,
+      "values": [
+        0.8906849998171679,
+        0.8937593441264686,
+        0.8964550577859202,
+        0.9018679076480637,
+        0.8985510060996852
+      ]
+    }
+  },
+  "environment": {
+    "aiter_path": "/app/aiter-test/aiter/__init__.py",
+    "container_image": "rocm/atom-dev:vllm-latest",
+    "device_count": 8,
+    "device_name": "AMD Radeon Graphics",
+    "host": "gbt350-odcdh2-c05-1",
+    "mori_path": "/opt/venv/lib/python3.12/site-packages/mori/__init__.py",
+    "torch": "2.10.0+rocm7.2.4.git3d3aa833",
+    "torch_hip": "7.2.53211"
+  },
+  "kernel_hsaco_sha256": {},
+  "kernel_source_sha256": {},
+  "p95_note": "supplementary only: MoK reports the median rank-max statistic; sequential arm p95 values are not paired and contain large outliers",
+  "primary_mok_results": {
+    "mps_mega": {
+      "candidate_production_ratio": 0.8424708096088792,
+      "candidate_us": 6496.627569198608,
+      "latency_reduction_percent": 15.75291903911208,
+      "median_delta_us": -1212.1913433074951,
+      "production_us": 7708.8189125061035,
+      "statistic": "median of 100 aligned MAX(rank) samples"
+    },
+    "pf6gm_mega": {
+      "candidate_production_ratio": 0.895238041321396,
+      "candidate_us": 6899.492025375366,
+      "latency_reduction_percent": 10.476195867860405,
+      "median_delta_us": -809.3268871307373,
+      "production_us": 7708.8189125061035,
+      "statistic": "median of 100 aligned MAX(rank) samples"
+    }
+  },
+  "rank_route_digests": [
+    "82b35223cbcb0d77f9a77ea05d7f63c2b0459b543914d1b11d067e26527b4da6",
+    "40f268c14336c6a9207e1a7d61c27c1e78ae34c8b3f6834fc69148724e89c716",
+    "34413d1fd9e73ba9efe3c05bdd4f86b2cbe986c08c70d55852293fd6f953531a",
+    "752c8e488eb4e50d53c133a4ad36ebc41b2be74cf48199e85ba8ab376dd9915d",
+    "e58240d52f55d353b4a3e74e108aaad9658970cb5b09d2812f82a362b5982b81",
+    "1628bdf3d09af36a491439d6381511775f6db086592da25071aacbf1b1a04114",
+    "27b803b1db87860f1e32478950ef9ce74d774a84cfdf0d2039d4daf30d26040b",
+    "6be786f3fd1d52b6c9d3632e47a6a1e4741edda938ff320bf5057a728419c58b"
+  ],
+  "rank_route_digests_per_run": {
+    "/home/subvadla/k0-mok-e33b/1_C16g353mode12flush_rows16timestamps1_20260812T090435Z/run1": [
+      "82b35223cbcb0d77f9a77ea05d7f63c2b0459b543914d1b11d067e26527b4da6",
+      "40f268c14336c6a9207e1a7d61c27c1e78ae34c8b3f6834fc69148724e89c716",
+      "34413d1fd9e73ba9efe3c05bdd4f86b2cbe986c08c70d55852293fd6f953531a",
+      "752c8e488eb4e50d53c133a4ad36ebc41b2be74cf48199e85ba8ab376dd9915d",
+      "e58240d52f55d353b4a3e74e108aaad9658970cb5b09d2812f82a362b5982b81",
+      "1628bdf3d09af36a491439d6381511775f6db086592da25071aacbf1b1a04114",
+      "27b803b1db87860f1e32478950ef9ce74d774a84cfdf0d2039d4daf30d26040b",
+      "6be786f3fd1d52b6c9d3632e47a6a1e4741edda938ff320bf5057a728419c58b"
+    ],
+    "/home/subvadla/k0-mok-e33b/1_C16g353mode12flush_rows16timestamps1_20260812T090435Z/run2": [
+      "82b35223cbcb0d77f9a77ea05d7f63c2b0459b543914d1b11d067e26527b4da6",
+      "40f268c14336c6a9207e1a7d61c27c1e78ae34c8b3f6834fc69148724e89c716",
+      "34413d1fd9e73ba9efe3c05bdd4f86b2cbe986c08c70d55852293fd6f953531a",
+      "752c8e488eb4e50d53c133a4ad36ebc41b2be74cf48199e85ba8ab376dd9915d",
+      "e58240d52f55d353b4a3e74e108aaad9658970cb5b09d2812f82a362b5982b81",
+      "b187e4a57073d7e9bdbff560cccfafa30810075402358787bce07d7060b58aaf",
+      "27b803b1db87860f1e32478950ef9ce74d774a84cfdf0d2039d4daf30d26040b",
+      "6be786f3fd1d52b6c9d3632e47a6a1e4741edda938ff320bf5057a728419c58b"
+    ],
+    "/home/subvadla/k0-mok-e33b/1_C16g353mode12flush_rows16timestamps1_20260812T090435Z/run3": [
+      "82b35223cbcb0d77f9a77ea05d7f63c2b0459b543914d1b11d067e26527b4da6",
+      "40f268c14336c6a9207e1a7d61c27c1e78ae34c8b3f6834fc69148724e89c716",
+      "34413d1fd9e73ba9efe3c05bdd4f86b2cbe986c08c70d55852293fd6f953531a",
+      "752c8e488eb4e50d53c133a4ad36ebc41b2be74cf48199e85ba8ab376dd9915d",
+      "e58240d52f55d353b4a3e74e108aaad9658970cb5b09d2812f82a362b5982b81",
+      "b187e4a57073d7e9bdbff560cccfafa30810075402358787bce07d7060b58aaf",
+      "27b803b1db87860f1e32478950ef9ce74d774a84cfdf0d2039d4daf30d26040b",
+      "6be786f3fd1d52b6c9d3632e47a6a1e4741edda938ff320bf5057a728419c58b"
+    ],
+    "/home/subvadla/k0-mok-e33b/1_C16g353mode12flush_rows16timestamps1_20260812T090435Z/run4": [
+      "82b35223cbcb0d77f9a77ea05d7f63c2b0459b543914d1b11d067e26527b4da6",
+      "40f268c14336c6a9207e1a7d61c27c1e78ae34c8b3f6834fc69148724e89c716",
+      "34413d1fd9e73ba9efe3c05bdd4f86b2cbe986c08c70d55852293fd6f953531a",
+      "752c8e488eb4e50d53c133a4ad36ebc41b2be74cf48199e85ba8ab376dd9915d",
+      "e58240d52f55d353b4a3e74e108aaad9658970cb5b09d2812f82a362b5982b81",
+      "b187e4a57073d7e9bdbff560cccfafa30810075402358787bce07d7060b58aaf",
+      "27b803b1db87860f1e32478950ef9ce74d774a84cfdf0d2039d4daf30d26040b",
+      "6be786f3fd1d52b6c9d3632e47a6a1e4741edda938ff320bf5057a728419c58b"
+    ],
+    "/home/subvadla/k0-mok-e33b/1_C16g353mode12flush_rows16timestamps1_20260812T090435Z/run5": [
+      "82b35223cbcb0d77f9a77ea05d7f63c2b0459b543914d1b11d067e26527b4da6",
+      "40f268c14336c6a9207e1a7d61c27c1e78ae34c8b3f6834fc69148724e89c716",
+      "34413d1fd9e73ba9efe3c05bdd4f86b2cbe986c08c70d55852293fd6f953531a",
+      "752c8e488eb4e50d53c133a4ad36ebc41b2be74cf48199e85ba8ab376dd9915d",
+      "e58240d52f55d353b4a3e74e108aaad9658970cb5b09d2812f82a362b5982b81",
+      "b187e4a57073d7e9bdbff560cccfafa30810075402358787bce07d7060b58aaf",
+      "27b803b1db87860f1e32478950ef9ce74d774a84cfdf0d2039d4daf30d26040b",
+      "6be786f3fd1d52b6c9d3632e47a6a1e4741edda938ff320bf5057a728419c58b"
+    ]
+  },
+  "route_digest_check": {
+    "divergent_ranks": [
+      5
+    ],
+    "per_rank_distinct_digests": {
+      "5": {
+        "expert_ids": [
+          "1628bdf3d09af36a491439d6381511775f6db086592da25071aacbf1b1a04114",
+          "b187e4a57073d7e9bdbff560cccfafa30810075402358787bce07d7060b58aaf"
+        ],
+        "router_weights": [
+          "3a5f783d23b94e8c9ccd4b8ba893bb4425a6ffdc0a538c9c5e17e161fb30a4ce"
+        ],
+        "verdict": "benign_topk_tie"
+      }
+    },
+    "policy": "exp_61 Fix 2 (approach a): per-rank expert_ids divergence is tolerated ONLY when that rank's router_weight digest is identical across all runs (same selected-logit values => benign GPU topk tiebreak). A divergent router_weight digest is genuine input corruption and hard-fails.",
+    "status": "benign_topk_tie_tolerated"
+  },
+  "run_count": 5,
+  "runs": [
+    {
+      "arm_names": [
+        "mps_mega",
+        "pf6gm_mega",
+        "production"
+      ],
+      "arm_order": [
+        "production",
+        "pf6gm_mega",
+        "mps_mega"
+      ],
+      "arm_p50_us": {
+        "mps_mega": 6496.285438537598,
+        "pf6gm_mega": 6886.969089508057,
+        "production": 7712.177991867065
+      },
+      "arm_p95_us": {
+        "mps_mega": 6577.742171287537,
+        "pf6gm_mega": 6947.972846031189,
+        "production": 7800.707149505615
+      },
+      "candidate_ratios": {
+        "mps_mega": {
+          "p50": 0.8423412225947461,
+          "p95": 0.8432238315348646
+        },
+        "pf6gm_mega": {
+          "p50": 0.8929992405220368,
+          "p95": 0.8906849998171679
+        }
+      },
+      "correctness": {
+        "mps_mega": {
+          "abs_error_max": 0.0390625,
+          "abs_error_mean": 0.0014957234795604432,
+          "absolute_tolerance": 0.1,
+          "local_pass": true,
+          "metric": "global sum(abs(diff)) / global sum(abs(reference))",
+          "nonfinite": 0,
+          "pass": true,
+          "pass_all_ranks": true,
+          "plan_err": 0,
+          "pperr": 0,
+          "relative_error": 0.008293387785644113,
+          "relative_tolerance": 0.1
+        },
+        "pf6gm_mega": {
+          "abs_error_max": 0.0390625,
+          "abs_error_mean": 0.0014957254752516747,
+          "absolute_tolerance": 0.1,
+          "local_pass": true,
+          "metric": "global sum(abs(diff)) / global sum(abs(reference))",
+          "nonfinite": 0,
+          "pass": true,
+          "pass_all_ranks": true,
+          "plan_err": 0,
+          "pperr": 0,
+          "relative_error": 0.008293398851219741,
+          "relative_tolerance": 0.1
+        },
+        "production": {
+          "abs_error_max": 0.0234375,
+          "abs_error_mean": 0.001045694641236748,
+          "absolute_tolerance": 0.1,
+          "local_pass": true,
+          "metric": "global sum(abs(diff)) / global sum(abs(reference))",
+          "nonfinite": 0,
+          "pass": true,
+          "pass_all_ranks": true,
+          "plan_err": 0,
+          "pperr": 0,
+          "relative_error": 0.005798097899549549,
+          "relative_tolerance": 0.1
+        }
+      },
+      "correctness_policy": {
+        "absolute_tolerance": 0.1,
+        "metric": "global sum(abs(diff)) / global sum(abs(reference))",
+        "relative_tolerance": 0.1
+      },
+      "directory": "/home/subvadla/k0-mok-e33b/1_C16g353mode12flush_rows16timestamps1_20260812T090435Z/run1",
+      "environment": {
+        "aiter_path": "/app/aiter-test/aiter/__init__.py",
+        "container_image": "rocm/atom-dev:vllm-latest",
+        "device_count": 8,
+        "device_name": "AMD Radeon Graphics",
+        "host": "gbt350-odcdh2-c05-1",
+        "mori_path": "/opt/venv/lib/python3.12/site-packages/mori/__init__.py",
+        "torch": "2.10.0+rocm7.2.4.git3d3aa833",
+        "torch_hip": "7.2.53211"
+      },
+      "kernel_hsaco_sha256": {},
+      "kernel_source_sha256": {},
+      "production_p50_us": 7712.177991867065,
+      "production_p95_us": 7800.707149505615,
+      "rank_route_digests": [
+        "82b35223cbcb0d77f9a77ea05d7f63c2b0459b543914d1b11d067e26527b4da6",
+        "40f268c14336c6a9207e1a7d61c27c1e78ae34c8b3f6834fc69148724e89c716",
+        "34413d1fd9e73ba9efe3c05bdd4f86b2cbe986c08c70d55852293fd6f953531a",
+        "752c8e488eb4e50d53c133a4ad36ebc41b2be74cf48199e85ba8ab376dd9915d",
+        "e58240d52f55d353b4a3e74e108aaad9658970cb5b09d2812f82a362b5982b81",
+        "1628bdf3d09af36a491439d6381511775f6db086592da25071aacbf1b1a04114",
+        "27b803b1db87860f1e32478950ef9ce74d774a84cfdf0d2039d4daf30d26040b",
+        "6be786f3fd1d52b6c9d3632e47a6a1e4741edda938ff320bf5057a728419c58b"
+      ],
+      "rank_router_weight_digests": [
+        "c1565a43ee3ab3c80c8c7ba942df399c4f0bd9c77616e2d51fd1814a92341d41",
+        "3f20e5a195ffdb7ff8328aaab05419c853563c29497d16ca5c101651e20ce058",
+        "c923f362a4077b129374b74b8890caa150646de2d8dda47d01fe070aa9b91e17",
+        "4e6a1dd2f8060deb29f3bcf34b26b2effe0ed912b7e790009e19ef6fac737f1f",
+        "8cf3e7fc6f146663b1b8838f37dd31bedbd9a8752f9816250cf594c7e19ce02b",
+        "3a5f783d23b94e8c9ccd4b8ba893bb4425a6ffdc0a538c9c5e17e161fb30a4ce",
+        "ef9b69fc7308abeb20da822f4f0f6fd414c2e6e5613fdc4c13ca8505d4366780",
+        "89f5843b8990cfc57a160678a4d32d64fa96d4f1bc563b3f3be1f594972d1eb4"
+      ],
+      "source_sha256": {
+        "correctness": "b93be545a3e4b5969536fc9df0db4cf5ae74a0b0044bbcfdb11a62b565740f47",
+        "executor": "6aa0c8d2e56943a74496f68d29fdc35fe06207db9370705d730e6aa112033ccc",
+        "synthetic_inputs": "5c447c8eeffc0bc8092c4004ec3f3101491e476ccd1847d5f40e6c60fc4c1223"
+      },
+      "status": "valid_diagnostic",
+      "strict_k0_correctness_diagnostic": {
+        "mps_mega": {
+          "absum": 5298213.0,
+          "max_abs": 0.0234375,
+          "nonfinite": 0,
+          "pass": false,
+          "rel_L2": 0.009755858220160007
+        },
+        "pf6gm_mega": {
+          "absum": 5298213.0,
+          "max_abs": 0.0234375,
+          "nonfinite": 0,
+          "pass": false,
+          "rel_L2": 0.009755677543580532
+        },
+        "production": {
+          "absum": 5298314.0,
+          "max_abs": 0.017578125,
+          "nonfinite": 0,
+          "pass": true,
+          "rel_L2": 0.006508120335638523
+        }
+      },
+      "timed_iters": 100,
+      "warmup_iters": 500
+    },
+    {
+      "arm_names": [
+        "mps_mega",
+        "pf6gm_mega",
+        "production"
+      ],
+      "arm_order": [
+        "pf6gm_mega",
+        "mps_mega",
+        "production"
+      ],
+      "arm_p50_us": {
+        "mps_mega": 6481.46653175354,
+        "pf6gm_mega": 6882.371187210083,
+        "production": 7708.8189125061035
+      },
+      "arm_p95_us": {
+        "mps_mega": 6555.177164077759,
+        "pf6gm_mega": 6964.274907112122,
+        "production": 7792.114233970642
+      },
+      "candidate_ratios": {
+        "mps_mega": {
+          "p50": 0.8407859369012527,
+          "p95": 0.8412578367370039
+        },
+        "pf6gm_mega": {
+          "p50": 0.8927919134336825,
+          "p95": 0.8937593441264686
+        }
+      },
+      "correctness": {
+        "mps_mega": {
+          "abs_error_max": 0.03515625,
+          "abs_error_mean": 0.0014956725229110038,
+          "absolute_tolerance": 0.1,
+          "local_pass": true,
+          "metric": "global sum(abs(diff)) / global sum(abs(reference))",
+          "nonfinite": 0,
+          "pass": true,
+          "pass_all_ranks": true,
+          "plan_err": 0,
+          "pperr": 0,
+          "relative_error": 0.008293098979923485,
+          "relative_tolerance": 0.1
+        },
+        "pf6gm_mega": {
+          "abs_error_max": 0.03515625,
+          "abs_error_mean": 0.0014956726559570857,
+          "absolute_tolerance": 0.1,
+          "local_pass": true,
+          "metric": "global sum(abs(diff)) / global sum(abs(reference))",
+          "nonfinite": 0,
+          "pass": true,
+          "pass_all_ranks": true,
+          "plan_err": 0,
+          "pperr": 0,
+          "relative_error": 0.00829309971762797,
+          "relative_tolerance": 0.1
+        },
+        "production": {
+          "abs_error_max": 0.02734375,
+          "abs_error_mean": 0.001041965958263193,
+          "absolute_tolerance": 0.1,
+          "local_pass": true,
+          "metric": "global sum(abs(diff)) / global sum(abs(reference))",
+          "nonfinite": 0,
+          "pass": true,
+          "pass_all_ranks": true,
+          "plan_err": 0,
+          "pperr": 0,
+          "relative_error": 0.005777418982578749,
+          "relative_tolerance": 0.1
+        }
+      },
+      "correctness_policy": {
+        "absolute_tolerance": 0.1,
+        "metric": "global sum(abs(diff)) / global sum(abs(reference))",
+        "relative_tolerance": 0.1
+      },
+      "directory": "/home/subvadla/k0-mok-e33b/1_C16g353mode12flush_rows16timestamps1_20260812T090435Z/run2",
+      "environment": {
+        "aiter_path": "/app/aiter-test/aiter/__init__.py",
+        "container_image": "rocm/atom-dev:vllm-latest",
+        "device_count": 8,
+        "device_name": "AMD Radeon Graphics",
+        "host": "gbt350-odcdh2-c05-1",
+        "mori_path": "/opt/venv/lib/python3.12/site-packages/mori/__init__.py",
+        "torch": "2.10.0+rocm7.2.4.git3d3aa833",
+        "torch_hip": "7.2.53211"
+      },
+      "kernel_hsaco_sha256": {},
+      "kernel_source_sha256": {},
+      "production_p50_us": 7708.8189125061035,
+      "production_p95_us": 7792.114233970642,
+      "rank_route_digests": [
+        "82b35223cbcb0d77f9a77ea05d7f63c2b0459b543914d1b11d067e26527b4da6",
+        "40f268c14336c6a9207e1a7d61c27c1e78ae34c8b3f6834fc69148724e89c716",
+        "34413d1fd9e73ba9efe3c05bdd4f86b2cbe986c08c70d55852293fd6f953531a",
+        "752c8e488eb4e50d53c133a4ad36ebc41b2be74cf48199e85ba8ab376dd9915d",
+        "e58240d52f55d353b4a3e74e108aaad9658970cb5b09d2812f82a362b5982b81",
+        "b187e4a57073d7e9bdbff560cccfafa30810075402358787bce07d7060b58aaf",
+        "27b803b1db87860f1e32478950ef9ce74d774a84cfdf0d2039d4daf30d26040b",
+        "6be786f3fd1d52b6c9d3632e47a6a1e4741edda938ff320bf5057a728419c58b"
+      ],
+      "rank_router_weight_digests": [
+        "c1565a43ee3ab3c80c8c7ba942df399c4f0bd9c77616e2d51fd1814a92341d41",
+        "3f20e5a195ffdb7ff8328aaab05419c853563c29497d16ca5c101651e20ce058",
+        "c923f362a4077b129374b74b8890caa150646de2d8dda47d01fe070aa9b91e17",
+        "4e6a1dd2f8060deb29f3bcf34b26b2effe0ed912b7e790009e19ef6fac737f1f",
+        "8cf3e7fc6f146663b1b8838f37dd31bedbd9a8752f9816250cf594c7e19ce02b",
+        "3a5f783d23b94e8c9ccd4b8ba893bb4425a6ffdc0a538c9c5e17e161fb30a4ce",
+        "ef9b69fc7308abeb20da822f4f0f6fd414c2e6e5613fdc4c13ca8505d4366780",
+        "89f5843b8990cfc57a160678a4d32d64fa96d4f1bc563b3f3be1f594972d1eb4"
+      ],
+      "source_sha256": {
+        "correctness": "b93be545a3e4b5969536fc9df0db4cf5ae74a0b0044bbcfdb11a62b565740f47",
+        "executor": "6aa0c8d2e56943a74496f68d29fdc35fe06207db9370705d730e6aa112033ccc",
+        "synthetic_inputs": "5c447c8eeffc0bc8092c4004ec3f3101491e476ccd1847d5f40e6c60fc4c1223"
+      },
+      "status": "valid_diagnostic",
+      "strict_k0_correctness_diagnostic": {
+        "mps_mega": {
+          "absum": 5298213.5,
+          "max_abs": 0.0234375,
+          "nonfinite": 0,
+          "pass": false,
+          "rel_L2": 0.009755968116223812
+        },
+        "pf6gm_mega": {
+          "absum": 5298213.0,
+          "max_abs": 0.0234375,
+          "nonfinite": 0,
+          "pass": false,
+          "rel_L2": 0.00975602213293314
+        },
+        "production": {
+          "absum": 5298318.0,
+          "max_abs": 0.01953125,
+          "nonfinite": 0,
+          "pass": true,
+          "rel_L2": 0.006492047104984522
+        }
+      },
+      "timed_iters": 100,
+      "warmup_iters": 500
+    },
+    {
+      "arm_names": [
+        "mps_mega",
+        "pf6gm_mega",
+        "production"
+      ],
+      "arm_order": [
+        "mps_mega",
+        "production",
+        "pf6gm_mega"
+      ],
+      "arm_p50_us": {
+        "mps_mega": 6496.627569198608,
+        "pf6gm_mega": 6899.492025375366,
+        "production": 7706.8798542022705
+      },
+      "arm_p95_us": {
+        "mps_mega": 6582.363867759705,
+        "pf6gm_mega": 6978.759074211121,
+        "production": 7784.839868545532
+      },
+      "candidate_ratios": {
+        "mps_mega": {
+          "p50": 0.8429646876688032,
+          "p95": 0.8455361932819705
+        },
+        "pf6gm_mega": {
+          "p50": 0.895238041321396,
+          "p95": 0.8964550577859202
+        }
+      },
+      "correctness": {
+        "mps_mega": {
+          "abs_error_max": 0.0390625,
+          "abs_error_mean": 0.0014957374493990625,
+          "absolute_tolerance": 0.1,
+          "local_pass": true,
+          "metric": "global sum(abs(diff)) / global sum(abs(reference))",
+          "nonfinite": 0,
+          "pass": true,
+          "pass_all_ranks": true,
+          "plan_err": 0,
+          "pperr": 0,
+          "relative_error": 0.008293453497878387,
+          "relative_tolerance": 0.1
+        },
+        "pf6gm_mega": {
+          "abs_error_max": 0.0390625,
+          "abs_error_mean": 0.0014957354537078313,
+          "absolute_tolerance": 0.1,
+          "local_pass": true,
+          "metric": "global sum(abs(diff)) / global sum(abs(reference))",
+          "nonfinite": 0,
+          "pass": true,
+          "pass_all_ranks": true,
+          "plan_err": 0,
+          "pperr": 0,
+          "relative_error": 0.008293442432318433,
+          "relative_tolerance": 0.1
+        },
+        "production": {
+          "abs_error_max": 0.03125,
+          "abs_error_mean": 0.0010361750610172749,
+          "absolute_tolerance": 0.1,
+          "local_pass": true,
+          "metric": "global sum(abs(diff)) / global sum(abs(reference))",
+          "nonfinite": 0,
+          "pass": true,
+          "pass_all_ranks": true,
+          "plan_err": 0,
+          "pperr": 0,
+          "relative_error": 0.00574530622848324,
+          "relative_tolerance": 0.1
+        }
+      },
+      "correctness_policy": {
+        "absolute_tolerance": 0.1,
+        "metric": "global sum(abs(diff)) / global sum(abs(reference))",
+        "relative_tolerance": 0.1
+      },
+      "directory": "/home/subvadla/k0-mok-e33b/1_C16g353mode12flush_rows16timestamps1_20260812T090435Z/run3",
+      "environment": {
+        "aiter_path": "/app/aiter-test/aiter/__init__.py",
+        "container_image": "rocm/atom-dev:vllm-latest",
+        "device_count": 8,
+        "device_name": "AMD Radeon Graphics",
+        "host": "gbt350-odcdh2-c05-1",
+        "mori_path": "/opt/venv/lib/python3.12/site-packages/mori/__init__.py",
+        "torch": "2.10.0+rocm7.2.4.git3d3aa833",
+        "torch_hip": "7.2.53211"
+      },
+      "kernel_hsaco_sha256": {},
+      "kernel_source_sha256": {},
+      "production_p50_us": 7706.8798542022705,
+      "production_p95_us": 7784.839868545532,
+      "rank_route_digests": [
+        "82b35223cbcb0d77f9a77ea05d7f63c2b0459b543914d1b11d067e26527b4da6",
+        "40f268c14336c6a9207e1a7d61c27c1e78ae34c8b3f6834fc69148724e89c716",
+        "34413d1fd9e73ba9efe3c05bdd4f86b2cbe986c08c70d55852293fd6f953531a",
+        "752c8e488eb4e50d53c133a4ad36ebc41b2be74cf48199e85ba8ab376dd9915d",
+        "e58240d52f55d353b4a3e74e108aaad9658970cb5b09d2812f82a362b5982b81",
+        "b187e4a57073d7e9bdbff560cccfafa30810075402358787bce07d7060b58aaf",
+        "27b803b1db87860f1e32478950ef9ce74d774a84cfdf0d2039d4daf30d26040b",
+        "6be786f3fd1d52b6c9d3632e47a6a1e4741edda938ff320bf5057a728419c58b"
+      ],
+      "rank_router_weight_digests": [
+        "c1565a43ee3ab3c80c8c7ba942df399c4f0bd9c77616e2d51fd1814a92341d41",
+        "3f20e5a195ffdb7ff8328aaab05419c853563c29497d16ca5c101651e20ce058",
+        "c923f362a4077b129374b74b8890caa150646de2d8dda47d01fe070aa9b91e17",
+        "4e6a1dd2f8060deb29f3bcf34b26b2effe0ed912b7e790009e19ef6fac737f1f",
+        "8cf3e7fc6f146663b1b8838f37dd31bedbd9a8752f9816250cf594c7e19ce02b",
+        "3a5f783d23b94e8c9ccd4b8ba893bb4425a6ffdc0a538c9c5e17e161fb30a4ce",
+        "ef9b69fc7308abeb20da822f4f0f6fd414c2e6e5613fdc4c13ca8505d4366780",
+        "89f5843b8990cfc57a160678a4d32d64fa96d4f1bc563b3f3be1f594972d1eb4"
+      ],
+      "source_sha256": {
+        "correctness": "b93be545a3e4b5969536fc9df0db4cf5ae74a0b0044bbcfdb11a62b565740f47",
+        "executor": "6aa0c8d2e56943a74496f68d29fdc35fe06207db9370705d730e6aa112033ccc",
+        "synthetic_inputs": "5c447c8eeffc0bc8092c4004ec3f3101491e476ccd1847d5f40e6c60fc4c1223"
+      },
+      "status": "valid_diagnostic",
+      "strict_k0_correctness_diagnostic": {
+        "mps_mega": {
+          "absum": 5298213.5,
+          "max_abs": 0.0234375,
+          "nonfinite": 0,
+          "pass": false,
+          "rel_L2": 0.009756342507898808
+        },
+        "pf6gm_mega": {
+          "absum": 5298213.0,
+          "max_abs": 0.0234375,
+          "nonfinite": 0,
+          "pass": false,
+          "rel_L2": 0.009756304323673248
+        },
+        "production": {
+          "absum": 5298312.0,
+          "max_abs": 0.01953125,
+          "nonfinite": 0,
+          "pass": true,
+          "rel_L2": 0.006461692973971367
+        }
+      },
+      "timed_iters": 100,
+      "warmup_iters": 500
+    },
+    {
+      "arm_names": [
+        "mps_mega",
+        "pf6gm_mega",
+        "production"
+      ],
+      "arm_order": [
+        "production",
+        "pf6gm_mega",
+        "mps_mega"
+      ],
+      "arm_p50_us": {
+        "mps_mega": 6497.608423233032,
+        "pf6gm_mega": 6938.133001327515,
+        "production": 7712.562084197998
+      },
+      "arm_p95_us": {
+        "mps_mega": 6567.9930210113525,
+        "pf6gm_mega": 7023.785161972046,
+        "production": 7788.0420207977295
+      },
+      "candidate_ratios": {
+        "mps_mega": {
+          "p50": 0.8424708096088792,
+          "p95": 0.8433432952045876
+        },
+        "pf6gm_mega": {
+          "p50": 0.8995886095416743,
+          "p95": 0.9018679076480637
+        }
+      },
+      "correctness": {
+        "mps_mega": {
+          "abs_error_max": 0.03515625,
+          "abs_error_mean": 0.0014956814369985036,
+          "absolute_tolerance": 0.1,
+          "local_pass": true,
+          "metric": "global sum(abs(diff)) / global sum(abs(reference))",
+          "nonfinite": 0,
+          "pass": true,
+          "pass_all_ranks": true,
+          "plan_err": 0,
+          "pperr": 0,
+          "relative_error": 0.008293148406123952,
+          "relative_tolerance": 0.1
+        },
+        "pf6gm_mega": {
+          "abs_error_max": 0.03515625,
+          "abs_error_mean": 0.001495685295334884,
+          "absolute_tolerance": 0.1,
+          "local_pass": true,
+          "metric": "global sum(abs(diff)) / global sum(abs(reference))",
+          "nonfinite": 0,
+          "pass": true,
+          "pass_all_ranks": true,
+          "plan_err": 0,
+          "pperr": 0,
+          "relative_error": 0.008293169799554006,
+          "relative_tolerance": 0.1
+        },
+        "production": {
+          "abs_error_max": 0.03125,
+          "abs_error_mean": 0.0010428018867969513,
+          "absolute_tolerance": 0.1,
+          "local_pass": true,
+          "metric": "global sum(abs(diff)) / global sum(abs(reference))",
+          "nonfinite": 0,
+          "pass": true,
+          "pass_all_ranks": true,
+          "plan_err": 0,
+          "pperr": 0,
+          "relative_error": 0.005782053979855498,
+          "relative_tolerance": 0.1
+        }
+      },
+      "correctness_policy": {
+        "absolute_tolerance": 0.1,
+        "metric": "global sum(abs(diff)) / global sum(abs(reference))",
+        "relative_tolerance": 0.1
+      },
+      "directory": "/home/subvadla/k0-mok-e33b/1_C16g353mode12flush_rows16timestamps1_20260812T090435Z/run4",
+      "environment": {
+        "aiter_path": "/app/aiter-test/aiter/__init__.py",
+        "container_image": "rocm/atom-dev:vllm-latest",
+        "device_count": 8,
+        "device_name": "AMD Radeon Graphics",
+        "host": "gbt350-odcdh2-c05-1",
+        "mori_path": "/opt/venv/lib/python3.12/site-packages/mori/__init__.py",
+        "torch": "2.10.0+rocm7.2.4.git3d3aa833",
+        "torch_hip": "7.2.53211"
+      },
+      "kernel_hsaco_sha256": {},
+      "kernel_source_sha256": {},
+      "production_p50_us": 7712.562084197998,
+      "production_p95_us": 7788.0420207977295,
+      "rank_route_digests": [
+        "82b35223cbcb0d77f9a77ea05d7f63c2b0459b543914d1b11d067e26527b4da6",
+        "40f268c14336c6a9207e1a7d61c27c1e78ae34c8b3f6834fc69148724e89c716",
+        "34413d1fd9e73ba9efe3c05bdd4f86b2cbe986c08c70d55852293fd6f953531a",
+        "752c8e488eb4e50d53c133a4ad36ebc41b2be74cf48199e85ba8ab376dd9915d",
+        "e58240d52f55d353b4a3e74e108aaad9658970cb5b09d2812f82a362b5982b81",
+        "b187e4a57073d7e9bdbff560cccfafa30810075402358787bce07d7060b58aaf",
+        "27b803b1db87860f1e32478950ef9ce74d774a84cfdf0d2039d4daf30d26040b",
+        "6be786f3fd1d52b6c9d3632e47a6a1e4741edda938ff320bf5057a728419c58b"
+      ],
+      "rank_router_weight_digests": [
+        "c1565a43ee3ab3c80c8c7ba942df399c4f0bd9c77616e2d51fd1814a92341d41",
+        "3f20e5a195ffdb7ff8328aaab05419c853563c29497d16ca5c101651e20ce058",
+        "c923f362a4077b129374b74b8890caa150646de2d8dda47d01fe070aa9b91e17",
+        "4e6a1dd2f8060deb29f3bcf34b26b2effe0ed912b7e790009e19ef6fac737f1f",
+        "8cf3e7fc6f146663b1b8838f37dd31bedbd9a8752f9816250cf594c7e19ce02b",
+        "3a5f783d23b94e8c9ccd4b8ba893bb4425a6ffdc0a538c9c5e17e161fb30a4ce",
+        "ef9b69fc7308abeb20da822f4f0f6fd414c2e6e5613fdc4c13ca8505d4366780",
+        "89f5843b8990cfc57a160678a4d32d64fa96d4f1bc563b3f3be1f594972d1eb4"
+      ],
+      "source_sha256": {
+        "correctness": "b93be545a3e4b5969536fc9df0db4cf5ae74a0b0044bbcfdb11a62b565740f47",
+        "executor": "6aa0c8d2e56943a74496f68d29fdc35fe06207db9370705d730e6aa112033ccc",
+        "synthetic_inputs": "5c447c8eeffc0bc8092c4004ec3f3101491e476ccd1847d5f40e6c60fc4c1223"
+      },
+      "status": "valid_diagnostic",
+      "strict_k0_correctness_diagnostic": {
+        "mps_mega": {
+          "absum": 5298213.0,
+          "max_abs": 0.03125,
+          "nonfinite": 0,
+          "pass": false,
+          "rel_L2": 0.009755234234035015
+        },
+        "pf6gm_mega": {
+          "absum": 5298213.0,
+          "max_abs": 0.03125,
+          "nonfinite": 0,
+          "pass": false,
+          "rel_L2": 0.009755291044712067
+        },
+        "production": {
+          "absum": 5298317.0,
+          "max_abs": 0.021484375,
+          "nonfinite": 0,
+          "pass": false,
+          "rel_L2": 0.006494151894003153
+        }
+      },
+      "timed_iters": 100,
+      "warmup_iters": 500
+    },
+    {
+      "arm_names": [
+        "mps_mega",
+        "pf6gm_mega",
+        "production"
+      ],
+      "arm_order": [
+        "pf6gm_mega",
+        "mps_mega",
+        "production"
+      ],
+      "arm_p50_us": {
+        "mps_mega": 6521.169900894165,
+        "pf6gm_mega": 6930.613994598389,
+        "production": 7707.743167877197
+      },
+      "arm_p95_us": {
+        "mps_mega": 6588.403868675232,
+        "pf6gm_mega": 7003.567051887512,
+        "production": 7794.289922714233
+      },
+      "candidate_ratios": {
+        "mps_mega": {
+          "p50": 0.8460543843847578,
+          "p95": 0.8452859636995551
+        },
+        "pf6gm_mega": {
+          "p50": 0.8991755230613322,
+          "p95": 0.8985510060996852
+        }
+      },
+      "correctness": {
+        "mps_mega": {
+          "abs_error_max": 0.03515625,
+          "abs_error_mean": 0.0014956693298050336,
+          "absolute_tolerance": 0.1,
+          "local_pass": true,
+          "metric": "global sum(abs(diff)) / global sum(abs(reference))",
+          "nonfinite": 0,
+          "pass": true,
+          "pass_all_ranks": true,
+          "plan_err": 0,
+          "pperr": 0,
+          "relative_error": 0.008293083624268326,
+          "relative_tolerance": 0.1
+        },
+        "pf6gm_mega": {
+          "abs_error_max": 0.03515625,
+          "abs_error_mean": 0.0014956750507865632,
+          "absolute_tolerance": 0.1,
+          "local_pass": true,
+          "metric": "global sum(abs(diff)) / global sum(abs(reference))",
+          "nonfinite": 0,
+          "pass": true,
+          "pass_all_ranks": true,
+          "plan_err": 0,
+          "pperr": 0,
+          "relative_error": 0.00829311534557015,
+          "relative_tolerance": 0.1
+        },
+        "production": {
+          "abs_error_max": 0.03125,
+          "abs_error_mean": 0.0010435152798891068,
+          "absolute_tolerance": 0.1,
+          "local_pass": true,
+          "metric": "global sum(abs(diff)) / global sum(abs(reference))",
+          "nonfinite": 0,
+          "pass": true,
+          "pass_all_ranks": true,
+          "plan_err": 0,
+          "pperr": 0,
+          "relative_error": 0.005786011190354628,
+          "relative_tolerance": 0.1
+        }
+      },
+      "correctness_policy": {
+        "absolute_tolerance": 0.1,
+        "metric": "global sum(abs(diff)) / global sum(abs(reference))",
+        "relative_tolerance": 0.1
+      },
+      "directory": "/home/subvadla/k0-mok-e33b/1_C16g353mode12flush_rows16timestamps1_20260812T090435Z/run5",
+      "environment": {
+        "aiter_path": "/app/aiter-test/aiter/__init__.py",
+        "container_image": "rocm/atom-dev:vllm-latest",
+        "device_count": 8,
+        "device_name": "AMD Radeon Graphics",
+        "host": "gbt350-odcdh2-c05-1",
+        "mori_path": "/opt/venv/lib/python3.12/site-packages/mori/__init__.py",
+        "torch": "2.10.0+rocm7.2.4.git3d3aa833",
+        "torch_hip": "7.2.53211"
+      },
+      "kernel_hsaco_sha256": {},
+      "kernel_source_sha256": {},
+      "production_p50_us": 7707.743167877197,
+      "production_p95_us": 7794.289922714233,
+      "rank_route_digests": [
+        "82b35223cbcb0d77f9a77ea05d7f63c2b0459b543914d1b11d067e26527b4da6",
+        "40f268c14336c6a9207e1a7d61c27c1e78ae34c8b3f6834fc69148724e89c716",
+        "34413d1fd9e73ba9efe3c05bdd4f86b2cbe986c08c70d55852293fd6f953531a",
+        "752c8e488eb4e50d53c133a4ad36ebc41b2be74cf48199e85ba8ab376dd9915d",
+        "e58240d52f55d353b4a3e74e108aaad9658970cb5b09d2812f82a362b5982b81",
+        "b187e4a57073d7e9bdbff560cccfafa30810075402358787bce07d7060b58aaf",
+        "27b803b1db87860f1e32478950ef9ce74d774a84cfdf0d2039d4daf30d26040b",
+        "6be786f3fd1d52b6c9d3632e47a6a1e4741edda938ff320bf5057a728419c58b"
+      ],
+      "rank_router_weight_digests": [
+        "c1565a43ee3ab3c80c8c7ba942df399c4f0bd9c77616e2d51fd1814a92341d41",
+        "3f20e5a195ffdb7ff8328aaab05419c853563c29497d16ca5c101651e20ce058",
+        "c923f362a4077b129374b74b8890caa150646de2d8dda47d01fe070aa9b91e17",
+        "4e6a1dd2f8060deb29f3bcf34b26b2effe0ed912b7e790009e19ef6fac737f1f",
+        "8cf3e7fc6f146663b1b8838f37dd31bedbd9a8752f9816250cf594c7e19ce02b",
+        "3a5f783d23b94e8c9ccd4b8ba893bb4425a6ffdc0a538c9c5e17e161fb30a4ce",
+        "ef9b69fc7308abeb20da822f4f0f6fd414c2e6e5613fdc4c13ca8505d4366780",
+        "89f5843b8990cfc57a160678a4d32d64fa96d4f1bc563b3f3be1f594972d1eb4"
+      ],
+      "source_sha256": {
+        "correctness": "b93be545a3e4b5969536fc9df0db4cf5ae74a0b0044bbcfdb11a62b565740f47",
+        "executor": "6aa0c8d2e56943a74496f68d29fdc35fe06207db9370705d730e6aa112033ccc",
+        "synthetic_inputs": "5c447c8eeffc0bc8092c4004ec3f3101491e476ccd1847d5f40e6c60fc4c1223"
+      },
+      "status": "valid_diagnostic",
+      "strict_k0_correctness_diagnostic": {
+        "mps_mega": {
+          "absum": 5298213.0,
+          "max_abs": 0.0234375,
+          "nonfinite": 0,
+          "pass": false,
+          "rel_L2": 0.009756803512573242
+        },
+        "pf6gm_mega": {
+          "absum": 5298213.0,
+          "max_abs": 0.0234375,
+          "nonfinite": 0,
+          "pass": false,
+          "rel_L2": 0.009756971150636673
+        },
+        "production": {
+          "absum": 5298318.5,
+          "max_abs": 0.01953125,
+          "nonfinite": 0,
+          "pass": true,
+          "rel_L2": 0.006499256007373333
+        }
+      },
+      "timed_iters": 100,
+      "warmup_iters": 500
+    }
+  ],
+  "scope": "Mixture-of-Kittens-style synthetic eager timing; not a graph-mode production or promotion result",
+  "source_sha256": {
+    "correctness": "b93be545a3e4b5969536fc9df0db4cf5ae74a0b0044bbcfdb11a62b565740f47",
+    "executor": "6aa0c8d2e56943a74496f68d29fdc35fe06207db9370705d730e6aa112033ccc",
+    "synthetic_inputs": "5c447c8eeffc0bc8092c4004ec3f3101491e476ccd1847d5f40e6c60fc4c1223"
+  },
+  "status": "valid_diagnostic",
+  "summarizer_version": "exp61-v3-2026-08-06",
+  "timed_iters": 100,
+  "warmup_iters": 500
+}
