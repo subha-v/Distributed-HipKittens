@@ -325,6 +325,65 @@ silent-null hazard the parser exists to catch. Reference-arm RSDs measured
 75/47/68/60/115% , confirming and slightly exceeding the "12-93%" caveat: quote
 its ratios, never its absolutes.
 
+## exp_23 — the waterfall's rungs are CONDITIONALLY ACTIVE, and that changes the figure
+
+Pre-registered from the shape plans **before** measuring, which is what makes it
+a prediction rather than an excuse:
+
+- **Rung a→b (WGM task order) can only move shapes 5 and 6.** The knob is
+  `WGM = (tiles <= g.num_gemm_ctas) ? 4 : num_pid_m`, so it differs from the
+  constant `WGM = 4` only where `tiles > NG`, i.e. only on the multi-round
+  shapes: shape 5 (512 tiles over 272 producers) and shape 6 (1024 over 256).
+- **Rung b→c (grouped release) can only move shape 6**, because
+  `rgroup = tiles_per_cta >= 4 ? 4 : 1` and shape 6 is the only row with
+  `tiles_per_cta == 4` — the same fact exp_20 measured from the other side.
+- **Therefore shapes 1-4 are predicted FLAT across a, b and c, and serve as four
+  extra null pairs.** A resolvable delta on shapes 1-4 is a **blocker, not a
+  result**: it would mean a rung changed something the mechanism cannot reach,
+  i.e. a build or harness artefact.
+
+This is the right way to read the money figure and it strengthens rather than
+weakens the paper's claim: these knobs are **targeted**, not global. A geomean
+alone would smear four structurally-inert shapes into the average and understate
+each rung's effect exactly where it acts.
+
+**Live risk, flagged before the run:** shape 6's b→c effect is expected around
+4%, and its published null floor is **4.28%**. So the granularity rung may come
+back **unresolved rather than won**, and that must be reported as unresolved —
+not re-run until it looks better. This is why the sweep takes several draws in
+both construction orders and scores with an exact rank-sum rather than a range.
+
+### The fingerprint gate passed, and it is now the model for arm construction
+
+Four rung binaries, each disassembled and hashed (ISA sha over gfx942 asm with
+`__hip_cuid_` normalised), with **nine assertions**, all passing:
+
+| rung | WGM4/RG | ISA sha[:12] | instrs | v_mfma | s_cbranch |
+|---|---|---|---|---|---|
+| a | 1/1 | ec714ea8a644 | 20190 | 184 | 1268 |
+| b | 0/1 | 366d4f08a030 | 20201 | 184 | 1268 |
+| c | 0/4 | 7926c2e87283 | 20734 | 184 | 1272 |
+| null | 0/4 | 7926c2e87283 | 20734 | 184 | 1272 |
+
+The distinctions are **attributable to their mechanisms**, not merely present:
+a↔b differ in `s_cselect` 535→542 (the folded `tiles <= NG` select), b↔c in
+`s_cbranch` 1268→1272 and +533 instructions (the group loop). `v_mfma` = 184 in
+all four, so no rung accidentally changed the math. **c ≡ null bit-identically
+except 5 `__hip_cuid_` lines**, which is what makes the null a pure allocation
+contrast. Rung (c) reproduces the shipped binary: 7 instantiations, VGPRs
+{98,104,136,246,248,91,92}, zero AGPR/scratch/VGPR-spill, resource table
+identical field-for-field to `harness/build/gemm_rs_mi300x.log`.
+
+Two disclosed method details worth keeping: the `.so` is **linked from the same
+object that `--save-temps` disassembled**, so the ISA provably belongs to the
+measured module rather than to a second compilation of the same flags; and SGPR
+spills (54-88) are deliberately **not** asserted zero, because the M2 no-spill
+claim is about *vector* spills.
+
+Correction to an earlier note: **`HK_GEMM_RS_MI300X_TILE_SWEEP` is not dead.**
+Its dispatch rows (`gemm_rs_mi300x.cpp:101-107`) are live for exp_14's screening
+module; it is simply not passed by the production build.
+
 ## Measurement discipline carried into the figure work
 
 - **The harness bias is per-allocation AND partly allocation-ORDER, not
