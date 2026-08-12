@@ -51,9 +51,74 @@ from harness_lib import rt, WORLD, GemmRS
 
 TIGHT = 2e-3
 
-# The frozen pre-E3 kernel, built as a separate module by
+# The golden kernel, built as a separate module by
 # experiments/exp_05_release_granularity/build_golden.sh.
+#
+# THE GOLDEN IS NOT PERMANENTLY FROZEN, and treating it as if it were is how
+# this gate stopped working. It must be REBUILT from the immediately preceding
+# validated source whenever the shape table changes, for two independent
+# reasons:
+#
+#   1. A bitwise comparison across a BM/BN/BK change is meaningless. Different
+#      tiling changes the accumulation order, so the bits legitimately differ
+#      and the gate reports corruption that is not there.
+#   2. A golden carrying an older table will compute a DIFFERENT tile map than
+#      the plan the harness hands it. That is not a mismatch, it is an
+#      out-of-bounds access: the pre-exp_14 golden reads 192 rows past the end
+#      of a 2880-row B operand on row 3 and faults the GPU
+#      ("Memory access fault by GPU node-7"), which then wedges the node in
+#      driver teardown and blocks every other experiment.
+#
+# The staleness check below turns that fault into a clear refusal. Regenerate
+# with experiments/exp_05_release_granularity/build_golden.sh against the
+# current best source before running this gate after any table change.
 GOLDEN_MODULE = "gemm_rs_mi300x_e3base"
+
+# Written by build_golden.sh next to the golden module: the scored-shape rows
+# the golden was compiled from. Absent on goldens built before this guard.
+GOLDEN_TABLE_SIDECAR = "build/gemm_rs_mi300x_e3base.table.json"
+
+
+def _assert_golden_matches_current_table(cases):
+    """Refuse to run if the golden was built from a different shape table.
+
+    Cheap, and it converts a GPU memory fault that wedges the node into a
+    one-line message naming the row that moved.
+    """
+    import json
+    import os
+
+    here = os.path.dirname(os.path.abspath(__file__))
+    path = os.path.join(here, GOLDEN_TABLE_SIDECAR)
+    current = {}
+    for (m, n, k, bias), _epochs, _why in cases:
+        p = rt.resolve_shape(m, n, k, bias)
+        current[f"{m}x{n}x{k}x{int(bias)}"] = [p["bm"], p["bn"], p["bk"]]
+
+    if not os.path.exists(path):
+        raise SystemExit(
+            f"GATE M9 REFUSED: no golden table sidecar at {path}.\n"
+            f"  The golden module '{GOLDEN_MODULE}' cannot be shown to share the\n"
+            f"  current shape table, and a golden built from a different table\n"
+            f"  reads out of bounds and faults the GPU rather than failing.\n"
+            f"  Rebuild it: experiments/exp_05_release_granularity/build_golden.sh\n"
+            f"  Current table for this gate's cases: {current}")
+
+    with open(path) as handle:
+        built_from = json.load(handle)
+
+    drift = {k: (built_from.get(k), v) for k, v in current.items()
+             if built_from.get(k) != v}
+    if drift:
+        lines = "\n".join(f"    {k}: golden {g} vs current {c}"
+                          for k, (g, c) in drift.items())
+        raise SystemExit(
+            f"GATE M9 REFUSED: the golden predates the current shape table.\n"
+            f"{lines}\n"
+            f"  A bitwise comparison across a tile change is meaningless (the\n"
+            f"  accumulation order differs), and the older tile map reads out of\n"
+            f"  bounds. Rebuild the golden from the current best source with\n"
+            f"  experiments/exp_05_release_granularity/build_golden.sh")
 
 # hipMemset carries a single byte, so the poison pattern has to be byte-uniform.
 # bf16 0xFFFF is sign 1, exponent all ones, mantissa 0x7F with its leading bit
@@ -199,12 +264,16 @@ def detected(fired):
 
 
 def main():
+    # Before any GPU work: a golden built from a different shape table does not
+    # merely disagree, it reads out of bounds and faults the node.
+    _assert_golden_matches_current_table(CASES)
+
     rt.enable_peer_access(WORLD)
     scale = float(sys.argv[1]) if len(sys.argv) > 1 else 1.0
 
     print("=" * 78)
     print("GATE M9 - stale-slot detector (poisoned heap + bitwise golden)")
-    print(f"  golden module : {GOLDEN_MODULE} (frozen pre-E3 build)")
+    print(f"  golden module : {GOLDEN_MODULE} (table-matched, see sidecar)")
     print(f"  poison        : 0x{POISON_BYTE:02X} bytes -> bf16 0xFFFF (qNaN)")
     print(f"  epoch scale   : {scale}")
     print("=" * 78)

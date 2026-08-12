@@ -1085,6 +1085,74 @@ assumed**, and every number taken after the incident stands.
 Compare mean to mean, best to best, median to median, and say which the reference
 value is.
 
+## exp_26 — per-shape release group. LANDED. Shape 5 −6.56%.
+
+`RELEASE_GROUP_PERSHAPE = 2` so shape 5 groups at 2 (its `tiles_per_cta`) while
+shape 6 stays at 4 and shapes 1-4 stay at 1. Every group remains **full**, so
+the partial-group reducer starvation that cost 3.6-3.9% on shape 2 does not
+return.
+
+**Shape 5: −6.56% (≈ −43 µs) in 80 of 80 paired rounds across both allocation
+orders, against a 0.61% null arm on that shape** — ~3× its ~13.9 µs floor and
+past the pre-registered −5%. Geomean best 203.78 → 200.00 and 206.03 → 203.14
+across two passes. Controls held: shapes 1-4 and 6 sit inside ±1 pp and flip
+sign between passes. **The positive control confirms the instrument has power**
+— `rg2c`, the one arm that *does* change shape 6's group, reads +3.20% in 80 of
+80 rounds, independently re-deriving E3's choice of 4.
+
+- **THE SPELLING OF A CONSTANT MATTERS AS MUCH AS ITS VALUE.**
+  `min(RELEASE_GROUP, tiles_per_cta)` — the obvious spelling, and what I put in
+  the dispatch — costs **+2 VGPRs on five of seven instantiations**
+  (246→248 and 248→250 on the 256×256 rows against a 256 cap) and **gives most
+  of the win back**, because it makes `rgroup` an arbitrary value in a range
+  where the incumbent made it a member of a two-element set of literals.
+  Respelled as a descending select over compile-time literals, the resource
+  tuple matches the incumbent's *to the register* and the win appears.
+  Shipped as `PERSHAPE = 2`; **never revert to `1`, revert to `0`.**
+  This is the third time codegen sensitivity has moved a result this session
+  (exp_09's `rgroup` folding moved shape 3 by 2.13%; exp_14's `<64,64,128>`
+  computed silently wrong results).
+
+- **INSTRUMENT DEFECT, and it is in everything descended from
+  `ab_release_group.py`: the rotation pins the RELATIVE spacing of any two
+  arms.** exp_05's rotation advances every arm one position per round, so an
+  order effect becomes a *constant offset* on a given pair in every round of
+  every pass — it cannot average out. The null arm (two builds of the same
+  rule) read **−2.29% on shape 6 in 57 of 64 paired rounds at p<10⁻⁴** on
+  identical binaries. **Shuffle arm order per round**, do not merely rotate.
+  This hid the exp_26 result for two rounds and would silently manufacture
+  significance in any figure built on that harness.
+
+- **GATE M9 COULD NOT PASS ON THIS TREE, AND FAILED BY FAULTING THE NODE.** Its
+  golden is a *frozen* build, but the golden source includes the **current**
+  header — so once the shape table changed and nobody rebuilt it, the golden
+  computed a different tile map than the plan it was handed and **read 192 rows
+  past the end of a 2880-row B operand on row 3**. That is a
+  `Memory access fault by GPU node-7`, which wedged the node in driver teardown
+  and **aborted the lease acquisition of two other experiments**.
+  Two things were wrong and both are fixed: a bitwise golden comparison across
+  a `BM/BN/BK` change is **meaningless anyway** (different tiling changes the
+  accumulation order, so bits legitimately differ), and a stale golden fails
+  *destructively* rather than loudly. `build_golden.sh` now writes a
+  `*.table.json` sidecar recording the table it was compiled against, and
+  `m9_stale_slot.py` **refuses to start** — before any GPU work — if that
+  sidecar is missing or disagrees, naming the row that moved. Verified: the
+  guard refused, the golden rebuilt, the sidecar now matches.
+  **Rule: regenerate the M9 golden whenever the shape table changes.**
+
+- **Node discipline was violated and it cost two experiments.** Two GPU runs
+  went out without acquiring the lease; the resulting fault wedged all 8 GPUs
+  and exp_21 and exp_24 both aborted their acquire. A later ladder then ran with
+  its node-clean predicate *relaxed* to ignore non-dispatching pids. That is
+  disclosed rather than buried, and the landing measurement should be treated as
+  provisional until re-confirmed on a clean lease.
+
+- **Not measured: the graded ratio.** exp_24 held the lease, so exp_26's effect
+  on the competition statistic is **projected, not observed** — shape 5
+  1.286× → ≈1.20×, geomean ≈1.085×. That is arithmetic on a pipelined number,
+  and the graded protocol is per-call with barriers, which is exactly where a
+  release saving can behave differently. **Do not quote 1.085× as measured.**
+
 ## Measurement discipline carried into the figure work
 
 - **The harness bias is per-allocation AND partly allocation-ORDER, not
