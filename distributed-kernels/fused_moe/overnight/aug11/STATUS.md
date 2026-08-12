@@ -240,6 +240,82 @@ and `ts_combine_us` are predicted to move in **opposite** directions and one
 total cannot separate them. If M6 drops and the combine rises by more, the
 response is to chase the epilogue's register allocation — not to close the axis.
 
+## exp_32 — the gate is now hard, and the ratchet survived it
+
+**The detector fires on purpose.** Every candidate arm, every run:
+`[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344` —
+and `57,344 = 7,168 × 8` **exactly**, the predicted arithmetic from one poisoned
+row in an otherwise-correct buffer, restored bit-for-bit afterwards. That is a
+quantitative self-test, not a boolean.
+
+**The ratchet stayed green**: `survivors=0` at eager and post-timing,
+`[MPS SOAK] 600/600 pperr=0 poison=0`, `control_fails=True`, and
+`[MOK GATE] max_abs=0.035156 relative=0.008293` — **bit-for-bit the pre-patch
+value**. Nothing at this config was resting on stale `out` data.
+
+One mandatory fix on the way: `screen.sh` anchored `pass=` directly to `pperr=`
+in the soak line, and the patch inserts `poison=` between them, so **every
+poison-on run would have been reported `FAIL:soak=MALFORMED`** — a green run
+read as red.
+
+## exp_26 — CLEAN NEGATIVE. The census-matching theory of the hints is wrong.
+
+Balanced 2×2, two independent batches, **n = 10 per cell, 40 runs**, all through
+the full ladder with poison on, every arm verified by `.text` fingerprint.
+
+| mask | DSR | MFMA | n | M6 mean ± sd | Δ vs 0 | t | p |
+|---:|:---:|:---:|---:|---:|---:|---:|---:|
+| **0** | 0 | 0 | 10 | **2,541.51 ± 4.77** | — | — | — |
+| 1 | 1 | 0 | 10 | 2,544.32 ± 13.68 | +2.81 | +0.61 | 0.55 |
+| 4 | 0 | 1 | 10 | 2,567.47 ± 20.47 | **+25.96** | +3.90 | 2.9e-03 |
+| 5 | 1 | 1 | 10 | 2,582.42 ± 10.11 | **+40.91** | +11.58 | 3.7e-08 |
+
+**MFMA-bit main effect = +32.03 ± 4.28 µs, t = +7.49, p = 3.7e-05.**
+Pre-registered expectation was **−75 to −200 µs**; measured is **+32 µs — wrong
+sign, seven sigma out**, replicated across two builds and four batches. Mask 4
+clears 3σ *in the losing direction*, so no campaign was run and **the ratchet is
+untouched at 0.8522×**. Shipping value returns to mask 0, which is
+`.text`-identical to the donor.
+
+**The compiler's own 34/48/14 split beats the "aligned" 48/48/0 one.** The two
+extra LDS waits per iteration that `build.md` called "a small debit" are the
+entire effect — over 512 iterations they are not small. **Matching
+`sched_group_barrier` counts to the instruction census is not a valid theory of
+scheduling on this loop.** That materially downgrades exp_31 (phase 2's hint is
+over-scaled 29 against a measured 17) — it is the same class of change and now
+has a measured counterexample.
+
+**Bit 0's premise is dead on the current source, for free.** The K-loop's
+`vmcnt(0)` drain is **already** at `mfma=48` in the baseline, so there was
+nothing to buy; and the 96-access scratch migration is gone too (scratch
+instructions 19 → 15, spills 14 → 12, `after_p2` unchanged at 3). exp_21/24
+fixed it incidentally. `activate.md` §7.2 closes as already-done.
+
+Also: the documented byte-identity hash `96049dfa…` / 166,656 B was **stale**
+(exp_21/24 moved the source). Re-derived on current source: donor-include and
+vendored mask-0 both hash `.text` to `ab0c353b…`, **179,904 B, identical**, and
+it holds on the live JIT binary — so the activation is a proven no-op on
+artifacts that actually ran.
+
+### Two measurement-integrity findings worth more than the null
+
+1. **`hsaco_before != hsaco_after` is NOT evidence of a code change.** A
+   mid-batch "rebuild" differed in 36 of 188,744 bytes — embedded build paths —
+   with identical `.text`. mori's key varies with which modules a process
+   compiles. **Only the `==` direction is sound.** Fingerprint by `.text`.
+2. **One batch ran the wrong arm and no gate noticed.** A `git push` was
+   rejected by a concurrent push while the launch went ahead, so a batch tagged
+   mask 5 measured mask 1. It was caught *only* by `.text` fingerprinting. Kept
+   honestly as a second mask-1 replicate — which is what exposed that
+   **single-batch t-statistics on this stamp overstate significance** (mask 1
+   read +11.7 in one batch, −6.5 in the other). The launcher now self-syncs and
+   refuses to start on a mismatch.
+3. The **M6 stamp is ~5× better than planned**: σ = **4.8 µs**, not 23, and a
+   control re-run 42 minutes later reproduced to **0.34 µs (p = 0.92)** — drift
+   excluded, not assumed.
+4. **A/B must be a compile-time `#define` in the hashed `.hip`, not `-D`** —
+   mori hashes content, not flags, so a flag flip silently reuses the hsaco.
+
 ## exp_30 — the per-row readiness protocol is pure cost. Predicted ~6,215 µs.
 
 **Q1 answered definitively: consumer early-start is NOT load-bearing.** Nothing
