@@ -153,8 +153,68 @@ allocates, zeroes in M0, and never writes.
 ### Vendoring provenance — one trap to avoid
 
 The authoritative donor is `solution/hip/n2_phase1_gm.cpp`, **585 lines**,
-sha256 `1d90b266…`. The `exp_65` snapshot is a **different 634-line file** and
-must never be the vendoring source.
+sha256 `1d90b26658b6a524db69434ddcfa0b2dcec2418c852f83874468d55dd0197dc2`. The
+`exp_59`/`exp_63` snapshots match it; the **`exp_65` snapshot is a different
+634-line fork** (`52ecd9e7…`) and must never be the vendoring source.
+
+## exp_26 landed (`f9bfb4be`) — the vendored M6 body, and the hints are not a null
+
+`n2_phase1_gm_mps.cpp` is **+112 / −0** against the donor: not one donor line
+modified or deleted, the four hint lines per half now sitting unchanged in the
+`#else` arm of a gate. Gate off is **`.text`-byte-identical** to the donor build
+(sha `96049dfa…`, both 166,656 B, zero-line `llvm-objdump` diff; the ELFs differ
+only in the HIP compilation-unit identity symbol, which hashes the TU path).
+
+**The G-scaled hints change instruction placement substantially, and for the
+better.** Per-iteration instruction mix is identical — only placement moved:
+
+| | gate off | gate on |
+|---|---|---|
+| position of the loop's only `s_waitcnt vmcnt(0)` | **mfma = 0** (stalls with zero MFMA of that iteration issued to cover it) | **mfma = 48** (1,536 cycles of issue first) |
+| barrier partition across the two `lds_cta_barrier()` | **33 / 49 / 14** | **48 / 48 / 0** |
+
+So the wrong hints did not merely fail to help — they actively steered the
+compiler into the worst placement available, putting the loop's only full VMEM
+drain where nothing covers it and leaving the two LDS buffer phases unbalanced.
+Cost of the fix: 3 extra `s_waitcnt lgkmcnt` per iteration against 13 fewer
+instructions in the loop; LDS waits are ~170–200 cycles of a ~9,000-cycle
+K-step, so a small debit.
+
+**Ceiling, honestly bounded:** the mechanism moves ≤1,536 cycles of MFMA in
+front of one drain inside an ~18,000–19,600-cycle iteration ⇒ ~8 % of M6 ≈
+200 µs ≈ 2.6 % end-to-end, and only if that drain is fully exposed today.
+Predicted **75–200 µs**.
+
+### The catch that must be measured before this ships
+
+Turning all four hints on migrates **96 extra scratch accesses into the M7
+epilogue / M8 / M9 region** — scratch instructions 21 → 114, with 99 of the 114
+landing after the phase-2 K-loop, up from 3. Scratch *bytes* actually improved
+(144 → 128 B/lane, spills 16 → 14): fewer values spilled, accessed far more
+often, in precisely the region that is mode 12's hot fabric path. A
+phase-1-only hint change reached that far through whole-function register
+allocation.
+
+Consequences, both now in flight: the gate is being turned into a **4-bit mask**
+(DS-read / VMEM / MFMA / DS-write) so we can find the subset that buys the
+placement win without the scratch migration; and the first GPU arm is the
+`timestamps=1` attribution pair, not an end-to-end number, because `ts_M6_us`
+and `ts_combine_us` are predicted to move in **opposite** directions and one
+total cannot separate them. If M6 drops and the combine rises by more, the
+response is to chase the epilogue's register allocation — not to close the axis.
+
+### Two corrections to `CONTEXT/m6_m7_structure.md` from the ISA read
+
+1. **§5.3 item 4 is wrong.** M6's K-loop *does* contain a compiler-inserted
+   `s_waitcnt vmcnt(0)` — one per **iteration** (not per half), always a full
+   drain, never a partial `vmcnt(N)`. The `N2_FORCE_VMCNT0` probe really is
+   compiled out; the compiler inserts its own. This closes §7 open item 4.
+2. **Phase 2's own `0x020` VMEM hint is over-scaled** — `8 + 7·kGM` = 29 at
+   G=3 against a measured 17; the correct form is `14 + kGM`. So "phase 2
+   scales three of its four correctly" is only 3/4 true. Phase 2 is M7 at
+   ~2,660 µs, and this is the same class of defect just fixed in phase 1.
+   Queued as a separate one-line experiment in `exp_26_p1_sched/activate.md`
+   (the file belongs to exp_24 tonight).
 
 ## Standing rules in force
 
