@@ -40,6 +40,119 @@ Three findings below change what gets built:
 
 ---
 
+## 0. Rev 2 — the interleave (Policy 0) is now the reviewed candidate
+
+The reviewed subject has changed from the static prefix split to the **interleave**
+(`design.md` §3.0). Everything below (§1-§8) was written against the static split
+and is **kept**; this section states what the change retires, what it keeps, and
+what it adds. **Net: the interleave is easier to make correct than the static
+split, and the one blocking finding (H1) is now on the critical path with a
+one-instruction fix.**
+
+### 0.1 What the interleave RETIRES
+
+| finding | status under Policy 0 | reason |
+|---|---|---|
+| **§6.3** doubly-covered M7 task (the 6 × 10⁻⁵ silent failure — "most likely bug to actually ship") | **RETIRED for this arm** | The M7 partition is **unchanged**: `start = blockIdx.x`, `stride = 240`, so the task set per CTA is byte-identical to today's. Over-coverage is impossible by construction, not by argument. The `part_done` detector is **not needed** |
+| **§6.8** `run_service`'s exact `== 12` | **RETIRED** | Policy 0 claims **no mode**; `k` lives in free config bits [34:40). All seven predicates are untouched (`design.md` §6.1a) |
+| **§6.5** cross-XCD M6 front stall in Policy 3 | **RETIRED** | No dynamic role, no front |
+| **§5.4** illegal `C6` configurations | **RETIRED** | No `C6` exists |
+| exp_01 `address (nil)` re-arm | **RETIRED** | M7 task start/stride and the `bid < 240` predicate are both unchanged (`design.md` §6.1b) |
+
+### 0.2 What the interleave KEEPS, unchanged and still blocking
+
+| finding | status |
+|---|---|
+| **H1** — E1's release covers only tid 0's own stores | **STILL BLOCKING, and now on the critical path rather than hypothetical.** Fix specified below (§0.3) |
+| **§6.1** the stale-`A2q` read is invisible to this campaign | **STILL FATAL to credibility.** Unchanged and, if anything, more dangerous: see §0.4 |
+| **§6.2** `a2_done`'s gate is `>=`, over-counting tolerated silently | keeps |
+| **§6.6** `g = 33` is a raw bit read with no mode gate | keeps — every Policy 0 sweep point must carry `g=33` |
+| **§6.7** `effective_flush_rows` confound | keeps |
+| **§6.9** skewed routing changes `num_tiles` | **keeps, but weakened**: `design.md` §6.0's availability identity has no `num_tiles` in it, so the *rate match* is routing-invariant. What survives is per-tile `gcount` non-uniformity perturbing the linearity, not the ratio |
+| **§6.10** the `A2q` bounded descriptor hides coverage bugs | keeps (M6's coverage is unchanged, so this is inherited risk, not new) |
+| **§4** buffer epoch lifetimes | **keeps and matters more.** See §0.5 |
+
+### 0.3 H1's fix, specified exactly — and it costs one instruction
+
+`design.md` §3.0.4 has the full argument. The protocol-relevant statement:
+
+**Sufficient condition for E1 (agent-scoped `A2q`/`DQ2` → `a2_done` publish):**
+every one of the 256 threads' stores must have *reached L2* before the single
+tid-0 agent-scope release fence is issued, because that fence's L2 writeback
+covers the CTA's entire L2 footprint but cannot flush a store still in flight.
+
+**Today**: `stores → __syncthreads() → tid-0 fence → RMW`. The barrier orders
+*execution*, not *memory retirement*. So a store still in flight at the barrier is
+not covered by the fence. **This is the defect.**
+
+**Fixed**: `stores → all-thread s_waitcnt vmcnt(0) → __syncthreads() → tid-0 fence
+→ RMW`, where the `vmcnt(0)` is supplied by defining
+`N2GM_P1_EPILOGUE_DONE_HOOK` (vendored line 637, already present, currently empty)
+in `KRN` only. Zero new barriers, zero new fences, zero vendored-file edits,
+11,360 waits per rank per epoch (≈ 11 µs).
+
+**Signoff condition:** the fix must be *verifiable by removal* — i.e. the negative
+control for S1d is the same kernel with the hook left empty, and the NaN-poison
+arm must **fire** on it. A fix that cannot be shown to matter has not been shown to
+be a fix.
+
+### 0.4 Why §6.1 is *worse* under the interleave, not better
+
+Under the static split, a missing readiness edge produced a stale read only in a
+narrow race window. Under the interleave, **CTAs are rate-matched to the knife
+edge** (`design.md` §6.0: available `2.133 m` vs required `2.133`, zero slack), so a
+CTA that is slightly ahead of its peers hits the `a2_done` wait **constantly**.
+If that wait is unsound, stale reads are not rare — they are the common case.
+
+And because the harness feeds identical input every iteration, a stale read
+returns **bit-identical bytes**, so it is correct-looking *and* faster. Restating
+the consequence in its sharpest form:
+
+> **The most likely way this experiment produces a headline number is by being
+> broken.** A missing readiness edge skips a real wait, returns the right answer,
+> passes `rel_L1`/`max_abs`/`pperr`/soak, and posts the best time in the `k` sweep.
+
+This is why `design.md` §5.5 pre-registers a **too-good** result as a defect
+signature: any `k` beating `k=∞` by more than **211 µs** exceeds W1's arithmetic
+ceiling and must be treated as a bug until the poison arm clears it.
+
+### 0.5 One new hazard the interleave introduces: `A2q` epoch overlap
+
+§4 asked whether an epoch-`(e+1)` M6 CTA can overwrite an epoch-`e` `A2q` row.
+Under the static split the answer was "no, because M6 and M7 are in the same
+epoch's phase window". **Under the interleave the question sharpens**, because a
+CTA finishing its M6 stripe early proceeds to M7 tasks while other CTAs are still
+in M6 — but this stays safe for a reason worth writing down: `A2q` is
+**single-buffered and capacity-sized**, and the epoch boundary is the M9 grid
+barrier, which every CTA must reach before any CTA can begin epoch `e+1`'s M6.
+Since the interleave adds no phase-crossing beyond M6↔M7 *within* one epoch, and
+M7 tasks are only claimable for tiles whose M6 is complete, **no epoch-`(e+1)`
+write can precede an epoch-`e` read.** Unchanged verdict, stronger argument.
+
+The genuinely new item: **the in-order `vmcnt` coupling** (`design.md` §3.0.6). It
+is a performance cost (~20-77 µs), not a correctness issue, *provided* the epilogue
+either drains or the subsequent wait is conservative. It becomes a **correctness**
+issue only in the fine-grained variant (deferring the epilogue drain across an M6
+K-loop), which is therefore **closed on ISA grounds**: `vmcnt` is one in-order
+counter per wave, so M6 cannot wait on its own loads without also waiting on the
+epilogue's outstanding remote atomics — and any attempt to publish `a2_done` before
+that drain reintroduces H1 in a form no fence can fix.
+
+### 0.6 Rev-2 verdict
+
+**Policy 0 is signed off for build subject to two conditions**, both cheap:
+
+1. **H1's `vmcnt(0)` hook is in the same commit as the fused loop.** Not a
+   follow-up. The interleave without it is an unsound kernel that will post a
+   good number.
+2. **The S1d NaN-poison detector arm runs before any `k` sweep number is
+   reported upward**, and must be shown to fire on the hook-removed control.
+
+Everything else that made the static split risky is retired by the claim-option-(c)
+choice. This is the rare case where the cheaper mechanism is also the safer one.
+
+---
+
 ## 1. Scope and method
 
 Reviewed: the readiness edge `a2_done`, the mode-12 stream protocol
@@ -70,7 +183,7 @@ currently does any ordering work or whether program order does it for free.
 | **E6** | *(Stage 0 only)* M6 pool done → the waiting CTAs | `counted_arrive_release_into<agent>` (`CTR:85-90`) on a fresh `mps_state` word, target `C6` | `bounded_poll_relaxed_into<agent>` + `cta_acquire<agent>` | agent | mode 10 is a genuine rendezvous, not a partial one | n/a | new |
 | **E7** | *(Stage 2 only)* per-XCD M7 ticket claim | `fetch_add_relaxed<agent>` on bank `bid % 8`, LDS broadcast, `__syncthreads()` | the CTA's own read of the broadcast word | agent (claim) + workgroup (broadcast) | each M7 task claimed by exactly one CTA | n/a | new |
 
-### H1 — E1's release covers only tid 0's own stores. **Blocking.**
+### H1 — E1's release covers only tid 0's own stores. **Blocking.** — **still blocking under Policy 0; exact one-instruction fix in §0.3**
 
 `HKA:95` issues the agent release **inside `if (tid == 0)`** (`KRN:228`). A
 release fence orders the *calling thread's* prior memory operations. The `A2q`
@@ -355,7 +468,7 @@ epoch's bytes, which per §6.1 are the same bytes. **Invisible.**
 *Detector:* `bounded_poll_exact_into` (the §8.2(4) primitive gap in `design.md`),
 or a one-line post-M6 check that `a2_done[b] == 8` for every live `b`.
 
-### 6.3 **A doubly-covered M7 task doubles one tile and produces ≈ 6 × 10⁻⁵ relative error. (Most likely bug to actually ship.)**
+### 6.3 **A doubly-covered M7 task doubles one tile and produces ≈ 6 × 10⁻⁵ relative error. (Most likely bug to actually ship.)** — **RETIRED for Policy 0, see §0.1**
 
 The M7 pool's start/stride change (`KRN:280-285`, `KRN:273-276`) is exactly the
 kind of arithmetic that goes wrong by one. The failure is **asymmetric**:

@@ -27,7 +27,148 @@ M6 arm.
 
 ---
 
-## 0. Verdict up front
+## 0. Verdict up front  — REVISED (rev 2, interleave assignment)
+
+> **Rev-2 note.** Rev 1 (below, §0.1) recommended the static prefix split. That
+> recommendation is **superseded**: the interleave is strictly better than the
+> static split on every term (it recovers the 173 µs work-conservation penalty,
+> needs no new mode, no new atomics, and no new protocol). But the reprioritizing
+> argument that motivated the promotion — "the 976 µs epilogue surcharge is
+> irreducible fabric time, so overlap it with M6's fabric-idle window" — **does
+> not survive its own arithmetic**, and the interleave inherits a much smaller
+> prize than the assignment assumes. Both conclusions are in §0.2/§0.3. Rev 1 is
+> kept verbatim per the supersede-don't-delete rule.
+
+### 0.2 The fabric arithmetic — verified, and it refutes its own conclusion
+
+The assignment's two numbers are **both arithmetically correct**:
+
+| quantity | value | check |
+|---|---:|---|
+| remote lane-atomics per rank per epoch | 102,760,448 | `mode12_protocol_map.md` §2 |
+| remote bytes | 411,041,792 B = **392.0 MiB** | ×4 B ✓ |
+| 392 MiB / 1,684 µs (M7 mode-0 fit) | **244 GB/s** | = the assignment's "~247" ✓ |
+| 392 MiB / **976 µs** (epilogue surcharge) | **421 GB/s** | = **78.3 % of 537.6** ✓ |
+| wire time for 392 MiB at 78 % efficiency | **980 µs** ≈ the 976 µs surcharge | ✓ |
+
+That last row is the coincidence the argument rests on, and it is real. **But
+`421 GB/s` is not a fabric utilization.** 976 µs is the *sum over each CTA of its
+own epilogue phases*, not a wall-clock window in which all 240 CTAs push
+concurrently. Per M7 task a CTA spends 71.2 µs in the K-loop and 41.2 µs in the
+epilogue, so a CTA is in an epilogue **36.7 %** of the time. The two readings are:
+
+- **Staggered** (CTAs at independent phases): ~88 of 240 CTAs pushing at any
+  instant → 392 MiB / 2,660 µs = **155 GB/s = 29 % of ceiling.** Fabric has 3.4×
+  headroom; the limiter is per-wave outstanding depth × ACK latency.
+- **Aligned** (CTAs in lockstep): all 240 pushing during a shared 976 µs of burst
+  windows → **421 GB/s = 78 % of ceiling.** Fabric nearly saturated during bursts.
+
+**The aligned reading is the correct one, and it is self-inflicted.** Every CTA
+enters M7 within a few µs of every other (M6 is uniform; `plan+M6` is invariant to
+0.5 %), and every M7 task costs the same, so the 240 CTAs march in lockstep
+through `[K-loop, epilogue] × 23.67` and their epilogue bursts **coincide by
+construction**. This also explains exp_21: unthrottled, 240 aligned CTAs drove the
+fabric into congestion collapse, and depth-8 throttling recovered 500 µs by
+pulling it back to ~78 % of ceiling.
+
+**And that is what kills the premise.** If the epilogue bursts are already at
+78 % of the aggregate egress ceiling, then de-aligning them or spreading them into
+M6's idle window can recover **at most the gap between 78 % and 100 %**:
+
+| assumed achievable efficiency | wire time for 392 MiB | max recoverable from the 976 µs |
+|---|---:|---:|
+| 100 % of 537.6 GB/s (unreachable) | 765 µs | **+211 µs** |
+| 90 % | 850 µs | **+126 µs** |
+| 78 % (what we already achieve) | 980 µs | **−4 µs, i.e. zero** |
+
+**W1's hard ceiling is +211 µs, not +450 µs, and it requires 100 % fabric
+efficiency on 4-byte remote RMWs.** The realistic figure is +100 to +210 µs. The
+assignment's conclusion — "most of the 976 µs is irreducible fabric time" — is
+**correct, and it is an argument *against* the mechanism, not for it**: irreducible
+means there is nothing to recover. exp_21 already harvested the reducible part.
+
+### 0.3 The interleave — a first-order tie, not a first-order win
+
+Work conservation applies to the interleave **with equality**, which is better
+than the static split but is not a win:
+
+| arrangement | makespan | vs today |
+|---|---:|---:|
+| today (M6 on 256, M7 on 240, sequential) | `2588 + 2660` = **5,248 µs** | — |
+| **interleave** (M6 on 256, M7 on 240, concurrent) | `A6/256 + A7/240` = **5,248 µs** | **0** |
+| static split, work-conserving floor | `(A6+A7)/240` = **5,421 µs** | −173 µs |
+
+A compute CTA still executes 2,588 µs of M6 work and 2,660 µs of M7 work, in
+*some* order; reordering them does not reduce either. **Every microsecond the
+interleave wins must come from a second-order term**, and the terms are:
+
+| term | size | sign |
+|---|---:|---|
+| W1 — de-aligning the epilogue bursts (§0.2 ceiling) | **+100 to +211 µs** | + |
+| W3 — one combined quantization tail instead of two | **+24 µs** | + |
+| **L2 co-residency** — M7's 2.64 MB/XCD `W2` stream loses its L2 residency to M6's 10.6 MB/XCD stream (§3.0.5) | **−0 to −222 µs** | **−** |
+| co-tenancy — the epilogue's neighbour becomes M6's *hungrier* stream (4.91 vs 4.30 TB/s) | **−0 to −100 µs** | − |
+| new `a2_done` poll + in-order `vmcnt` coupling at each transition | **−20 to −50 µs** | − |
+| the mandatory H1 drain fix (§3.0.4) | **−11 µs** | − |
+
+**Central prediction: 6,713 µs (0.870×). Band 6,481 – 6,944 (0.840 – 0.900×).
+The current ratchet, 6,685 µs, sits inside the band.** This is a **wash**, and
+the falsifier (§5.5) is pre-registered accordingly.
+
+### 0.4 What I recommend instead
+
+Build it anyway, but **only because it is now cheap enough to be a screen rather
+than an experiment** — three findings collapsed the cost:
+
+1. **No new mode, and none of the seven predicates.** The interleave changes the
+   *order* in which one CTA runs its own two task stripes. The protocol, the
+   partition, and every buffer are bit-identical to mode 12. `k` goes in **free
+   config bits [34:40)**, `k=0` ≡ ∞ ≡ today, bit-identical. This also sidesteps
+   the exp_29 mode collision entirely (§6.1a).
+2. **Zero delta against the vendored file.** exp_26's commit `f9bfb4be` already
+   landed `N2GM_P1_TASK_START/_STRIDE` (MPS-DELTA (3), lines 215-227) *explicitly
+   for this experiment*, and `N2GM_P1_EPILOGUE_DONE_HOOK` (MPS-DELTA (10), line
+   637) is exactly where the H1 fix belongs.
+3. **The static-stripe claim needs no claim mechanism at all** (§3.0.2): keep
+   today's `start = blockIdx.x, stride = 240` M7 partition and merely run it
+   early. Over-coverage — the silent 6 × 10⁻⁵ failure — becomes **impossible by
+   construction**, retiring `protocol_review.md` §6.3 for this arm.
+
+**Revised build cost: 4–6 h (was 14–19 h).** And the Stage-0 diagnostic asked for
+turns out to be **an arithmetic identity, not a measurement** (§6.0): the number
+of ready M7 tasks is *exactly* rate-matched to what the interleave needs, with
+0.05 % slack, for any routing. That answer is free, and it is the most useful
+thing in this document.
+
+### 0.5 The four claims, adjudicated
+
+| claim | verdict | why |
+|---|---|---|
+| **No work-conservation loss** | **CONFIRMED as stated; the implication REFUTED** | `A6/256 + A7/240 = 5,248 µs` = exactly today. The `(W6+W7)/240 = 5,421` penalty genuinely does not apply — the interleave is 173 µs better than the static split. But *no penalty ≠ a gain*: it is a **tie** at first order, and the framing treats removing the penalty as the win. It is not. Every µs must come from §0.3's second-order terms |
+| **F1 becomes irrelevant** | **CONFIRMED — with a cost the claim does not price** | The interleave never reduces M6's CTA count, so `T6(C6)` drops out of the model entirely and the gate is genuinely removed. But F1's *favourable* branch was also the static split's upside (up to −535 µs). The interleave wins 0 first-order **regardless of F1**, so it forgoes that option value. **The two mechanisms are not ordered** (§3.5a): keep F1, demoted from gate to option-pricing |
+| **Zero register risk** | **CONFIRMED, and better-founded than my rev-1 argument** | Accumulators are born and die inside each body → allocator takes `max(192,168)`, not the sum. The loop-carried *pointer* worry from §3.4 is answered in source: `k0p6_dread` (`KRN:204-209`) is a **volatile** load whose memory clobber the comment says exists precisely to "keep the compiler from CSE-hoisting descriptor values into kernel-long registers". So the pointers cannot be hoisted into the fused loop. Extra live state = ~5 scalars (two cursors, `k`/`j` counters). **New risk, unrelated to registers: I-cache.** Both MFMA bodies inlined into one hot loop against a 32 KB L1I shared by 2 CUs — unquantifiable from here, must be read out of the resource report |
+| **Zero extra LDS** | **CONFIRMED** | Both phases' blocks already sum into the single 155,428 B allocation; interleaving changes no allocation |
+| **Still on-mandate** | **COMPLIANT, but not an advance — I partly disagree** | The service pool survives, so a CTA role split exists and the arm is compliant. But `aug10/CLAUDE.md` requires that *"at any instant some CTAs are moving data while **different** CTAs are issuing MFMA"*. Under the interleave every compute CTA runs the **same** mixture, so the M6/M7 boundary is **not** a role partition — it is a schedule. The mandate is satisfied only by the pre-existing pool the ratchet already has. **The interleave adds nothing new on the mandate's research question; the static split does.** Worth knowing, since mission step 5 is what this line of work exists for |
+
+### 0.6 Revised staged build
+
+| stage | what | cost | gate |
+|---|---|---:|---|
+| **S0** | **nothing to build** — readiness is the identity in §6.0 | **0 h** | availability is not the limiter; proceed |
+| **S1** | fused task loop in `KRN` + `k` in config bits [34:40) + the H1 `vmcnt(0)` hook. `k=0` must be **bit-identical** to today | 3-4 h | resource tuple unchanged; `k=0` arm within ±15 µs of 6,685 µs, else it is a build defect — stop |
+| **S1d** | **DQ2-NaN-poison detector arm** (§3.0.4). Not optional | 1 h | must fire on a deliberately-removed drain (negative control), must be clean with it |
+| **S2** | sweep `k ∈ {1,2,4,8,∞}`, one campaign per point | 2 h GPU | §5.5 |
+| **S3** | only if S2 lands < 6,481 µs: price F1 to decide whether Policy 1/2 exists | 2 h | §3.5a |
+
+**Total to a decision: 4-6 h build + 2 h GPU** (rev 1 was 14-19 h).
+
+---
+
+### 0.1 Verdict, rev 1 — SUPERSEDED (static prefix split)
+
+> **Superseded by §0.2–0.4.** Demoted because the interleave dominates it on every
+> term at a fraction of the build cost — but note §3.5a: the static split retains
+> real option value the interleave gives up, so this analysis is not dead.
 
 **The mechanism is worth building, but the framing in the assignment needs one
 correction that changes the whole experiment: a static role split cannot win by
@@ -237,9 +378,195 @@ W3 is **0 to −90 µs**, and fall-through is worth ~120 µs of it.
 
 ---
 
-## 3. Partition policy — four designs compared
+## 3. Partition policy — five designs compared
 
-### 3.1 Policy 1 — static split, no fall-through
+> **Rev 2:** Policy 0 (§3.0) is the recommendation. Policies 1-4 (§3.1-3.4) are
+> **superseded** — kept for their measurements and for §3.5a's option-value
+> argument, which is the one reason not to close them.
+
+### 3.0 Policy 0 — the interleave (RECOMMENDED, Stage 1)
+
+Every compute CTA runs `k` M6 tasks, then drains up to `j` ready M7 tasks, and
+repeats. `k = ∞` is today's behaviour and is the control arm — it is **mode 12
+itself**, so this mechanism is the only one in the design with a *free,
+already-ratcheted* control.
+
+#### 3.0.1 The ratio is fixed by structure, not tuned
+
+M6 produces a tile in **8** chunk-tasks; M7 consumes a tile in **16** tasks.
+Per CTA per epoch: `2,840/256 = 11.09` M6 tasks and `5,680/240 = 23.67` M7 tasks.
+
+```
+required consumption ratio  j/k = (16/8) x (256/240) = 2.133
+```
+
+M6 task ≈ 229 µs, M7 task ≈ 112 µs, so `k=1, j=2` gives 229 µs of M6 against
+224 µs of M7 per cycle — **naturally balanced with no tuning**. `k` is therefore a
+*granularity* knob (how coarsely the two streams are chopped), not a *balance*
+knob. Sweep `k ∈ {1, 2, 4, 8, ∞}` with `j = 2k` implied.
+
+#### 3.0.2 The claim mechanism: there is none, and that is the design
+
+Three candidates were compared. **Option (c) wins decisively.**
+
+| option | atomics / CTA / epoch | XCD invariant (`n2_phase2_gm_mps.cpp:77`) | over-coverage risk | verdict |
+|---|---:|---|---|---|
+| (a) global dynamic ticket, ready-filtered with skip | 1 RMW/claim + retries = **≥ 23.67** on 1 cell (5,680 RMWs on one line) | **broken** — `task` no longer ≡ `bid` mod 8, so `nc → XCD` residency is destroyed | needs a 710-B claimed-bitmap or a deferred list; monotonic tickets and *skipping* are structurally incompatible | **reject** |
+| (b) per-XCD ticket bank, 8 banks | **23.67** RMWs on 8 padded cells (710/cell) | preserved (bank `x` hands out `task = x + 8m`) | a claim cannot be *returned*, so a claimed-but-not-ready task must spin — reintroduces the stall the mechanism exists to remove | reject |
+| **(c) today's static stripe, executed early** | **0** | **preserved exactly** — the partition is byte-identical to today's | **impossible by construction** | **RECOMMENDED** |
+
+Option (c): keep `N2GM_TASK_START = blockIdx.x`, `N2GM_TASK_STRIDE = 240`
+(`n2_phase2_gm_mps.cpp:286-294`) **completely unchanged**, and simply let a CTA
+execute the next task of its own stripe early, interleaved with its M6 tasks.
+
+- **Exactly-once is inherited, not re-proved.** The task set per CTA is
+  `{bid + 240i}`; the union over `bid ∈ [0,240)`, `i ≥ 0` is `[0, num_tasks)`
+  exactly once — *the same partition mode 12 ships today*. Nothing can be lost or
+  doubled because nothing about the partition changed. **This retires
+  `protocol_review.md` §6.3 (the silent 6 × 10⁻⁵ doubled-tile failure) for this
+  arm**, and with it the need for a `part_done` detector.
+- **The `nc → XCD` invariant is preserved for free.** `stride = 240 ≡ 0 (mod 8)`,
+  so every task a CTA ever runs has the same `nc mod 8`, exactly as today.
+- **exp_07/exp_08's lesson is honoured trivially**: no atomic is relocated,
+  coalesced, or added. Line spread is untouched.
+- **No ABI change, no new `mps_state` cell, no new buffer.**
+
+#### 3.0.3 Leftover M7 tasks: there is no handoff
+
+Because the partition is unchanged, "leftover" is just "the rest of my own
+stripe". After its last M6 task a CTA continues its stripe from wherever it got
+to, in the same loop, with the same cursor. **No handoff, no rendezvous, no
+fall-through predicate, no proof obligation.** The existing M7.6 drain
+(`KRN:1395-1467`) absorbs the tail exactly as it does today.
+
+The one real consequence is **progress skew**: a CTA blocked on `a2_done` falls
+behind its peers. Since all stripes are uniformly spread over the task space and
+readiness is globally uniform (§6.0), the CTAs are symmetric and the skew is
+self-correcting — but it is the mechanism by which the interleave can *lose*, and
+it is why the `k` sweep must include `k = ∞`.
+
+#### 3.0.4 The `a2_done` ordering fix (H1) — one instruction, zero barriers
+
+`protocol_review.md` §H1 is now on the critical path. The release at
+`KRN:227-234` is a **tid-0-only** `fence(release, agent)` guarding a counter that
+publishes stores made by **all 256 threads**. Today CTA program order hides it;
+under the interleave a *different* CTA reads `A2q` while this one is still in M6,
+and the fence orders nothing it did not itself write.
+
+The vendored file's sequence (`n2_phase1_gm_mps.cpp`) is already the right shape:
+
+```
+612-613, 626-629   all 256 threads store A2q / DQ2      (plain uint4 / f32)
+637                N2GM_P1_EPILOGUE_DONE_HOOK           <-- MPS-DELTA (10), empty today
+639                __syncthreads()
+646-653            N2GM_TASK_DONE_HOOK  ->  k0p6_a2_arrive()   (tid-0 fence + RMW)
+```
+
+**The fix is to define the hook, in `KRN` only, as an all-thread
+`s_waitcnt vmcnt(0)`.** That composes `producer_drain_release<agent>` out of parts
+that already exist:
+
+| `producer_drain_release<agent>` step | supplied by |
+|---|---|
+| drain every lane's VMEM | **the new hook at line 637** (all 256 threads) |
+| CTA convergence | the existing `__syncthreads()` at line 639 |
+| leader agent-scope release fence | the existing tid-0 fence in `k0p6_a2_arrive` |
+| broadcast the result | **not needed** — nothing consumes a return value |
+
+The ordering argument for why *one* thread's release fence suffices: a normal
+store retires into the **local L2**, which is not visible to other XCDs; the
+agent-scope release fence emits the L2 writeback, and that writeback covers the
+CTA's **entire L2 footprint**, not just the fencing thread's lines. It is
+therefore sufficient *provided every thread's store has already reached L2* —
+which is precisely what `vmcnt(0)` + the barrier guarantees, and precisely what is
+missing today.
+
+**Cost, counted:** one `s_waitcnt vmcnt(0)` per wave per M6 task =
+`2,840 × 4 = 11,360` waits per rank per epoch. **Zero new barriers** (reuses line
+639), **zero new fences** (reuses the tid-0 fence), **zero edits to the vendored
+file**. Against M6's existing ~66 barriers/task the marginal cost is ≈ 0; measured
+as time, ~1 µs per task per CTA → **≈ 11 µs per epoch**. This is the cheapest
+blocking-bug fix in the whole exp_25 design.
+
+**Why the campaign cannot catch H1 on its own** (restated plainly, because it is
+the single most dangerous property of this experiment): the MoK harness feeds
+**identical input and identical routing every iteration**. So epoch `e−1`'s `A2q`
+bytes are **bit-identical** to epoch `e`'s. A missing readiness edge makes M7 read
+*last epoch's* `A2q` — which contains the same numbers. The kernel returns the
+right answer, `rel_L1` passes, `max_abs` passes, `pperr = 0`, the 600-epoch soak
+passes, and because it skipped a real wait it **posts the best time in the
+sweep**. A broken build wins the ratchet. Nothing in the gate ladder can see it.
+
+**Therefore the DQ2-NaN-poison detector arm is a signoff condition, not an
+option.** At the end of each M6 task, before the drain, write `NaN` into the
+task's `DQ2` cells for the *next* epoch's slot — i.e. poison what a stale reader
+would see. M7 reads `DQ2` before its K-loop; any stale read produces `NaN`, which
+propagates to `out` and is caught by the **zero-nonfinite** gate on the very first
+iteration. Cost ~2.1 MB of extra stores, ~50 µs, and it is asymmetric across
+epochs so it must be run as a **separate detector arm, never as the timed arm**.
+
+#### 3.0.5 The L2 co-residency risk, quantified — the strongest argument against
+
+Per XCD: 32 CTAs, **4 MB** 16-way L2.
+
+| window | resident working set | vs 4 MB |
+|---|---:|---|
+| today, M6 alone | 2.9 experts × 3.67 MB slab (`g = xcd`) = **10.6 MB** | 2.65× over |
+| today, M7 alone | **2.64 MB** (`m6_m7_structure.md` §3.3) | **fits (66 %)** |
+| **interleaved** (≈16 CTAs in each body) | `16/32 × 10.6 + 16/30 × 2.64` = **6.7 MB** | 1.68× over |
+
+So the interleave **improves** M6's pressure (10.6 → 5.3 MB of M6 footprint) and
+**destroys** M7's residency (2.64 MB fits → 1.4 MB of it competing inside a 6.7 MB
+demand). M7's `W2` stream is the one the kernel deliberately keeps L2-resident.
+
+**Bandwidth bound on the damage — and it is reassuring.** If M7's `W2` stream
+loses residency entirely, all 5.211 GB of it crosses the XCD↔IC path. Total
+request traffic for the combined window becomes `12.456 (M6) + 6.817 (M7)` =
+19.27 GB over 5,248 µs = **3.67 TB/s** — which is **25 % *below* the 4.91 TB/s
+that M6 alone already sustains**. **The Infinity Cache has the headroom.** So the
+damage is bounded by **latency, not bandwidth**.
+
+**Latency is where it bites.** M7's K-loop is only 16 steps deep with a
+one-step-deep software pipeline, so it is the more latency-exposed of the two
+bodies. If its achieved bandwidth falls 4.30 → 3.8 TB/s, `A7K` inflates by
+`(4.30/3.8 − 1) = 13 %` → **+222 µs on the makespan**. Scaling exp_08's measured
+result — per-XCD L2 effects at this boundary were **36 % of M7's interference** —
+onto the 976 µs surcharge gives an independent **−0 to −110 µs**. Take the range
+as **−0 to −222 µs**.
+
+**Predicted shape of the `k` sweep.** `k` trades the two directly: small `k` =
+maximal burst de-alignment (+W1) and maximal L2 thrash (−L2); large `k` = neither.
+
+- If W1 > L2: **interior optimum near `k = 2–4`** (enough transitions to
+  de-align 240 CTAs' bursts, few enough that each body gets a run of ~460-920 µs
+  to re-establish residency).
+- If L2 > W1: **monotone increasing in `k`, optimum at `k = ∞`** — i.e. *the sweep
+  says do not interleave*, and it says it cheaply.
+
+**My prediction is the second**, because W1's ceiling (+211 µs at unreachable
+100 % fabric efficiency) and the L2 term (−222 µs) are the same magnitude with
+opposite signs and the L2 term does not need a heroic efficiency assumption to be
+realized. I put ~60/40 on `k = ∞` winning. **This is a genuine risk of a null
+result, and it is why Policy 0 should be built as a 4-6 h screen and not as a
+multi-stage experiment.**
+
+#### 3.0.6 The in-order `vmcnt` coupling — a real cost, correctly sized
+
+`vmcnt` is **one in-order counter per wave** (ISA §4.4: memory ops return in issue
+order). So after an M7 epilogue, M6's next compiler-inserted `s_waitcnt vmcnt(N)`
+implicitly waits on the epilogue's outstanding remote atomics — whose ACK latency
+(~3.5 µs, derived from `976 µs / (2,230 atomic instructions / depth 8)`) is ~5×
+M6's one-K-step latency tolerance (1,536 cycles ≈ 0.7 µs).
+
+**But this is a per-transition latency, not a per-atomic one.** At `k = 1` there
+are ~11 transitions per CTA per epoch → `11 × 2 × 3.5 µs ≈ 77 µs`; at `k = 4`,
+~20 µs. Bounded and small. It does, however, **kill the fine-grained variant** —
+issuing the epilogue's atomics and deferring their drain across an M6 K-loop, so
+the ACK stall hides under MFMA — because M6's own loads cannot be waited on
+without also waiting for the earlier atomics. That variant is dead on ISA grounds,
+not on register grounds. Record it as closed.
+
+### 3.1 Policy 1 — static split, no fall-through  *(superseded — see §3.5a)*
 
 `bid < C6` runs M6 then goes straight to the service drain; `C6 ≤ bid < 256−C`
 runs M7 only.
@@ -368,7 +695,38 @@ measurement, and the measurement costs a build.
 Secondary risk: I-cache. Both MFMA loops inlined into one hot loop; gfx950's
 32 KB I-cache is shared by two CUs. Unquantifiable from here.
 
-### 3.5 Recommendation
+### 3.5a Recommendation — REVISED (rev 2)
+
+**Build Policy 0 (§3.0) as Stage 1. It dominates Policies 1-3 on every axis:**
+
+| | Policy 0 (interleave) | Policy 1/2 (static split) |
+|---|---|---|
+| work-conservation term | **0** | **−173 µs** |
+| new mode + 7 predicates | **none** | required |
+| new atomics | **0** | 0 / 5,680 |
+| ABI / `mps_state` change | **none** | none / one cell |
+| over-coverage hazard (§6.3) | **impossible by construction** | live, needs `part_done` detector |
+| gated on unmeasured `T6(C6)` (F1) | **no** | **yes** |
+| exp_01 `address (nil)` re-arm risk | **none** (M7 start unchanged) | live |
+| control arm | **mode 12 itself, already ratcheted** | must be built |
+| build cost | **4-6 h** | 14-19 h |
+
+**But the static split retains option value the interleave gives up, and this is
+the one reason not to close §3.1-3.4.** F1 is the coefficient `T6(128)/T6(256)`.
+In the *favourable* branch — M6 largely insensitive to CTA count — the static
+split wins up to **−535 µs**, because it can hand M7 more CTAs for the same M6
+time. The interleave wins **0 first-order regardless of F1**. So:
+
+**The two mechanisms are not ordered.** If M6 turns out CTA-insensitive, the
+static split is strictly better than the interleave. Therefore **F1 remains the
+highest-value measurement on this boundary even though the interleave does not
+need it** — it is no longer a *gate* on Stage 1 (that is the assignment's claim,
+and it is correct), but it is still the thing that decides whether Stage 2 exists.
+Keep it, demoted from gate to option-pricing.
+
+### 3.5 Recommendation, rev 1 — SUPERSEDED
+
+> Superseded by §3.5a: Policy 0 dominates on every term at a third of the cost.
 
 **Build Policy 1 first (Stage 1), then Policy 2 (Stage 2). Recommend Policy 2 as
 the shipping shape if the boundary survives Stage 1.**
@@ -718,9 +1076,141 @@ looking, not to bank the number.
 
 ---
 
+## 5.5 Falsifier for Policy 0 (rev 2, pre-registered)
+
+Denominator: mode 12 `C=16 g=33 flush=16` = **6,685 µs** in the SAME campaign.
+Arms: `production, pf6gm_mega, mps_mega`; `mps_mega` swept over `k ∈ {1,2,4,8,∞}`.
+
+| observation | reading | action |
+|---|---|---|
+| best `k` ≥ 6,685 µs (i.e. `k = ∞` wins) | L2 co-residency ≥ W1. §0.2's ceiling was already thin; the boundary is **closed** | **STOP.** Log the axis closed in `LESSONS.md` with the `k` curve. Do not build Policy 1/2 on the strength of this axis |
+| 6,481 – 6,685 µs | partial: W1 real but L2 eats it | one more point (`k` between the best two), then stop |
+| 6,172 – 6,481 µs | **mechanism confirmed**, ratchet advances | ratchet, then price F1 for Policy 2 |
+| < 6,172 µs (0.80×) | exceeds the §0.2 ceiling — **the model is wrong, not the kernel** | **do not ratchet yet.** Verify against the H1 detector arm first: a stale-`A2q` read is the most likely explanation of a number this good (§3.0.4) |
+| any `k` faster than `k = ∞` by > 211 µs | **exceeds W1's hard ceiling.** Impossible by §0.2 unless work is being skipped | treat as a **defect signature**, run the NaN-poison arm before believing it |
+
+That last row is the one that matters most: **this experiment's failure mode is a
+number that is too good, not too bad.**
+
+---
+
 ## 6. Build plan
 
-### 6.1 Mode numbers
+### 6.0 Stage 0 — the diagnostic, which is free: readiness is an identity
+
+The assignment asks for the single most valuable thing: *how many M7 blocks are
+already ready at various points during M6?* — because that is the hard ceiling on
+what any interleave can pull forward.
+
+**It does not need to be measured. It is an arithmetic identity.**
+
+M6's task assignment is `task = bid + 256m` and `tile = task/8`, so the 256 CTAs'
+`m`-th round covers tasks `256m … 256m+255` = **tiles `32m … 32m+31`, all 8 chunks
+of each**. Therefore:
+
+```
+after m global M6 rounds:  exactly 32m tiles are complete  (a2_done[b] == 8)
+```
+
+Readiness advances **linearly and exactly in step with M6 progress**: at M6
+progress fraction `p`, exactly fraction `p` of M7's tasks are claimable.
+
+Now price it against demand. CTA `bid`'s M7 stripe is `{bid + 240i}`, so its `i`-th
+task sits at tile `bid/16 + 15i` (240/16 = 15 tiles per step). It is claimable when
+`bid/16 + 15i < 32m`:
+
+```
+available:  i < (32/15) m = 2.133 m
+required :  j/k          = (16/8)(256/240) = 2.133      (from §3.0.1)
+```
+
+**These are equal — to 0.05 %, and identically, not coincidentally**: both reduce
+to `(256 × 16)/(8 × 240)`. Two consequences, and they are the whole answer:
+
+1. **The prize is not availability-limited.** The interleave *can* run M7 fully
+   concurrently with M6. The mechanism is not dead before we build it — which is
+   what the assignment wanted to know, and it is now known for free.
+2. **There is exactly zero slack.** The M7 consumption front rides *precisely* on
+   M6's production front, for any routing (the identity has no `num_tiles` in it).
+   So **every `a2_done` poll by a CTA that is even slightly ahead of its peers is a
+   genuine stall**, and the interleave's steady state is M6 and M7 progressing in
+   lockstep and finishing together at `t = 5,248 µs` — which is exactly the
+   work-conservation answer of §0.3, re-derived independently. Consistent.
+
+**If a measurement is wanted anyway** (to catch deviation from linearity when
+skewed routing makes tiles non-uniform in `gcount`), it is 4 lines and no new
+buffer: define `N2GM_P1_TASK_HEAD_HOOK` (MPS-DELTA (5), vendored line ~161, already
+present) so CTA 0's tid 0 stamps `s_memrealtime` into `mps_state[4..7]` on M6 task
+iterations 0/3/6/9, behind `cfg.timestamps`. Combined with the identity, that is
+the readiness curve. **But the Tier-1 first/last M6 task-end stamps
+(`m6_m7_structure.md` §6.3) already measure the only unknown — the straggler
+spread — so even this is arguably redundant.**
+
+**Stage 0 cost: 0 h.** Recommend proceeding directly to Stage 1.
+
+### 6.1a Mode number — I claim NO mode; I claim config bits [34:40)
+
+**exp_29 has taken both 10 and 11** (`kModePipelinedProbe = 10`,
+`kModePipelinedCombine = 11`, its design.md:504). That collision is **moot**,
+because Policy 0 does not need a mode at all:
+
+The interleave changes *the order in which one CTA executes its own two task
+stripes*. The protocol, the partition, every buffer, every counter, every
+release/acquire pair and every arrival target are **bit-identical to mode 12**.
+Nothing in `run_service`, the M7.6 drain, M8's selector, or the validator can tell
+the difference. **So none of the seven predicates needs threading** — including the
+exact `env.mode == kModeRemoteAccum` at `ADP:803` that was going to be the awkward
+one.
+
+`k` goes in the **free upper bits of the config word**
+(`moe_host_abi.hpp:146-163` defines `[0:8) C | [8:16) g | [16:24) mode |
+[24:32) flush_rows | [32] pull_fallback | [33] timestamps`; **bits [34:64) are
+unused**):
+
+```
+[34:40)  k   6 bits, 0..63.   k == 0  =>  infinity  =>  today, bit-identical
+```
+
+`k = 0` default means an unset field reproduces mode 12 exactly, so the parity
+argument is trivial and every existing campaign config is unaffected. One
+`config_is_valid` addition (`ADP:249-286`): `k != 0` requires `mode == 12`.
+
+**exp_29 keeps 10 and 11. I take no mode number. No collision.**
+
+### 6.1b exp_01 `address (nil)` re-arm — not applicable to Policy 0, and why
+
+The assignment correctly warns that changing the M7 task start without the pool
+predicate in the same commit re-arms the exp_01 fault class (negative `task` →
+negative `tile` → `tile_desc[-8]`). **Policy 0 does not change the M7 task start
+or stride at all** — `N2GM_TASK_START` stays `blockIdx.x` and `N2GM_TASK_STRIDE`
+stays `kCTAs` (`n2_phase2_gm_mps.cpp:286-294`, untouched). The service CTAs are
+excluded by the *existing* `bid < 240` predicate at `KRN:1366-1392`, unchanged.
+
+The fault class is therefore **not re-armed**, and this is a direct consequence of
+choosing claim option (c). It is the second time that choice removed a whole
+hazard class (the first being over-coverage, §3.0.2). **If a future stage moves to
+option (b)'s per-XCD banks, the predicate and the start must land in the same
+commit** — carry that warning forward to Stage 2, where it does apply.
+
+### 6.1c Delta against the real vendored file: zero lines
+
+Verified against `n2_phase1_gm_mps.cpp` as it stands after commit `f9bfb4be`:
+
+| what Policy 0 needs | status |
+|---|---|
+| M6 task start/stride parameterization | **already landed** — MPS-DELTA (3), lines 215-227, whose comment says verbatim *"Added for exp_25's M6/M7 interleave and for the F1 measurement"* |
+| a drain point after the A2q/DQ2 stores, before the task-end barrier | **already landed** — MPS-DELTA (10) `N2GM_P1_EPILOGUE_DONE_HOOK`, line 637 |
+| readiness-curve instrumentation (optional, §6.0) | **already landed** — MPS-DELTA (5) `N2GM_P1_TASK_HEAD_HOOK` |
+
+**exp_25 needs no edit to `n2_phase1_gm_mps.cpp`.** The rev-1 request for a
+"MPS-DELTA (9)" is withdrawn — it exists as MPS-DELTA (3). All Policy 0 edits are
+confined to files exp_25 owns: `k0pf6gm_device_tile_mps.hip` (the fused task loop
++ the hook definition), `moe_mps_adapter.cuh` (`k` decode + validator),
+`moe_host_abi.hpp` (the bit-field comment only). Note the authoritative donor is
+the **585-line** `solution/hip/n2_phase1_gm.cpp` (sha256 `1d90b266…`), not the
+634-line exp_65 snapshot.
+
+### 6.1 Mode numbers *(rev 1 — superseded by §6.1a)*
 
 `mode12_protocol_map.md` §6 says 10 and 11 are free; I re-verified —
 `config_is_valid` bounds `mode > 13u` (`ADP:271`) and nothing in the tree
