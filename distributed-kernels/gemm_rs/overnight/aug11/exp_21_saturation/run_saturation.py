@@ -469,7 +469,8 @@ def main():
             "fanout": fanout if mode == 2 else None,
             "overlay": overlay,
             "protocol": bool(protocol),
-            "metric": "TFLOPS" if mode == 0 else "GBps",
+            # the reserve control has no traffic, so its reported value is the GEMM role's TFLOPS
+            "metric": "TFLOPS" if (mode == 0 or overlay == "reserve_control") else "GBps",
             "payload_granularity": "coarse" if args.payload_coarse else "fine",
             "value": res["value"], "samples": res["samples"], "per_rank": res["per_rank"],
             "concurrent_gemm_tflops": res["concurrent_gemm_tflops"],

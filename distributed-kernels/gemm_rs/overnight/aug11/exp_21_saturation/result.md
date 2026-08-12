@@ -1,9 +1,31 @@
 # exp_21 result — resource saturation vs CTA count (paper Fig 2 / Q4(a)), MI300X
 
-**STATUS: BUILD-ONLY. No GPU run has happened yet.** This file is a stub with the
-schema, the derivation slots and the verdict table pre-laid-out; the numbers are
-filled in after `run_sweep.sh`. Nothing here is a measurement until this line is
-replaced.
+**STATUS: BUILT AND ISA-VERIFIED. No GPU run has happened yet** (another agent
+held the devices). Section 3 is real; sections 4–6 are empty slots that
+`run_sweep.sh` fills. Nothing outside section 3 is a measurement until this line
+is replaced.
+
+Launch command for the sweep:
+
+```bash
+powershell -ExecutionPolicy Bypass -File distributed-kernels\gemm_rs\overnight\tools\nsh.ps1 \
+  -Script distributed-kernels\gemm_rs\overnight\aug11\exp_21_saturation\do_sweep.sh -ArgLine "quick"
+# then, once the smoke passes:
+#   ... -ArgLine "full"      (the figure data)
+#   ... -ArgLine "coarse"    (the production-parity payload-granularity cross-check)
+```
+
+### One thing that cannot be checked without a GPU
+
+The launch requests **65,536 B of dynamic LDS** in every arm (`SAT_LDS`, the
+whole gfx942 per-workgroup budget, static LDS 0). The production kernel does
+exactly this (`dynamic_shared_memory()` returns `kittens::MAX_SHARED_MEMORY`
+= 65,536), so it is expected to be accepted without `hipFuncSetAttribute` — but
+it is the one thing in this module that a compiler cannot prove. `run_sweep.sh
+quick` fails loudly on it (`sat_kernel launch: ...`) if it is wrong, and the
+fallback is to drop the request to `SAT_LDS` only for the mode-a-bearing arms
+and pass the emit window's 16,384 B for isolated mode c, at the cost of no
+longer holding occupancy fixed across arms.
 
 Plan and pre-registered predictions: `plan.md`. Task graph, buffers, rejected
 alternatives: `design.md`.
@@ -38,33 +60,70 @@ correctness gates are:
 
 No number from this experiment is ever reported as kernel performance.
 
-## 3. ISA verification (fill from `isa_report.txt`)
+## 3. ISA verification — DONE (2026-08-12, `isa_report.txt`)
 
-| kernel | SGPR | VGPR | AGPR | scratch | spills | LDS | waves/SIMD | CTA/CU |
+`hipcc` HIP 7.2.53211, AMD clang 22.0.0git (roc-7.2.3), `--offload-arch=gfx942`,
+`-DKITTENS_CDNA3 -O3 -ffast-math`. Two independent routes agree: the
+`--save-temps` `.s` (8,486 lines) and `llvm-objdump -d --mcpu=gfx942` of the
+gfx942 code object extracted with `llvm-objcopy --dump-section=.hip_fatbin` +
+`clang-offload-bundler` out of **the shipped `sat_ubench.so`** — so a
+build-flag divergence between the verified code and the code the driver
+dlopens cannot hide.
+
+| kernel | SGPR | VGPR | AGPR | scratch | SGPR spill | VGPR spill | static LDS | waves/SIMD |
 |---|---|---|---|---|---|---|---|---|
-| `sat_kernel<a,isolated>` | | | | | | | | |
-| `sat_kernel<b,isolated>` | | | | | | | | |
-| `sat_kernel<c,isolated>` | | | | | | | | |
-| `sat_kernel<b,concurrent>` | | | | | | | | |
-| `sat_kernel<b,control>` | | | | | | | | |
-| `sat_kernel<c,concurrent>` | | | | | | | | |
-| `sat_kernel<c,control>` | | | | | | | | |
+| `sat_kernel<a, isolated>` | 48 | 193 | 0 | 0 | 0 | 0 | 0 | 2 |
+| `sat_kernel<b, isolated>` | 82 | 86 | 0 | 0 | 0 | 0 | 0 | 5 |
+| `sat_kernel<c, isolated>` | 105 | 20 | 0 | 0 | 0 | 0 | 0 | 7 |
+| `sat_kernel<b, concurrent>` | 86 | 195 | 0 | 0 | 0 | 0 | 0 | 2 |
+| `sat_kernel<c, concurrent>` | 106 | 195 | 0 | 0 | 0 | 0 | 0 | 2 |
+| `sat_kernel<b, control>` | 52 | 194 | 0 | 0 | 0 | 0 | 0 | 2 |
+| `sat_kernel<c, control>` | 52 | 194 | 0 | 0 | 0 | 0 | 0 | 2 |
 
-Required properties:
+`private_segment_fixed_size` is 0 in every kernel and the module contains zero
+`scratch_load`/`scratch_store`: nothing spills to memory anywhere.
 
-- mode c lowers to a **16-byte** peer store. Production emits
-  `flat_store_dwordx4` for the peer emit and `global_store_dwordx4` for the
-  reducer output (exp_02's `m2_report.log`), so either 16 B form is correct;
-  what must be **absent** is any `buffer_store_*` (32-bit voffset — the exact
-  truncation that broke rank-1's peer stores, HANDOFF.md) and any narrower
-  store in the emit body.
-- mode a emits `v_mfma_f32_16x16x16_bf16` and **never** `v_mfma_f32_32x32x8`,
-  matching the production selection.
-- mode b's 8 sources load as `global_load_dwordx4`.
-- `scratch_load`/`scratch_store` must be **0** in the mode-a-bearing kernels; a
-  spilling mainloop would not be this kernel's MFMA curve.
-- LDS = 65,536 B in every arm ⇒ 1 CTA/CU by LDS alone ⇒ the H4 "no
-  oversubscription regime" claim is structural, not asserted.
+**Static LDS reads 0 because every byte of this ubench's LDS is dynamic**, so
+the compiler's `waves/SIMD` column ignores it. The launch requests 65,536 B of
+dynamic LDS in *every* arm, which pins 1 CTA/CU everywhere at runtime; the
+isolated b (5 waves/SIMD) and c (7 waves/SIMD) figures above are the
+register-only bound and are **not** the occupancy those arms will run at. The
+concurrent arms are at 1 CTA/CU from registers alone as well.
+
+Per-kernel opcode evidence (identical in the `.s` and the objdump):
+
+| property | mode a | mode b | mode c | verdict |
+|---|---|---|---|---|
+| 16 B peer store | — | — | **1 × `flat_store_dwordx4 v[6:7], v[12:15]`** | the peer emit is a single 16 B store with a 64-bit flat address — the same form production emits for its peer emit (exp_02 `m2_report.log`) |
+| `buffer_store_*` | 0 | 0 | **0** | no 32-bit-voffset store anywhere; the truncation class that broke rank-1's peer stores (HANDOFF.md) is absent |
+| narrower stores in the emit body | — | — | **0** | the `store_dwordx2`/`dword`/`short` counts in the census all sit in the `work_done`/`stamps`/fill/verify code, never in the packet loop |
+| 16 B LDS read of the staged source | — | — | **1 × `ds_read_b128`** | the emit's source read is one 16 B LDS access |
+| MFMA opcode | **64 × `v_mfma_f32_16x16x16_bf16`** per k-iteration | — | — | matches the production selection exactly |
+| `v_mfma_f32_32x32x8` | **0** | 0 | 0 | production never selects it and neither does this |
+| 8 REDV=1 source loads | — | **8 × `global_load_dwordx4`** + 1 × `global_store_dwordx4` | — | eight 16 B source packets in, one packed 16 B packet out |
+| `s_setprio` | present (10 module-wide) | — | — | the exp_09 issue-priority window survived |
+| release writeback | 0 | **0** | **`buffer_wbl2 sc0 sc1`, and only here** | the entire module contains exactly two `buffer_wbl2 sc0 sc1`, both inside mode c's `--protocol` branch. Protocol cost is therefore *structurally* separable from payload cost in this binary — the payload-only arms cannot emit a release even by accident |
+| `buffer_inv` | 0 | 0 | 0 | no acquire side; the ubench never consumes peer payload in a timed path |
+
+Two findings worth keeping:
+
+1. **The relaxed completion counter matters.** The first build used an
+   `__ATOMIC_RELEASE` increment for `res_done` and that alone put a
+   `buffer_wbl2` into the mode-b concurrent and control kernels *and* cost 4
+   SGPR spills in `sat_kernel<c, concurrent>`. Since the end stamp is taken
+   after that store, an L2 writeback there would have landed inside the
+   measured span — expensive in mode b, which leaves 64 MB of dirty output
+   behind. Relaxed removed the writeback and the spills both.
+2. **H4 is confirmed structurally, twice over.** Mode a is 1 CTA/CU from
+   registers alone (193 VGPRs → 2 waves/SIMD → 2×4/8 = 1 CTA/CU at 512
+   threads) *and* from LDS alone (65,536 B = the entire gfx942 per-workgroup
+   budget). No oversubscription regime exists for this body, so a superlinear
+   or saturating MFMA curve cannot be an occupancy artefact.
+
+Mode a here is 193 VGPRs with no spills against production's 256 with 2 VGPR
+spills on the same 256/256/32 row, because the ubench body carries no
+epilogue, bias, credit wait or emit. The k-loop schedule is the same; the
+register headroom is not, and that is stated rather than glossed.
 
 ## 4. Measured ceilings on THIS node (fill from `ceilings.txt` / `ceilings_host.txt`)
 

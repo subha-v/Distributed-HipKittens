@@ -142,37 +142,71 @@ for (a, sym), (b, _) in zip(starts, starts[1:]):
 PY
 echo
 
+echo "################ exact spelling: 16 B stores, release writebacks, MFMA ################"
+echo "-- every 16 B store instruction, with modifiers --"
+grep -oE '\b(flat|global)_store_dwordx4[^;]*' "$S" | sed 's/  */ /g;s/ *$//' | sort | uniq -c | sort -rn
+echo "-- every release writeback / invalidate, with cache-scope bits --"
+grep -oE '\bbuffer_(wbl2|inv|wbinvl1)[^;]*' "$S" | sed 's/  */ /g;s/ *$//' | sort | uniq -c | sort -rn
+echo "-- MFMA opcodes present --"
+grep -oE '\bv_mfma_[a-z0-9_]+' "$S" | sort | uniq -c | sort -rn
+echo "-- the emit loop's LDS read width --"
+grep -oE '\bds_read[a-z0-9_]*' "$S" | sort | uniq -c | sort -rn
+echo
+
 echo "################ .s amdhsa metadata ################"
 grep -E '\.name:|\.symbol:|\.sgpr_count|\.vgpr_count|\.agpr_count|\.group_segment_fixed_size|\.private_segment_fixed_size|\.max_flat_workgroup_size|\.sgpr_spill_count|\.vgpr_spill_count' "$S" \
   | sed 's/^ *//' | head -140
 echo
 
-echo "################ llvm-objdump cross-check on the built .so ################"
-if [ -f "$OUT/sat_ubench.so" ]; then
-  if command -v "$ROCM_PATH/llvm/bin/llvm-objdump" >/dev/null 2>&1; then
-    OBJ="$ROCM_PATH/llvm/bin/llvm-objdump"
-  else
-    OBJ=llvm-objdump
-  fi
-  # roc-obj extracts the embedded device code objects; fall back to clang-offload-bundler.
-  if command -v roc-obj >/dev/null 2>&1; then
-    ( cd "$ISA" && roc-obj -o "$ISA/roc" "$OUT/sat_ubench.so" >"$ISA/rocobj.log" 2>&1 )
-    echo "roc-obj exit=$? (log: $ISA/rocobj.log)"
-    for f in "$ISA"/roc*gfx942*; do
-      [ -f "$f" ] || continue
-      echo "-- objdump $f --"
-      "$OBJ" -d --mcpu=gfx942 "$f" > "$ISA/objdump.txt" 2>"$ISA/objdump.err"
-      for p in flat_store_dwordx4 global_store_dwordx4 buffer_store_ v_mfma_f32_16x16x16 \
-               v_mfma_f32_32x32x8 global_load_dwordx4 buffer_wbl2 scratch_store; do
-        printf '   %-30s %s\n' "$p" "$(grep -c "$p" "$ISA/objdump.txt")"
-      done
-      break
-    done
-  else
-    echo "roc-obj not present; the --save-temps .s census above is the record"
-  fi
-else
+echo "################ llvm-objdump cross-check on the SHIPPED .so ################"
+# The .s above comes from a second compiler invocation; this disassembles the device code actually
+# embedded in the module the driver will dlopen, so a build-flag divergence cannot hide here.
+OBJ="$ROCM_PATH/llvm/bin/llvm-objdump"
+command -v "$OBJ" >/dev/null 2>&1 || OBJ=llvm-objdump
+BUNDLER="$ROCM_PATH/llvm/bin/clang-offload-bundler"
+command -v "$BUNDLER" >/dev/null 2>&1 || BUNDLER=clang-offload-bundler
+
+if [ ! -f "$OUT/sat_ubench.so" ]; then
   echo "no sat_ubench.so yet -- run build.sh first"
+else
+  CO=""
+  # 1) extract .hip_fatbin from the .so, then unbundle the gfx942 code object
+  if "$OBJ" -h "$OUT/sat_ubench.so" 2>/dev/null | grep -q hip_fatbin; then
+    "$ROCM_PATH/llvm/bin/llvm-objcopy" --dump-section=.hip_fatbin="$ISA/fatbin.bin" \
+      "$OUT/sat_ubench.so" /dev/null 2>"$ISA/objcopy.err" && echo "extracted .hip_fatbin"
+  fi
+  if [ -s "$ISA/fatbin.bin" ]; then
+    "$BUNDLER" --type=o --unbundle --input="$ISA/fatbin.bin" \
+      --targets=hipv4-amdgcn-amd-amdhsa--gfx942 --output="$ISA/dev_gfx942.o" \
+      >"$ISA/bundler.log" 2>&1 && CO="$ISA/dev_gfx942.o"
+    [ -z "$CO" ] && { "$BUNDLER" --type=o --unbundle --input="$ISA/fatbin.bin" \
+        --targets=hip-amdgcn-amd-amdhsa--gfx942 --output="$ISA/dev_gfx942.o" \
+        >>"$ISA/bundler.log" 2>&1 && CO="$ISA/dev_gfx942.o"; }
+  fi
+  # 2) roc-obj as a second route
+  if [ -z "$CO" ] && command -v roc-obj >/dev/null 2>&1; then
+    ( cd "$ISA" && roc-obj -o "$ISA/roc" "$OUT/sat_ubench.so" >"$ISA/rocobj.log" 2>&1 )
+    for f in "$ISA"/roc*gfx942* "$ISA"/*gfx942*.co; do
+      [ -f "$f" ] && { CO="$f"; break; }
+    done
+  fi
+
+  if [ -n "$CO" ]; then
+    echo "device code object: $CO"
+    "$OBJ" -d --mcpu=gfx942 "$CO" > "$ISA/objdump.txt" 2>"$ISA/objdump.err"
+    echo "objdump lines: $(wc -l < "$ISA/objdump.txt")"
+    for p in flat_store_dwordx4 global_store_dwordx4 'buffer_store_' \
+             v_mfma_f32_16x16x16 v_mfma_f32_32x32x8 global_load_dwordx4 \
+             ds_read_b128 buffer_wbl2 buffer_inv scratch_store s_memrealtime; do
+      printf '   %-30s %s\n' "$p" "$(grep -c "$p" "$ISA/objdump.txt")"
+    done
+    echo "-- exact spelling of every 16 B store and every release writeback --"
+    grep -oE '(flat|global)_store_dwordx4[^/]*|buffer_wbl2[^/]*' "$ISA/objdump.txt" \
+      | sed 's/  */ /g' | sort | uniq -c | sort -rn | head -20
+  else
+    echo "could not extract a device code object (see bundler.log / rocobj.log);"
+    echo "the --save-temps .s census above is then the record -- same compiler, same flags"
+  fi
 fi
 
 echo

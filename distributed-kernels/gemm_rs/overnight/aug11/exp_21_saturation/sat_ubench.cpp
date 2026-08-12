@@ -354,9 +354,9 @@ __device__ void sat_mode_c(const sat_args& g, int role_id, int role_ctas, int* s
             }
         }
     }
-    if (g.depth > 0 || g.protocol == 0) {
-        asm volatile("s_waitcnt vmcnt(0)" ::: "memory");
-    }
+    // Unconditional trailing drain, so the measured span covers delivery of the last partial
+    // batch at every depth (including depth == 0, which issues no drain inside the loop at all).
+    asm volatile("s_waitcnt vmcnt(0)" ::: "memory");
     if (threadIdx.x == 0) g.work_done[blockIdx.x] = done;
 }
 
@@ -396,7 +396,12 @@ void sat_kernel(const sat_args g) {
                 sat_mode_c(g, pid, g.num_res_ctas, shm);
             }
             if (threadIdx.x == 0) {
-                (void)__hip_atomic_fetch_add(g.res_done, 1u, __ATOMIC_RELEASE,
+                // RELAXED deliberately. This counter is a completion signal for the filler, not
+                // an ownership transfer: nothing reads the resource role's payload through it. An
+                // ACQ_REL increment lowers to an L2 writeback (buffer_wbl2), and since the end
+                // stamp is taken after this store that writeback would land INSIDE the measured
+                // span -- expensive in the mode-b arm, which leaves 64 MB of dirty output behind.
+                (void)__hip_atomic_fetch_add(g.res_done, 1u, __ATOMIC_RELAXED,
                                              __HIP_MEMORY_SCOPE_AGENT);
             }
         } else {
