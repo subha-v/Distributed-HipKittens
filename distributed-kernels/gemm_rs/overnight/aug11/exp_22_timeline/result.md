@@ -101,12 +101,111 @@ by the anchor check rather than by a mispatch, and one planned site turned out
 to need no edit because aggregate initialization already value-initializes the
 new trailing member to 0.
 
-Still blocked on the **GPU lease** (exp_23 and exp_21 are ahead). Arm (a)
-capture, the tick calibration and arm (b) all need the node; nothing has been
-launched. When the lease is granted, every GPU step runs inside
-`tools/gpu_lease.sh acquire exp_22 5400` … `release exp_22`, with the release
-trapped on exit, because a dirty-node check alone lets two agents observe a
-clean node in the same second and both launch.
+## Phase 2 (GPU): node sanity PASS, arm (a) COMPLETE, arm (b) queued
+
+### Node sanity — PASS, but only after the gate was pointed at the right statistic
+
+exp_22 is the first campaign to run after the exp_26 M9 run took a
+`VM_L2_PROTECTION_FAULT` and left a KFD entry wedged in `exit_mm` holding
+~1.25 GB per GPU at zero CU occupancy. The instruction was to re-verify a known
+value before trusting anything, so the lease opens with a full M7 at the
+flag-OFF production build (`harness/build/gemm_rs_mi300x.so`, used as-is and
+never rebuilt — the binary that produced the reference vector is the binary
+that should reproduce it).
+
+**The first version of this gate FAILED, and the failure was the gate's, not
+the node's.** It compared M7 to the best-of-arm vector
+`62.38 / 64.52 / 83.75 / 198.71 / 613.70 / 1616.63` and flagged shape 5 at
++5.3% (646.10 vs 613.70). That is verbatim the trap at `LESSONS.md:189`: *the
+recorded per-shape denominator vector is BEST-of-arm, while gate M7 prints
+MEANS* — exp_05's own table records shape 5 as `613.70 / 645.93` = best/median,
+and comparing the two manufactured a phantom regression once already, for a row
+whose device code had not changed. A best over three rotations is also a weaker
+order statistic than a best pooled over a multi-arm campaign, which is why
+*every* shape drifted up 1–5% while shape 6 drifted *down* 2.9% — a mixed sign
+pattern that no node degradation produces.
+
+Re-scored against like-for-like statistics (`sanity.json`, `exp22.sanity.v2`):
+
+| statistic | measured | recorded | delta | verdict |
+|---|---:|---:|---:|---|
+| geomean of M7 means | 207.76 µs | 207.18 µs (`LESSONS.md:598`, the E4b landing) | **+0.28%** | ok |
+| shape 5 mean | 648.11 µs | 645.93 µs (exp_05 median) | **+0.34%** | ok |
+| shape 5 in same-config range | 648.11 µs | 644.71–669.39 µs (`LESSONS.md:194`) | inside | ok |
+| correctness, all six shapes at `2e-3` | True | — | — | ok |
+
+**The node reproduces the ratchet to 0.3% on the like-for-like statistic.** The
+stale KFD entry's predicted timing effect of nil is confirmed, not assumed. The
+best-vs-best column is retained in `sanity.json` as context and explicitly not
+gated. Shape-5 per-rotation spread was 2.10 µs (0.3%), i.e. the instrument is
+tight; the historical run that produced the 613.70 best had a mean of 645.93,
+so its spread was ~5%, which is the fat lower tail LESSONS warns about.
+
+### Arm (a) — reference GEMM+RCCL, COMPLETE
+
+`events_b0_reference.json`, `b0_kernel_map.json`. Shape 5, rank 0 traced with
+`rocprofv3 --kernel-trace`, the other seven ranks unprofiled so the collective
+had real peers. 1506 dispatches, nine distinct kernel names, **zero
+unclassified after the rule correction below**.
+
+The chosen epoch (median of 13 usable, durations 512.0 / 527.9 / 669.9 µs
+min/med/max) is three intervals and they are **strictly serialized with zero
+overlap** — which is the entire point of the arm:
+
+| interval | µs | resource | kernel |
+|---|---:|---|---|
+| 0.0 → 243.2 | 243.2 | mfma | `Cijk_Alik_Bljk_BBS_BH_Bias_HA_S_SAV_UserArgs_MT256x224x64_MI16x16x1_…` (rocBLAS) |
+| 243.2 → 286.5 | 43.4 | hbm | `at::native::elementwise_kernel_manual_unroll<128,8,…>` (bias) |
+| 286.6 → 527.9 | 241.3 | xgmi | `ncclDevKernel_Generic_2(ncclDevKernelArgsStorage<4096ul>)` (reduce-scatter) |
+
+46% MFMA, 8% HBM, 46% xGMI, and **each resource is idle while the other two
+run**. Host cross-check: rank 3's own device median was 573.4 µs against the
+traced rank-0 epoch of 527.9 µs; rank 0 is the profiled rank and the difference
+is not used for any performance claim.
+
+**Two rule corrections, both derived from names actually observed**, recorded
+because the requirement was to report rather than bucket:
+
+1. `ncclDevKernel_Generic_2` — 30 dispatches, 11.07 ms, **the single most
+   important kernel in the arm** — matched no seed rule and landed in
+   `unclassified`. The seeds looked for `rccl*`/`ncclkernel`; ROCm's RCCL
+   exports the upstream NCCL symbol names. Added `^nccl`. The
+   report-don't-bucket rule is what surfaced this; a silent fallback would have
+   produced a figure with an empty xGMI strip for the reference arm.
+2. `__amd_rocclr_copyBuffer` (866) and `__amd_rocclr_fillBufferAligned` (552)
+   are HIP runtime allocator blits from input setup, not operator work. They
+   are now class `runtime`, **excluded from epoch segmentation and from the
+   strips, and reported**. Left in, they cut the trace into 718 fragments and
+   no epoch contained both a GEMM and a collective — the first capture aborted
+   on exactly that. Excluding them leaves 88 operator dispatches → 36 epochs,
+   13 usable.
+
+### Arm (b) — built and correct-by-construction, queued on the lease
+
+The diagnostic build now compiles and loads (`gemm_rs_mi300x_trace.so`,
+429,264 B). One defect found and fixed, in the *verification*, not the build:
+the smoke test loaded the module under the spec name `t`, and CPython resolves
+a C extension's init symbol as `PyInit_<last component of the spec name>`, so
+it failed with `does not define module export function (PyInit_t)` — which
+reads like a build failure and is not one. `trace_run.py` already used the
+correct name.
+
+**Arm (b) has not run.** After arm (a) completed I released the lease, and it
+was immediately taken by **exp_24**, with **exp_21** and **exp_26** also
+queued. Our job is waiting its turn behind them, which is the lease working as
+designed; it has been re-armed with a 4-hour outer window (`timeout 14400`) so
+the queue wait cannot consume its run window, and it will execute arms (a) and
+(b) unattended when the lease frees. Nothing was stolen and the stale KFD entry
+was never signalled.
+
+### One process trap worth recording: CRLF
+
+The second capture attempt died with `syntax error: unexpected end of file` and
+`$'fi\r': command not found`. Every `.sh` and `.py` in this directory had been
+written with CRLF endings from Windows. Simple line-per-command scripts tolerate
+it; anything with a multi-line construct does not. All files are normalized to
+LF and normalization now runs before every push. This is the trap the root
+charter flags, and it cost one capture.
 
 ## Policy, stated up front and binding on everything below
 

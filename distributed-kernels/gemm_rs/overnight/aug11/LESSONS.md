@@ -874,14 +874,104 @@ The mechanism is arithmetic and it is the important part:
 plateau that panel b measures independently.** **At full grid this mainloop is
 memory-path bound.**
 
-**Consequence for Phase 2, and it changes the plan:** arithmetic intensity is
-`~(1/BM + 1/BN)` and is **independent of `BK`**. So freeing LDS to raise `BK`
-reduces `k_iters` but moves **the same number of operand bytes** — if the mainloop
-is already memory-path bound at full grid, raising `BK` cannot buy what a
-cycles-per-iteration model predicts. This is the same `1/BM + 1/BN` column
-HANDOFF flagged as "real", now measured directly: the lever that matters is
-**operand traffic per FLOP**, i.e. larger `BM·BN` reuse, not fewer iterations.
-exp_27's brief was written around raising `BK` and must be re-ranked accordingly.
+**Consequence for Phase 2:** arithmetic intensity is `~(1/BM + 1/BN)` and is
+**independent of `BK`**, so freeing LDS to raise `BK` reduces `k_iters` while
+moving the **same** operand bytes.
+
+> **CORRECTION — I over-read this, and exp_27 caught it. The bandwidth conclusion
+> does NOT transfer to the production mainloop.** See "the ubench-transfer error"
+> below. The `BK` point above still stands on its own arithmetic; the
+> "memory-path bound" framing does not.
+
+## exp_27 — THE UBENCH-TRANSFER ERROR, and the mainloop's real bound
+
+I re-ranked Phase 2 off exp_21's H4 result and was **wrong**. The correction is
+recorded in full because the mistake is a general one and cheap to repeat.
+
+**The error.** exp_21's mode-a panel plateaus at 582.4 TFLOPS, and
+`7.813e-3 B/FLOP × 582.36 TFLOPS = 4549 GB/s` sits at 99.0% of the 4593 GB/s
+plateau its own panel b measures. I read that agreement as "the mainloop is
+memory-path bound at full grid". **It is a coincidence, and the two panels do not
+measure the same level of the hierarchy.** Panel a runs on a **15.2 MB,
+deliberately cache-resident** operand set — its own plan says the point is to
+price **MFMA issue, not HBM**. Panel b runs on 512 MB and is a genuine HBM curve.
+For 4549 to *be* the HBM demand, panel a would have to miss to HBM, which its
+design specifically prevents.
+
+**The production mainloop's bound, from MEASURED counters** (`ea_read_requests` ×
+64 B, already in exp_20's `counters.json` — not a new run):
+
+| | shape 5 | shape 6 |
+|---|---:|---:|
+| achieved (FLOP / GEMM pool) | 394.1 TFLOPS | 500.0 TFLOPS |
+| % of producer-CU peak @ 1900 MHz | 37.2% | **50.2%** |
+| below-L2 reads, measured | 125.6 MB | 436.9 MB |
+| implied L2 read hit ratio | 86.6% | 88.8% |
+| as bandwidth over the GEMM pool | 411.6 GB/s | 440.3 GB/s |
+| **as a fraction of the 4593 GB/s plateau** | **9.0%** | **9.6%** |
+
+**Both shapes are latency/schedule-bound, not bandwidth-bound**, by an order of
+magnitude. The tell that settles it: **shape 5 is further from every bandwidth
+limit than shape 6 while being further below MFMA peak** — the exact opposite of
+what a bandwidth bound produces.
+
+Two independent cross-checks that the 99% agreement was coincidence: 4549 GB/s is
+**7.9 B/clk/CU against a 64 B/clk vL1D**, i.e. 12% of L1 capability; and
+**HANDOFF's own control with 1.78× the traffic cost 6.2%, not ~78%** — that
+control was always evidence *against* a traffic bound, and I had it in front of me.
+Panel a's "45% of peak" and the production kernel's "50.2% of producer peak" are
+most likely **the same schedule ceiling measured twice**.
+
+**The generalizable lesson: a microbenchmark's bound only transfers to the
+production kernel if their working sets occupy the same level of the memory
+hierarchy.** A cache-resident ubench can price issue rate and instruction
+scheduling; it cannot establish an HBM bound for a kernel whose operand stream
+misses differently. When a ubench and a counter pass disagree, **the counter pass
+on the real kernel wins** — and here they never actually disagreed, I just
+mismatched the levels.
+
+### The dispatch's headline candidate is dead twice over
+
+**`S=1, BK=64` (single-buffer to free LDS) is closed on two independent grounds**:
+it yields **identical barriers per tile** (2 × 58 = 1 × 116) *and* identical bytes
+moved. Separately, `256/256/32` is the **argmax of MFMA-work-per-barrier** under
+the joint LDS and accumulator caps, so the current tile is already the right
+answer for the quantity that matters. Do not re-open it.
+
+**XCD-aware tile order is now priced and small**, which retires a long-standing
+"untested" item: perfect locality would save 316 MB ≈ 319 GB/s of a plateau we use
+**9.6%** of — worth −0 to −15 µs on shape 6.
+
+### Ranked survivors (shape 6 / shape 5 µs)
+
+| | mechanism | s6 | s5 |
+|---|---|---:|---:|
+| A | counter pass to adjudicate the bound (no code) | 0 | 0 |
+| **B** | hoist `load_commit` above the half-1 MFMAs | −37…−73 | −11…−23 |
+| C | prefill swizzled LDS offsets + SGPR bases (donor port) | −25…−60 | −8…−18 |
+| D | retire `K_TAIL=true` on shape 6 (+63 instrs/trip, counted) | −40…−90 | 0 |
+| E | phase-offset warp-group ping-pong (donor) | −150…−350 | −45…−105 |
+| H | `32x32x8` — issue-slot lever only; warp LDS reads are `(WM+WN)·BK·2` regardless of atom | −20…−60 | −6…−18 |
+
+**Recommendation: run A, then land B.** Pre-registered: shape 6 GEMM pool
+−5.0% ± 3.0%, geomean **−0.91%** (209.56 → 207.66 µs). Falsifier: |Δ| < 1.5% on
+shape 6 over ≥3 paired draws **with the ISA confirming `vmcnt(0)` moved** between
+the two 32-MFMA runs closes the whole B/C/D family at once.
+
+Gate A is one `rocprofv3` pass with plumbing that already exists:
+`SQ_WAIT_INST_LDS`, `SQ_WAIT_ANY`, `SQ_LDS_BANK_CONFLICT` on shapes 5 and 6.
+Pre-registered: LDS+barrier wait > 60%, VMEM wait < 25%. **Falsifier: VMEM wait
+> 50% means the mainloop should be abandoned for traffic work.**
+
+### The honest expected value, which is the number that should govern the night
+
+**The ~571 µs is recoverable, but by far less than its size.** It is the distance
+to a roofline no GEMM reaches: we sit at **50.2% of producer peak where tuned
+MI300X libraries reach 60-75%**. Realistic capture is **~250 µs on shape 6 and
+~90 µs on shape 5 = −5.15% at the geomean**, which would take the graded gap from
+**1.098× to ~1.046×**. Every individual mechanism is worth ≤1% of geomean, so this
+is a grind of several landed changes, not one win — and shapes 1-4 contribute
+nothing.
 
 ## Measurement discipline carried into the figure work
 

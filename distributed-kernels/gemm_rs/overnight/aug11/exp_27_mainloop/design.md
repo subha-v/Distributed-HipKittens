@@ -1,5 +1,16 @@
 # exp_27 — where the ~571 µs actually is, and what can take it
 
+> **Read `addendum_bandwidth.md` alongside this file.** After it was written,
+> exp_21's saturation ubench reported the mainloop body plateauing at 45% of
+> peak and attributed that to operand bandwidth. The addendum re-derives the
+> bound per shape from exp_20's `ea_read_requests` counter and finds the
+> production kernel's below-L2 read stream at **9.0–9.6% of the measured
+> 4593 GB/s memory-path plateau** — so the regime call below (schedule-bound)
+> holds, and §4's closure of `S=1, BK=64` is now doubly proven, since
+> `bytes/FLOP = 1/BM + 1/BN` is `BK`-independent. Rankings and the
+> recommendation are unchanged; one new candidate (XCD-aware tile order) is
+> priced in the addendum and found small.
+
 **Verdict up front, in three parts.**
 
 1. **The dispatch's leading hypothesis is dead on arithmetic.** Single-buffered

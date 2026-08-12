@@ -204,27 +204,41 @@ live 4096³ bf16 matmul with 190 of 192 GiB free at idle temps and power.
 
 Then **Phase 2**: the optimization loop resumes against the refreshed profile.
 
-## PHASE 2 RE-RANKED by exp_21 — the mainloop may be BANDWIDTH-bound, not schedule-bound
+## PHASE 2 — the mainloop is LATENCY/SCHEDULE-bound, and worth ~5% of geomean
 
-exp_21 measured the mainloop body in isolation and found MFMA scaling is **linear
-only to C≈160**, plateauing at **582.4 TFLOPS = 45% of this node's 1307.4 TFLOPS
-ceiling** — and **not because of occupancy** (1 CTA/CU from both 193 VGPRs and
-64 KB LDS). The mechanism closes to 1%: **7.813e-3 B/FLOP × 582.36 TFLOPS =
-4549 GB/s against an independently measured 4593 GB/s memory-path plateau.**
+I briefly re-ranked this as bandwidth-bound off exp_21's H4 result; **exp_27
+refuted that with measured counters and was right.** The refutation and the
+general lesson (a cache-resident ubench cannot establish an HBM bound for the
+production kernel) are in LESSONS under "the ubench-transfer error".
 
-**At the full 304-CTA grid this mainloop is memory-path bound**, which changes the
-plan: arithmetic intensity is `~(1/BM + 1/BN)` and is **independent of `BK`**, so
-freeing LDS to raise `BK` cuts iterations while moving **the same operand bytes**.
-The lever is **operand traffic per FLOP** (bigger `BM·BN` reuse, better L2/Infinity
-Cache hit rate, XCD-aware tile order — still untested), not fewer iterations.
-exp_27 has been interrupted and re-tasked to reconcile this against exp_20's
-"~571 µs is not MFMA occupancy" and to decide between **exposed latency** and
-**bandwidth wait**, since those imply opposite designs.
+From exp_20's already-measured `ea_read_requests`: below-L2 reads are
+125.6 MB (shape 5) and 436.9 MB (shape 6), i.e. **411.6 and 440.3 GB/s over the
+GEMM pool — 9.0% and 9.6% of the 4593 GB/s plateau.** Both shapes are
+**latency/schedule-bound by an order of magnitude.** The tell: shape 5 is further
+from every bandwidth limit than shape 6 while being further below MFMA peak, which
+is the opposite of a bandwidth bound.
 
-**And exp_21 promoted a cheaper target**: the release protocol costs **0.440× of
-egress bandwidth at identical payload bytes** (0.366× single-link). With exp_20's
-1.0007× fabric amplification, egress *width* is closed from both sides and **the
-whole residue is release granularity** — which is also where exp_26 already sits.
+**Two directions are now closed.** `S=1, BK=64` gives *identical* barriers per tile
+(2 × 58 = 1 × 116) **and** identical bytes, and `256/256/32` is the argmax of
+MFMA-work-per-barrier under the joint LDS and accumulator caps. XCD-aware tile
+order is priced and small: perfect locality saves 316 MB ≈ 319 GB/s of a plateau
+we use 9.6% of.
+
+**Plan: gate A (one `rocprofv3` pass, no code) then land B** (hoist `load_commit`
+above the half-1 MFMAs). Pre-registered: shape 6 GEMM pool −5.0% ± 3.0%, geomean
+−0.91%. Gate A pre-registers LDS+barrier wait > 60% and VMEM wait < 25%, with
+**VMEM wait > 50% as the falsifier that would abandon the mainloop for traffic
+work**.
+
+**The honest ceiling: ~250 µs on shape 6 and ~90 µs on shape 5 = −5.15% geomean**,
+taking the graded gap **1.098× → ~1.046×**. We are at **50.2% of producer peak
+where tuned MI300X libraries reach 60-75%**, so this is a grind of several landed
+changes each worth ≤1% of geomean, not one win. Shapes 1-4 contribute nothing.
+
+**The cheapest µs on the board remains release granularity** — exp_21 measured the
+release protocol costing **0.440×** of egress bandwidth at identical payload bytes,
+and with exp_20's 1.0007× amplification the whole egress residue is granularity.
+exp_26 owns it (~32 µs on shape 5, ≈0.8% geomean) and is blocked on its fault.
 
 ## Phase 2 queue, ranked by the exp_20 profile (not by the charter's stale one)
 
