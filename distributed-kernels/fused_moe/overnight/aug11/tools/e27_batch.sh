@@ -39,7 +39,9 @@ GOT="$(grep -oE '^#define K0P6_MPS_ASCALE_TM [0-9]+' "$MPSSRC" | awk '{print $3}
 SRCREV="$(grep -oE '^#define K0P6_MPS_SRC_REV [0-9]+' "$MPSSRC" | awk '{print $3}')"
 INC="$(grep -oE '^#include "n2_phase1_gm(_mps)?\.cpp"' "$MPSSRC" | tail -1)"
 KNOB="$(grep -oE '^#define N2GM_P1_ASCALE_TOKEN_MAJOR [0-9]+' "$P1SRC" | awk '{print $3}')"
-SLOT="$(grep -A8 'n2p6gm_phase1_body(' "$MPSSRC" | grep -oE 'K0P6_D_SC_(DST|STAGE)' | tr '\n' ' ')"
+# -A14, not -A8: the exp_27 comment block sits between the call and the #if, so a
+# window of 8 stopped short of the slot lines and printed an empty probe.
+SLOT="$(grep -A14 'n2p6gm_phase1_body(' "$MPSSRC" | grep -oE 'K0P6_D_SC_(DST|STAGE)' | tr '\n' ' ')"
 echo "node HEAD=$HEADSHA  SRC_REV=$SRCREV  ASCALE_TM=$GOT (want $EXPECT)"
 echo "  phase-1 include : $INC"
 echo "  p1 knob default : $KNOB (must be 0 -- the .hip literal is what governs)"
