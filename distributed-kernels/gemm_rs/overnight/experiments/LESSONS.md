@@ -387,8 +387,76 @@
   Shape 1 was subject to the same bug but did not move: at m=64 it is
   latency-bound at ~181 µs, so tile geometry is not what sets its time.
 
-- **THE REMAINING GAP IS A ~100 µs PER-CALL FIXED COST, not the mainloop and
-  not the egress.** Subtracting our own pipelined device time from our graded
+- **The ~100 µs per-call cost is DECOMPOSED and the axis is CLOSED. Most of it
+  was never ours.** Three extra timestamps inside the graded timed region
+  (`perf_counter_ns` is `CLOCK_MONOTONIC`, so the eight ranks' stamps are
+  directly comparable, which also yields cross-rank issue skew for free):
+
+  | # | graded total | clone | **host** | device | **barrier** | wait-for-slowest |
+  |---|---|---|---|---|---|---|
+  | 1 | 247.9 | 21.9 | **38.6** | 82.3 | **86.3** | 18.7 |
+  | 4 | 335.2 | 15.7 | **25.5** | 196.7 | **75.8** | 21.6 |
+  | 6 | 1927.0 | 13.9 | **21.5** | 1823.9 | **73.9** | −6.2 |
+
+  The largest term is the evaluator's own trailing
+  `torch.cuda.synchronize() + dist.barrier()`. A `floor` arm — the identical
+  barrier-bracketed structure with **nothing inside the timed region** — costs
+  **57-79 µs**. Every submission pays it, rank-1 included. It also wanders
+  between 54 and 86 µs with host state, **which is why the small shapes' graded
+  numbers are ±10% noisy no matter what the kernel does.** The clone is the
+  evaluator's too and scales with input bytes like the memcpy it is.
+  **Every device-side candidate is falsified.** A probe kernel matched to our
+  launch geometry costs the same at **1, 8, 76, 152, 304 and 608 CTAs**
+  (70.1-71.1 µs against a 57.5 µs floor), so a launch costs 12-16 µs and that
+  cost is **per-launch, not per-CTA** — which kills the idea of shrinking the
+  grid. The 64 KB dynamic-LDS request is free. A kernel running `epoch32`
+  verbatim on the per-CTA cell plus the sticky error-bit load in all 304 CTAs
+  is indistinguishable from an empty one, so the start-up handshake costs
+  nothing (and the epoch/credit protocol never had to be opened). Graded device
+  time equals our pipelined `dev_max` within ±3% on all six shapes, so there is
+  no drain cost either.
+
+- **WIN: prebound launch path. Graded geomean 381.69 → 357.45 µs against
+  rank-1's 306.23 — the gap goes 1.238× → 1.167×, and shape 1 flips to a WIN
+  at 0.959×.** The one reducible term was our own host path at 21-39 µs, whose
+  largest piece is inside pybind: `pyutils`' `gl<>` converter re-derives
+  `__class__.__name__`, `is_contiguous()`, `device.type`, `shape` and
+  `data_ptr()` off four duck-typed tensors **on every call**, recomputing
+  values that cannot change on a cached state.
+  Fix is additive: `configure(...)` binds everything invariant for one
+  `(rank, shape)` into a `mi300x_globals` and returns an opaque handle;
+  `run(handle, a, b, bias, stream)` copies that POD, writes three pointers and
+  the stream, and calls the same dispatch — same POD, same dispatch table,
+  **still one launch per call**. Host cost fell to **4.8-7.4 µs** against a
+  measured 4.86 µs floor for a bare pybind call plus `hipLaunchKernel`.
+  Issue skew collapsed with it (29.2 → 12.9 µs on shape 1), and **because the
+  protocol runs at the pace of the last rank to launch, the total gain exceeds
+  the host-mean saving.** Two paired same-run A/Bs: 424.1 → 383.0 (0.903×) and
+  382.3 → 355.9 (0.931×). Pipelined geomean unchanged at 231.16 µs, exactly as
+  predicted — **this axis is invisible in our own harness.**
+  Validation note: the ladder drives the *old* entry point, so the new one was
+  checked separately and more strictly — the two launch paths are
+  **bit-identical** (`torch.equal` True, `max|diff| = 0.000e+00`) on all six
+  shapes on all eight ranks.
+
+- **Axis closed, with the residual quantified.** Of the ~103 µs of non-device
+  cost per call, **~92 µs is harness machinery every submission pays** and the
+  ~11 µs that is ours sits within ~6 µs of the floor for issuing any HIP kernel
+  from Python at all. The next microsecond would require removing Python from
+  the call entirely, for a ceiling of ~5 µs. Not worth it.
+  **The corollary matters more than the win:** because that ~92 µs is a
+  constant added to *both* arms, the kernel-to-kernel ratio is **worse** than
+  the 1.167× headline. Netted out, shapes 5 and 6 are **1.36× and 1.38× on
+  device work alone.**
+
+- **TRAP: `harness/submission.py` is a node-only COPY of `hk_submission.py`,
+  and every `mp_*` harness imports `submission`.** Editing `hk_submission.py`
+  without recopying measures the old code and looks exactly like a clean null
+  result — the most dangerous kind of failure, because a null result is a
+  plausible outcome. The build step now resyncs and asserts it.
+
+- **SUPERSEDED (decomposed above): the remaining gap is a ~100 µs per-call
+  fixed cost, not the mainloop and not the egress.** Subtracting our own pipelined device time from our graded
   best, per shape: **103 / 98 / 103 / 110 / 111 / 152 µs**. Nearly constant, and
   on shape 1 it is **57% of the entire runtime**. That is also why the gap
   became *uniform* (1.18-1.38×) after the shape-table fix instead of staying
@@ -406,6 +474,69 @@
   structurally a consequence of the persistent-megakernel/CTA-split design, so
   it belongs to the same research question as E4/E7 rather than being separate
   from it.
+
+- **exp_12: THE ~100 µs IS 70% THE EVALUATOR'S OWN BARRIER, and the ~20 µs of
+  it that was ours is now gone. Graded geomean 1.238× → 1.167× behind rank-1;
+  shape 1 flips to a WIN (0.959×).** This supersedes the candidate list in the
+  entry above: three of its four device-side mechanisms are falsified outright.
+  `mp_percall.py` reproduces the graded region in 8 processes with three extra
+  timestamps inside it, splitting it into clone / host / device / barrier, and
+  `nullk.cpp` launches probe kernels at our exact launch geometry.
+
+  | # | graded total | clone | **host** | device | **barrier** | resid |
+  |---|---:|---:|---:|---:|---:|---:|
+  | 1 | 247.9 | 21.9 | **38.6** | 82.3 | **86.3** | 18.7 |
+  | 4 | 335.2 | 15.7 | **25.5** | 196.7 | **75.8** | 21.6 |
+  | 6 | 1927.0 | 13.9 | **21.5** | 1823.9 | **73.9** | −6.2 |
+
+  - **The `floor` arm — the identical structure with NOTHING in the timed region
+    — costs 57–79 µs**, essentially all of it `dist.barrier()`. That is the
+    evaluator's, it is charged to every submission including rank-1's, and it is
+    not reducible by us. It also varies 54–86 µs between runs, which is why the
+    small shapes' graded numbers are ±10% noisy no matter what the kernel does.
+  - **Grid size is irrelevant: 1, 8, 76, 152, 304 and 608 CTAs all cost the same
+    launch** (70.1–71.1 µs on shape 4 against a 57.5 µs floor). A launch costs
+    12–16 µs and it is per-launch, not per-CTA. Kills "shrink the grid".
+  - **The start-up handshake costs zero.** `epoch304` runs `epoch32` verbatim on
+    the per-CTA cell plus the sticky error-bit load in all 304 CTAs and is
+    indistinguishable from an empty kernel. 304 atomics at kernel start are not
+    a serialization point, so the epoch/credit protocol was never opened.
+  - **The 64 KB dynamic-LDS request costs zero**, and **drain costs zero**:
+    graded device time equals pipelined `dev_max` within ±3% on all six shapes
+    (shapes 5 and 6 measure *below* it).
+  - **The whole reducible term was our python/pybind host path**, 21–39 µs, of
+    which the largest single piece is `pyutils`' `from_object<GL>` re-deriving
+    `__class__.__name__`, `is_contiguous()`, `device.type`, `shape` and
+    `data_ptr()` off four duck-typed tensors on every call.
+  - **Fix: a prebound launch pair** (`gemm_rs_mi300x_configure` /
+    `_run`) that binds everything invariant for one (rank, shape) once and passes
+    only the three input pointers and the stream per call, plus a
+    `custom_kernel` fast path making the same decision with the redundant work
+    removed. Additive; the original binding still serves `harness_lib`.
+    **Host 21–39 → 4.8–7.4 µs, against a measured 4.86 µs floor for a bare
+    pybind call plus `hipLaunchKernel` — i.e. at the floor.** Issue skew across
+    ranks collapsed with it (29.2 → 12.9 µs on shape 1), and since the protocol
+    runs at the pace of the last rank to launch, the total gain exceeds the
+    host-mean saving.
+  - Two paired same-run A/Bs with `_FAST` toggled between arms: geomean best
+    424.1 → 383.0 (0.903×) and 382.3 → 355.9 (0.931×). Full ladder green,
+    M3 17/17 at both tolerances, and `04_equiv.py` shows the two launch paths
+    are **bit-identical** (`torch.equal` True, max|diff| 0.000e+00) on all six
+    shapes on all eight ranks. Pipelined geomean unchanged at 231.16 µs, exactly
+    as predicted — the single-process harness cannot see this change.
+  - **This axis is now CLOSED.** ~92 of the remaining ~103 µs per call is
+    harness machinery every submission pays; the ~11 µs that is ours is within
+    ~6 µs of the floor for issuing any HIP kernel from python. The corollary:
+    because that ~92 µs is a constant added to both arms, the kernel-to-kernel
+    ratio is *worse* than 1.167× — netting it out, shapes 5 and 6 are 1.36× and
+    1.38× on device work alone. **E2 (XGMI egress on the two large shapes) is
+    where the rest of the gap lives.**
+
+- **TRAP: `harness/submission.py` is a COPY of `hk_submission.py` that exists
+  only on the node.** The evaluator and every `mp_*` harness import
+  `submission`, and various scripts create it with `cp`. Editing
+  `hk_submission.py` and re-pushing measures the *old* code and looks exactly
+  like a clean null result. Resync and `cmp` it as part of the build step.
 
 - **METHODOLOGY: means are unusable on this node, even with same-run
   interleaving.** Shape 3's mean (327.77) sat far above its median (218.46),
