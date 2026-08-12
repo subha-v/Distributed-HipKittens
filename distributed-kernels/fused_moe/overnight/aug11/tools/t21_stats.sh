@@ -135,6 +135,18 @@ for mask, tg in CELL.items():
     print(f"mask {mask}: DSR={mask & 1} MFMA={(mask & 4) >> 2}  "
           f"n={n:2d} mean={m:8.2f} sd={s:6.2f}   batches: {bs}")
 
+CELLVALS = {}
+for mask, tg in CELL.items():
+    v = [float(r["ts_M6_us"]) for t in tg if t in data
+         for r in data[t] if r["ts_M6_us"] not in ("", None)]
+    if v: CELLVALS[mask] = v
+if 0 in CELLVALS:
+    print("\nper-mask vs the POOLED mask-0 control (both cells, 2 batches, n=10):")
+    for mask in sorted(CELLVALS):
+        if mask == 0: continue
+        d, t, df, p = welch(CELLVALS[mask], CELLVALS[0])
+        print(f"  mask {mask}: delta {d:+7.2f} us  t {t:+6.2f}  df {df:5.1f}  p2 {p:9.2e}")
+
 def contrast(coefs):
     """coefs: {mask: weight}. Returns (estimate, se, t, df_min)."""
     est = sum(w * cell[k][1] for k, w in coefs.items())

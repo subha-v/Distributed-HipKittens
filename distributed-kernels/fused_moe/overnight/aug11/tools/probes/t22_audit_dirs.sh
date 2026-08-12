@@ -8,7 +8,7 @@ JIT="$HOME/.cache/k0-mok-synthetic-prefill/mori/jit/gfx950_mlx5"
 W=$HOME/overnight-scratch/e26act/audit
 mkdir -p "$W"; rm -f "$W"/*.hsaco "$W"/*.elf "$W"/*.text.bin
 i=0
-for f in $(find "$JIT" -maxdepth 2 -name 'k0pf6gm_mps_mega.hsaco' -newermt '-60 minutes' | sort); do
+for f in $(find "$JIT" -maxdepth 2 -name 'k0pf6gm_mps_mega.hsaco' -newermt '-180 minutes' | sort); do
   d="$(basename "$(dirname "$f")")"
   [ "$d" = "latest" ] && continue
   i=$((i+1)); cp "$f" "$W/$d.hsaco"
