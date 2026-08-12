@@ -163,39 +163,129 @@ Frozen rank-1 hash re-verified at run time by `patch_rank1.py`; staged copy
 
 ## 1. Verdict
 
-*(fill in: one sentence, then the three geomeans and the two ratios, both
-protocols, labelled.)*
+**We are behind rank-1 on both protocols and the honest protocol is the worse
+one: 1.0971× graded, 1.1189× pipelined (geomean of per-shape best). We beat
+reference GEMM+RCCL overall — 0.8863× graded, 0.9113× pipelined — but we LOSE to
+it on the two largest shapes.** Instrument A, six shapes, five arms, same-run
+interleaved, complete arm-order rotation, 2026-08-12 06:02–07:33.
+
+| statistic | ours | rank-1 | reference | ours/rank-1 | ours/reference |
+|---|---:|---:|---:|---:|---:|
+| **graded**, geomean of per-shape best | 339.29 | 309.28 | 382.80 | **1.0971×** | **0.8863×** |
+| **graded**, geomean of per-shape median | 356.19 | 330.19 | 401.22 | 1.0788× | 0.8878× |
+| **pipelined**, geomean of per-shape best | 210.64 | 188.25 | 231.14 | **1.1189×** | **0.9113×** |
+| **pipelined**, geomean of per-shape median | 214.61 | 195.25 | 237.17 | 1.0992× | 0.9049× |
+
+Null arm (`ours_null`) geomean: 339.25 µs graded / 210.21 µs pipelined — 0.01%
+and 0.20% from `ours`. Every ratio above clears the floor by more than an order
+of magnitude at the geomean; **per shape it is not that simple, see §2.4.**
+
+Three things this run changes:
+
+1. **The graded/pipelined dilution is real at the geomean but NOT uniform per
+ shape.** Graded understates our gap to rank-1 by 18.4% of the gap (best) /
+ 20.6% (median). But per shape the compression ranges from **+88.4%** (shape 2)
+ to **−100.4%** (shape 4): on two of six shapes the graded protocol *overstates*
+ the gap. Shape 2 — the quick run's only shape — is the single most diluted
+ shape in the ladder, so **the 1.0496-vs-1.2207 finding was true and not
+ generalizable.** See §4, expectation 4.
+2. **The "we beat reference GEMM+RCCL" claim needs a size qualifier.** We win on
+ shapes 1–4 (0.75–0.93×) and lose on shapes 5 and 6 (1.16×, 1.07× pipelined).
+ The geomean win is carried by the small and mid shapes.
+3. **The netted table is dropped**, on both of the conditions the dispatch named
+ — see §2.2.
 
 ## 2. The ladder
 
 ### 2.1 Graded per-call — **the competition's ranking statistic**, raw
 
-| # | shape | ours | rank-1 | reference | ours/rank-1 | ours/reference |
+Statistic = **best** of 250 samples per arm per shape (5 reps × 50 iters), with
+**median** in parentheses. µs.
+
+| # | shape | ours | rank-1 | reference | ours/rank-1 (best) | ours/reference (best) |
 |---:|---|---:|---:|---:|---:|---:|
-| 1 | 64×7168×18432 | | | | | |
-| 2 | 512×4096×12288 | | | | | |
-| 3 | 2048×2880×2880 | | | | | |
-| 4 | 4096×4096×4096 | | | | | |
-| 5 | 8192×4096×14336 | | | | | |
-| 6 | 8192×8192×29568 | | | | | |
-| | **geomean** | | | | | |
+| 1 | 64×7168×18432 | 149.37 (157.56) | 176.37 (184.87) | 177.97 (191.49) | **0.8469** | 0.8393 |
+| 2 | 512×4096×12288 | 154.03 (161.88) | 149.67 (160.11) | 204.63 (215.87) | 1.0291 | 0.7527 |
+| 3 | 2048×2880×2880 | 178.12 (185.84) | 157.48 (168.05) | 233.67 (245.16) | 1.1311 | 0.7623 |
+| 4 | 4096×4096×4096 | 294.84 (306.99) | 253.28 (280.48) | 334.99 (351.74) | 1.1641 | 0.8802 |
+| 5 | 8192×4096×14336 | 717.71 (739.19) | 565.44 (607.49) | 663.08 (676.34) | 1.2693 | 1.0824 |
+| 6 | 8192×8192×29568 | 1759.29 (1898.74) | 1470.00 (1528.93) | 1664.70 (1730.23) | 1.1968 | 1.0568 |
+| | **geomean** | **339.29** (356.19) | **309.28** (330.19) | **382.80** (401.22) | **1.0971** | **0.8863** |
 
-*(best / median / mean each in its own table or column set, statistic named.)*
+Means are reported only next to the null spread, because they are not usable:
+geomean(mean) is 387.87 / 364.90 / 468.11 µs, and the null arm's *mean* differs
+from ours by 12.5% and 14.1% on shapes 1 and 2 (§2.4). The graded region contains
+`clear_l2` and a fresh clone, so its tail is dominated by allocator and cache
+effects, not by the kernel.
 
-### 2.2 Graded per-call — **netted**, with this run's measured harness constant removed
+### 2.2 Graded per-call — netted — **DROPPED, not published**
 
-*(the `harness_floor` arm's per-shape median, then every arm minus it. State
-whether the floor was shape-independent; if it was not, say so and drop the
-netted table rather than publishing it.)*
+Both of the conditions the dispatch set for dropping this table fired, so it is
+dropped rather than published:
 
-### 2.3 Pipelined — the throughput number
+1. **The floor is not shape-independent.** Measured `harness_floor` medians are
+ 103.38 / 87.33 / 86.19 / 87.22 / 107.83 / **156.88** µs — a **67.5% spread**,
+ and it clearly *scales with shape size* (the largest shape has the largest
+ floor, because `clear_l2` and the input clone both grow with the operands).
+ Subtracting a single constant would be wrong; subtracting a per-shape floor
+ subtracts a quantity that is itself partly the arm's own memory traffic.
+2. **The floor's own noise is larger than the thing it would correct.** Per-shape
+ rsd is 88.7–215.0%, median **171.6%** — worse than the 53.7% seen in the quick
+ run, not better.
 
-*(same table. Never averaged with §2.1.)*
+For the record, had it been published it would have read `ours/rank1` 1.0713×
+and `ours/reference` 0.7818× (median). **Those numbers should not be used.** A
+netted table with a 172%-rsd, size-dependent subtrahend would be more misleading
+than no netted table, which is exactly the trap the dispatch anticipated.
 
-### 2.4 The null arm — the ladder's own noise floor, measured in this run
+### 2.3 Pipelined — the throughput number, and the honest kernel-to-kernel one
 
-*(`ours` vs `ours_null`, per shape and on the geomean. Any ratio movement in
-§2.1–2.3 smaller than this is not a result.)*
+Never averaged with §2.1. Statistic = **best** of 100 samples (5 reps × 20
+bursts), **median** in parentheses. µs.
+
+| # | shape | ours | rank-1 | reference | ours/rank-1 (best) | ours/reference (best) |
+|---:|---|---:|---:|---:|---:|---:|
+| 1 | 64×7168×18432 | 62.88 (63.96) | 75.46 (77.32) | 71.12 (74.77) | **0.8332** | 0.8842 |
+| 2 | 512×4096×12288 | 71.17 (72.12) | 56.91 (59.28) | 94.13 (96.21) | 1.2507 | 0.7561 |
+| 3 | 2048×2880×2880 | 90.95 (92.97) | 79.86 (83.47) | 122.01 (125.17) | 1.1388 | 0.7454 |
+| 4 | 4096×4096×4096 | 208.10 (211.00) | 192.34 (200.60) | 224.21 (226.74) | 1.0819 | 0.9281 |
+| 5 | 8192×4096×14336 | 627.84 (632.95) | 491.22 (510.65) | 542.51 (548.51) | 1.2781 | 1.1573 |
+| 6 | 8192×8192×29568 | 1642.60 (1706.00) | 1373.60 (1413.92) | 1535.08 (1589.22) | 1.1958 | 1.0700 |
+| | **geomean** | **210.64** (214.61) | **188.25** (195.25) | **231.14** (237.17) | **1.1189** | **0.9113** |
+
+`harness_floor` pipelined is 5.31 µs geomean (best), flat across shapes
+(5.15–5.51) — the pipelined region really is nearly free, which is what makes it
+the honest comparison.
+
+### 2.4 The null arm — the six noise floors measured in this run
+
+`ours` vs `ours_null`: the same `.so` loaded under two module names, in the same
+pool, in the same run, rotated like any other arm. **No per-shape ratio smaller
+than that shape's own floor is a result.**
+
+| # | shape | graded best% | graded median% | pipelined best% | published | verdict |
+|---:|---|---:|---:|---:|---:|---|
+| 1 | 64×7168×18432 | 0.34 | 0.36 | 0.36 | 1.34 | within |
+| 2 | 512×4096×12288 | 0.44 | 0.10 | 0.57 | 0.56 | within (pipelined +0.01 over) |
+| 3 | 2048×2880×2880 | 0.48 | 0.25 | 0.43 | 0.61 | within |
+| 4 | 4096×4096×4096 | 2.15 | 0.78 | 0.10 | 2.41 | within |
+| 5 | 8192×4096×14336 | 2.00 | 2.68 | 2.25 | 2.17 | at the published floor |
+| 6 | 8192×8192×29568 | 4.31 | 0.51 | 0.26 | 4.28 | at the published floor |
+
+The tightest floor is shape 2 (0.10–0.57%) and the loosest is shape 6 (4.31%
+graded best), a **12× range** — shape 2's floor must not be generalized, which is
+why every ratio in §3 is printed beside its own shape's floor.
+
+The **decision-relevant rows** are 1 and 6, and both survive comfortably: shape
+1's win over rank-1 is 15.3% against a 0.34% floor (45×), and shape 6's loss is
+19.7% against a 4.31% floor (4.6×). The row that does *not* clear cleanly is
+**shape 2 on the graded median**: a 1.11% gap against a 0.10% floor is 11× the
+floor and fine, but its graded *best* gap of 2.91% sits only 6.6× above a 0.44%
+floor while its pipelined gap is 25.07% — that 8.6× discrepancy between protocols
+on one shape is the dilution effect, not noise.
+
+Means are unusable and are reported only here: the null arm's *mean* differs from
+`ours` by 12.46% (shape 1) and 14.07% (shape 2) under the graded protocol.
 
 ## 3. Against the prior denominator
 
@@ -208,19 +298,42 @@ Reference GEMM+RCCL **438.15 µs**, beaten. Per-shape graded ratio
 between runs: +1.4 / −2.1 / −1.9%). Do not report a ratio change smaller than
 that as a change.
 
-*(fill in the delta table and say which rows moved outside the floor.)*
+**The ratchet has not moved.** Graded geomean ratio vs rank-1 went 1.098× →
+**1.0971×**, a 0.08% change against a ±2% ratio floor: unchanged, as it should be,
+since no kernel change was made between exp_14 and tonight.
+
+| # | shape | exp_14 graded | tonight graded | delta | this shape's floor | moved? |
+|---:|---|---:|---:|---:|---:|---|
+| 1 | 64×7168×18432 | 0.850 | 0.8469 | −0.4% | 0.34% | no |
+| 2 | 512×4096×12288 | 1.072 | 1.0291 | −4.0% | 0.44% | **yes, we improved** |
+| 3 | 2048×2880×2880 | 1.102 | 1.1311 | +2.6% | 0.48% | **yes, we regressed** |
+| 4 | 4096×4096×4096 | 1.120 | 1.1641 | +3.9% | 2.15% | **yes, we regressed** |
+| 5 | 8192×4096×14336 | 1.286 | 1.2693 | −1.3% | 2.00% | no |
+| 6 | 8192×8192×29568 | 1.208 | 1.1968 | −0.9% | 4.31% | no |
+| | geomean | 1.098 | 1.0971 | −0.08% | — | no |
+
+Three rows moved outside their floors in *opposite directions* while the geomean
+stood still, so this is redistribution between shapes across two separate runs,
+not a change in the kernel. It is a caution about reading any single shape's ratio
+across runs: the geomean is much more stable than its terms.
 
 ## 4. Pre-registered expectations vs outcome
 
 | # | pre-registered in `plan.md` §6 | outcome |
 |---:|---|---|
-| 1 | graded `ours/rank1` geomean in 1.02–1.10× | |
-| 2 | shape 1 stays <1.0; shapes 5 and 6 stay >1.15 | |
-| 3 | graded `ours/reference` stays <0.85 | |
-| 4 | pipelined ratio at least 0.08 below graded | |
-| 5 | `harness_floor` measures 57–99 µs, shape-independent | |
-| 6 | `ours` vs `ours_null` <4.3% per shape, <2% geomean | |
-| 7 | instrument B absolutes 25–45% above A; both agree on arm ORDERING | |
+| 1 | graded `ours/rank1` geomean in 1.02–1.10× | **HELD.** 1.0971× (best), 1.0788× (median) |
+| 2 | shape 1 stays <1.0; shapes 5 and 6 stay >1.15 | **HELD.** 0.8469; 1.2693 and 1.1968 |
+| 3 | graded `ours/reference` stays <0.85 | **FAILED, narrowly.** 0.8863× — and the geomean hides that we *lose* on shapes 5 (1.0824) and 6 (1.0568) |
+| 4 | *(re-registered after the quick run)* pipelined ratio WORSE than graded, i.e. graded dilutes in our favour | **HELD at the geomean, FAILED per shape.** Geomean compression +18.4% (best) / +20.6% (median), so graded does flatter us overall. But per shape it holds on only 4 of 6, and on shapes 4 and 6 graded *overstates* the gap (−100.4%, −0.5%). Shape 2, the quick run's shape, is the extreme case at +88.4% |
+| 5 | `harness_floor` measures 57–99 µs, shape-independent | **HALF FAILED.** Magnitude right (86–157 µs median, 94.27 geomean best) but **not shape-independent**: 67.5% spread, scaling with operand size. This is what killed §2.2 |
+| 6 | `ours` vs `ours_null` <4.3% per shape, <2% geomean | **HELD.** Max 4.31% (shape 6 graded best, exactly at the published 4.28%); geomean 0.01% graded / 0.20% pipelined |
+| 7 | instrument B absolutes 25–45% above A; both agree on arm ORDERING | see §12 |
+
+Expectation 4 is the one worth keeping: the *direction* of the dilution argument
+survives and is the headline for the paper's Q6, but the claim has to be made at
+the geomean. Per shape the constant's effect depends on how large it is relative
+to that shape's kernel time and on which side of parity the shape sits, and those
+two factors do not move together.
 
 ## 5. Correctness, both arms, both tolerances
 
@@ -405,6 +518,65 @@ runs *against* rank-1 and so cannot manufacture a win for us.
 
 `tools/` is not this experiment's to edit and was not edited by it; the repair was
 made by the tree's owner after this experiment reported the defects.
+
+**8.9 One preemption, disclosed. It cost one shape and no data.** At
+**06:40:53** the orchestrator SIGTERMed this run while it held the lease, logging
+`STEAL by orchestrator from exp_26 -- exp_24 stuck in a non-terminating drain wait
+on a dead pid; freeing for exp_22 (last figure)`. Five of six shapes
+(0,1,2,4,5) were already complete on disk and the exit trap released the lease
+cleanly, so the cost was shape 3 alone, re-measured at 07:27–07:33 and merged.
+
+The complaint was justified even though the diagnosis was slightly off — the drain
+wait was *bounded* at ~200 s per transition, not infinite. But it was a wait that
+could never succeed: pid **3001610** (`m9_stale_slot.py`, another agent's wedged M9
+test, state `Dl`, uninterruptible, **CU occupancy 0**, holding 10.05 GB on all 8
+GPUs) holds a `/dev/kfd` fd permanently. Every shape transition paid the full cap
+and printed a repeating line that reads exactly like a hang. Fixed by recording
+pre-existing kfd holders at preflight and never waiting on them, while still
+waiting on every worker this run creates.
+
+**Does that pid bias the measurement?** It holds memory but cannot dispatch: CU
+occupancy 0 and `D` state mean it is not executing and cannot be scheduled. It was
+present for all six shapes and for every arm within each shape, so it is common-mode
+across the comparison. It was **not** SIGTERMed: a `D`-state process cannot receive
+signals, and it is another agent's evidence. 10.05 GB against 192 GB per GPU leaves
+ample headroom for shape 6.
+
+**Shape 3 was measured 55 minutes after the other five.** Each shape is a
+self-contained pool in which all five arms are interleaved and rotated, so shape 3's
+own five-arm comparison is same-run and valid; only the cross-shape geomean spans
+two windows. Clocks were pinned in both and the null arm's shape-3 floor (0.10–2.15%)
+is unremarkable, so this is disclosed rather than corrected.
+
+**8.10 Two shared-tool defects hit before any GPU work, both caught by a syntax
+check rather than by a wrong number.**
+
+- `tools/gpu_lease.sh` arrived with **Windows CRLF line endings**, so bash read
+ `pipefail\r` as an option name and `2\r` as an exit status. Two launches acquired
+ the lease and died within one second (`set: Illegal option -o pipefail`,
+ `exit: 2: numeric argument required`) before the snapshot's `bash -n` named it in
+ one line. This is the trap `HANDOFF.md` documents, invisible to `cat` and to grep.
+ It has since been fixed upstream (all six tools now snapshot at CRLF x0).
+ This experiment did not edit `tools/`; it reads an immutable, CR-stripped snapshot
+ under `toolsnap/`, whose sha256s are in `logs/provenance.txt` and *are* the
+ provenance for what executed.
+- `instrument_a` returned **rc=1 on a completely clean run**, because
+ `grep -c SHIM_WAS_CALLED` exits 1 when it finds nothing — the good outcome, meaning
+ the `sudo` shim stayed dead code — and `set -o pipefail` promoted that to the
+ function's status, so `instrument_a && parse` silently skipped aggregation. The
+ six-shape ladder was intact on disk the whole time. Aggregation now also runs
+ immediately after instrument A so the headline cannot be held hostage by a later
+ phase.
+
+**8.11 Instrument B ran ONE rotation, not the designed two.** With five other
+experiments cycling the node and one preemption already paid, a ~3 h lease hold
+invited a second one, and instrument A — the headline, which carries the full
+arm-order rotation — was already complete. Instrument B's purpose is to cross-check
+arm *ordering* under the competition's real one-process-per-rank topology; its arms
+are separate process pools launched by separate drivers with no shared warm state,
+so first-arm bias is far weaker there than in A. **Instrument B therefore has no
+arm-order rotation and must not be read as an independent confirmation of A's
+absolute values.**
 
 **8.9 Means alone are unusable on this node**, even same-run interleaved, because
 the bias is **per-allocation and partly allocation-ORDER**, not positional:

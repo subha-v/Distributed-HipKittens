@@ -25,10 +25,23 @@ echo -n "CRLF in tools/gpu_lease.sh: "; grep -c $'\r' "$ON/tools/gpu_lease.sh" |
 
 # Fresh log for this attempt, and clear any stale instrument-A samples so a
 # previous partial cannot be aggregated into tonight's ladder.
+#
+# LAD_KEEP=1 suppresses the wipe, for RESUMING after a preemption. This guard is
+# the difference between filling in one missing shape and destroying five good
+# ones: the 06:40 SIGTERM left shapes 0,1,2,4,5 complete on disk, and an
+# unconditional rm here would have thrown away 35 minutes of measured data on the
+# next launch.
 mkdir -p "$D/logs" "$D/raw/ladder"
 mv -f "$D/logs/full_run.log" "$D/logs/full_run.prev.log" 2>/dev/null
-rm -f "$D/raw/ladder"/lad_s*.rank*.json "$D/raw/ladder"/lad_s*.rank*.stderr
-rm -rf "$D/raw/eval"
+if [ "${LAD_KEEP:-0}" = "1" ]; then
+  echo "LAD_KEEP=1 -- preserving existing samples (resume):"
+  for i in 0 1 2 3 4 5; do
+    echo "  shape idx $i : $(ls "$D/raw/ladder"/lad_s${i}.rank*.json 2>/dev/null | wc -l)/8 rank files"
+  done
+else
+  rm -f "$D/raw/ladder"/lad_s*.rank*.json "$D/raw/ladder"/lad_s*.rank*.stderr
+  rm -rf "$D/raw/eval"
+fi
 
 echo
 echo "=== launching detached $(date -Is) ==="

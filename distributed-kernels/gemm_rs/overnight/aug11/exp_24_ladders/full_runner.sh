@@ -111,10 +111,20 @@ echo
 echo "=== lease held; starting the ladder $(date -Is) ==="
 export LAD_LEASED=1
 export LAD_ROTATIONS="${LAD_ROTATIONS:-2}"
-# 7 h cap on the ladder itself. Instrument A is allowed to overrun its estimate
-# rather than truncate -- a truncated rank-1 pass is exactly the artifact the
-# parser refuses -- so this cap exists only to guarantee the lease comes back.
-timeout --signal=TERM 25200 bash "$D/run_ladders.sh" all
+PHASE=${LAD_PHASE:-all}
+CAP=${LAD_CAP:-25200}
+# The cap exists only to guarantee the lease comes back; instrument A is allowed to
+# overrun its estimate rather than truncate, because a truncated rank-1 pass is
+# exactly the artifact the parser refuses.
+#
+# The run is SPLIT into phases on purpose. Five other experiments are cycling the
+# node tonight and this run was already preempted once at 06:40; holding the lease
+# for a single 4-hour block invites that again, and a preemption in hour three would
+# cost the whole campaign. Phase A (the headline five-arm ladder) now finishes in a
+# short window, is aggregated, and is safe on disk before phase B (the evaluator
+# cross-check) asks for the node again.
+echo "phase=$PHASE cap=${CAP}s shapes=${LAD_SHAPES:-default} keep=${LAD_KEEP:-0}"
+timeout --signal=TERM "$CAP" bash "$D/run_ladders.sh" "$PHASE"
 rc=$?
 echo
 echo "=== run_ladders.sh returned rc=$rc at $(date -Is) ==="

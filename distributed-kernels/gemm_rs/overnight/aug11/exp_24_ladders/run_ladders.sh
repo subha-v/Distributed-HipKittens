@@ -81,11 +81,44 @@ hr()  { echo "----------------------------------------------------------------";
 kfd_fds() { ls -l /proc/[0-9]*/fd/* 2>/dev/null | grep -c kfd; }
 kfd_pids() { rocm-smi --showpids 2>/dev/null | awk '/^[0-9]+[ \t]/{print $1}'; }
 
+# The pids currently holding a /dev/kfd fd. Needed because a raw fd COUNT cannot
+# distinguish "my last worker is still exiting" from "a permanently wedged process
+# that will never let go".
+kfd_holders() {
+  local p out=""
+  for p in $(ls /proc 2>/dev/null | grep -E '^[0-9]+$'); do
+    ls -l "/proc/$p/fd" 2>/dev/null | grep -q kfd && out="$out $p"
+  done
+  echo "$out"
+}
+
+# Holders that already existed before we started, and are therefore NOT ours to
+# wait for. Populated once, in preflight.
+#
+# Why this exists: the first attempt at this run waited on a raw fd count, and pid
+# 3001610 (`m9_stale_slot.py`, state Dl, uninterruptible, CU occupancy 0, another
+# agent's wedged M9 test) holds a kfd fd forever. Every shape transition therefore
+# paid the full 200 s cap, and from outside it looked like a hang: the orchestrator
+# SIGTERMed this run at 06:40 to free the node for exp_22, costing shape 3. The
+# wait was capped, not infinite -- but a wait that can never succeed should not be
+# entered at all. Ignoring pre-existing holders is safe because the lease already
+# guarantees no other LEASED job is running, and it still waits for every worker
+# this run creates.
+DRAIN_IGNORE=""
+
 preflight() {
   say "=== preflight ==="
   local pids; pids=$(kfd_pids)
   echo "rocm-smi --showpids:"; rocm-smi --showpids 2>&1 | sed -n '1,20p'
   echo "kfd fds: $(kfd_fds)"
+  DRAIN_IGNORE=$(kfd_holders)
+  if [ -n "$DRAIN_IGNORE" ]; then
+    say "pre-existing kfd holders (will NOT be waited on):$DRAIN_IGNORE"
+    for p in $DRAIN_IGNORE; do
+      echo "    pid $p state=$(awk '{print $3}' /proc/$p/stat 2>/dev/null) \
+cmd=$(tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null | cut -c1-60)"
+    done
+  fi
   if [ -n "$pids" ]; then
     say "NODE DIRTY: KFD pids [$pids] hold the GPUs"
     # LAD_LEASED=1 means tools/gpu_lease.sh already took the lock AND performed
@@ -101,12 +134,10 @@ preflight() {
       say "LAD_ALLOW_DIRTY=1 -- proceeding, and this run MUST NOT be reported as timing"
     fi
   fi
-  # Bounded drain wait. SIGTERM only, never SIGKILL: this kernel uses HIP IPC and
-  # leaked mappings wedge the node.
-  for _ in $(seq 1 24); do
-    [ "$(kfd_fds)" = "0" ] && break
-    say "  waiting for kfd drain (fds=$(kfd_fds))"; sleep 5
-  done
+  # No drain wait here. The pre-existing holders recorded above are exactly the
+  # ones that will never leave, and the lease has already guaranteed no other
+  # LEASED job is running; waiting on them is the bounded-but-unsatisfiable loop
+  # that got this run preempted at 06:40. Per-arm drains still wait on OUR workers.
 
   say "--- pin clocks (idle sclk is ~125 MHz; unpinned short runs are unrepeatable) ---"
   bash "$TOOLS/set_clocks.sh" pin 1900 2>&1 | tail -6 || say "WARN: clock pin failed"
@@ -230,10 +261,7 @@ instrument_a() {
     local port=$((PORT0 + s)) t0; t0=$(date +%s)
     hr; say "shape index $s"
     rm -f "$CB/rank1"/ipc_handles_rank*.bin
-    for _ in $(seq 1 24); do
-      [ "$(kfd_fds)" = "0" ] && break
-      say "  waiting for kfd drain (fds=$(kfd_fds))"; sleep 5
-    done
+    drain
     docker exec -w "$CB/rank1" \
       -e PATH="$ON/tools/compat/bin:/usr/local/bin:/usr/bin:/bin:/opt/rocm/bin" \
       -e PYTHONPATH="$ON/tools/compat:$IRISDST" \
@@ -255,9 +283,15 @@ instrument_a() {
       2>&1 | tee "$D/logs/ladder_s${s}.log" \
       | grep -vE '^\[1/|^\[2/|^\[3/|hipcc|^ *[0-9]+ \||warning:|^ *\^|preprocessed|replaced kernel|unsupported CUDA'
     say "shape $s wall=$(( $(date +%s) - t0 ))s"
-    grep -c SHIM_WAS_CALLED "$out/lad_s${s}".rank*.stderr 2>/dev/null \
-      | awk -F: '$2>0 {print "SHIM_WAS_CALLED in", $1, "-- repair #3 is no longer dead code"}'
+    # `|| true` is REQUIRED, not defensive noise. grep exits 1 when it finds no
+    # match, which here is the GOOD outcome (the sudo shim stayed dead code), and
+    # under `set -o pipefail` that 1 became the loop body's status, then the
+    # function's status, so `instrument_a && parse` silently skipped aggregation.
+    # A completely clean six-shape run reported itself as rc=1.
+    { grep -c SHIM_WAS_CALLED "$out/lad_s${s}".rank*.stderr 2>/dev/null \
+      | awk -F: '$2>0 {print "SHIM_WAS_CALLED in", $1, "-- repair #3 is no longer dead code"}'; } || true
   done
+  return 0
 }
 
 # ------------------------------ instrument B: the official evaluator, rotated ---
@@ -274,10 +308,19 @@ capture() {  # capture <arm> <dest>
 }
 
 drain() {
-  for _ in $(seq 1 36); do
-    [ "$(kfd_fds)" = "0" ] && break
-    say "  waiting for kfd drain (fds=$(kfd_fds))"; sleep 5
+  local i rem p
+  for i in $(seq 1 24); do
+    rem=""
+    for p in $(kfd_holders); do
+      case " $DRAIN_IGNORE " in *" $p "*) ;; *) rem="$rem $p";; esac
+    done
+    [ -z "$rem" ] && break
+    # Log ONCE, not every 5 s: the repeated line is what made a bounded wait look
+    # like a hang to the orchestrator.
+    [ "$i" = "1" ] && say "  draining our workers:$rem (ignoring pre-existing:${DRAIN_IGNORE:- none})"
+    sleep 5
   done
+  [ -n "$rem" ] && say "  WARN: proceeding after 120s with our holders still up:$rem"
   sleep 20   # let eval.py's hardcoded MASTER_PORT 12356 leave TIME_WAIT
 }
 
@@ -332,7 +375,14 @@ instrument_b() {
 # a completed 6-shape ladder down with it at the --expect-b assertion.
 parse() {  # parse <expect_b> [fatal|soft]
   local expect_b="$1" mode="${2:-fatal}"
+  # LAD_EXPECT_A exists for RESUME. After the 06:40 preemption, five of six shapes
+  # were already on disk and only shape 3 had to be re-run; SHAPES=3 then implies
+  # one shape, but the aggregate must still assert all SIX are present. Without the
+  # override the resume would either fail on a complete ladder or, with --lenient,
+  # silently accept an incomplete one -- and the whole point of the assertion is
+  # that a partial ladder must never pass quietly.
   local n_shapes; n_shapes=$(awk -F, '{print NF}' <<< "$SHAPES")
+  n_shapes=${LAD_EXPECT_A:-$n_shapes}
   local out="$D/ladders.json"
   [ "$QUICK" = "1" ] && out="$D/ladders_quick.json"
   say "=== aggregate -> $(basename "$out")  (expect-a=$n_shapes expect-b=$expect_b) ==="
