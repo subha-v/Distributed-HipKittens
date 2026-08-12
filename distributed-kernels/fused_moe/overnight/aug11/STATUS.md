@@ -84,6 +84,78 @@ construction. exp_25 and exp_29 are the two on-mandate role-specialization
 mechanisms and carry the largest prizes; both get a written protocol review
 before their first GPU run.
 
+## exp_25 design verdict — the M6/M7 split is gated on one unmeasured number
+
+The design (`exp_25_m6m7_split/design.md`) reframed the mechanism honestly and
+the reframing is worth carrying forward:
+
+**A static role split cannot win by overlapping work.** Work is conserved, and
+today M6 already gets all 256 CTAs while M7 gets 240. A split can only give M6
+about 128. Under linear scaling the best balanced split is `(W6+W7)/240 =
+5,421 µs` against today's `W6/256 + W7/240 = 5,248 µs` — a **173 µs loss**. Any
+claimed win must name a term outside that model, and there are exactly three:
+
+- **W1 — throttling the remote-RMW rate by cutting injectors. This is the whole
+  case.** M7 in mode 12 costs 2,660 µs against 1,684 µs for the same GEMM
+  without the remote-accumulate epilogue, so the epilogue surcharge is
+  **976 µs**, and exp_21 proved it is rate-shaped. The split is a second,
+  orthogonal throttle on the same axis: total outstanding remote RMWs =
+  injectors × depth; exp_21 capped the depth, the split cuts injectors to
+  0.47×. And M6 touches no fabric at all, so **xGMI sits 100 % idle for
+  2,588 µs of every epoch** — that is the one genuine complementarity.
+- **W2 — resource complementarity ≈ 0, plausibly −300 µs.** Both phases are the
+  same fp8 K-loop with the same L2/LLC limiter (161.7 vs 158.1 FLOP/B, 17.1 %
+  vs 13.7 % MFMA duty). Do not claim compute/bandwidth complementarity; the
+  numbers do not support it.
+- **W3 — tail elimination nets to ~zero** once the split's own start bubble is
+  counted.
+
+Central prediction **6,312 µs = 0.818×**, band 5,877–6,969. The band is
+dominated by one coefficient: **M6's CTA scaling, which has never been
+measured** (see the retraction above).
+
+### F1 — the cheap gate that must run before the expensive build
+
+Measure `T6(128) / T6(256)`.
+
+| result | action |
+|---|---|
+| **≥ 1.90** | **stop — do not build the overlap arm.** Work-conservation loss cancels the whole prize. |
+| ≤ 1.80 | build |
+
+F1 needs only the `N2GM_P1_TASK_START` / `_STRIDE` hooks in the vendored
+phase-1 body (still the donor's hardcoded `blockIdx.x` / `kCTAs` by default), so
+it rides exp_26's file rather than creating a second writer. **`a6` is a
+property of the tree, not the hardware** — exp_24 and exp_26 both move it, so F1
+runs on the winning tree, not first in wall-clock order.
+
+### The correctness landmine, recorded before anyone builds
+
+**`a2_done`'s poll is vacuous today and this experiment makes it live for the
+first time — and the campaign structurally cannot detect it failing.** M6's
+payload release is a tid-0-only agent fence behind a bare `__syncthreads()`,
+ordering 255 other threads' plain `uint4` stores that tid 0 never touched,
+across eight non-coherent per-XCD L2s. Because the MoK harness feeds identical
+input and routing every iteration, epoch `e−1`'s `A2q` bytes are **bit-identical**
+to epoch `e`'s — so **a completely absent readiness edge returns the right
+answer, passes every gate, and posts the best number in the sweep.** Signoff
+conditions before any overlap arm is timed: use `producer_drain_release<agent>`
+(a primitive we own and do not call), and add the DQ2-NaN-poison detector
+(2.1 MB, unobservable in a correct run, trips the zero-nonfinite gate on a
+premature read).
+
+Runner-up, and the likeliest bug to actually ship: an off-by-one in the M7
+pool's start/stride that covers a task **twice** doubles one 32×448 tile out of
+16,720 — ≈6×10⁻⁵ relative error, `pperr = 0`, every gate green. Under-coverage
+is loud; over-coverage is silent. Free detector: `part_done`, which mode 12
+allocates, zeroes in M0, and never writes.
+
+### Vendoring provenance — one trap to avoid
+
+The authoritative donor is `solution/hip/n2_phase1_gm.cpp`, **585 lines**,
+sha256 `1d90b266…`. The `exp_65` snapshot is a **different 634-line file** and
+must never be the vendoring source.
+
 ## Standing rules in force
 
 Every candidate: correctness + negative control + 600-epoch soak **before**
