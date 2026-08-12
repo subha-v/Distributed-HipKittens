@@ -18,15 +18,46 @@ rewritten with numbers when Phase 2 lands.
 | `plot_timeline.py` | done — the 3×N grid |
 | `c_rank1_probe.sh` | done — arm (c) feasibility probe, read-only, no GPU |
 
-## Phase 2 — blocked on two gates held by the orchestrator
+## Why the phase enum carries a credit-wait pair — preserved reasoning
 
-1. **Kernel-edit gate.** `design.md` §9 is a 22-site additive patch to
-   `gemm_rs_mi300x.cpp`, entirely inside `#if HK_GEMM_RS_MI300X_TRACE`
-   (default 0). It is **not applied**: another agent is compiling waterfall
-   rung binaries from that exact file and an edit mid-build would silently
-   contaminate its arms.
-2. **GPU lease.** Arm (a) capture, the parity gate's flag-ON build check, and
-   arm (b) all need the node. Nothing has been launched.
+The charter's nine-tuple has no producer credit-wait. Adding
+`CREDIT_WAIT_BEG`/`CREDIT_WAIT_END` (ids 3 and 4) is not decoration; without
+them the producer's **reuse-credit stall lands inside the emit interval**, and
+because the xGMI strip is computed as (phase bytes ÷ phase duration), a longer
+emit interval carrying the same bytes deflates the strip by exactly the length
+of that stall. The figure would then show our egress running slower than it
+does, and — worse — it would point the reader at the wrong resource, because
+the missing time would look like fabric cost rather than protocol waiting.
+
+The size of that mis-attribution is now measured, not hypothetical: exp_20's
+refreshed profile ranks `sync` as the **second-largest non-GEMM pool on shape 6
+at 168.6 µs**, ahead of both reduce and release. Folding a 168.6 µs stall into
+the emit interval would have been one of the largest errors this figure could
+contain.
+
+The same argument is why `RELEASE_END` exists (the release is an interval worth
+65.4 µs on shape 5, not an instant) and why `PUBLISH_END` exists (otherwise the
+publish loop is charged to the next tile's mainloop).
+
+Ring depth is derived the same way — from this kernel's own per-row worst case,
+29 events on shape 6 and 20 on shape 5, giving depth 64 at 2.17× headroom.
+The sibling's depth 24 is a gfx950 MoE fact about a different phase taxonomy
+(M0-M9 plus service stripes) and was not inherited.
+
+## Phase 2 — patch APPLIED, parity gate is the next deliverable
+
+The kernel-edit gate was opened and the patch landed: **21 sites, +109 lines,
+0 deletions**, all inside `#if HK_GEMM_RS_MI300X_TRACE`, **default 0**.
+`design.md` §9 records the anchor resolution — the file had grown from 893 to
+951 lines under exp_26, every planned line number shifted, three of this
+document's own anchors were recorded at the wrong indentation and were caught
+by the anchor check rather than by a mispatch, and one planned site turned out
+to need no edit because aggregate initialization already value-initializes the
+new trailing member to 0.
+
+Still blocked on the **GPU lease** (exp_23 and exp_21 are ahead). Arm (a)
+capture, the tick calibration and arm (b) all need the node; nothing has been
+launched.
 
 ## Policy, stated up front and binding on everything below
 

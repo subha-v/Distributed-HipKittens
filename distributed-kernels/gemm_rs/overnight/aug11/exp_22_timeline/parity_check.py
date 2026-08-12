@@ -26,8 +26,21 @@ import os
 import re
 import sys
 
-# Post-exp_14 M2 table: (BM, BN, BK, k_tail) -> VGPRs.  AGPRs, scratch and both
-# spill counts must be zero on every row; M2_EXPECT is the instantiation count.
+# Post-exp_14 M2 table: (BM, BN, BK, k_tail) -> VGPRs.  AGPRs, scratch and
+# **VGPR** spills must be zero on every row; M2_EXPECT is the instantiation
+# count.
+#
+# SGPR spills are deliberately NOT required to be zero.  The first run of this
+# gate demanded it and failed all 14 rows -- including the untouched baseline
+# build, which reports 54-88 SGPR spills on every instantiation.  The M2
+# contract (LESSONS: "zero AGPRs, zero scratch and zero VGPR spills") never
+# mentioned them, and they cost nothing observable here: ScratchSize is 0 on
+# every row, i.e. the scalar spills go to VGPR lanes and never to memory.
+# Demanding zero would have made the gate fail on a property of the kernel
+# rather than a property of the patch.  What IS required of SGPR spills is that
+# they be *identical* between the two flag-OFF arms, which the parity
+# comparison below already enforces.
+ZERO_REQUIRED = ("agpr", "scratch", "vgpr_spill")
 M2_EXPECT = 7
 KNOWN_GOOD_VGPR = {
     (32, 64, 128, False): 98,
@@ -137,15 +150,16 @@ def main():
             if entry.get("vgpr") != want:
                 failures.append(
                     f"{tag} {key}: VGPR {entry.get('vgpr')} != known-good {want}")
-            for field in ("agpr", "scratch", "sgpr_spill", "vgpr_spill"):
+            for field in ZERO_REQUIRED:
                 if entry.get(field, 0) != 0:
                     failures.append(
                         f"{tag} {key}: {field} = {entry.get(field)}, expected 0")
 
     # --- disclosure: what the flag-ON build costs --------------------------
     print()
-    header = f"{'BM/BN/BK/tail':<20}{'OFF vgpr':>9}{'ON vgpr':>9}{'ON agpr':>9}" \
-             f"{'ON scratch':>12}{'ON spills':>11}"
+    header = (f"{'BM/BN/BK/tail':<20}{'OFF vgpr':>9}{'ON vgpr':>8}{'d':>4}"
+              f"{'ON agpr':>9}{'ON scr':>8}{'OFF sspill':>11}{'ON sspill':>10}"
+              f"{'ON vspill':>10}")
     print(header)
     print("-" * len(header))
     on_by_key = {decode(n): e for n, e in arms["on"].items()}
@@ -153,16 +167,21 @@ def main():
     for name, entry in sorted(absent.items(), key=lambda kv: decode(kv[0]) or ()):
         key = decode(name)
         on = on_by_key.get(key, {})
-        spills = on.get("sgpr_spill", 0) + on.get("vgpr_spill", 0)
+        delta = (on.get("vgpr") or 0) - (entry.get("vgpr") or 0)
         on_delta[str(key)] = {
             "off_vgpr": entry.get("vgpr"),
             "on_vgpr": on.get("vgpr"),
+            "vgpr_delta": delta,
             "on_agpr": on.get("agpr"),
             "on_scratch": on.get("scratch"),
-            "on_spills": spills,
+            "off_sgpr_spill": entry.get("sgpr_spill"),
+            "on_sgpr_spill": on.get("sgpr_spill"),
+            "on_vgpr_spill": on.get("vgpr_spill"),
         }
-        print(f"{str(key):<20}{entry.get('vgpr'):>9}{str(on.get('vgpr')):>9}"
-              f"{str(on.get('agpr')):>9}{str(on.get('scratch')):>12}{spills:>11}")
+        print(f"{str(key):<20}{entry.get('vgpr'):>9}{str(on.get('vgpr')):>8}"
+              f"{delta:>+4}{str(on.get('agpr')):>9}{str(on.get('scratch')):>8}"
+              f"{str(entry.get('sgpr_spill')):>11}{str(on.get('sgpr_spill')):>10}"
+              f"{str(on.get('vgpr_spill')):>10}")
 
     verdict = "PASS" if not failures else "FAIL"
     print()
@@ -172,11 +191,19 @@ def main():
     if verdict == "PASS":
         print("  flag-present-and-0 is byte-identical to flag-absent on all "
               f"{M2_EXPECT} instantiations, and both match the post-exp_14 table.")
-    on_spilling = [k for k, v in on_delta.items() if v["on_spills"]]
-    if on_spilling:
-        print("  DISCLOSURE: the flag-ON build spills on " + ", ".join(on_spilling) +
-              " -- the diagnostic arm has different register pressure than the "
-              "ratchet and result.md must say so.")
+    on_bad = [k for k, v in on_delta.items()
+              if v["on_vgpr_spill"] or v["on_scratch"]]
+    if on_bad:
+        print("  DISCLOSURE: the flag-ON build spills VGPRs or uses scratch on "
+              + ", ".join(on_bad) + " -- the diagnostic arm would picture a "
+              "kernel with materially different register pressure than the "
+              "ratchet. Switch to the static-slot fallback (design.md section "
+              "3 item 3) and re-run.")
+    else:
+        worst = max((v["vgpr_delta"] for v in on_delta.values()), default=0)
+        print(f"  DISCLOSURE: the flag-ON build costs at most {worst:+d} VGPRs "
+              "and stays at zero AGPRs, zero scratch and zero VGPR spills on "
+              "every instantiation, so the static-slot fallback is not needed.")
 
     if args.json:
         with open(args.json, "w") as handle:

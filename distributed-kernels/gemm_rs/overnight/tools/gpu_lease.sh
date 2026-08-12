@@ -61,17 +61,25 @@ case "${1:-status}" in
         echo "$OWNER" > "$LOCK/owner"
         now > "$LOCK/since"
         echo "$$" > "$LOCK/pid"
-        # Having the lease is necessary but not sufficient: a foreign tenant may
-        # still be on the GPUs. Wait for drain rather than aborting on the first
-        # sample -- a previous run's last worker lingers for tens of seconds
-        # after its parent returns, and aborting there wastes an invocation.
-        for i in $(seq 1 30); do
+        # Having the lease is necessary but not sufficient: a foreign tenant, or
+        # one of our own jobs that failed to take the lease, may still be on the
+        # GPUs. Wait for drain rather than aborting on the first sample -- a
+        # previous run's last worker lingers for tens of seconds after its parent
+        # returns, and aborting there wastes an invocation.
+        #
+        # The drain wait spends the CALLER'S remaining budget, not a fixed 300 s.
+        # Learned the hard way: an unleased 2-hour M9 gate run held all 8 GPUs
+        # while a queued campaign sat in acquire. With a fixed 300 s cap the
+        # queued job aborted, which is the opposite of what a queue is for -- a
+        # busy node is a reason to keep waiting, not a reason to fail. The only
+        # thing that should end the wait is the caller's own deadline.
+        while :; do
           n=$(kfd_pids)
           [ "$n" = "0" ] && break
-          [ "$i" = "1" ] && echo "  lease held by '$OWNER'; $n KFD pid(s) still draining"
-          if [ "$i" = "30" ]; then
-            echo "  ABORT: node still dirty after 300s; releasing the lease"
-            note "ABORT $OWNER -- node dirty after 300s"
+          [ -z "${_warned:-}" ] && { echo "  lease held by '$OWNER'; $n KFD pid(s) still draining (unleased job?)"; _warned=1; }
+          if [ $(( $(now) - t0 )) -ge "$WAIT" ]; then
+            echo "  TIMEOUT: node still dirty at the caller's ${WAIT}s deadline; releasing the lease"
+            note "TIMEOUT $OWNER -- node dirty at deadline, $n pid(s)"
             rm -rf "$LOCK"
             exit 1
           fi

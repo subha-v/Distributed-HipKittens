@@ -112,7 +112,7 @@ Since then two more landed:
 | exp_20 | bottleneck attribution refresh | Q3 | **DONE** — freshness gate passed (+0.96%) |
 | exp_21 | saturation vs CTA count (NanoFlow Fig 7 analog) | Fig 2 / Q4 | **building** (greenfield ubench) |
 | exp_22 | per-layer resource timeline (NanoFlow v2 Fig 10 analog) | Fig 3 / Q4 | queued — needs new kernel instrumentation |
-| exp_23 | knob waterfall — **the money figure** | Fig 4 / Q1 | **rungs built + fingerprinted, 9/9 assertions pass**; sweep queued for GPU |
+| exp_23 | knob waterfall — **the money figure** | Fig 4 / Q1 | **LANDED** — a→b **1.084×**, a→c **1.115×**, null within **0.2%** of c; structural prediction held; NR flatness falsified in a useful way |
 | exp_24 | external ladders refresh | Q6 | queued |
 | exp_25 | per-shape sensitivity readout | Q5 | queued (derives from exp_20 + exp_23) |
 

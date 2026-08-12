@@ -43,11 +43,22 @@ cleanup() { say "releasing lease"; bash "$ON/tools/gpu_lease.sh" release "$OWNER
 trap cleanup EXIT INT TERM
 
 say "campaign start (pid $$), phases: $PHASES"
-say "waiting for the GPU lease (up to ${WAIT_S}s; exp_23 is ahead in the queue)"
-bash "$ON/tools/gpu_lease.sh" acquire "$OWNER" "$WAIT_S"
-rc=$?
-if [ "$rc" != "0" ]; then
-  say "ABORT: could not acquire the lease (rc=$rc)"
+say "waiting for the GPU lease (up to ${WAIT_S}s per attempt)"
+# Retried, because `acquire` has two distinct failure modes and both are transient
+# here: a TIMEOUT means another agent's campaign is long, and an ABORT means the
+# lease was free but a job that never took the lease was still draining past the
+# 300 s window (tonight: a sibling's m9_stale_slot.py). Neither is a reason to
+# throw the invocation away.
+got=0
+for attempt in 1 2 3 4; do
+  bash "$ON/tools/gpu_lease.sh" acquire "$OWNER" "$WAIT_S"
+  rc=$?
+  if [ "$rc" = "0" ]; then got=1; break; fi
+  say "acquire attempt $attempt failed (rc=$rc); retrying in 90s"
+  sleep 90
+done
+if [ "$got" != "1" ]; then
+  say "ABORT: could not acquire the lease after 4 attempts"
   exit 2
 fi
 

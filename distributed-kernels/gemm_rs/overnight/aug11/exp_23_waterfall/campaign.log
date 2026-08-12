@@ -1,0 +1,1319 @@
+===== exp_23 campaign start 2026-08-12T04:51:11-05:00 =====
+  lease held by 'exp_23'; 1 KFD pid(s) still draining
+GPU lease ACQUIRED by 'exp_23' after 42s; node clean
+
+===== clocks BEFORE (pinned expected: ~1900 MHz sclk, perf determinism) =====
+GPU[0]		: fclk clock level: 0: (1300Mhz)
+GPU[0]		: mclk clock level: 0: (900Mhz)
+GPU[0]		: sclk clock level: S: (139Mhz)
+GPU[0]		: socclk clock level: S: (28Mhz)
+GPU[1]		: fclk clock level: 0: (1300Mhz)
+GPU[1]		: mclk clock level: 0: (900Mhz)
+GPU[1]		: sclk clock level: S: (120Mhz)
+GPU[1]		: socclk clock level: S: (28Mhz)
+GPU[2]		: fclk clock level: 0: (1300Mhz)
+GPU[2]		: mclk clock level: 0: (900Mhz)
+GPU[2]		: sclk clock level: S: (120Mhz)
+GPU[2]		: socclk clock level: S: (28Mhz)
+GPU[3]		: fclk clock level: 0: (1300Mhz)
+GPU[3]		: mclk clock level: 0: (900Mhz)
+GPU[3]		: sclk clock level: S: (120Mhz)
+GPU[3]		: socclk clock level: S: (28Mhz)
+GPU[4]		: fclk clock level: 0: (1300Mhz)
+GPU[4]		: mclk clock level: 0: (900Mhz)
+GPU[4]		: sclk clock level: S: (120Mhz)
+GPU[4]		: socclk clock level: S: (28Mhz)
+================================= Show Performance Level =================================
+GPU[0]		: Performance Level: perf_determinism
+GPU[1]		: Performance Level: perf_determinism
+GPU[2]		: Performance Level: perf_determinism
+GPU[3]		: Performance Level: perf_determinism
+GPU[4]		: Performance Level: perf_determinism
+GPU[5]		: Performance Level: perf_determinism
+GPU[6]		: Performance Level: perf_determinism
+GPU[7]		: Performance Level: perf_determinism
+
+########## preflight smoke draw (shape 3, 1 rotation, no draw file) ##########
+fingerprint gate: PASS
+  rung a     isa ec714ea8a6444284 config {'WGM4': 1, 'RELEASE_GROUP': 1, 'RELEASE_GROUP_FULL_ONLY': 1}
+  rung b     isa 366d4f08a030afaa config {'WGM4': 0, 'RELEASE_GROUP': 1, 'RELEASE_GROUP_FULL_ONLY': 1}
+  rung c     isa 7926c2e872835c8d config {'WGM4': 0, 'RELEASE_GROUP': 4, 'RELEASE_GROUP_FULL_ONLY': 1}
+  rung null  isa 7926c2e872835c8d config {'WGM4': 0, 'RELEASE_GROUP': 4, 'RELEASE_GROUP_FULL_ONLY': 1}
+
+exp_23 waterfall: shapes=[3] scale=0.3 construction=forward  [SMOKE -- no draw file written]
+
+===== shape 3: 2048x2880x2880 bias=1  128/192/32 row=3 shippedNR=32 NG=272 tiles=240 tiles/CTA=1  iters=75 passes=8 arms=8 construction=forward =====
+  a->b active on this shape: False   b->c active on this shape: False
+  a      mod=gemm_rs_w23_a      NR=32  NG=272  max|diff|=4.88e-04 OK
+  b      mod=gemm_rs_w23_b      NR=32  NG=272  max|diff|=4.88e-04 OK
+  c      mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=4.88e-04 OK
+  null   mod=gemm_rs_w23_null   NR=32  NG=272  max|diff|=4.88e-04 OK
+  nr8    mod=gemm_rs_w23_c      NR=8   NG=296  max|diff|=4.88e-04 OK
+  nr16   mod=gemm_rs_w23_c      NR=16  NG=288  max|diff|=4.88e-04 OK
+  nr32   mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=4.88e-04 OK
+  nr48   mod=gemm_rs_w23_c      NR=48  NG=256  max|diff|=4.88e-04 OK
+  pass 0: order ['a', 'b', 'c', 'null', 'nr8', 'nr16', 'nr32', 'nr48']
+  pass 1: order ['b', 'c', 'null', 'nr8', 'nr16', 'nr32', 'nr48', 'a']
+  pass 2: order ['c', 'null', 'nr8', 'nr16', 'nr32', 'nr48', 'a', 'b']
+  pass 3: order ['null', 'nr8', 'nr16', 'nr32', 'nr48', 'a', 'b', 'c']
+  pass 4: order ['nr8', 'nr16', 'nr32', 'nr48', 'a', 'b', 'c', 'null']
+  pass 5: order ['nr16', 'nr32', 'nr48', 'a', 'b', 'c', 'null', 'nr8']
+  pass 6: order ['nr32', 'nr48', 'a', 'b', 'c', 'null', 'nr8', 'nr16']
+  pass 7: order ['nr48', 'a', 'b', 'c', 'null', 'nr8', 'nr16', 'nr32']
+  ---------------------------------------------------------------------
+      arm   NR      best    median  spread%    d_best  vs_a_b%  vs_a_m%
+        a   32     85.43     85.71     0.65     84.43     0.00     0.00
+        b   32     88.02     88.59     1.03     86.99     3.04     3.36
+        c   32     85.55     85.68     0.48     84.56     0.15    -0.04
+     null   32     85.40     86.01     2.94     84.45    -0.03     0.34
+      nr8    8    116.51    116.84     0.45    115.51    36.38    36.31
+     nr16   16     96.28     96.61     1.06     95.37    12.70    12.71
+     nr32   32     87.34     87.83     1.22     86.34     2.24     2.47
+     nr48   48     84.41     84.74     0.68     83.47    -1.19    -1.14
+  NULL FLOOR (c vs null, identical device ISA, independent allocations): best 0.18%  median 0.38%  <-- believe nothing below this
+  position residual %: 0:-0.00 1:-0.00 2:+0.16 3:-0.23 4:-0.03 5:+0.23 6:-0.03 7:-0.03
+
+====================================================================================================
+DRAW SUMMARY (median us; every delta beside its null floor)
+====================================================================================================
+
+shape 3 2048x2880x2880  null floor 0.38%  a->b active=False  b->c active=False
+  b      gain vs a      -3.25%   vs a   -3.25%   beyond floor
+  c      gain vs b      +3.40%   vs a   +0.04%   beyond floor
+  null   gain vs c      -0.38%   vs a   -0.34%   inside floor -> no evidence
+  NR=8    vs shipped NR  -26.67%   beyond floor
+  NR=16   vs shipped NR  -11.31%   beyond floor
+  NR=32   vs shipped NR   -2.45%   beyond floor
+  NR=48   vs shipped NR   +1.11%   beyond floor
+
+SMOKE OK -- no draw file written. dead arms: []
+  preflight exit=0
+
+########## draw 1/4: construction=fwd 2026-08-12T04:52:15-05:00 ##########
+fingerprint gate: PASS
+  rung a     isa ec714ea8a6444284 config {'WGM4': 1, 'RELEASE_GROUP': 1, 'RELEASE_GROUP_FULL_ONLY': 1}
+  rung b     isa 366d4f08a030afaa config {'WGM4': 0, 'RELEASE_GROUP': 1, 'RELEASE_GROUP_FULL_ONLY': 1}
+  rung c     isa 7926c2e872835c8d config {'WGM4': 0, 'RELEASE_GROUP': 4, 'RELEASE_GROUP_FULL_ONLY': 1}
+  rung null  isa 7926c2e872835c8d config {'WGM4': 0, 'RELEASE_GROUP': 4, 'RELEASE_GROUP_FULL_ONLY': 1}
+
+exp_23 waterfall: shapes=[1, 2, 3, 4, 5, 6] scale=1.0 construction=forward
+
+===== shape 1: 64x7168x18432 bias=0  32/64/128 row=1 shippedNR=56 NG=248 tiles=224 tiles/CTA=1  iters=300 passes=8 arms=8 construction=forward =====
+  a->b active on this shape: False   b->c active on this shape: False
+  a      mod=gemm_rs_w23_a      NR=56  NG=248  max|diff|=6.10e-05 OK
+  b      mod=gemm_rs_w23_b      NR=56  NG=248  max|diff|=6.10e-05 OK
+  c      mod=gemm_rs_w23_c      NR=56  NG=248  max|diff|=6.10e-05 OK
+  null   mod=gemm_rs_w23_null   NR=56  NG=248  max|diff|=6.10e-05 OK
+  nr8    mod=gemm_rs_w23_c      NR=8   NG=296  max|diff|=6.10e-05 OK
+  nr16   mod=gemm_rs_w23_c      NR=16  NG=288  max|diff|=6.10e-05 OK
+  nr32   mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=6.10e-05 OK
+  nr48   mod=gemm_rs_w23_c      NR=48  NG=256  max|diff|=6.10e-05 OK
+  pass 0: order ['a', 'b', 'c', 'null', 'nr8', 'nr16', 'nr32', 'nr48']
+  pass 1: order ['b', 'c', 'null', 'nr8', 'nr16', 'nr32', 'nr48', 'a']
+  pass 2: order ['c', 'null', 'nr8', 'nr16', 'nr32', 'nr48', 'a', 'b']
+  pass 3: order ['null', 'nr8', 'nr16', 'nr32', 'nr48', 'a', 'b', 'c']
+  pass 4: order ['nr8', 'nr16', 'nr32', 'nr48', 'a', 'b', 'c', 'null']
+  pass 5: order ['nr16', 'nr32', 'nr48', 'a', 'b', 'c', 'null', 'nr8']
+  pass 6: order ['nr32', 'nr48', 'a', 'b', 'c', 'null', 'nr8', 'nr16']
+  pass 7: order ['nr48', 'a', 'b', 'c', 'null', 'nr8', 'nr16', 'nr32']
+  ---------------------------------------------------------------------
+      arm   NR      best    median  spread%    d_best  vs_a_b%  vs_a_m%
+        a   56     63.09     63.54     2.51     62.88     0.00     0.00
+        b   56     63.42     63.85     2.04     63.26     0.52     0.49
+        c   56     61.89     62.93     3.18     61.77    -1.91    -0.96
+     null   56     62.52     63.17     3.33     62.33    -0.91    -0.57
+      nr8    8    129.21    129.27     0.08    128.99   104.80   103.45
+     nr16   16     87.42     87.51     0.21     87.27    38.56    37.73
+     nr32   32     66.82     66.90     0.62     66.59     5.90     5.28
+     nr48   48     61.90     62.41     1.85     61.78    -1.89    -1.77
+  NULL FLOOR (c vs null, identical device ISA, independent allocations): best 1.01%  median 0.39%  <-- believe nothing below this
+  position residual %: 0:-0.07 1:+0.23 2:+0.16 3:-0.01 4:-0.05 5:+0.26 6:-0.22 7:+0.32
+
+===== shape 2: 512x4096x12288 bias=1  64/128/64 row=2 shippedNR=32 NG=272 tiles=256 tiles/CTA=1  iters=250 passes=8 arms=8 construction=forward =====
+  a->b active on this shape: False   b->c active on this shape: False
+  a      mod=gemm_rs_w23_a      NR=32  NG=272  max|diff|=4.88e-04 OK
+  b      mod=gemm_rs_w23_b      NR=32  NG=272  max|diff|=4.88e-04 OK
+  c      mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=4.88e-04 OK
+  null   mod=gemm_rs_w23_null   NR=32  NG=272  max|diff|=4.88e-04 OK
+  nr8    mod=gemm_rs_w23_c      NR=8   NG=296  max|diff|=4.88e-04 OK
+  nr16   mod=gemm_rs_w23_c      NR=16  NG=288  max|diff|=4.88e-04 OK
+  nr32   mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=4.88e-04 OK
+  nr48   mod=gemm_rs_w23_c      NR=48  NG=256  max|diff|=4.88e-04 OK
+  pass 0: order ['a', 'b', 'c', 'null', 'nr8', 'nr16', 'nr32', 'nr48']
+  pass 1: order ['b', 'c', 'null', 'nr8', 'nr16', 'nr32', 'nr48', 'a']
+  pass 2: order ['c', 'null', 'nr8', 'nr16', 'nr32', 'nr48', 'a', 'b']
+  pass 3: order ['null', 'nr8', 'nr16', 'nr32', 'nr48', 'a', 'b', 'c']
+  pass 4: order ['nr8', 'nr16', 'nr32', 'nr48', 'a', 'b', 'c', 'null']
+  pass 5: order ['nr16', 'nr32', 'nr48', 'a', 'b', 'c', 'null', 'nr8']
+  pass 6: order ['nr32', 'nr48', 'a', 'b', 'c', 'null', 'nr8', 'nr16']
+  pass 7: order ['nr48', 'a', 'b', 'c', 'null', 'nr8', 'nr16', 'nr32']
+  ---------------------------------------------------------------------
+      arm   NR      best    median  spread%    d_best  vs_a_b%  vs_a_m%
+        a   32     64.25     65.76     3.49     63.94     0.00     0.00
+        b   32     65.20     66.09     2.11     64.84     1.47     0.50
+        c   32     65.62     65.93     3.93     65.37     2.13     0.26
+     null   32     64.90     66.17     3.12     64.56     1.01     0.63
+      nr8    8     88.50     88.61     0.19     88.21    37.74    34.76
+     nr16   16     71.95     72.04     1.66     71.64    11.98     9.56
+     nr32   32     64.30     65.02     2.02     64.10     0.07    -1.13
+     nr48   48     64.86     66.53     3.98     64.56     0.95     1.18
+  NULL FLOOR (c vs null, identical device ISA, independent allocations): best 1.11%  median 0.37%  <-- believe nothing below this
+  position residual %: 0:-0.12 1:-0.17 2:+0.12 3:+0.17 4:-0.12 5:-0.12 6:-0.72 7:+0.23
+
+===== shape 3: 2048x2880x2880 bias=1  128/192/32 row=3 shippedNR=32 NG=272 tiles=240 tiles/CTA=1  iters=250 passes=8 arms=8 construction=forward =====
+  a->b active on this shape: False   b->c active on this shape: False
+  a      mod=gemm_rs_w23_a      NR=32  NG=272  max|diff|=4.88e-04 OK
+  b      mod=gemm_rs_w23_b      NR=32  NG=272  max|diff|=4.88e-04 OK
+  c      mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=4.88e-04 OK
+  null   mod=gemm_rs_w23_null   NR=32  NG=272  max|diff|=4.88e-04 OK
+  nr8    mod=gemm_rs_w23_c      NR=8   NG=296  max|diff|=4.88e-04 OK
+  nr16   mod=gemm_rs_w23_c      NR=16  NG=288  max|diff|=4.88e-04 OK
+  nr32   mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=4.88e-04 OK
+  nr48   mod=gemm_rs_w23_c      NR=48  NG=256  max|diff|=4.88e-04 OK
+  pass 0: order ['a', 'b', 'c', 'null', 'nr8', 'nr16', 'nr32', 'nr48']
+  pass 1: order ['b', 'c', 'null', 'nr8', 'nr16', 'nr32', 'nr48', 'a']
+  pass 2: order ['c', 'null', 'nr8', 'nr16', 'nr32', 'nr48', 'a', 'b']
+  pass 3: order ['null', 'nr8', 'nr16', 'nr32', 'nr48', 'a', 'b', 'c']
+  pass 4: order ['nr8', 'nr16', 'nr32', 'nr48', 'a', 'b', 'c', 'null']
+  pass 5: order ['nr16', 'nr32', 'nr48', 'a', 'b', 'c', 'null', 'nr8']
+  pass 6: order ['nr32', 'nr48', 'a', 'b', 'c', 'null', 'nr8', 'nr16']
+  pass 7: order ['nr48', 'a', 'b', 'c', 'null', 'nr8', 'nr16', 'nr32']
+  ---------------------------------------------------------------------
+      arm   NR      best    median  spread%    d_best  vs_a_b%  vs_a_m%
+        a   32     84.59     84.85     0.65     84.35     0.00     0.00
+        b   32     85.03     85.26     0.47     84.71     0.52     0.48
+        c   32     84.90     84.94     0.14     84.63     0.36     0.10
+     null   32     84.47     84.65     0.54     84.19    -0.15    -0.24
+      nr8    8    115.92    116.40     0.53    115.68    37.03    37.18
+     nr16   16     95.35     95.64     0.82     95.10    12.72    12.71
+     nr32   32     84.23     84.37     0.42     83.93    -0.43    -0.56
+     nr48   48     83.85     84.05     0.58     83.54    -0.88    -0.95
+  NULL FLOOR (c vs null, identical device ISA, independent allocations): best 0.51%  median 0.34%  <-- believe nothing below this
+  position residual %: 0:+0.05 1:+0.02 2:+0.04 3:-0.00 4:+0.02 5:-0.03 6:-0.02 7:-0.06
+
+===== shape 4: 4096x4096x4096 bias=0  256/256/32 row=4 shippedNR=32 NG=272 tiles=256 tiles/CTA=1  iters=120 passes=8 arms=8 construction=forward =====
+  a->b active on this shape: False   b->c active on this shape: False
+  a      mod=gemm_rs_w23_a      NR=32  NG=272  max|diff|=3.05e-05 OK
+  b      mod=gemm_rs_w23_b      NR=32  NG=272  max|diff|=3.05e-05 OK
+  c      mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=3.05e-05 OK
+  null   mod=gemm_rs_w23_null   NR=32  NG=272  max|diff|=3.05e-05 OK
+  nr8    mod=gemm_rs_w23_c      NR=8   NG=296  max|diff|=3.05e-05 OK
+  nr16   mod=gemm_rs_w23_c      NR=16  NG=288  max|diff|=3.05e-05 OK
+  nr32   mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=3.05e-05 OK
+  nr48   mod=gemm_rs_w23_c      NR=48  NG=256  max|diff|=3.05e-05 OK
+  pass 0: order ['a', 'b', 'c', 'null', 'nr8', 'nr16', 'nr32', 'nr48']
+  pass 1: order ['b', 'c', 'null', 'nr8', 'nr16', 'nr32', 'nr48', 'a']
+  pass 2: order ['c', 'null', 'nr8', 'nr16', 'nr32', 'nr48', 'a', 'b']
+  pass 3: order ['null', 'nr8', 'nr16', 'nr32', 'nr48', 'a', 'b', 'c']
+  pass 4: order ['nr8', 'nr16', 'nr32', 'nr48', 'a', 'b', 'c', 'null']
+  pass 5: order ['nr16', 'nr32', 'nr48', 'a', 'b', 'c', 'null', 'nr8']
+  pass 6: order ['nr32', 'nr48', 'a', 'b', 'c', 'null', 'nr8', 'nr16']
+  pass 7: order ['nr48', 'a', 'b', 'c', 'null', 'nr8', 'nr16', 'nr32']
+  ---------------------------------------------------------------------
+      arm   NR      best    median  spread%    d_best  vs_a_b%  vs_a_m%
+        a   32    199.00    199.65     0.58    198.32     0.00     0.00
+        b   32    198.47    199.21     0.57    197.84    -0.26    -0.22
+        c   32    198.07    198.66     0.45    197.48    -0.47    -0.50
+     null   32    197.47    198.10     0.48    196.91    -0.77    -0.78
+      nr8    8    262.72    263.03     0.29    262.15    32.02    31.75
+     nr16   16    219.56    219.79     0.39    218.88    10.33    10.09
+     nr32   32    198.01    198.23     0.22    197.43    -0.49    -0.71
+     nr48   48    197.22    197.84     0.59    196.62    -0.89    -0.90
+  NULL FLOOR (c vs null, identical device ISA, independent allocations): best 0.30%  median 0.28%  <-- believe nothing below this
+  position residual %: 0:-0.03 1:-0.08 2:+0.06 3:-0.01 4:+0.05 5:-0.03 6:+0.00 7:-0.06
+
+===== shape 5: 8192x4096x14336 bias=1  256/256/32 row=5 shippedNR=32 NG=272 tiles=512 tiles/CTA=2  iters=60 passes=8 arms=8 construction=forward =====
+  a->b active on this shape: True   b->c active on this shape: False
+  a      mod=gemm_rs_w23_a      NR=32  NG=272  max|diff|=4.88e-04 OK
+  b      mod=gemm_rs_w23_b      NR=32  NG=272  max|diff|=4.88e-04 OK
+  c      mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=4.88e-04 OK
+  null   mod=gemm_rs_w23_null   NR=32  NG=272  max|diff|=4.88e-04 OK
+  nr8    mod=gemm_rs_w23_c      NR=8   NG=296  max|diff|=4.88e-04 OK
+  nr16   mod=gemm_rs_w23_c      NR=16  NG=288  max|diff|=4.88e-04 OK
+  nr32   mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=4.88e-04 OK
+  nr48   mod=gemm_rs_w23_c      NR=48  NG=256  max|diff|=4.88e-04 OK
+  pass 0: order ['a', 'b', 'c', 'null', 'nr8', 'nr16', 'nr32', 'nr48']
+  pass 1: order ['b', 'c', 'null', 'nr8', 'nr16', 'nr32', 'nr48', 'a']
+  pass 2: order ['c', 'null', 'nr8', 'nr16', 'nr32', 'nr48', 'a', 'b']
+  pass 3: order ['null', 'nr8', 'nr16', 'nr32', 'nr48', 'a', 'b', 'c']
+  pass 4: order ['nr8', 'nr16', 'nr32', 'nr48', 'a', 'b', 'c', 'null']
+  pass 5: order ['nr16', 'nr32', 'nr48', 'a', 'b', 'c', 'null', 'nr8']
+  pass 6: order ['nr32', 'nr48', 'a', 'b', 'c', 'null', 'nr8', 'nr16']
+  pass 7: order ['nr48', 'a', 'b', 'c', 'null', 'nr8', 'nr16', 'nr32']
+  ---------------------------------------------------------------------
+      arm   NR      best    median  spread%    d_best  vs_a_b%  vs_a_m%
+        a   32    749.32    750.89     0.37    748.51     0.00     0.00
+        b   32    641.76    643.08     0.39    640.52   -14.35   -14.36
+        c   32    649.61    651.34     0.59    648.25   -13.31   -13.26
+     null   32    652.94    655.88     0.66    651.63   -12.86   -12.65
+      nr8    8    735.79    737.05     0.26    734.44    -1.81    -1.84
+     nr16   16    680.05    681.50     0.35    678.90    -9.24    -9.24
+     nr32   32    659.52    659.91     0.12    658.26   -11.98   -12.12
+     nr48   48    648.42    650.50     0.53    647.24   -13.47   -13.37
+  NULL FLOOR (c vs null, identical device ISA, independent allocations): best 0.51%  median 0.70%  <-- believe nothing below this
+  position residual %: 0:-0.06 1:-0.01 2:-0.10 3:-0.07 4:+0.08 5:-0.03 6:-0.02 7:+0.05
+
+===== shape 6: 8192x8192x29568 bias=0  256/256/32 row=6 shippedNR=48 NG=256 tiles=1024 tiles/CTA=4  iters=50 passes=8 arms=8 construction=forward =====
+  a->b active on this shape: True   b->c active on this shape: True
+  a      mod=gemm_rs_w23_a      NR=48  NG=256  max|diff|=1.22e-04 OK
+  b      mod=gemm_rs_w23_b      NR=48  NG=256  max|diff|=1.22e-04 OK
+  c      mod=gemm_rs_w23_c      NR=48  NG=256  max|diff|=1.22e-04 OK
+  null   mod=gemm_rs_w23_null   NR=48  NG=256  max|diff|=1.22e-04 OK
+  nr8    mod=gemm_rs_w23_c      NR=8   NG=296  max|diff|=1.22e-04 OK
+  nr16   mod=gemm_rs_w23_c      NR=16  NG=288  max|diff|=1.22e-04 OK
+  nr32   mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=1.22e-04 OK
+  nr48   mod=gemm_rs_w23_c      NR=48  NG=256  max|diff|=1.22e-04 OK
+  pass 0: order ['a', 'b', 'c', 'null', 'nr8', 'nr16', 'nr32', 'nr48']
+  pass 1: order ['b', 'c', 'null', 'nr8', 'nr16', 'nr32', 'nr48', 'a']
+  pass 2: order ['c', 'null', 'nr8', 'nr16', 'nr32', 'nr48', 'a', 'b']
+  pass 3: order ['null', 'nr8', 'nr16', 'nr32', 'nr48', 'a', 'b', 'c']
+  pass 4: order ['nr8', 'nr16', 'nr32', 'nr48', 'a', 'b', 'c', 'null']
+  pass 5: order ['nr16', 'nr32', 'nr48', 'a', 'b', 'c', 'null', 'nr8']
+  pass 6: order ['nr32', 'nr48', 'a', 'b', 'c', 'null', 'nr8', 'nr16']
+  pass 7: order ['nr48', 'a', 'b', 'c', 'null', 'nr8', 'nr16', 'nr32']
+  ---------------------------------------------------------------------
+      arm   NR      best    median  spread%    d_best  vs_a_b%  vs_a_m%
+        a   48   2595.05   2612.40     1.02   2594.45     0.00     0.00
+        b   48   1824.67   1839.71     1.35   1823.22   -29.69   -29.58
+        c   48   1623.70   1640.91     2.74   1622.26   -37.43   -37.19
+     null   48   1624.23   1651.15     3.16   1622.67   -37.41   -36.80
+      nr8    8   1998.27   2001.53     0.72   1995.42   -23.00   -23.38
+     nr16   16   1791.91   1806.71     1.74   1790.54   -30.95   -30.84
+     nr32   32   1674.55   1689.20     2.08   1673.36   -35.47   -35.34
+     nr48   48   1561.28   1581.83     3.13   1559.72   -39.84   -39.45
+  NULL FLOOR (c vs null, identical device ISA, independent allocations): best 0.03%  median 0.62%  <-- believe nothing below this
+  position residual %: 0:+0.05 1:-0.20 2:+0.65 3:+0.13 4:-0.17 5:-0.53 6:+0.38 7:-0.21
+
+====================================================================================================
+DRAW SUMMARY (median us; every delta beside its null floor)
+====================================================================================================
+
+shape 1 64x7168x18432  null floor 0.39%  a->b active=False  b->c active=False
+  b      gain vs a      -0.49%   vs a   -0.49%   beyond floor
+  c      gain vs b      +1.46%   vs a   +0.97%   beyond floor
+  null   gain vs c      -0.38%   vs a   +0.58%   inside floor -> no evidence
+  NR=8    vs shipped NR  -51.32%   beyond floor
+  NR=16   vs shipped NR  -28.09%   beyond floor
+  NR=32   vs shipped NR   -5.93%   beyond floor
+  NR=48   vs shipped NR   +0.83%   beyond floor
+
+shape 2 512x4096x12288  null floor 0.37%  a->b active=False  b->c active=False
+  b      gain vs a      -0.49%   vs a   -0.49%   beyond floor
+  c      gain vs b      +0.24%   vs a   -0.26%   inside floor -> no evidence
+  null   gain vs c      -0.37%   vs a   -0.62%   inside floor -> no evidence
+  NR=8    vs shipped NR  -25.60%   beyond floor
+  NR=16   vs shipped NR   -8.49%   beyond floor
+  NR=32   vs shipped NR   +1.40%   beyond floor
+  NR=48   vs shipped NR   -0.91%   beyond floor
+
+shape 3 2048x2880x2880  null floor 0.34%  a->b active=False  b->c active=False
+  b      gain vs a      -0.48%   vs a   -0.48%   beyond floor
+  c      gain vs b      +0.38%   vs a   -0.10%   beyond floor
+  null   gain vs c      +0.34%   vs a   +0.24%   beyond floor
+  NR=8    vs shipped NR  -27.03%   beyond floor
+  NR=16   vs shipped NR  -11.19%   beyond floor
+  NR=32   vs shipped NR   +0.67%   beyond floor
+  NR=48   vs shipped NR   +1.06%   beyond floor
+
+shape 4 4096x4096x4096  null floor 0.28%  a->b active=False  b->c active=False
+  b      gain vs a      +0.22%   vs a   +0.22%   inside floor -> no evidence
+  c      gain vs b      +0.28%   vs a   +0.50%   inside floor -> no evidence
+  null   gain vs c      +0.28%   vs a   +0.78%   beyond floor
+  NR=8    vs shipped NR  -24.47%   beyond floor
+  NR=16   vs shipped NR   -9.61%   beyond floor
+  NR=32   vs shipped NR   +0.22%   inside floor
+  NR=48   vs shipped NR   +0.41%   beyond floor
+
+shape 5 8192x4096x14336  null floor 0.70%  a->b active=True  b->c active=False
+  b      gain vs a     +16.76%   vs a  +16.76%   beyond floor
+  c      gain vs b      -1.27%   vs a  +15.28%   beyond floor
+  null   gain vs c      -0.69%   vs a  +14.49%   inside floor -> no evidence
+  NR=8    vs shipped NR  -11.63%   beyond floor
+  NR=16   vs shipped NR   -4.43%   beyond floor
+  NR=32   vs shipped NR   -1.30%   beyond floor
+  NR=48   vs shipped NR   +0.13%   inside floor
+
+shape 6 8192x8192x29568  null floor 0.62%  a->b active=True  b->c active=True
+  b      gain vs a     +42.00%   vs a  +42.00%   beyond floor
+  c      gain vs b     +12.11%   vs a  +59.20%   beyond floor
+  null   gain vs c      -0.62%   vs a  +58.22%   inside floor -> no evidence
+  NR=8    vs shipped NR  -18.02%   beyond floor
+  NR=16   vs shipped NR   -9.18%   beyond floor
+  NR=32   vs shipped NR   -2.86%   beyond floor
+  NR=48   vs shipped NR   +3.74%   beyond floor
+
+wrote /home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_23_waterfall/draw_20260812_095242_fwd.json
+
+pooled 1 draw(s) (0 reversed) -> /home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_23_waterfall/waterfall.json
+
+  rung   geo_best  geo_median     vs_a  vs_prev
+     a     225.84      227.56   1.0000   1.0000
+     b     208.31      209.60   0.9211   0.9211
+     c     203.98      205.28   0.9021   0.9794
+  null     203.86      205.77   0.9043   1.0024
+
+    NR   geo_best  geo_median     vs_c
+     8     282.85      283.34   1.3803
+    16     233.11      233.76   1.1388
+    32     207.20      208.05   1.0135
+    48     201.64      203.51   0.9914
+  draw 1 exit=0
+
+########## draw 2/4: construction=rev 2026-08-12T04:52:53-05:00 ##########
+fingerprint gate: PASS
+  rung a     isa ec714ea8a6444284 config {'WGM4': 1, 'RELEASE_GROUP': 1, 'RELEASE_GROUP_FULL_ONLY': 1}
+  rung b     isa 366d4f08a030afaa config {'WGM4': 0, 'RELEASE_GROUP': 1, 'RELEASE_GROUP_FULL_ONLY': 1}
+  rung c     isa 7926c2e872835c8d config {'WGM4': 0, 'RELEASE_GROUP': 4, 'RELEASE_GROUP_FULL_ONLY': 1}
+  rung null  isa 7926c2e872835c8d config {'WGM4': 0, 'RELEASE_GROUP': 4, 'RELEASE_GROUP_FULL_ONLY': 1}
+
+exp_23 waterfall: shapes=[1, 2, 3, 4, 5, 6] scale=1.0 construction=REVERSED
+
+===== shape 1: 64x7168x18432 bias=0  32/64/128 row=1 shippedNR=56 NG=248 tiles=224 tiles/CTA=1  iters=300 passes=8 arms=8 construction=REVERSED =====
+  a->b active on this shape: False   b->c active on this shape: False
+  nr48   mod=gemm_rs_w23_c      NR=48  NG=256  max|diff|=6.10e-05 OK
+  nr32   mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=6.10e-05 OK
+  nr16   mod=gemm_rs_w23_c      NR=16  NG=288  max|diff|=6.10e-05 OK
+  nr8    mod=gemm_rs_w23_c      NR=8   NG=296  max|diff|=6.10e-05 OK
+  null   mod=gemm_rs_w23_null   NR=56  NG=248  max|diff|=6.10e-05 OK
+  c      mod=gemm_rs_w23_c      NR=56  NG=248  max|diff|=6.10e-05 OK
+  b      mod=gemm_rs_w23_b      NR=56  NG=248  max|diff|=6.10e-05 OK
+  a      mod=gemm_rs_w23_a      NR=56  NG=248  max|diff|=6.10e-05 OK
+  pass 0: order ['nr48', 'nr32', 'nr16', 'nr8', 'null', 'c', 'b', 'a']
+  pass 1: order ['nr32', 'nr16', 'nr8', 'null', 'c', 'b', 'a', 'nr48']
+  pass 2: order ['nr16', 'nr8', 'null', 'c', 'b', 'a', 'nr48', 'nr32']
+  pass 3: order ['nr8', 'null', 'c', 'b', 'a', 'nr48', 'nr32', 'nr16']
+  pass 4: order ['null', 'c', 'b', 'a', 'nr48', 'nr32', 'nr16', 'nr8']
+  pass 5: order ['c', 'b', 'a', 'nr48', 'nr32', 'nr16', 'nr8', 'null']
+  pass 6: order ['b', 'a', 'nr48', 'nr32', 'nr16', 'nr8', 'null', 'c']
+  pass 7: order ['a', 'nr48', 'nr32', 'nr16', 'nr8', 'null', 'c', 'b']
+  ---------------------------------------------------------------------
+      arm   NR      best    median  spread%    d_best  vs_a_b%  vs_a_m%
+     nr48   48     61.67     62.88     3.66     61.45     0.63     0.19
+     nr32   32     68.04     68.75     1.42     67.84    11.02     9.53
+     nr16   16     87.00     87.11     0.22     86.78    41.96    38.78
+      nr8    8    129.94    130.01     0.21    129.68   112.04   107.13
+     null   56     60.02     60.35     0.89     59.75    -2.05    -3.86
+        c   56     60.41     62.04     3.93     60.12    -1.43    -1.15
+        b   56     63.10     64.11     2.20     63.00     2.97     2.14
+        a   56     61.28     62.77     3.27     60.99     0.00     0.00
+  NULL FLOOR (c vs null, identical device ISA, independent allocations): best 0.64%  median 2.82%  <-- believe nothing below this
+  position residual %: 0:-0.56 1:-0.43 2:+0.36 3:-0.06 4:-0.05 5:-0.54 6:+0.23 7:+0.18
+
+===== shape 2: 512x4096x12288 bias=1  64/128/64 row=2 shippedNR=32 NG=272 tiles=256 tiles/CTA=1  iters=250 passes=8 arms=8 construction=REVERSED =====
+  a->b active on this shape: False   b->c active on this shape: False
+  nr48   mod=gemm_rs_w23_c      NR=48  NG=256  max|diff|=4.88e-04 OK
+  nr32   mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=4.88e-04 OK
+  nr16   mod=gemm_rs_w23_c      NR=16  NG=288  max|diff|=4.88e-04 OK
+  nr8    mod=gemm_rs_w23_c      NR=8   NG=296  max|diff|=4.88e-04 OK
+  null   mod=gemm_rs_w23_null   NR=32  NG=272  max|diff|=4.88e-04 OK
+  c      mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=4.88e-04 OK
+  b      mod=gemm_rs_w23_b      NR=32  NG=272  max|diff|=4.88e-04 OK
+  a      mod=gemm_rs_w23_a      NR=32  NG=272  max|diff|=4.88e-04 OK
+  pass 0: order ['nr48', 'nr32', 'nr16', 'nr8', 'null', 'c', 'b', 'a']
+  pass 1: order ['nr32', 'nr16', 'nr8', 'null', 'c', 'b', 'a', 'nr48']
+  pass 2: order ['nr16', 'nr8', 'null', 'c', 'b', 'a', 'nr48', 'nr32']
+  pass 3: order ['nr8', 'null', 'c', 'b', 'a', 'nr48', 'nr32', 'nr16']
+  pass 4: order ['null', 'c', 'b', 'a', 'nr48', 'nr32', 'nr16', 'nr8']
+  pass 5: order ['c', 'b', 'a', 'nr48', 'nr32', 'nr16', 'nr8', 'null']
+  pass 6: order ['b', 'a', 'nr48', 'nr32', 'nr16', 'nr8', 'null', 'c']
+  pass 7: order ['a', 'nr48', 'nr32', 'nr16', 'nr8', 'null', 'c', 'b']
+  ---------------------------------------------------------------------
+      arm   NR      best    median  spread%    d_best  vs_a_b%  vs_a_m%
+     nr48   48     64.73     65.95     2.75     64.42     0.16     0.45
+     nr32   32     65.33     66.47     2.54     65.08     1.08     1.24
+     nr16   16     72.44     72.64     1.49     72.11    12.08    10.63
+      nr8    8     87.82     87.87     0.12     87.55    35.87    33.83
+     null   32     64.56     64.74     0.74     64.38    -0.11    -1.40
+        c   32     64.83     65.97     2.87     64.55     0.31     0.48
+        b   32     64.58     65.71     2.54     64.26    -0.07     0.08
+        a   32     64.63     65.66     8.66     64.36     0.00     0.00
+  NULL FLOOR (c vs null, identical device ISA, independent allocations): best 0.42%  median 1.90%  <-- believe nothing below this
+  position residual %: 0:+0.53 1:-0.21 2:-0.17 3:+0.10 4:-0.37 5:+0.03 6:+0.44 7:-0.25
+
+===== shape 3: 2048x2880x2880 bias=1  128/192/32 row=3 shippedNR=32 NG=272 tiles=240 tiles/CTA=1  iters=250 passes=8 arms=8 construction=REVERSED =====
+  a->b active on this shape: False   b->c active on this shape: False
+  nr48   mod=gemm_rs_w23_c      NR=48  NG=256  max|diff|=4.88e-04 OK
+  nr32   mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=4.88e-04 OK
+  nr16   mod=gemm_rs_w23_c      NR=16  NG=288  max|diff|=4.88e-04 OK
+  nr8    mod=gemm_rs_w23_c      NR=8   NG=296  max|diff|=4.88e-04 OK
+  null   mod=gemm_rs_w23_null   NR=32  NG=272  max|diff|=4.88e-04 OK
+  c      mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=4.88e-04 OK
+  b      mod=gemm_rs_w23_b      NR=32  NG=272  max|diff|=4.88e-04 OK
+  a      mod=gemm_rs_w23_a      NR=32  NG=272  max|diff|=4.88e-04 OK
+  pass 0: order ['nr48', 'nr32', 'nr16', 'nr8', 'null', 'c', 'b', 'a']
+  pass 1: order ['nr32', 'nr16', 'nr8', 'null', 'c', 'b', 'a', 'nr48']
+  pass 2: order ['nr16', 'nr8', 'null', 'c', 'b', 'a', 'nr48', 'nr32']
+  pass 3: order ['nr8', 'null', 'c', 'b', 'a', 'nr48', 'nr32', 'nr16']
+  pass 4: order ['null', 'c', 'b', 'a', 'nr48', 'nr32', 'nr16', 'nr8']
+  pass 5: order ['c', 'b', 'a', 'nr48', 'nr32', 'nr16', 'nr8', 'null']
+  pass 6: order ['b', 'a', 'nr48', 'nr32', 'nr16', 'nr8', 'null', 'c']
+  pass 7: order ['a', 'nr48', 'nr32', 'nr16', 'nr8', 'null', 'c', 'b']
+  ---------------------------------------------------------------------
+      arm   NR      best    median  spread%    d_best  vs_a_b%  vs_a_m%
+     nr48   48     83.52     83.63     0.45     83.29    -2.27    -2.40
+     nr32   32     83.49     83.71     0.67     83.16    -2.31    -2.31
+     nr16   16     94.05     94.37     0.48     93.80    10.05    10.14
+      nr8    8    115.61    116.18     0.76    115.39    35.28    35.58
+     null   32     84.52     84.86     0.59     84.31    -1.10    -0.97
+        c   32     84.61     84.88     0.63     84.28    -1.00    -0.94
+        b   32     85.11     85.39     0.72     84.81    -0.41    -0.35
+        a   32     85.46     85.69     0.46     85.16     0.00     0.00
+  NULL FLOOR (c vs null, identical device ISA, independent allocations): best 0.10%  median 0.03%  <-- believe nothing below this
+  position residual %: 0:+0.01 1:+0.08 2:-0.01 3:-0.01 4:-0.03 5:-0.06 6:-0.01 7:-0.01
+
+===== shape 4: 4096x4096x4096 bias=0  256/256/32 row=4 shippedNR=32 NG=272 tiles=256 tiles/CTA=1  iters=120 passes=8 arms=8 construction=REVERSED =====
+  a->b active on this shape: False   b->c active on this shape: False
+  nr48   mod=gemm_rs_w23_c      NR=48  NG=256  max|diff|=3.05e-05 OK
+  nr32   mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=3.05e-05 OK
+  nr16   mod=gemm_rs_w23_c      NR=16  NG=288  max|diff|=3.05e-05 OK
+  nr8    mod=gemm_rs_w23_c      NR=8   NG=296  max|diff|=3.05e-05 OK
+  null   mod=gemm_rs_w23_null   NR=32  NG=272  max|diff|=3.05e-05 OK
+  c      mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=3.05e-05 OK
+  b      mod=gemm_rs_w23_b      NR=32  NG=272  max|diff|=3.05e-05 OK
+  a      mod=gemm_rs_w23_a      NR=32  NG=272  max|diff|=3.05e-05 OK
+  pass 0: order ['nr48', 'nr32', 'nr16', 'nr8', 'null', 'c', 'b', 'a']
+  pass 1: order ['nr32', 'nr16', 'nr8', 'null', 'c', 'b', 'a', 'nr48']
+  pass 2: order ['nr16', 'nr8', 'null', 'c', 'b', 'a', 'nr48', 'nr32']
+  pass 3: order ['nr8', 'null', 'c', 'b', 'a', 'nr48', 'nr32', 'nr16']
+  pass 4: order ['null', 'c', 'b', 'a', 'nr48', 'nr32', 'nr16', 'nr8']
+  pass 5: order ['c', 'b', 'a', 'nr48', 'nr32', 'nr16', 'nr8', 'null']
+  pass 6: order ['b', 'a', 'nr48', 'nr32', 'nr16', 'nr8', 'null', 'c']
+  pass 7: order ['a', 'nr48', 'nr32', 'nr16', 'nr8', 'null', 'c', 'b']
+  ---------------------------------------------------------------------
+      arm   NR      best    median  spread%    d_best  vs_a_b%  vs_a_m%
+     nr48   48    198.37    198.65     0.59    197.75     0.21     0.21
+     nr32   32    198.58    198.94     0.62    197.97     0.32     0.36
+     nr16   16    219.29    219.57     0.36    218.63    10.78    10.77
+      nr8    8    264.57    265.18     0.37    263.93    33.65    33.78
+     null   32    199.52    200.11     0.73    198.91     0.79     0.95
+        c   32    199.37    199.90     0.44    198.72     0.71     0.84
+        b   32    197.89    198.50     0.74    197.22    -0.03     0.14
+        a   32    197.95    198.23     0.42    197.29     0.00     0.00
+  NULL FLOOR (c vs null, identical device ISA, independent allocations): best 0.08%  median 0.11%  <-- believe nothing below this
+  position residual %: 0:+0.09 1:+0.01 2:-0.02 3:+0.01 4:+0.03 5:+0.05 6:+0.10 7:-0.04
+
+===== shape 5: 8192x4096x14336 bias=1  256/256/32 row=5 shippedNR=32 NG=272 tiles=512 tiles/CTA=2  iters=60 passes=8 arms=8 construction=REVERSED =====
+  a->b active on this shape: True   b->c active on this shape: False
+  nr48   mod=gemm_rs_w23_c      NR=48  NG=256  max|diff|=4.88e-04 OK
+  nr32   mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=4.88e-04 OK
+  nr16   mod=gemm_rs_w23_c      NR=16  NG=288  max|diff|=4.88e-04 OK
+  nr8    mod=gemm_rs_w23_c      NR=8   NG=296  max|diff|=4.88e-04 OK
+  null   mod=gemm_rs_w23_null   NR=32  NG=272  max|diff|=4.88e-04 OK
+  c      mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=4.88e-04 OK
+  b      mod=gemm_rs_w23_b      NR=32  NG=272  max|diff|=4.88e-04 OK
+  a      mod=gemm_rs_w23_a      NR=32  NG=272  max|diff|=4.88e-04 OK
+  pass 0: order ['nr48', 'nr32', 'nr16', 'nr8', 'null', 'c', 'b', 'a']
+  pass 1: order ['nr32', 'nr16', 'nr8', 'null', 'c', 'b', 'a', 'nr48']
+  pass 2: order ['nr16', 'nr8', 'null', 'c', 'b', 'a', 'nr48', 'nr32']
+  pass 3: order ['nr8', 'null', 'c', 'b', 'a', 'nr48', 'nr32', 'nr16']
+  pass 4: order ['null', 'c', 'b', 'a', 'nr48', 'nr32', 'nr16', 'nr8']
+  pass 5: order ['c', 'b', 'a', 'nr48', 'nr32', 'nr16', 'nr8', 'null']
+  pass 6: order ['b', 'a', 'nr48', 'nr32', 'nr16', 'nr8', 'null', 'c']
+  pass 7: order ['a', 'nr48', 'nr32', 'nr16', 'nr8', 'null', 'c', 'b']
+  ---------------------------------------------------------------------
+      arm   NR      best    median  spread%    d_best  vs_a_b%  vs_a_m%
+     nr48   48    662.68    665.11     0.49    661.33   -10.92   -10.75
+     nr32   32    629.68    630.82     0.41    628.39   -15.35   -15.35
+     nr16   16    679.52    680.84     0.36    678.18    -8.65    -8.63
+      nr8    8    756.32    756.73     0.26    754.96     1.67     1.55
+     null   32    658.82    659.91     0.44    657.54   -11.44   -11.44
+        c   32    660.90    662.19     0.33    659.54   -11.16   -11.14
+        b   32    661.09    661.96     0.32    659.88   -11.13   -11.17
+        a   32    743.88    745.18     0.26    743.06     0.00     0.00
+  NULL FLOOR (c vs null, identical device ISA, independent allocations): best 0.32%  median 0.35%  <-- believe nothing below this
+  position residual %: 0:+0.04 1:-0.08 2:-0.05 3:+0.02 4:-0.02 5:+0.03 6:+0.04 7:-0.00
+
+===== shape 6: 8192x8192x29568 bias=0  256/256/32 row=6 shippedNR=48 NG=256 tiles=1024 tiles/CTA=4  iters=50 passes=8 arms=8 construction=REVERSED =====
+  a->b active on this shape: True   b->c active on this shape: True
+  nr48   mod=gemm_rs_w23_c      NR=48  NG=256  max|diff|=1.22e-04 OK
+  nr32   mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=1.22e-04 OK
+  nr16   mod=gemm_rs_w23_c      NR=16  NG=288  max|diff|=1.22e-04 OK
+  nr8    mod=gemm_rs_w23_c      NR=8   NG=296  max|diff|=1.22e-04 OK
+  null   mod=gemm_rs_w23_null   NR=48  NG=256  max|diff|=1.22e-04 OK
+  c      mod=gemm_rs_w23_c      NR=48  NG=256  max|diff|=1.22e-04 OK
+  b      mod=gemm_rs_w23_b      NR=48  NG=256  max|diff|=1.22e-04 OK
+  a      mod=gemm_rs_w23_a      NR=48  NG=256  max|diff|=1.22e-04 OK
+  pass 0: order ['nr48', 'nr32', 'nr16', 'nr8', 'null', 'c', 'b', 'a']
+  pass 1: order ['nr32', 'nr16', 'nr8', 'null', 'c', 'b', 'a', 'nr48']
+  pass 2: order ['nr16', 'nr8', 'null', 'c', 'b', 'a', 'nr48', 'nr32']
+  pass 3: order ['nr8', 'null', 'c', 'b', 'a', 'nr48', 'nr32', 'nr16']
+  pass 4: order ['null', 'c', 'b', 'a', 'nr48', 'nr32', 'nr16', 'nr8']
+  pass 5: order ['c', 'b', 'a', 'nr48', 'nr32', 'nr16', 'nr8', 'null']
+  pass 6: order ['b', 'a', 'nr48', 'nr32', 'nr16', 'nr8', 'null', 'c']
+  pass 7: order ['a', 'nr48', 'nr32', 'nr16', 'nr8', 'null', 'c', 'b']
+  ---------------------------------------------------------------------
+      arm   NR      best    median  spread%    d_best  vs_a_b%  vs_a_m%
+     nr48   48   1574.41   1585.62     4.13   1572.94   -39.38   -39.32
+     nr32   32   1676.43   1687.37     1.47   1674.92   -35.45   -35.43
+     nr16   16   1772.58   1786.15     1.44   1771.15   -31.75   -31.65
+      nr8    8   2020.11   2026.92     1.23   2018.52   -22.22   -22.43
+     null   48   1613.24   1639.29     2.98   1611.23   -37.89   -37.27
+        c   48   1641.38   1655.96     1.87   1639.94   -36.80   -36.63
+        b   48   1843.53   1860.19     1.24   1842.03   -29.02   -28.81
+        a   48   2597.30   2613.15     1.33   2596.69     0.00     0.00
+  NULL FLOOR (c vs null, identical device ISA, independent allocations): best 1.74%  median 1.02%  <-- believe nothing below this
+  position residual %: 0:-0.14 1:+0.06 2:+0.12 3:-0.26 4:+0.75 5:+0.31 6:-0.25 7:+0.02
+
+====================================================================================================
+DRAW SUMMARY (median us; every delta beside its null floor)
+====================================================================================================
+
+shape 1 64x7168x18432  null floor 2.82%  a->b active=False  b->c active=False
+  b      gain vs a      -2.10%   vs a   -2.10%   inside floor -> no evidence
+  c      gain vs b      +3.33%   vs a   +1.16%   beyond floor
+  null   gain vs c      +2.82%   vs a   +4.01%   beyond floor
+  NR=8    vs shipped NR  -52.28%   beyond floor
+  NR=16   vs shipped NR  -28.77%   beyond floor
+  NR=32   vs shipped NR   -9.75%   beyond floor
+  NR=48   vs shipped NR   -1.33%   inside floor
+
+shape 2 512x4096x12288  null floor 1.90%  a->b active=False  b->c active=False
+  b      gain vs a      -0.08%   vs a   -0.08%   inside floor -> no evidence
+  c      gain vs b      -0.39%   vs a   -0.47%   inside floor -> no evidence
+  null   gain vs c      +1.90%   vs a   +1.42%   beyond floor
+  NR=8    vs shipped NR  -24.93%   beyond floor
+  NR=16   vs shipped NR   -9.18%   beyond floor
+  NR=32   vs shipped NR   -0.76%   inside floor
+  NR=48   vs shipped NR   +0.02%   inside floor
+
+shape 3 2048x2880x2880  null floor 0.03%  a->b active=False  b->c active=False
+  b      gain vs a      +0.35%   vs a   +0.35%   beyond floor
+  c      gain vs b      +0.59%   vs a   +0.95%   beyond floor
+  null   gain vs c      +0.03%   vs a   +0.98%   beyond floor
+  NR=8    vs shipped NR  -26.94%   beyond floor
+  NR=16   vs shipped NR  -10.06%   beyond floor
+  NR=32   vs shipped NR   +1.41%   beyond floor
+  NR=48   vs shipped NR   +1.50%   beyond floor
+
+shape 4 4096x4096x4096  null floor 0.11%  a->b active=False  b->c active=False
+  b      gain vs a      -0.14%   vs a   -0.14%   beyond floor
+  c      gain vs b      -0.70%   vs a   -0.83%   beyond floor
+  null   gain vs c      -0.11%   vs a   -0.94%   inside floor -> no evidence
+  NR=8    vs shipped NR  -24.62%   beyond floor
+  NR=16   vs shipped NR   -8.96%   beyond floor
+  NR=32   vs shipped NR   +0.48%   beyond floor
+  NR=48   vs shipped NR   +0.63%   beyond floor
+
+shape 5 8192x4096x14336  null floor 0.35%  a->b active=True  b->c active=False
+  b      gain vs a     +12.57%   vs a  +12.57%   beyond floor
+  c      gain vs b      -0.03%   vs a  +12.53%   inside floor -> no evidence
+  null   gain vs c      +0.35%   vs a  +12.92%   inside floor -> no evidence
+  NR=8    vs shipped NR  -12.49%   beyond floor
+  NR=16   vs shipped NR   -2.74%   beyond floor
+  NR=32   vs shipped NR   +4.97%   beyond floor
+  NR=48   vs shipped NR   -0.44%   beyond floor
+
+shape 6 8192x8192x29568  null floor 1.02%  a->b active=True  b->c active=True
+  b      gain vs a     +40.48%   vs a  +40.48%   beyond floor
+  c      gain vs b     +12.33%   vs a  +57.80%   beyond floor
+  null   gain vs c      +1.02%   vs a  +59.41%   inside floor -> no evidence
+  NR=8    vs shipped NR  -18.30%   beyond floor
+  NR=16   vs shipped NR   -7.29%   beyond floor
+  NR=32   vs shipped NR   -1.86%   beyond floor
+  NR=48   vs shipped NR   +4.44%   beyond floor
+
+wrote /home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_23_waterfall/draw_20260812_095321_rev.json
+
+pooled 2 draw(s) (1 reversed) -> /home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_23_waterfall/waterfall.json
+
+  rung   geo_best  geo_median     vs_a  vs_prev
+     a     224.28      227.21   1.0000   1.0000
+     b     207.71      210.12   0.9248   0.9248
+     c     202.63      205.46   0.9043   0.9778
+  null     202.07      204.36   0.8994   0.9946
+
+    NR   geo_best  geo_median     vs_c
+     8     282.35      284.37   1.3841
+    16     231.89      233.37   1.1358
+    32     205.31      207.85   1.0116
+    48     201.32      203.83   0.9920
+  draw 2 exit=0
+
+########## draw 3/4: construction=fwd 2026-08-12T04:53:32-05:00 ##########
+fingerprint gate: PASS
+  rung a     isa ec714ea8a6444284 config {'WGM4': 1, 'RELEASE_GROUP': 1, 'RELEASE_GROUP_FULL_ONLY': 1}
+  rung b     isa 366d4f08a030afaa config {'WGM4': 0, 'RELEASE_GROUP': 1, 'RELEASE_GROUP_FULL_ONLY': 1}
+  rung c     isa 7926c2e872835c8d config {'WGM4': 0, 'RELEASE_GROUP': 4, 'RELEASE_GROUP_FULL_ONLY': 1}
+  rung null  isa 7926c2e872835c8d config {'WGM4': 0, 'RELEASE_GROUP': 4, 'RELEASE_GROUP_FULL_ONLY': 1}
+
+exp_23 waterfall: shapes=[1, 2, 3, 4, 5, 6] scale=1.0 construction=forward
+
+===== shape 1: 64x7168x18432 bias=0  32/64/128 row=1 shippedNR=56 NG=248 tiles=224 tiles/CTA=1  iters=300 passes=8 arms=8 construction=forward =====
+  a->b active on this shape: False   b->c active on this shape: False
+  a      mod=gemm_rs_w23_a      NR=56  NG=248  max|diff|=6.10e-05 OK
+  b      mod=gemm_rs_w23_b      NR=56  NG=248  max|diff|=6.10e-05 OK
+  c      mod=gemm_rs_w23_c      NR=56  NG=248  max|diff|=6.10e-05 OK
+  null   mod=gemm_rs_w23_null   NR=56  NG=248  max|diff|=6.10e-05 OK
+  nr8    mod=gemm_rs_w23_c      NR=8   NG=296  max|diff|=6.10e-05 OK
+  nr16   mod=gemm_rs_w23_c      NR=16  NG=288  max|diff|=6.10e-05 OK
+  nr32   mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=6.10e-05 OK
+  nr48   mod=gemm_rs_w23_c      NR=48  NG=256  max|diff|=6.10e-05 OK
+  pass 0: order ['a', 'b', 'c', 'null', 'nr8', 'nr16', 'nr32', 'nr48']
+  pass 1: order ['b', 'c', 'null', 'nr8', 'nr16', 'nr32', 'nr48', 'a']
+  pass 2: order ['c', 'null', 'nr8', 'nr16', 'nr32', 'nr48', 'a', 'b']
+  pass 3: order ['null', 'nr8', 'nr16', 'nr32', 'nr48', 'a', 'b', 'c']
+  pass 4: order ['nr8', 'nr16', 'nr32', 'nr48', 'a', 'b', 'c', 'null']
+  pass 5: order ['nr16', 'nr32', 'nr48', 'a', 'b', 'c', 'null', 'nr8']
+  pass 6: order ['nr32', 'nr48', 'a', 'b', 'c', 'null', 'nr8', 'nr16']
+  pass 7: order ['nr48', 'a', 'b', 'c', 'null', 'nr8', 'nr16', 'nr32']
+  ---------------------------------------------------------------------
+      arm   NR      best    median  spread%    d_best  vs_a_b%  vs_a_m%
+        a   56     63.04     63.37     2.81     62.88     0.00     0.00
+        b   56     62.08     62.96     3.65     61.91    -1.53    -0.64
+        c   56     62.07     62.53     2.00     61.88    -1.54    -1.33
+     null   56     61.77     62.37     3.02     61.64    -2.02    -1.58
+      nr8    8    129.24    129.33     0.17    128.99   105.01   104.09
+     nr16   16     86.99     87.01     0.11     86.74    37.98    37.30
+     nr32   32     67.47     67.57     0.87     67.27     7.03     6.63
+     nr48   48     61.67     62.29     2.29     61.39    -2.17    -1.71
+  NULL FLOOR (c vs null, identical device ISA, independent allocations): best 0.49%  median 0.26%  <-- believe nothing below this
+  position residual %: 0:+0.19 1:+0.75 2:+0.33 3:-0.31 4:+0.50 5:+0.21 6:-0.09 7:+0.05
+
+===== shape 2: 512x4096x12288 bias=1  64/128/64 row=2 shippedNR=32 NG=272 tiles=256 tiles/CTA=1  iters=250 passes=8 arms=8 construction=forward =====
+  a->b active on this shape: False   b->c active on this shape: False
+  a      mod=gemm_rs_w23_a      NR=32  NG=272  max|diff|=4.88e-04 OK
+  b      mod=gemm_rs_w23_b      NR=32  NG=272  max|diff|=4.88e-04 OK
+  c      mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=4.88e-04 OK
+  null   mod=gemm_rs_w23_null   NR=32  NG=272  max|diff|=4.88e-04 OK
+  nr8    mod=gemm_rs_w23_c      NR=8   NG=296  max|diff|=4.88e-04 OK
+  nr16   mod=gemm_rs_w23_c      NR=16  NG=288  max|diff|=4.88e-04 OK
+  nr32   mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=4.88e-04 OK
+  nr48   mod=gemm_rs_w23_c      NR=48  NG=256  max|diff|=4.88e-04 OK
+  pass 0: order ['a', 'b', 'c', 'null', 'nr8', 'nr16', 'nr32', 'nr48']
+  pass 1: order ['b', 'c', 'null', 'nr8', 'nr16', 'nr32', 'nr48', 'a']
+  pass 2: order ['c', 'null', 'nr8', 'nr16', 'nr32', 'nr48', 'a', 'b']
+  pass 3: order ['null', 'nr8', 'nr16', 'nr32', 'nr48', 'a', 'b', 'c']
+  pass 4: order ['nr8', 'nr16', 'nr32', 'nr48', 'a', 'b', 'c', 'null']
+  pass 5: order ['nr16', 'nr32', 'nr48', 'a', 'b', 'c', 'null', 'nr8']
+  pass 6: order ['nr32', 'nr48', 'a', 'b', 'c', 'null', 'nr8', 'nr16']
+  pass 7: order ['nr48', 'a', 'b', 'c', 'null', 'nr8', 'nr16', 'nr32']
+  ---------------------------------------------------------------------
+      arm   NR      best    median  spread%    d_best  vs_a_b%  vs_a_m%
+        a   32     64.33     65.89     3.22     63.96     0.00     0.00
+        b   32     65.08     66.33     2.72     64.76     1.17     0.67
+        c   32     65.26     66.36     2.61     65.06     1.46     0.71
+     null   32     64.63     65.80     2.98     64.32     0.48    -0.13
+      nr8    8     88.29     88.34     0.30     88.01    37.26    34.07
+     nr16   16     72.61     72.68     1.53     72.30    12.89    10.31
+     nr32   32     64.71     65.08     2.12     64.47     0.59    -1.22
+     nr48   48     64.53     65.44     2.84     64.23     0.31    -0.68
+  NULL FLOOR (c vs null, identical device ISA, independent allocations): best 0.98%  median 0.85%  <-- believe nothing below this
+  position residual %: 0:-0.67 1:-0.01 2:-0.15 3:+0.24 4:+0.13 5:-0.04 6:-0.10 7:+0.24
+
+===== shape 3: 2048x2880x2880 bias=1  128/192/32 row=3 shippedNR=32 NG=272 tiles=240 tiles/CTA=1  iters=250 passes=8 arms=8 construction=forward =====
+  a->b active on this shape: False   b->c active on this shape: False
+  a      mod=gemm_rs_w23_a      NR=32  NG=272  max|diff|=4.88e-04 OK
+  b      mod=gemm_rs_w23_b      NR=32  NG=272  max|diff|=4.88e-04 OK
+  c      mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=4.88e-04 OK
+  null   mod=gemm_rs_w23_null   NR=32  NG=272  max|diff|=4.88e-04 OK
+  nr8    mod=gemm_rs_w23_c      NR=8   NG=296  max|diff|=4.88e-04 OK
+  nr16   mod=gemm_rs_w23_c      NR=16  NG=288  max|diff|=4.88e-04 OK
+  nr32   mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=4.88e-04 OK
+  nr48   mod=gemm_rs_w23_c      NR=48  NG=256  max|diff|=4.88e-04 OK
+  pass 0: order ['a', 'b', 'c', 'null', 'nr8', 'nr16', 'nr32', 'nr48']
+  pass 1: order ['b', 'c', 'null', 'nr8', 'nr16', 'nr32', 'nr48', 'a']
+  pass 2: order ['c', 'null', 'nr8', 'nr16', 'nr32', 'nr48', 'a', 'b']
+  pass 3: order ['null', 'nr8', 'nr16', 'nr32', 'nr48', 'a', 'b', 'c']
+  pass 4: order ['nr8', 'nr16', 'nr32', 'nr48', 'a', 'b', 'c', 'null']
+  pass 5: order ['nr16', 'nr32', 'nr48', 'a', 'b', 'c', 'null', 'nr8']
+  pass 6: order ['nr32', 'nr48', 'a', 'b', 'c', 'null', 'nr8', 'nr16']
+  pass 7: order ['nr48', 'a', 'b', 'c', 'null', 'nr8', 'nr16', 'nr32']
+  ---------------------------------------------------------------------
+      arm   NR      best    median  spread%    d_best  vs_a_b%  vs_a_m%
+        a   32     85.07     85.23     0.40     84.76     0.00     0.00
+        b   32     85.59     85.92     0.50     85.38     0.62     0.80
+        c   32     83.57     83.80     0.59     83.27    -1.76    -1.68
+     null   32     83.91     84.01     0.33     83.71    -1.35    -1.44
+      nr8    8    115.14    115.58     0.71    114.87    35.35    35.61
+     nr16   16     93.93     94.06     0.21     93.75    10.41    10.35
+     nr32   32     85.02     85.29     0.67     84.75    -0.05     0.06
+     nr48   48     83.67     83.90     0.47     83.35    -1.64    -1.57
+  NULL FLOOR (c vs null, identical device ISA, independent allocations): best 0.42%  median 0.25%  <-- believe nothing below this
+  position residual %: 0:+0.03 1:-0.06 2:-0.00 3:-0.07 4:-0.02 5:-0.06 6:-0.00 7:+0.11
+
+===== shape 4: 4096x4096x4096 bias=0  256/256/32 row=4 shippedNR=32 NG=272 tiles=256 tiles/CTA=1  iters=120 passes=8 arms=8 construction=forward =====
+  a->b active on this shape: False   b->c active on this shape: False
+  a      mod=gemm_rs_w23_a      NR=32  NG=272  max|diff|=3.05e-05 OK
+  b      mod=gemm_rs_w23_b      NR=32  NG=272  max|diff|=3.05e-05 OK
+  c      mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=3.05e-05 OK
+  null   mod=gemm_rs_w23_null   NR=32  NG=272  max|diff|=3.05e-05 OK
+  nr8    mod=gemm_rs_w23_c      NR=8   NG=296  max|diff|=3.05e-05 OK
+  nr16   mod=gemm_rs_w23_c      NR=16  NG=288  max|diff|=3.05e-05 OK
+  nr32   mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=3.05e-05 OK
+  nr48   mod=gemm_rs_w23_c      NR=48  NG=256  max|diff|=3.05e-05 OK
+  pass 0: order ['a', 'b', 'c', 'null', 'nr8', 'nr16', 'nr32', 'nr48']
+  pass 1: order ['b', 'c', 'null', 'nr8', 'nr16', 'nr32', 'nr48', 'a']
+  pass 2: order ['c', 'null', 'nr8', 'nr16', 'nr32', 'nr48', 'a', 'b']
+  pass 3: order ['null', 'nr8', 'nr16', 'nr32', 'nr48', 'a', 'b', 'c']
+  pass 4: order ['nr8', 'nr16', 'nr32', 'nr48', 'a', 'b', 'c', 'null']
+  pass 5: order ['nr16', 'nr32', 'nr48', 'a', 'b', 'c', 'null', 'nr8']
+  pass 6: order ['nr32', 'nr48', 'a', 'b', 'c', 'null', 'nr8', 'nr16']
+  pass 7: order ['nr48', 'a', 'b', 'c', 'null', 'nr8', 'nr16', 'nr32']
+  ---------------------------------------------------------------------
+      arm   NR      best    median  spread%    d_best  vs_a_b%  vs_a_m%
+        a   32    197.72    198.42     0.60    197.09     0.00     0.00
+        b   32    198.02    198.23     0.49    197.39     0.15    -0.10
+        c   32    197.95    198.57     0.59    197.36     0.12     0.08
+     null   32    197.95    198.45     0.49    197.30     0.12     0.02
+      nr8    8    264.11    264.41     0.36    263.50    33.58    33.26
+     nr16   16    221.73    222.53     0.61    221.19    12.14    12.15
+     nr32   32    199.48    200.27     0.72    198.88     0.89     0.93
+     nr48   48    197.71    198.30     0.41    197.10    -0.00    -0.06
+  NULL FLOOR (c vs null, identical device ISA, independent allocations): best 0.00%  median 0.06%  <-- believe nothing below this
+  position residual %: 0:+0.06 1:-0.12 2:+0.00 3:+0.08 4:+0.07 5:-0.02 6:-0.05 7:+0.00
+
+===== shape 5: 8192x4096x14336 bias=1  256/256/32 row=5 shippedNR=32 NG=272 tiles=512 tiles/CTA=2  iters=60 passes=8 arms=8 construction=forward =====
+  a->b active on this shape: True   b->c active on this shape: False
+  a      mod=gemm_rs_w23_a      NR=32  NG=272  max|diff|=4.88e-04 OK
+  b      mod=gemm_rs_w23_b      NR=32  NG=272  max|diff|=4.88e-04 OK
+  c      mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=4.88e-04 OK
+  null   mod=gemm_rs_w23_null   NR=32  NG=272  max|diff|=4.88e-04 OK
+  nr8    mod=gemm_rs_w23_c      NR=8   NG=296  max|diff|=4.88e-04 OK
+  nr16   mod=gemm_rs_w23_c      NR=16  NG=288  max|diff|=4.88e-04 OK
+  nr32   mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=4.88e-04 OK
+  nr48   mod=gemm_rs_w23_c      NR=48  NG=256  max|diff|=4.88e-04 OK
+  pass 0: order ['a', 'b', 'c', 'null', 'nr8', 'nr16', 'nr32', 'nr48']
+  pass 1: order ['b', 'c', 'null', 'nr8', 'nr16', 'nr32', 'nr48', 'a']
+  pass 2: order ['c', 'null', 'nr8', 'nr16', 'nr32', 'nr48', 'a', 'b']
+  pass 3: order ['null', 'nr8', 'nr16', 'nr32', 'nr48', 'a', 'b', 'c']
+  pass 4: order ['nr8', 'nr16', 'nr32', 'nr48', 'a', 'b', 'c', 'null']
+  pass 5: order ['nr16', 'nr32', 'nr48', 'a', 'b', 'c', 'null', 'nr8']
+  pass 6: order ['nr32', 'nr48', 'a', 'b', 'c', 'null', 'nr8', 'nr16']
+  pass 7: order ['nr48', 'a', 'b', 'c', 'null', 'nr8', 'nr16', 'nr32']
+  ---------------------------------------------------------------------
+      arm   NR      best    median  spread%    d_best  vs_a_b%  vs_a_m%
+        a   32    756.61    757.18     0.19    755.81     0.00     0.00
+        b   32    634.09    635.94     0.40    632.75   -16.19   -16.01
+        c   32    624.94    625.84     0.31    623.58   -17.40   -17.35
+     null   32    625.60    626.80     0.35    624.30   -17.31   -17.22
+      nr8    8    752.02    753.86     0.48    750.79    -0.61    -0.44
+     nr16   16    661.98    662.89     0.39    660.87   -12.51   -12.45
+     nr32   32    646.99    648.18     0.46    645.54   -14.49   -14.40
+     nr48   48    612.81    613.14     0.30    611.57   -19.00   -19.02
+  NULL FLOOR (c vs null, identical device ISA, independent allocations): best 0.11%  median 0.15%  <-- believe nothing below this
+  position residual %: 0:-0.01 1:-0.04 2:+0.01 3:+0.03 4:+0.02 5:-0.03 6:+0.03 7:+0.03
+
+===== shape 6: 8192x8192x29568 bias=0  256/256/32 row=6 shippedNR=48 NG=256 tiles=1024 tiles/CTA=4  iters=50 passes=8 arms=8 construction=forward =====
+  a->b active on this shape: True   b->c active on this shape: True
+  a      mod=gemm_rs_w23_a      NR=48  NG=256  max|diff|=1.22e-04 OK
+  b      mod=gemm_rs_w23_b      NR=48  NG=256  max|diff|=1.22e-04 OK
+  c      mod=gemm_rs_w23_c      NR=48  NG=256  max|diff|=1.22e-04 OK
+  null   mod=gemm_rs_w23_null   NR=48  NG=256  max|diff|=1.22e-04 OK
+  nr8    mod=gemm_rs_w23_c      NR=8   NG=296  max|diff|=1.22e-04 OK
+  nr16   mod=gemm_rs_w23_c      NR=16  NG=288  max|diff|=1.22e-04 OK
+  nr32   mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=1.22e-04 OK
+  nr48   mod=gemm_rs_w23_c      NR=48  NG=256  max|diff|=1.22e-04 OK
+  pass 0: order ['a', 'b', 'c', 'null', 'nr8', 'nr16', 'nr32', 'nr48']
+  pass 1: order ['b', 'c', 'null', 'nr8', 'nr16', 'nr32', 'nr48', 'a']
+  pass 2: order ['c', 'null', 'nr8', 'nr16', 'nr32', 'nr48', 'a', 'b']
+  pass 3: order ['null', 'nr8', 'nr16', 'nr32', 'nr48', 'a', 'b', 'c']
+  pass 4: order ['nr8', 'nr16', 'nr32', 'nr48', 'a', 'b', 'c', 'null']
+  pass 5: order ['nr16', 'nr32', 'nr48', 'a', 'b', 'c', 'null', 'nr8']
+  pass 6: order ['nr32', 'nr48', 'a', 'b', 'c', 'null', 'nr8', 'nr16']
+  pass 7: order ['nr48', 'a', 'b', 'c', 'null', 'nr8', 'nr16', 'nr32']
+  ---------------------------------------------------------------------
+      arm   NR      best    median  spread%    d_best  vs_a_b%  vs_a_m%
+        a   48   2599.14   2620.03     1.37   2598.73     0.00     0.00
+        b   48   1801.78   1809.50     1.56   1799.99   -30.68   -30.94
+        c   48   1614.28   1630.55     2.44   1612.82   -37.89   -37.77
+     null   48   1622.67   1642.52     4.68   1620.42   -37.57   -37.31
+      nr8    8   2010.60   2020.52     0.97   2008.97   -22.64   -22.88
+     nr16   16   1786.32   1798.09     1.24   1784.56   -31.27   -31.37
+     nr32   32   1706.23   1729.49     1.75   1704.79   -34.35   -33.99
+     nr48   48   1547.02   1566.37     2.62   1545.72   -40.48   -40.22
+  NULL FLOOR (c vs null, identical device ISA, independent allocations): best 0.52%  median 0.73%  <-- believe nothing below this
+  position residual %: 0:+0.18 1:+0.01 2:+0.64 3:+0.27 4:-0.09 5:-0.00 6:-0.35 7:-0.25
+
+====================================================================================================
+DRAW SUMMARY (median us; every delta beside its null floor)
+====================================================================================================
+
+shape 1 64x7168x18432  null floor 0.26%  a->b active=False  b->c active=False
+  b      gain vs a      +0.65%   vs a   +0.65%   beyond floor
+  c      gain vs b      +0.69%   vs a   +1.34%   beyond floor
+  null   gain vs c      +0.26%   vs a   +1.61%   inside floor -> no evidence
+  NR=8    vs shipped NR  -51.65%   beyond floor
+  NR=16   vs shipped NR  -28.13%   beyond floor
+  NR=32   vs shipped NR   -7.46%   beyond floor
+  NR=48   vs shipped NR   +0.39%   beyond floor
+
+shape 2 512x4096x12288  null floor 0.85%  a->b active=False  b->c active=False
+  b      gain vs a      -0.66%   vs a   -0.66%   inside floor -> no evidence
+  c      gain vs b      -0.04%   vs a   -0.71%   inside floor -> no evidence
+  null   gain vs c      +0.85%   vs a   +0.13%   inside floor -> no evidence
+  NR=8    vs shipped NR  -24.88%   beyond floor
+  NR=16   vs shipped NR   -8.70%   beyond floor
+  NR=32   vs shipped NR   +1.96%   beyond floor
+  NR=48   vs shipped NR   +1.40%   beyond floor
+
+shape 3 2048x2880x2880  null floor 0.25%  a->b active=False  b->c active=False
+  b      gain vs a      -0.80%   vs a   -0.80%   beyond floor
+  c      gain vs b      +2.52%   vs a   +1.71%   beyond floor
+  null   gain vs c      -0.25%   vs a   +1.46%   inside floor -> no evidence
+  NR=8    vs shipped NR  -27.50%   beyond floor
+  NR=16   vs shipped NR  -10.90%   beyond floor
+  NR=32   vs shipped NR   -1.74%   beyond floor
+  NR=48   vs shipped NR   -0.11%   inside floor
+
+shape 4 4096x4096x4096  null floor 0.06%  a->b active=False  b->c active=False
+  b      gain vs a      +0.10%   vs a   +0.10%   beyond floor
+  c      gain vs b      -0.17%   vs a   -0.08%   beyond floor
+  null   gain vs c      +0.06%   vs a   -0.02%   beyond floor
+  NR=8    vs shipped NR  -24.90%   beyond floor
+  NR=16   vs shipped NR  -10.77%   beyond floor
+  NR=32   vs shipped NR   -0.85%   beyond floor
+  NR=48   vs shipped NR   +0.14%   beyond floor
+
+shape 5 8192x4096x14336  null floor 0.15%  a->b active=True  b->c active=False
+  b      gain vs a     +19.07%   vs a  +19.07%   beyond floor
+  c      gain vs b      +1.61%   vs a  +20.99%   beyond floor
+  null   gain vs c      -0.15%   vs a  +20.80%   inside floor -> no evidence
+  NR=8    vs shipped NR  -16.98%   beyond floor
+  NR=16   vs shipped NR   -5.59%   beyond floor
+  NR=32   vs shipped NR   -3.45%   beyond floor
+  NR=48   vs shipped NR   +2.07%   beyond floor
+
+shape 6 8192x8192x29568  null floor 0.73%  a->b active=True  b->c active=True
+  b      gain vs a     +44.79%   vs a  +44.79%   beyond floor
+  c      gain vs b     +10.98%   vs a  +60.68%   beyond floor
+  null   gain vs c      -0.73%   vs a  +59.51%   inside floor -> no evidence
+  NR=8    vs shipped NR  -19.30%   beyond floor
+  NR=16   vs shipped NR   -9.32%   beyond floor
+  NR=32   vs shipped NR   -5.72%   beyond floor
+  NR=48   vs shipped NR   +4.10%   beyond floor
+
+wrote /home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_23_waterfall/draw_20260812_095400_fwd.json
+
+pooled 3 draw(s) (1 reversed) -> /home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_23_waterfall/waterfall.json
+
+  rung   geo_best  geo_median     vs_a  vs_prev
+     a     224.24      227.39   1.0000   1.0000
+     b     206.29      209.52   0.9214   0.9214
+     c     200.70      205.15   0.9022   0.9792
+  null     200.42      204.81   0.9007   0.9983
+
+    NR   geo_best  geo_median     vs_c
+     8     282.16      284.83   1.3884
+    16     230.83      233.15   1.1365
+    32     205.31      208.21   1.0149
+    48     199.02      203.26   0.9908
+  draw 3 exit=0
+
+########## draw 4/4: construction=rev 2026-08-12T04:54:11-05:00 ##########
+fingerprint gate: PASS
+  rung a     isa ec714ea8a6444284 config {'WGM4': 1, 'RELEASE_GROUP': 1, 'RELEASE_GROUP_FULL_ONLY': 1}
+  rung b     isa 366d4f08a030afaa config {'WGM4': 0, 'RELEASE_GROUP': 1, 'RELEASE_GROUP_FULL_ONLY': 1}
+  rung c     isa 7926c2e872835c8d config {'WGM4': 0, 'RELEASE_GROUP': 4, 'RELEASE_GROUP_FULL_ONLY': 1}
+  rung null  isa 7926c2e872835c8d config {'WGM4': 0, 'RELEASE_GROUP': 4, 'RELEASE_GROUP_FULL_ONLY': 1}
+
+exp_23 waterfall: shapes=[1, 2, 3, 4, 5, 6] scale=1.0 construction=REVERSED
+
+===== shape 1: 64x7168x18432 bias=0  32/64/128 row=1 shippedNR=56 NG=248 tiles=224 tiles/CTA=1  iters=300 passes=8 arms=8 construction=REVERSED =====
+  a->b active on this shape: False   b->c active on this shape: False
+  nr48   mod=gemm_rs_w23_c      NR=48  NG=256  max|diff|=6.10e-05 OK
+  nr32   mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=6.10e-05 OK
+  nr16   mod=gemm_rs_w23_c      NR=16  NG=288  max|diff|=6.10e-05 OK
+  nr8    mod=gemm_rs_w23_c      NR=8   NG=296  max|diff|=6.10e-05 OK
+  null   mod=gemm_rs_w23_null   NR=56  NG=248  max|diff|=6.10e-05 OK
+  c      mod=gemm_rs_w23_c      NR=56  NG=248  max|diff|=6.10e-05 OK
+  b      mod=gemm_rs_w23_b      NR=56  NG=248  max|diff|=6.10e-05 OK
+  a      mod=gemm_rs_w23_a      NR=56  NG=248  max|diff|=6.10e-05 OK
+  pass 0: order ['nr48', 'nr32', 'nr16', 'nr8', 'null', 'c', 'b', 'a']
+  pass 1: order ['nr32', 'nr16', 'nr8', 'null', 'c', 'b', 'a', 'nr48']
+  pass 2: order ['nr16', 'nr8', 'null', 'c', 'b', 'a', 'nr48', 'nr32']
+  pass 3: order ['nr8', 'null', 'c', 'b', 'a', 'nr48', 'nr32', 'nr16']
+  pass 4: order ['null', 'c', 'b', 'a', 'nr48', 'nr32', 'nr16', 'nr8']
+  pass 5: order ['c', 'b', 'a', 'nr48', 'nr32', 'nr16', 'nr8', 'null']
+  pass 6: order ['b', 'a', 'nr48', 'nr32', 'nr16', 'nr8', 'null', 'c']
+  pass 7: order ['a', 'nr48', 'nr32', 'nr16', 'nr8', 'null', 'c', 'b']
+  ---------------------------------------------------------------------
+      arm   NR      best    median  spread%    d_best  vs_a_b%  vs_a_m%
+     nr48   48     62.26     62.99     1.51     62.05    -0.73    -1.09
+     nr32   32     67.74     68.68     2.31     67.48     8.00     7.86
+     nr16   16     86.71     86.80     0.31     86.48    38.25    36.30
+      nr8    8    128.55    128.61     0.29    128.32   104.94   101.96
+     null   56     60.47     61.24     1.72     60.28    -3.59    -3.83
+        c   56     60.78     62.87     6.40     60.59    -3.09    -1.28
+        b   56     63.65     64.13     3.20     63.53     1.48     0.71
+        a   56     62.72     63.68     3.63     62.55     0.00     0.00
+  NULL FLOOR (c vs null, identical device ISA, independent allocations): best 0.52%  median 2.66%  <-- believe nothing below this
+  position residual %: 0:-0.82 1:+0.23 2:-0.12 3:-0.13 4:+0.56 5:+0.35 6:+0.14 7:-0.22
+
+===== shape 2: 512x4096x12288 bias=1  64/128/64 row=2 shippedNR=32 NG=272 tiles=256 tiles/CTA=1  iters=250 passes=8 arms=8 construction=REVERSED =====
+  a->b active on this shape: False   b->c active on this shape: False
+  nr48   mod=gemm_rs_w23_c      NR=48  NG=256  max|diff|=4.88e-04 OK
+  nr32   mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=4.88e-04 OK
+  nr16   mod=gemm_rs_w23_c      NR=16  NG=288  max|diff|=4.88e-04 OK
+  nr8    mod=gemm_rs_w23_c      NR=8   NG=296  max|diff|=4.88e-04 OK
+  null   mod=gemm_rs_w23_null   NR=32  NG=272  max|diff|=4.88e-04 OK
+  c      mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=4.88e-04 OK
+  b      mod=gemm_rs_w23_b      NR=32  NG=272  max|diff|=4.88e-04 OK
+  a      mod=gemm_rs_w23_a      NR=32  NG=272  max|diff|=4.88e-04 OK
+  pass 0: order ['nr48', 'nr32', 'nr16', 'nr8', 'null', 'c', 'b', 'a']
+  pass 1: order ['nr32', 'nr16', 'nr8', 'null', 'c', 'b', 'a', 'nr48']
+  pass 2: order ['nr16', 'nr8', 'null', 'c', 'b', 'a', 'nr48', 'nr32']
+  pass 3: order ['nr8', 'null', 'c', 'b', 'a', 'nr48', 'nr32', 'nr16']
+  pass 4: order ['null', 'c', 'b', 'a', 'nr48', 'nr32', 'nr16', 'nr8']
+  pass 5: order ['c', 'b', 'a', 'nr48', 'nr32', 'nr16', 'nr8', 'null']
+  pass 6: order ['b', 'a', 'nr48', 'nr32', 'nr16', 'nr8', 'null', 'c']
+  pass 7: order ['a', 'nr48', 'nr32', 'nr16', 'nr8', 'null', 'c', 'b']
+  ---------------------------------------------------------------------
+      arm   NR      best    median  spread%    d_best  vs_a_b%  vs_a_m%
+     nr48   48     64.13     65.63     3.56     63.81    -0.59    -0.91
+     nr32   32     64.88     66.08     2.67     64.67     0.58    -0.23
+     nr16   16     72.01     72.87     2.34     71.71    11.63    10.03
+      nr8    8     88.10     88.17     0.15     87.78    36.57    33.13
+     null   32     64.62     64.72     0.27     64.40     0.17    -2.29
+        c   32     64.82     66.07     2.61     64.61     0.48    -0.25
+        b   32     65.41     65.99     2.47     65.15     1.41    -0.36
+        a   32     64.51     66.23     3.30     64.26     0.00     0.00
+  NULL FLOOR (c vs null, identical device ISA, independent allocations): best 0.31%  median 2.09%  <-- believe nothing below this
+  position residual %: 0:-0.54 1:-0.11 2:-0.35 3:-0.05 4:+0.25 5:-0.55 6:+0.25 7:+0.10
+
+===== shape 3: 2048x2880x2880 bias=1  128/192/32 row=3 shippedNR=32 NG=272 tiles=240 tiles/CTA=1  iters=250 passes=8 arms=8 construction=REVERSED =====
+  a->b active on this shape: False   b->c active on this shape: False
+  nr48   mod=gemm_rs_w23_c      NR=48  NG=256  max|diff|=4.88e-04 OK
+  nr32   mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=4.88e-04 OK
+  nr16   mod=gemm_rs_w23_c      NR=16  NG=288  max|diff|=4.88e-04 OK
+  nr8    mod=gemm_rs_w23_c      NR=8   NG=296  max|diff|=4.88e-04 OK
+  null   mod=gemm_rs_w23_null   NR=32  NG=272  max|diff|=4.88e-04 OK
+  c      mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=4.88e-04 OK
+  b      mod=gemm_rs_w23_b      NR=32  NG=272  max|diff|=4.88e-04 OK
+  a      mod=gemm_rs_w23_a      NR=32  NG=272  max|diff|=4.88e-04 OK
+  pass 0: order ['nr48', 'nr32', 'nr16', 'nr8', 'null', 'c', 'b', 'a']
+  pass 1: order ['nr32', 'nr16', 'nr8', 'null', 'c', 'b', 'a', 'nr48']
+  pass 2: order ['nr16', 'nr8', 'null', 'c', 'b', 'a', 'nr48', 'nr32']
+  pass 3: order ['nr8', 'null', 'c', 'b', 'a', 'nr48', 'nr32', 'nr16']
+  pass 4: order ['null', 'c', 'b', 'a', 'nr48', 'nr32', 'nr16', 'nr8']
+  pass 5: order ['c', 'b', 'a', 'nr48', 'nr32', 'nr16', 'nr8', 'null']
+  pass 6: order ['b', 'a', 'nr48', 'nr32', 'nr16', 'nr8', 'null', 'c']
+  pass 7: order ['a', 'nr48', 'nr32', 'nr16', 'nr8', 'null', 'c', 'b']
+  ---------------------------------------------------------------------
+      arm   NR      best    median  spread%    d_best  vs_a_b%  vs_a_m%
+     nr48   48     85.28     85.55     0.48     84.96     2.41     2.35
+     nr32   32     84.57     84.74     0.29     84.28     1.56     1.38
+     nr16   16     97.43     97.50     0.45     97.17    17.00    16.64
+      nr8    8    120.93    121.52     0.59    120.63    45.22    45.38
+     null   32     84.23     84.36     0.28     83.89     1.15     0.92
+        c   32     83.93     84.10     0.45     83.62     0.79     0.61
+        b   32     85.46     85.96     0.91     85.29     2.63     2.84
+        a   32     83.27     83.59     1.08     83.03     0.00     0.00
+  NULL FLOOR (c vs null, identical device ISA, independent allocations): best 0.36%  median 0.31%  <-- believe nothing below this
+  position residual %: 0:+0.03 1:+0.15 2:+0.01 3:-0.05 4:-0.11 5:+0.01 6:-0.08 7:+0.10
+
+===== shape 4: 4096x4096x4096 bias=0  256/256/32 row=4 shippedNR=32 NG=272 tiles=256 tiles/CTA=1  iters=120 passes=8 arms=8 construction=REVERSED =====
+  a->b active on this shape: False   b->c active on this shape: False
+  nr48   mod=gemm_rs_w23_c      NR=48  NG=256  max|diff|=3.05e-05 OK
+  nr32   mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=3.05e-05 OK
+  nr16   mod=gemm_rs_w23_c      NR=16  NG=288  max|diff|=3.05e-05 OK
+  nr8    mod=gemm_rs_w23_c      NR=8   NG=296  max|diff|=3.05e-05 OK
+  null   mod=gemm_rs_w23_null   NR=32  NG=272  max|diff|=3.05e-05 OK
+  c      mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=3.05e-05 OK
+  b      mod=gemm_rs_w23_b      NR=32  NG=272  max|diff|=3.05e-05 OK
+  a      mod=gemm_rs_w23_a      NR=32  NG=272  max|diff|=3.05e-05 OK
+  pass 0: order ['nr48', 'nr32', 'nr16', 'nr8', 'null', 'c', 'b', 'a']
+  pass 1: order ['nr32', 'nr16', 'nr8', 'null', 'c', 'b', 'a', 'nr48']
+  pass 2: order ['nr16', 'nr8', 'null', 'c', 'b', 'a', 'nr48', 'nr32']
+  pass 3: order ['nr8', 'null', 'c', 'b', 'a', 'nr48', 'nr32', 'nr16']
+  pass 4: order ['null', 'c', 'b', 'a', 'nr48', 'nr32', 'nr16', 'nr8']
+  pass 5: order ['c', 'b', 'a', 'nr48', 'nr32', 'nr16', 'nr8', 'null']
+  pass 6: order ['b', 'a', 'nr48', 'nr32', 'nr16', 'nr8', 'null', 'c']
+  pass 7: order ['a', 'nr48', 'nr32', 'nr16', 'nr8', 'null', 'c', 'b']
+  ---------------------------------------------------------------------
+      arm   NR      best    median  spread%    d_best  vs_a_b%  vs_a_m%
+     nr48   48    198.64    198.96     0.74    198.00    -0.13    -0.44
+     nr32   32    200.00    200.42     0.45    199.45     0.55     0.29
+     nr16   16    221.21    221.63     0.43    220.60    11.22    10.90
+      nr8    8    263.66    264.05     0.22    263.02    32.56    32.13
+     null   32    198.36    199.08     0.57    197.74    -0.27    -0.38
+        c   32    199.29    199.51     0.31    198.69     0.19    -0.16
+        b   32    200.42    200.98     0.64    199.87     0.76     0.57
+        a   32    198.90    199.84     0.79    198.25     0.00     0.00
+  NULL FLOOR (c vs null, identical device ISA, independent allocations): best 0.47%  median 0.22%  <-- believe nothing below this
+  position residual %: 0:+0.02 1:-0.04 2:+0.04 3:+0.14 4:+0.01 5:+0.04 6:-0.03 7:-0.06
+
+===== shape 5: 8192x4096x14336 bias=1  256/256/32 row=5 shippedNR=32 NG=272 tiles=512 tiles/CTA=2  iters=60 passes=8 arms=8 construction=REVERSED =====
+  a->b active on this shape: True   b->c active on this shape: False
+  nr48   mod=gemm_rs_w23_c      NR=48  NG=256  max|diff|=4.88e-04 OK
+  nr32   mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=4.88e-04 OK
+  nr16   mod=gemm_rs_w23_c      NR=16  NG=288  max|diff|=4.88e-04 OK
+  nr8    mod=gemm_rs_w23_c      NR=8   NG=296  max|diff|=4.88e-04 OK
+  null   mod=gemm_rs_w23_null   NR=32  NG=272  max|diff|=4.88e-04 OK
+  c      mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=4.88e-04 OK
+  b      mod=gemm_rs_w23_b      NR=32  NG=272  max|diff|=4.88e-04 OK
+  a      mod=gemm_rs_w23_a      NR=32  NG=272  max|diff|=4.88e-04 OK
+  pass 0: order ['nr48', 'nr32', 'nr16', 'nr8', 'null', 'c', 'b', 'a']
+  pass 1: order ['nr32', 'nr16', 'nr8', 'null', 'c', 'b', 'a', 'nr48']
+  pass 2: order ['nr16', 'nr8', 'null', 'c', 'b', 'a', 'nr48', 'nr32']
+  pass 3: order ['nr8', 'null', 'c', 'b', 'a', 'nr48', 'nr32', 'nr16']
+  pass 4: order ['null', 'c', 'b', 'a', 'nr48', 'nr32', 'nr16', 'nr8']
+  pass 5: order ['c', 'b', 'a', 'nr48', 'nr32', 'nr16', 'nr8', 'null']
+  pass 6: order ['b', 'a', 'nr48', 'nr32', 'nr16', 'nr8', 'null', 'c']
+  pass 7: order ['a', 'nr48', 'nr32', 'nr16', 'nr8', 'null', 'c', 'b']
+  ---------------------------------------------------------------------
+      arm   NR      best    median  spread%    d_best  vs_a_b%  vs_a_m%
+     nr48   48    628.12    629.04     0.31    626.91   -16.44   -16.44
+     nr32   32    662.92    665.17     0.56    661.67   -11.81   -11.64
+     nr16   16    677.50    678.28     0.21    676.33    -9.87    -9.90
+      nr8    8    744.97    745.62     0.35    743.77    -0.90    -0.95
+     null   32    658.08    660.00     0.60    656.69   -12.46   -12.33
+        c   32    632.72    633.75     0.37    631.44   -15.83   -15.81
+        b   32    661.69    663.52     0.38    660.44   -11.98   -11.86
+        a   32    751.73    752.79     0.23    750.98     0.00     0.00
+  NULL FLOOR (c vs null, identical device ISA, independent allocations): best 4.01%  median 4.14%  <-- believe nothing below this
+  position residual %: 0:-0.00 1:-0.04 2:+0.04 3:+0.00 4:-0.05 5:-0.03 6:+0.03 7:-0.03
+
+===== shape 6: 8192x8192x29568 bias=0  256/256/32 row=6 shippedNR=48 NG=256 tiles=1024 tiles/CTA=4  iters=50 passes=8 arms=8 construction=REVERSED =====
+  a->b active on this shape: True   b->c active on this shape: True
+  nr48   mod=gemm_rs_w23_c      NR=48  NG=256  max|diff|=1.22e-04 OK
+  nr32   mod=gemm_rs_w23_c      NR=32  NG=272  max|diff|=1.22e-04 OK
+  nr16   mod=gemm_rs_w23_c      NR=16  NG=288  max|diff|=1.22e-04 OK
+  nr8    mod=gemm_rs_w23_c      NR=8   NG=296  max|diff|=1.22e-04 OK
+  null   mod=gemm_rs_w23_null   NR=48  NG=256  max|diff|=1.22e-04 OK
+  c      mod=gemm_rs_w23_c      NR=48  NG=256  max|diff|=1.22e-04 OK
+  b      mod=gemm_rs_w23_b      NR=48  NG=256  max|diff|=1.22e-04 OK
+  a      mod=gemm_rs_w23_a      NR=48  NG=256  max|diff|=1.22e-04 OK
+  pass 0: order ['nr48', 'nr32', 'nr16', 'nr8', 'null', 'c', 'b', 'a']
+  pass 1: order ['nr32', 'nr16', 'nr8', 'null', 'c', 'b', 'a', 'nr48']
+  pass 2: order ['nr16', 'nr8', 'null', 'c', 'b', 'a', 'nr48', 'nr32']
+  pass 3: order ['nr8', 'null', 'c', 'b', 'a', 'nr48', 'nr32', 'nr16']
+  pass 4: order ['null', 'c', 'b', 'a', 'nr48', 'nr32', 'nr16', 'nr8']
+  pass 5: order ['c', 'b', 'a', 'nr48', 'nr32', 'nr16', 'nr8', 'null']
+  pass 6: order ['b', 'a', 'nr48', 'nr32', 'nr16', 'nr8', 'null', 'c']
+  pass 7: order ['a', 'nr48', 'nr32', 'nr16', 'nr8', 'null', 'c', 'b']
+  ---------------------------------------------------------------------
+      arm   NR      best    median  spread%    d_best  vs_a_b%  vs_a_m%
+     nr48   48   1573.54   1590.09     2.34   1572.11   -39.62   -39.30
+     nr32   32   1673.48   1701.63     2.47   1671.77   -35.79   -35.04
+     nr16   16   1769.55   1782.97     1.36   1768.18   -32.10   -31.93
+      nr8    8   2016.68   2027.18     1.34   2014.84   -22.62   -22.61
+     null   48   1601.58   1612.50     2.41   1599.57   -38.54   -38.44
+        c   48   1609.79   1630.28     3.79   1608.20   -38.23   -37.76
+        b   48   1823.22   1841.90     1.97   1821.83   -30.04   -29.68
+        a   48   2606.07   2619.48     1.60   2605.48     0.00     0.00
+  NULL FLOOR (c vs null, identical device ISA, independent allocations): best 0.51%  median 1.10%  <-- believe nothing below this
+  position residual %: 0:+0.08 1:+0.33 2:+0.03 3:-0.10 4:-0.10 5:+0.05 6:+0.43 7:+0.02
+
+====================================================================================================
+DRAW SUMMARY (median us; every delta beside its null floor)
+====================================================================================================
+
+shape 1 64x7168x18432  null floor 2.66%  a->b active=False  b->c active=False
+  b      gain vs a      -0.70%   vs a   -0.70%   inside floor -> no evidence
+  c      gain vs b      +2.01%   vs a   +1.29%   inside floor -> no evidence
+  null   gain vs c      +2.66%   vs a   +3.99%   inside floor -> no evidence
+  NR=8    vs shipped NR  -51.12%   beyond floor
+  NR=16   vs shipped NR  -27.57%   beyond floor
+  NR=32   vs shipped NR   -8.47%   beyond floor
+  NR=48   vs shipped NR   -0.19%   inside floor
+
+shape 2 512x4096x12288  null floor 2.09%  a->b active=False  b->c active=False
+  b      gain vs a      +0.36%   vs a   +0.36%   inside floor -> no evidence
+  c      gain vs b      -0.11%   vs a   +0.25%   inside floor -> no evidence
+  null   gain vs c      +2.09%   vs a   +2.34%   beyond floor
+  NR=8    vs shipped NR  -25.07%   beyond floor
+  NR=16   vs shipped NR   -9.34%   beyond floor
+  NR=32   vs shipped NR   -0.02%   inside floor
+  NR=48   vs shipped NR   +0.67%   inside floor
+
+shape 3 2048x2880x2880  null floor 0.31%  a->b active=False  b->c active=False
+  b      gain vs a      -2.76%   vs a   -2.76%   beyond floor
+  c      gain vs b      +2.22%   vs a   -0.61%   beyond floor
+  null   gain vs c      -0.31%   vs a   -0.91%   inside floor -> no evidence
+  NR=8    vs shipped NR  -30.80%   beyond floor
+  NR=16   vs shipped NR  -13.75%   beyond floor
+  NR=32   vs shipped NR   -0.76%   beyond floor
+  NR=48   vs shipped NR   -1.70%   beyond floor
+
+shape 4 4096x4096x4096  null floor 0.22%  a->b active=False  b->c active=False
+  b      gain vs a      -0.57%   vs a   -0.57%   beyond floor
+  c      gain vs b      +0.74%   vs a   +0.17%   beyond floor
+  null   gain vs c      +0.22%   vs a   +0.38%   beyond floor
+  NR=8    vs shipped NR  -24.44%   beyond floor
+  NR=16   vs shipped NR   -9.98%   beyond floor
+  NR=32   vs shipped NR   -0.45%   beyond floor
+  NR=48   vs shipped NR   +0.28%   beyond floor
+
+shape 5 8192x4096x14336  null floor 4.14%  a->b active=True  b->c active=False
+  b      gain vs a     +13.45%   vs a  +13.45%   beyond floor
+  c      gain vs b      +4.70%   vs a  +18.78%   beyond floor
+  null   gain vs c      -3.98%   vs a  +14.06%   inside floor -> no evidence
+  NR=8    vs shipped NR  -15.00%   beyond floor
+  NR=16   vs shipped NR   -6.56%   beyond floor
+  NR=32   vs shipped NR   -4.72%   beyond floor
+  NR=48   vs shipped NR   +0.75%   inside floor
+
+shape 6 8192x8192x29568  null floor 1.10%  a->b active=True  b->c active=True
+  b      gain vs a     +42.22%   vs a  +42.22%   beyond floor
+  c      gain vs b     +12.98%   vs a  +60.68%   beyond floor
+  null   gain vs c      +1.10%   vs a  +62.45%   inside floor -> no evidence
+  NR=8    vs shipped NR  -19.58%   beyond floor
+  NR=16   vs shipped NR   -8.56%   beyond floor
+  NR=32   vs shipped NR   -4.19%   beyond floor
+  NR=48   vs shipped NR   +2.53%   beyond floor
+
+wrote /home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_23_waterfall/draw_20260812_095439_rev.json
+
+pooled 4 draw(s) (2 reversed) -> /home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_23_waterfall/waterfall.json
+
+  rung   geo_best  geo_median     vs_a  vs_prev
+     a     223.65      227.61   1.0000   1.0000
+     b     206.29      210.20   0.9235   0.9235
+     c     200.60      204.55   0.8986   0.9731
+  null     200.18      204.09   0.8967   0.9978
+
+    NR   geo_best  geo_median     vs_c
+     8     281.92      284.59   1.3913
+    16     230.64      233.34   1.1407
+    32     205.28      209.02   1.0219
+    48     198.81      202.75   0.9912
+  draw 4 exit=0
+
+===== clocks AFTER =====
+GPU[0]		: fclk clock level: 0: (1300Mhz)
+GPU[0]		: mclk clock level: 0: (900Mhz)
+GPU[0]		: sclk clock level: S: (120Mhz)
+GPU[0]		: socclk clock level: S: (28Mhz)
+GPU[1]		: fclk clock level: 0: (1300Mhz)
+GPU[1]		: mclk clock level: 0: (900Mhz)
+GPU[1]		: sclk clock level: S: (120Mhz)
+GPU[1]		: socclk clock level: S: (28Mhz)
+GPU[2]		: fclk clock level: 0: (1300Mhz)
+GPU[2]		: mclk clock level: 0: (900Mhz)
+GPU[2]		: sclk clock level: S: (120Mhz)
+GPU[2]		: socclk clock level: S: (28Mhz)
+GPU[3]		: fclk clock level: 0: (1300Mhz)
+GPU[3]		: mclk clock level: 0: (900Mhz)
+GPU[3]		: sclk clock level: S: (122Mhz)
+GPU[3]		: socclk clock level: S: (28Mhz)
+GPU[4]		: fclk clock level: 0: (1300Mhz)
+GPU[4]		: mclk clock level: 0: (900Mhz)
+GPU[4]		: sclk clock level: S: (120Mhz)
+GPU[4]		: socclk clock level: S: (28Mhz)
+
+===== pooling all draws -> waterfall.json =====
+
+pooled 4 draw(s) (2 reversed) -> /home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_23_waterfall/waterfall.json
+
+  rung   geo_best  geo_median     vs_a  vs_prev
+     a     223.65      227.61   1.0000   1.0000
+     b     206.29      210.20   0.9235   0.9235
+     c     200.60      204.55   0.8986   0.9731
+  null     200.18      204.09   0.8967   0.9978
+
+    NR   geo_best  geo_median     vs_c
+     8     281.92      284.59   1.3913
+    16     230.64      233.34   1.1407
+    32     205.28      209.02   1.0219
+    48     198.81      202.75   0.9912
+  pool exit=0
+
+===== scoring (paired contrasts, exact rank-sum) -> stats.json =====
+pooling 4 allocation draw(s): 2 forward construction, 2 reversed
+  draw_20260812_095242_fwd.json
+  draw_20260812_095321_rev.json
+  draw_20260812_095400_fwd.json
+  draw_20260812_095439_rev.json
+
+resolution limit at 4 draws per side: smallest attainable one-sided p = 1/C(8,4) = 0.0143
+
+============================================================================================================
+shape 1: 64x7168x18432   draws=4   NULL FLOOR (worst draw, c vs null) = 2.82%   per draw: 0.39 2.82 0.26 2.66
+  a->b mechanism active here: False   b->c mechanism active here: False   shipped NR = 56
+============================================================================================================
+        contrast  gain_b%  gain_m%    m_lo    m_hi  null_lo  null_hi  p_fast  p_slow  verdict
+          b vs a    -0.98    -0.60   -2.10    0.65    -0.38     2.82  0.9714  0.0571  UNRESOLVED
+          c vs b     3.46     1.74    0.69    3.33    -0.38     2.82  0.3429  0.7571  UNRESOLVED
+       null vs c     0.50     1.46   -0.38    2.82    -0.38     2.82  0.3429  0.3429  UNRESOLVED
+        nr8 vs c   -52.41   -51.48  -52.28  -51.12    -0.38     2.82  1.0000  0.0143  RESOLVED slower
+       nr16 vs c   -29.55   -28.11  -28.77  -27.57    -0.38     2.82  1.0000  0.0143  RESOLVED slower
+       nr32 vs c    -9.14    -7.96   -9.75   -5.93    -0.38     2.82  1.0000  0.0143  RESOLVED slower
+       nr48 vs c    -1.03     0.10   -1.33    0.83    -0.38     2.82  0.8286  0.2429  UNRESOLVED
+
+============================================================================================================
+shape 2: 512x4096x12288   draws=4   NULL FLOOR (worst draw, c vs null) = 2.09%   per draw: 0.37 1.90 0.85 2.09
+  a->b mechanism active here: False   b->c mechanism active here: False   shipped NR = 32
+============================================================================================================
+        contrast  gain_b%  gain_m%    m_lo    m_hi  null_lo  null_hi  p_fast  p_slow  verdict
+          b vs a    -1.27    -0.29   -0.66    0.36    -0.37     2.09  0.9714  0.0571  UNRESOLVED
+          c vs b    -0.34    -0.08   -0.39    0.24    -0.37     2.09  0.9429  0.1000  UNRESOLVED
+       null vs c     0.70     1.37   -0.37    2.09    -0.37     2.09  0.3429  0.3429  UNRESOLVED
+        nr8 vs c   -26.13   -25.00  -25.60  -24.88    -0.37     2.09  1.0000  0.0143  RESOLVED slower
+       nr16 vs c   -10.05    -8.94   -9.34   -8.49    -0.37     2.09  1.0000  0.0143  RESOLVED slower
+       nr32 vs c     0.38     0.69   -0.76    1.96    -0.37     2.09  0.7571  0.3429  UNRESOLVED
+       nr48 vs c     1.11     0.35   -0.91    1.40    -0.37     2.09  0.9000  0.1714  UNRESOLVED
+
+============================================================================================================
+shape 3: 2048x2880x2880   draws=4   NULL FLOOR (worst draw, c vs null) = 0.34%   per draw: 0.34 0.03 0.25 0.31
+  a->b mechanism active here: False   b->c mechanism active here: False   shipped NR = 32
+============================================================================================================
+        contrast  gain_b%  gain_m%    m_lo    m_hi  null_lo  null_hi  p_fast  p_slow  verdict
+          b vs a    -0.57    -0.64   -2.76    0.35    -0.31     0.34  0.9000  0.1714  UNRESOLVED
+          c vs b     1.21     1.41    0.38    2.52    -0.31     0.34  0.0143  1.0000  UNRESOLVED
+       null vs c    -0.13    -0.11   -0.31    0.34    -0.31     0.34  0.3429  0.3429  UNRESOLVED
+        nr8 vs c   -27.12   -27.26  -30.80  -26.94    -0.31     0.34  1.0000  0.0143  RESOLVED slower
+       nr16 vs c   -11.00   -11.04  -13.75  -10.06    -0.31     0.34  1.0000  0.0143  RESOLVED slower
+       nr32 vs c     0.02    -0.04   -1.74    1.41    -0.31     0.34  0.5571  0.5571  UNRESOLVED
+       nr48 vs c     0.56     0.48   -1.70    1.50    -0.31     0.34  0.3429  0.7571  UNRESOLVED
+
+============================================================================================================
+shape 4: 4096x4096x4096   draws=4   NULL FLOOR (worst draw, c vs null) = 0.28%   per draw: 0.28 0.11 0.06 0.22
+  a->b mechanism active here: False   b->c mechanism active here: False   shipped NR = 32
+============================================================================================================
+        contrast  gain_b%  gain_m%    m_lo    m_hi  null_lo  null_hi  p_fast  p_slow  verdict
+          b vs a    -0.06    -0.02   -0.57    0.22    -0.11     0.28  0.8286  0.2429  UNRESOLVED
+          c vs b     0.12     0.05   -0.70    0.74    -0.11     0.28  0.6571  0.4429  UNRESOLVED
+       null vs c     0.15     0.14   -0.11    0.28    -0.11     0.28  0.3429  0.3429  UNRESOLVED
+        nr8 vs c   -24.63   -24.55  -24.90  -24.44    -0.11     0.28  1.0000  0.0143  RESOLVED slower
+       nr16 vs c    -9.85    -9.80  -10.77   -8.96    -0.11     0.28  1.0000  0.0143  RESOLVED slower
+       nr32 vs c    -0.16    -0.12   -0.85    0.48    -0.11     0.28  0.7571  0.3429  UNRESOLVED
+       nr48 vs c     0.38     0.34    0.14    0.63    -0.11     0.28  0.1000  0.9429  UNRESOLVED
+
+============================================================================================================
+shape 5: 8192x4096x14336   draws=4   NULL FLOOR (worst draw, c vs null) = 4.14%   per draw: 0.70 0.35 0.15 4.14
+  a->b mechanism active here: True   b->c mechanism active here: False   shipped NR = 32
+============================================================================================================
+        contrast  gain_b%  gain_m%    m_lo    m_hi  null_lo  null_hi  p_fast  p_slow  verdict
+          b vs a    15.18    15.11   12.57   19.07    -3.98     0.35  0.0143  1.0000  RESOLVED faster
+          c vs b     0.75     0.79   -1.27    4.70    -3.98     0.35  0.1714  0.9000  UNRESOLVED
+       null vs c    -0.31    -0.42   -3.98    0.35    -3.98     0.35  0.3429  0.3429  UNRESOLVED
+        nr8 vs c   -13.84   -13.75  -16.98  -11.63    -3.98     0.35  1.0000  0.0143  RESOLVED slower
+       nr16 vs c    -5.04    -5.01   -6.56   -2.74    -3.98     0.35  0.9857  0.0286  UNRESOLVED
+       nr32 vs c    -2.45    -2.37   -4.72    4.97    -3.98     0.35  0.7571  0.3429  UNRESOLVED
+       nr48 vs c     0.46     0.44   -0.44    2.07    -3.98     0.35  0.1000  0.9429  UNRESOLVED
+
+============================================================================================================
+shape 6: 8192x8192x29568   draws=4   NULL FLOOR (worst draw, c vs null) = 1.10%   per draw: 0.62 1.02 0.73 1.10
+  a->b mechanism active here: True   b->c mechanism active here: True   shipped NR = 48
+============================================================================================================
+        contrast  gain_b%  gain_m%    m_lo    m_hi  null_lo  null_hi  p_fast  p_slow  verdict
+          b vs a    42.58    42.11   40.48   44.79    -0.73     1.10  0.0143  1.0000  RESOLVED faster
+          c vs b    12.35    12.22   10.98   12.98    -0.73     1.10  0.0143  1.0000  RESOLVED faster
+       null vs c     0.24     0.20   -0.73    1.10    -0.73     1.10  0.3429  0.3429  UNRESOLVED
+        nr8 vs c   -19.23   -18.80  -19.58  -18.02    -0.73     1.10  1.0000  0.0143  RESOLVED slower
+       nr16 vs c    -9.21    -8.87   -9.32   -7.29    -0.73     1.10  1.0000  0.0143  RESOLVED slower
+       nr32 vs c    -3.42    -3.53   -5.72   -1.86    -0.73     1.10  1.0000  0.0143  RESOLVED slower
+       nr48 vs c     4.13     3.92    2.53    4.44    -0.73     1.10  0.0143  1.0000  RESOLVED faster
+
+============================================================================================================
+GEOMEANS over the shapes present (best = min over all draws, median = median of per-draw medians)
+============================================================================================================
+       arm   geo_best_us  geo_median_us  vs_a_best   vs_a_med
+         a        223.65         227.62     1.0000     1.0000
+         b        206.29         210.28     1.0841     1.0825
+         c        200.60         204.52     1.1149     1.1129
+      null        200.18         204.50     1.1173     1.1130
+       nr8        281.92         284.66     0.7933     0.7996
+      nr16        230.64         233.37     0.9697     0.9753
+      nr32        205.28         209.11     1.0895     1.0885
+      nr48        198.81         202.82     1.1249     1.1223
+
+structural prediction HOLDS: every contrast the mechanism predicts inert is unresolved against tonight's null floor.
+
+wrote /home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_23_waterfall/stats.json
+  stats exit=0
+
+===== exp_23 campaign done 2026-08-12T04:54:53-05:00 =====
+
+===== releasing GPU lease =====
+GPU lease released by 'exp_23'

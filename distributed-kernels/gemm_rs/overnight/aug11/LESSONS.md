@@ -510,6 +510,80 @@ decision; and the warm clock had to start after the first block, because
 `reference` and `rank1` spent the entire 400 ms warmup inside RCCL/JIT setup and
 then landed on the 20-call floor.
 
+## exp_23 VERDICT — the waterfall, and the structural prediction HELD
+
+4 draws, 2 forward and 2 reversed construction order, on validated rungs
+(`fingerprints.json` records A1/A1b/A2/A3/A4 all passing, with
+`c.isa == null.isa` differing on 5 lines, `cuid-only = True`). Geomeans over the
+shapes present, µs:
+
+| arm | geo best | geo median | speedup vs rung a (best) |
+|---|---|---|---|
+| a — pre-WGM order + per-tile release | 223.65 | 227.62 | 1.000 |
+| b — + WGM destination-spreading order | 206.29 | 210.28 | **1.084** |
+| c — + grouped release (shipped) | 200.60 | 204.52 | **1.115** |
+| null (= c, different allocation) | 200.18 | 204.50 | 1.117 |
+
+The null arm landing at 200.18 against c's 200.60 — **0.2% apart** — is what makes
+the two rung deltas believable: the instrument's own reproducibility is far
+tighter than the effects it is reporting.
+
+**The pre-registered structural prediction held**: "every contrast the mechanism
+predicts inert is unresolved against tonight's null floor." Shape 1 is the clean
+demonstration — `ab_rung_active = false`, `bc_rung_active = false`, and the
+measured `b vs a` contrast is −0.98% best / −0.60% median against a null range of
+±1.0%, i.e. unresolved, exactly as required. Shape 1's null floor varied
+0.26-2.82% **across four draws of an identical binary**, which is the
+per-allocation bias reproduced yet again and the reason single-draw deltas on this
+node are worthless.
+
+### The NR sweep FALSIFIED the flatness prediction — and the real shape is better
+
+Predicted flat. Measured, geomean best: `NR=8` 281.92, `NR=16` 230.64,
+`NR=32` 205.28, `NR=48` 198.81. On shape 1 alone the spread is brutal:
+**128.55 / 86.71 / 66.82 / 61.67 µs** for NR 8/16/32/48, against 60.41 at its
+shipped `NR=56`. That is **2.1× slower at NR=8**, and still improving at 56.
+
+So the honest statement is not "placement is flat" but something sharper and
+more useful to the paper: **the reducer pool has a floor it must clear, and above
+that floor it is flat.** Too few reducers is catastrophic; past ~32-48 the curve
+flattens. That is fully consistent with the project's existing finding that the
+split buys *rounds*, not CTAs — below the floor you are adding reduce rounds,
+and `ceil(tiles/count)` is a step function. It is also consistent with the
+already-measured negative that *adding* communication CTAs (`NR=16` from 32) cost
++3.6%. The Q2 claim survives in its correct form: **enlarging the communication
+pool beyond what the reduction needs buys nothing**; shrinking it is not a
+"placement" question at all, it is a capacity question.
+
+**A caveat that must appear on the figure or it will mislead**: the sweep is
+*uniform* NR over {8,16,32,48} while the **shipped table is per-shape
+`56/32/32/32/32/48`**. So no single swept point is the shipped config, and
+comparing a uniform point to rung (c) mixes two variables. In particular shape 1
+ships 56 — above every swept point — so shape 1's curve is monotone over the
+whole swept range by construction. Mark which points are shipped, per shape.
+
+## PROCESS — an unleased GPU job stalled the figure queue, and the lease was wrong too
+
+The orphaned exp_26 work launched `m9_stale_slot.py` (detached, `timeout 7200`)
+on all 8 GPUs **without taking the lease**, then exited, leaving a 2-hour-capped
+GPU job with no owner. Two separate faults, and the second is mine:
+
+1. **A GPU job that does not take the lease defeats the lease for everyone
+   else.** The lease is only as good as its weakest participant.
+2. **`gpu_lease.sh`'s drain wait was capped at a fixed 300 s and then *failed the
+   caller*.** That is backwards: a busy node is a reason to keep waiting, not a
+   reason to abort a queued campaign. exp_21 acquired the lease, found the node
+   dirty because of the unleased M9 run, and was on course to abort at 300 s
+   while doing everything correctly. Fixed so the drain wait spends the
+   **caller's own remaining budget** and only the caller's deadline ends it.
+
+**Swapping the tool required care worth recording**: bash reads a script
+incrementally from its open descriptor, so truncating a script that a process is
+currently executing makes it resume at a byte offset in different text and fail
+in whatever way the new bytes parse as. The replacement was staged under a
+temporary name, `bash -n` syntax-checked, and installed with `mv` — an atomic
+rename leaves the running process on its original inode.
+
 ## Measurement discipline carried into the figure work
 
 - **The harness bias is per-allocation AND partly allocation-ORDER, not

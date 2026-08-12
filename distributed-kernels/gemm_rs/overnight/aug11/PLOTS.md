@@ -12,7 +12,7 @@ under `overnight/experiments/`.
 | — | Q3 bottleneck attribution | `aug11/exp_20_attribution/ablation.json`, `counters.json` | exp_20 | **LANDED** — 6 shapes × 5 stages, freshness gate +0.96% |
 | Fig 2 | Q4 saturation vs CTA count | `aug11/exp_21_saturation/saturation.json` | exp_21 | queued |
 | Fig 3 | Q4 per-layer resource timeline | `aug11/exp_22_timeline/events.json`, `timeline_bins.csv` | exp_22 | queued |
-| Fig 4 | Q1 knob waterfall (**money figure**) | `aug11/exp_23_waterfall/waterfall.json` | exp_23 | queued |
+| Fig 4 | Q1 knob waterfall (**money figure**) | `aug11/exp_23_waterfall/waterfall.json`, `stats.json`, `fingerprints.json` | exp_23 | **LANDED** — 4 draws (2 fwd / 2 rev); a→b 1.084×, b→c 1.115× cumulative; null within 0.2% of c; structural prediction held |
 | — | Q6 external ladders | `aug11/exp_24_ladders/ladders.json` | exp_24 | queued |
 | — | Q5 per-shape sensitivity | `aug11/exp_25_sensitivity/knob_by_shape.json` | exp_25 | queued |
 

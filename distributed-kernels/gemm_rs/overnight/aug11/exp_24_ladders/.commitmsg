@@ -1,0 +1,22 @@
+exp_24: wire the repaired rank-1 driver and make the ladder survive a slow instrument B
+
+Three fixes found by inspecting the two tools the parent pushed, before spending
+hours of GPU time on them:
+
+- build_crosscheck filtered instrument B's popcorn files on a `benchmark`
+  filename prefix, but run_rank1_bench3.sh names its files after its pass label
+  (warm/test/bench), not after the eval.py mode. Every rank-1 number would have
+  been silently dropped. It now skips only test-mode files, which carry no timing
+  blocks, and flags rank-1's JIT-warming pass as throwaway so it cannot become
+  the headline.
+- The rank-1 cross-check arm now calls the repaired tools/run_rank1_bench3.sh,
+  which performs all three passes itself in the mandatory warm -> test -> bench
+  order. Its four repairs are verified mechanically before use and disclosed in
+  result.md 8.8 with the behaviour-preserving argument: they change only how the
+  arm is launched, never what it computes.
+- Aggregation now runs twice, once the moment instrument A finishes and again
+  after B, so a long or dead instrument B cannot take a completed six-shape
+  ladder down with it at the --expect-b assertion.
+
+The run is detached behind tools/gpu_lease.sh with an exit trap, since the queue
+wait alone can exceed an hour and the ladder several more.

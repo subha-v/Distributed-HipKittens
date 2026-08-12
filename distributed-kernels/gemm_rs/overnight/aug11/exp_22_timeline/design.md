@@ -299,18 +299,47 @@ then reporting that number would be worse than shipping two arms.
 
 ---
 
-## 9. PATCH PLAN — `distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp`
+## 9. PATCH — `distributed-kernels/gemm_rs/gemm_rs_mi300x.cpp`
 
-**Not applied. Awaiting the kernel-edit gate.** One file, additive, entirely
-inside `#if HK_GEMM_RS_MI300X_TRACE`. The adapter, the constants header and
-the host ABI are **not** touched — everything the instrumentation needs
-(`m3::CU_COUNT`, `blockIdx`, the POD) is already visible in this TU, so the
-blast radius is one file.
+**APPLIED.** Gate opened; the patch is in the file. One file, additive
+(+109 lines, 0 deletions), entirely inside `#if HK_GEMM_RS_MI300X_TRACE`,
+**default 0**. The adapter, the constants header and the host ABI are **not**
+touched — everything the instrumentation needs (`m3::CU_COUNT`, `blockIdx`,
+the POD) is already visible in this TU, so the blast radius is one file.
 
-Line numbers are against the 893-line file at the time of writing. Every site
-also carries a **content anchor**, because LESSONS records that exp_20's
-attribution instrument died when E3 re-indented and re-commented this exact
-region: line numbers drift, anchors are re-findable.
+### Anchor resolution — the line numbers had moved, the anchors held
+
+The table's line numbers were written against the 893-line file. By the time
+the gate opened the file was 951 lines: exp_26 inserted a
+`RELEASE_GROUP_PERSHAPE` block after line 88 and a branch inside the `rgroup`
+computation. **Every planned line number shifted by up to +59**, which is why
+each site carried a content anchor. Resolving all of them mechanically:
+
+- **16 of 19 anchors resolved to exactly one line**, at their new positions.
+- **Three anchors were wrong as written in this document** and the check caught
+  them before a single edit: `m3::acquire_payload_system();`,
+  `m3::pull_sum_bf16_strip_mlp8(` and `if (threadIdx.x < m3::WORLD_SIZE) {`
+  were recorded at 4-space indentation, but they live inside the reducer's tile
+  loop at 8, and `m3::release_payload_system();` was recorded at 8 where it
+  sits at 12. This is precisely the failure mode LESSONS documents for exp_20's
+  attribution instrument — a continuation line's leading whitespace is pinned
+  by the preceding newline, so an indentation error is a silent zero-match, not
+  a near-match. They were re-resolved against the file's actual text.
+- **One anchor was ambiguous**: `&mi300x_globals::even_k);` matches twice, once
+  in the negative-control binding and once in production. Only the production
+  binding is patched, and the replacement carries enough surrounding context to
+  be unambiguous.
+- **Site 21 turned out to need no edit at all.** `prebound::configure`'s
+  aggregate initializer ends `config_row, even_k,` — a trailing member added
+  after `even_k` is value-initialized to 0 by the aggregate rules, so the
+  prebound path compiles unchanged and never traces, which is exactly the
+  intended behaviour. The patch is therefore **21 sites, not 22**.
+
+Post-patch positions (1060-line file), for the next reader: flag 154-160,
+namespace + macro 152-221, POD member 240-247, entry stamp 355-360, then
+512, 628, 643, 657, 663, 715, 735, 755, 788, 793 (producer) and 821, 831, 833,
+848, 871, 873 (reducer), binding 1035-1044. Seventeen `HK_TRACE_STAMP` call
+sites cover sixteen phase ids (`CTA_END` appears once per role).
 
 | # | line | insert | anchor (executable text, exact indentation) |
 |---:|---:|---|---|

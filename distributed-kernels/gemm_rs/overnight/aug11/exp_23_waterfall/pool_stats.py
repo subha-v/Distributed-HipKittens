@@ -43,6 +43,26 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 RUNG_CONTRASTS = [("b", "a"), ("c", "b")]
 NR_POINTS = [8, 16, 32, 48]
 NULL_CONTRAST = ("null", "c")
+
+# SECOND NULL PAIR, and it is not decoration.
+#
+# `resolve_shape_with_split` overrides only num_reducer_ctas and num_gemm_ctas
+# (dhk_rt.cpp:197-206), so on a shape whose shipped NR happens to be one of the
+# swept points, that NR arm is configured IDENTICALLY to rung c and running the
+# same binary. It is therefore a second, independent draw from the null.
+#
+# Tonight that mattered: on shape 6 (shipped NR = 48) the c-vs-null pair
+# measured 1.10% while the c-vs-nr48 pair measured 3.92% -- consistently, in
+# all four draws and in BOTH construction orders, which the disjointness rule
+# then certified as "RESOLVED faster". That is a false positive manufactured by
+# a single-pair floor, and it lands almost exactly on the 4.28% shape-6 floor
+# HANDOFF.md published. So the null set is the UNION of every identically
+# configured pair available at that shape, which is strictly more conservative.
+def twin_pairs(shipped_nr):
+    pairs = [NULL_CONTRAST]
+    if shipped_nr in NR_POINTS:
+        pairs.append((f"nr{shipped_nr}", "c"))
+    return pairs
 # Contrasts the mechanism predicts are inert on some shapes; see plan.md. These
 # are the structural check, and a resolvable delta in one of them is a blocker.
 PREDICTED_FLAT_KEY = {"b": "ab_rung_active", "c": "bc_rung_active"}
@@ -144,23 +164,33 @@ def main():
         tag = present[0][1]["shape"]
         meta = present[0][1]
 
-        # The instrument's own resolution at this shape, measured TONIGHT.
-        floors = []
-        for _, res in present:
-            c, nul = res["arms"].get("c"), res["arms"].get("null")
-            if c and nul and c["median_us"] and nul["median_us"]:
-                floors.append(abs(c["median_us"] - nul["median_us"]) /
-                              min(c["median_us"], nul["median_us"]) * 100)
-        floor = max(floors) if floors else float("nan")
-
-        nulls = {f: [contrast(res, *NULL_CONTRAST, f"{f}_us")
-                     for _, res in present] for f in ("best", "median")}
-        nulls = {f: [v for v in vals if v is not None]
-                 for f, vals in nulls.items()}
+        # The instrument's own resolution at this shape, measured TONIGHT, from
+        # every identically-configured pair available here.
+        pairs = twin_pairs(meta.get("shipped_nr"))
+        nulls = {"best": [], "median": []}
+        per_pair_floor = {}
+        for label, base in pairs:
+            vals = {f: [v for v in (contrast(res, label, base, f"{f}_us")
+                                    for _, res in present) if v is not None]
+                    for f in ("best", "median")}
+            nulls["best"] += vals["best"]
+            nulls["median"] += vals["median"]
+            per_pair_floor[f"{label} vs {base}"] = {
+                "per_draw_pct": vals["median"],
+                "worst_pct": max(abs(v) for v in vals["median"])
+                if vals["median"] else None,
+            }
+        narrow = per_pair_floor.get("null vs c", {}).get("worst_pct")
+        floor = max((p["worst_pct"] for p in per_pair_floor.values()
+                     if p["worst_pct"] is not None), default=float("nan"))
+        floors = per_pair_floor.get("null vs c", {}).get("per_draw_pct", [])
 
         shape_out = {
             "shape": tag,
+            "null_pairs": [f"{a} vs {b}" for a, b in pairs],
             "null_floor_worst_draw_pct": floor,
+            "null_floor_single_pair_pct": narrow,
+            "null_floor_per_pair": per_pair_floor,
             "null_floor_per_draw_pct": floors,
             "ab_rung_active": meta.get("ab_rung_active"),
             "bc_rung_active": meta.get("bc_rung_active"),
@@ -187,8 +217,11 @@ def main():
 
         print(f"\n{'=' * 108}")
         print(f"shape {index + 1}: {tag}   draws={len(present)}   "
-              f"NULL FLOOR (worst draw, c vs null) = {floor:.2f}%   "
-              f"per draw: {' '.join(f'{v:.2f}' for v in floors)}")
+              f"NULL FLOOR = {floor:.2f}%  (single pair c-vs-null would say "
+              f"{narrow:.2f}%)")
+        for name, p in per_pair_floor.items():
+            print(f"    null pair {name:<14} per draw: "
+                  f"{' '.join(f'{v:+.2f}' for v in p['per_draw_pct'])}")
         print(f"  a->b mechanism active here: {meta.get('ab_rung_active')}   "
               f"b->c mechanism active here: {meta.get('bc_rung_active')}   "
               f"shipped NR = {meta.get('shipped_nr')}")
@@ -198,12 +231,19 @@ def main():
                 f"{'p_fast':>8}{'p_slow':>8}  verdict")
         print(head)
 
+        twin_labels = {a for a, _ in pairs}
+
         def emit(name, label, base, predicted_flat=None):
             sets = {f: [v for v in (contrast(res, label, base, f"{f}_us")
                                     for _, res in present) if v is not None]
                     for f in ("best", "median")}
             s = score(sets, nulls, len(present))
             s["predicted_flat"] = predicted_flat
+            # An arm that IS one of the null pairs cannot be scored against a
+            # null set containing itself; it is reported as a floor estimate.
+            s["is_null_pair"] = label in twin_labels
+            if s["is_null_pair"]:
+                s["verdict"] = "NULL PAIR (floor estimate, not a result)"
             s["beyond_floor"] = (abs(s["gain_median_pct"]) > floor
                                  if s.get("gain_median_pct") is not None
                                  else None)
@@ -231,7 +271,9 @@ def main():
                  predicted_flat=(active is False))
         emit("null vs c", "null", "c")
         for nr in NR_POINTS:
-            emit(f"nr{nr} vs c", f"nr{nr}", "c")
+            shipped = nr == meta.get("shipped_nr")
+            emit(f"nr{nr} vs c" + (" *shipped" if shipped else ""),
+                 f"nr{nr}", "c")
 
         report["shapes"][str(index + 1)] = shape_out
 
