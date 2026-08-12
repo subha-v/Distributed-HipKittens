@@ -17,7 +17,11 @@ pgrep -af 'full_runner.sh|ladder_mp.py' | grep -v pgrep || echo "nothing of ours
 
 echo
 echo "=== lease status before launch ==="
-bash "$ON/tools/gpu_lease.sh" status
+# Read the lease tool through a CR strip: it currently ships with CRLF line
+# endings, which bash rejects outright. full_runner.sh snapshots and normalizes it
+# properly; this is just the pre-launch readout.
+bash <(tr -d '\r' < "$ON/tools/gpu_lease.sh") status
+echo -n "CRLF in tools/gpu_lease.sh: "; grep -c $'\r' "$ON/tools/gpu_lease.sh" || true
 
 # Fresh log for this attempt, and clear any stale instrument-A samples so a
 # previous partial cannot be aggregated into tonight's ladder.

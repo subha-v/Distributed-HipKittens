@@ -7,7 +7,13 @@ D=$ON/aug11/exp_24_ladders
 echo "=== $(date -Is) ==="
 echo -n "runner: "; pgrep -af 'full_runner.sh' | grep -v pgrep || echo "NOT RUNNING"
 echo -n "ladder: "; pgrep -af 'ladder_mp.py|eval.py' | grep -v pgrep | head -3 || echo "no python arm active"
-bash "$ON/tools/gpu_lease.sh" status
+# tools/gpu_lease.sh currently ships CRLF, which bash rejects; prefer the runner's
+# normalized snapshot, and fall back to a CR-stripped read of the live tool.
+if [ -f "$D/toolsnap/gpu_lease.sh" ]; then
+  bash "$D/toolsnap/gpu_lease.sh" status
+else
+  bash <(tr -d '\r' < "$ON/tools/gpu_lease.sh") status
+fi
 echo "kfd fds: $(ls -l /proc/[0-9]*/fd/* 2>/dev/null | grep -c kfd)"
 
 echo

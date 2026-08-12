@@ -29,6 +29,7 @@ Reports best and median, never the mean: means are unusable on this node.
 import json
 import math
 import os
+import random
 import statistics
 import sys
 import time
@@ -41,7 +42,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
 import harness_lib as H                                   # noqa: E402
 from harness_lib import rt, WORLD, GemmRS                 # noqa: E402
 
-ARMS = ["ps0", "ps1", "ps2", "rg2c", "ps0b"]
+ARMS = os.environ.get("AB_ARMS", "ps0,ps1,ps2,rg2c,ps0b").split(",")
 BASE = "ps0"
 NULL_ARM = "ps0b"
 CANDIDATE = os.environ.get("AB_CANDIDATE", "ps2")
@@ -134,11 +135,31 @@ def measure_shape(shape, rounds, iters, warmup_ms, arms_order):
             for tag in arms_order:
                 arms[tag].sync()
 
+        # Arm order WITHIN a round: shuffled, not rotated.
+        #
+        # The rotation this instrument inherited from exp_05 advances every arm
+        # by one position per round, which balances absolute position but pins
+        # the RELATIVE spacing of any two arms: with `order = (r + i) % n`, arm
+        # j always runs exactly (j - k) mod n blocks after arm k, in every round
+        # of every pass. Any effect that depends on what ran just before a block
+        # therefore does not average out between a given pair -- it is a
+        # constant offset added to that pair's paired difference. The null arm
+        # measured it: ps0b, which differs from ps0 in nothing an instruction
+        # can see, came out -2.29% against ps0 on 8192x8192x29568 and -0.77% on
+        # 4096x4096x4096, in 57 and 58 of 64 paired rounds. A permutation drawn
+        # per round makes the spacing between any two arms vary, so that offset
+        # averages out instead of accumulating.
+        #
+        # Seeded from the shape so the sequence is reproducible and independent
+        # of arms_order -- the forward and reversed passes must not receive
+        # correlated permutations, or the reversal stops being an independent
+        # draw.
+        rng = random.Random(0xC0FFEE ^ (m * 1315423911) ^ (n << 7) ^ k)
         samples = {tag: [] for tag in arms_order}
         for r in range(rounds):
-            order = [(r + i) % len(arms_order) for i in range(len(arms_order))]
-            for index in order:
-                tag = arms_order[index]
+            shuffled = list(arms_order)
+            rng.shuffle(shuffled)
+            for tag in shuffled:
                 wall, _ = arms[tag]._timed_block(iters)
                 samples[tag].append(wall)
 
@@ -190,7 +211,7 @@ def main():
     print(f"  arms      : {', '.join(arms_order)}"
           f"{'   (REVERSED allocation order)' if reverse else ''}")
     print(f"  protocol  : {rounds} rounds x {iters} pipelined iters per arm, "
-          f"rotating arm order, {warmup_ms} ms shared warmup per shape")
+          f"arm order SHUFFLED per round, {warmup_ms} ms warmup per shape")
     print(f"  null arm  : {BASE} vs {NULL_ARM} -- same rule, two modules; their "
           f"delta is this instrument's floor")
     print("=" * 100)

@@ -808,6 +808,81 @@ i.e. better than shipped" — **is not resolvable on any shape**, and no claim t
 uniform NR=48 beats the shipped per-shape table is supported. The flatness of the
 32-56 plateau is exactly the reason: a plateau cannot rank its own points.
 
+## exp_21 VERDICT — Fig 2 lands: the communication pool is 5.3% of the machine
+
+260 points, **224/224 destination checksums with one distinct fingerprint**, all
+ceilings sourced from this node. No gfx950 number appears anywhere.
+
+| quantity | value | source |
+|---|---|---|
+| xGMI per link/direction | **64.0 GB/s** | `rocm-smi --shownodesbw` = `64000 mps`, all 28 pairs; `--showtopo` XGMI 1 hop |
+| xGMI aggregate egress | **448 GB/s** | 7 × 64.0 |
+| HBM | **5325 GB/s** | `amd-smi static`: HBM, 8192-bit, `MAX_BANDWIDTH 5325 GB/s` |
+| bf16 MFMA | **1307.4 TFLOPS** | 304 CU × 2.100 GHz × 2048 FLOP/cyc/CU |
+
+**A derivation trap recorded so nobody repeats it**: the `hipDeviceProp_t` route
+(2 × memClk × busWidth / 8) gives **2662.4 GB/s**, and the measurement *exceeds*
+it by 1.73× — it is exactly **half** the node's own 5325 figure for the same
+8192-bit bus. Use the node's reported number, not the derivation.
+
+### The knees
+
+- **Mode c, aggregate (rr7): 90% of plateau at C=16 of 304 CTAs — 5.3% of the
+  machine**, plateau 403.2 GB/s (90.0% of the 448 ceiling), scaling 1.99-2.00×
+  per doubling below the knee.
+- **Mode c, single link: C=2** (at depths 0/4/8; C=4 at d=1), plateau 95.4% of one
+  link.
+- **The pre-registered falsifier did NOT trigger** — the isolated single-link
+  curve reaches 75% of plateau at **C=2**, sixteen times below the C≥32 threshold
+  that would have inverted the tiny-pool story. **H1 confirmed and stronger than
+  predicted** (2-4, not 8-16); **H2 confirmed at the low edge** (16).
+- The two-scale agreement (single-link plateau 95.4% of one link, rr7 90.0% of
+  seven) also **proves the fine-grained heap worked**: L2 absorption would have
+  reported *above* the ceiling.
+
+### Protocol, not payload — and it is the dominant term
+
+Identical 16 B stores, identical addresses, identical order; only the release
+differs. **Protocol-on/off is 0.440 at the rr7 knee and 0.366 single-link** — the
+release protocol costs **56-63% of egress bandwidth at identical payload bytes**.
+That is an order of magnitude larger than the interference term. Together with
+exp_20's **1.0007× fabric amplification at 99.9% full-64 B**, the egress-width
+axis is now **closed from both sides, by two independent instruments**, and the
+entire residue is **release granularity**. H3 confirmed on substance with its
+framing corrected: **protocol dominates interference rather than amplifying it.**
+
+### The interference term is asymmetric, and that argues against pools by itself
+
+At the rr7 knee (C=16), concurrent/isolated is **0.957** against the C-matched
+reserve-only control — while that same control shows the **GEMM slowing 1.221×**.
+**The emit barely notices the GEMM; the GEMM notices the emit.** Above C≈32 the
+GEMM side collapses by 3.3-6.9×. So a large communication pool is doubly wrong: it
+does not help the emit (already saturated at 16) and it wrecks the compute.
+
+**H5 confirmed**: in-flight depth is a *below-the-knee* knob — `d=1` costs 41% at
+C=8 but ≤14% at C=16.
+
+### H4 FALSIFIED past C≈160 — and this RE-RANKS the mainloop work
+
+MFMA TFLOPS is linear only to **C≈160** (per-CTA flat within 1.8%); the 90% knee
+is C=256 and the plateau is **582.4 TFLOPS**, i.e. **45% of the 1307.4 ceiling**.
+And the cause is **not occupancy** — the body is 1 CTA/CU from both its 193 VGPRs
+and its 64 KB LDS.
+
+The mechanism is arithmetic and it is the important part:
+**7.813e-3 B/FLOP × 582.36 TFLOPS = 4549 GB/s = 99.0% of the 4593 GB/s memory-path
+plateau that panel b measures independently.** **At full grid this mainloop is
+memory-path bound.**
+
+**Consequence for Phase 2, and it changes the plan:** arithmetic intensity is
+`~(1/BM + 1/BN)` and is **independent of `BK`**. So freeing LDS to raise `BK`
+reduces `k_iters` but moves **the same number of operand bytes** — if the mainloop
+is already memory-path bound at full grid, raising `BK` cannot buy what a
+cycles-per-iteration model predicts. This is the same `1/BM + 1/BN` column
+HANDOFF flagged as "real", now measured directly: the lever that matters is
+**operand traffic per FLOP**, i.e. larger `BM·BN` reuse, not fewer iterations.
+exp_27's brief was written around raising `BK` and must be re-ranked accordingly.
+
 ## Measurement discipline carried into the figure work
 
 - **The harness bias is per-allocation AND partly allocation-ORDER, not

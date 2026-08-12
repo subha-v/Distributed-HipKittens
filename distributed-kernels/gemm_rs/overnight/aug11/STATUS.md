@@ -110,7 +110,7 @@ Since then two more landed:
 | # | experiment | paper figure | status |
 |---|---|---|---|
 | exp_20 | bottleneck attribution refresh | Q3 | **DONE** — freshness gate passed (+0.96%) |
-| exp_21 | saturation vs CTA count (NanoFlow Fig 7 analog) | Fig 2 / Q4 | **building** (greenfield ubench) |
+| exp_21 | saturation vs CTA count (NanoFlow Fig 7 analog) | Fig 2 / Q4 | **LANDED** — 260 points, 224/224 checksums; **egress knee C=16 of 304 = 5.3% of the machine**; falsifier not triggered |
 | exp_22 | per-layer resource timeline (NanoFlow v2 Fig 10 analog) | Fig 3 / Q4 | **instrumented + parity gate PASSED** (flag-off byte-identical, 7/7); arms (a)+(b) on GPU |
 | exp_23 | knob waterfall — **the money figure** | Fig 4 / Q1 | **LANDED** — all 6 shapes, 4 draws, 192/192 arms correct at both tolerances; a→c **1.113×** (1.082× order × 1.028× granularity); structural prediction held |
 | exp_24 | external ladders refresh | Q6 | queued |
@@ -203,6 +203,28 @@ live 4096³ bf16 matmul with 190 of 192 GiB free at idle temps and power.
   greenfield kernel work behind a compile flag, gated on resource-tuple parity.
 
 Then **Phase 2**: the optimization loop resumes against the refreshed profile.
+
+## PHASE 2 RE-RANKED by exp_21 — the mainloop may be BANDWIDTH-bound, not schedule-bound
+
+exp_21 measured the mainloop body in isolation and found MFMA scaling is **linear
+only to C≈160**, plateauing at **582.4 TFLOPS = 45% of this node's 1307.4 TFLOPS
+ceiling** — and **not because of occupancy** (1 CTA/CU from both 193 VGPRs and
+64 KB LDS). The mechanism closes to 1%: **7.813e-3 B/FLOP × 582.36 TFLOPS =
+4549 GB/s against an independently measured 4593 GB/s memory-path plateau.**
+
+**At the full 304-CTA grid this mainloop is memory-path bound**, which changes the
+plan: arithmetic intensity is `~(1/BM + 1/BN)` and is **independent of `BK`**, so
+freeing LDS to raise `BK` cuts iterations while moving **the same operand bytes**.
+The lever is **operand traffic per FLOP** (bigger `BM·BN` reuse, better L2/Infinity
+Cache hit rate, XCD-aware tile order — still untested), not fewer iterations.
+exp_27 has been interrupted and re-tasked to reconcile this against exp_20's
+"~571 µs is not MFMA occupancy" and to decide between **exposed latency** and
+**bandwidth wait**, since those imply opposite designs.
+
+**And exp_21 promoted a cheaper target**: the release protocol costs **0.440× of
+egress bandwidth at identical payload bytes** (0.366× single-link). With exp_20's
+1.0007× fabric amplification, egress *width* is closed from both sides and **the
+whole residue is release granularity** — which is also where exp_26 already sits.
 
 ## Phase 2 queue, ranked by the exp_20 profile (not by the charter's stale one)
 

@@ -1,0 +1,615 @@
+{
+ "experiment": "exp_27_mainloop",
+ "what": "static cycle account of the GEMM k-loop + ranked mechanisms",
+ "provenance": {
+  "gemm_rs_mi300x.cpp_sha256_16": "5f9f47258842c64d",
+  "gemm_rs_mi300x_hk_adapter.cuh_sha256_16": "e9b3d1c17d49ee0b",
+  "gemm_rs_mi300x_constants.cuh_sha256_16": "c993b2a6004a6977",
+  "hipcc": "HIP 7.2.53211-c2d9476115",
+  "utc": "20260812T110649Z",
+  "clock_hz": 1900000000.0,
+  "gpu_used": false
+ },
+ "method": "instruction counts COUNTED from hipcc --save-temps ISA via kloop_hist.py back-edge loop detection; pool and MFMA-busy figures MEASURED by exp_20; cycle rates other than the MFMA rate are ASSUMED and labelled per line; candidate deltas are INFERRED",
+ "instantiations": [
+  {
+   "name": "<32,64,128,false>",
+   "bm": 32,
+   "bn": 64,
+   "bk": 128,
+   "k_tail": false,
+   "vgpr": 98,
+   "sgpr": 106,
+   "spill": 0,
+   "waves": 4,
+   "blocks": 1,
+   "mfma": 8,
+   "ds_read": 16,
+   "ds_write": 6,
+   "gload": 3,
+   "valu": 81,
+   "salu": 22,
+   "barrier": 1,
+   "waitcnt": 6,
+   "nop": 2,
+   "branch": 2,
+   "total": 147
+  },
+  {
+   "name": "<64,128,64,false>",
+   "bm": 64,
+   "bn": 128,
+   "bk": 64,
+   "k_tail": false,
+   "vgpr": 104,
+   "sgpr": 106,
+   "spill": 0,
+   "waves": 4,
+   "blocks": 1,
+   "mfma": 16,
+   "ds_read": 16,
+   "ds_write": 6,
+   "gload": 3,
+   "valu": 63,
+   "salu": 23,
+   "barrier": 1,
+   "waitcnt": 6,
+   "nop": 2,
+   "branch": 1,
+   "total": 137
+  },
+  {
+   "name": "<128,192,32,true>",
+   "bm": 128,
+   "bn": 192,
+   "bk": 32,
+   "k_tail": true,
+   "vgpr": 136,
+   "sgpr": 106,
+   "spill": 0,
+   "waves": 3,
+   "blocks": 10,
+   "mfma": 24,
+   "ds_read": 14,
+   "ds_write": 6,
+   "gload": 3,
+   "valu": 85,
+   "salu": 52,
+   "barrier": 1,
+   "waitcnt": 6,
+   "nop": 0,
+   "branch": 6,
+   "total": 197
+  },
+  {
+   "name": "<256,256,32,false>",
+   "bm": 256,
+   "bn": 256,
+   "bk": 32,
+   "k_tail": false,
+   "vgpr": 246,
+   "sgpr": 106,
+   "spill": 0,
+   "waves": 2,
+   "blocks": 1,
+   "mfma": 64,
+   "ds_read": 24,
+   "ds_write": 8,
+   "gload": 4,
+   "valu": 58,
+   "salu": 24,
+   "barrier": 1,
+   "waitcnt": 6,
+   "nop": 3,
+   "branch": 2,
+   "total": 194
+  },
+  {
+   "name": "<256,256,32,true>",
+   "bm": 256,
+   "bn": 256,
+   "bk": 32,
+   "k_tail": true,
+   "vgpr": 248,
+   "sgpr": 106,
+   "spill": 0,
+   "waves": 2,
+   "blocks": 4,
+   "mfma": 64,
+   "ds_read": 24,
+   "ds_write": 8,
+   "gload": 4,
+   "valu": 98,
+   "salu": 46,
+   "barrier": 1,
+   "waitcnt": 6,
+   "nop": 3,
+   "branch": 3,
+   "total": 257
+  },
+  {
+   "name": "<32,64,64,false>",
+   "bm": 32,
+   "bn": 64,
+   "bk": 64,
+   "k_tail": false,
+   "vgpr": 91,
+   "sgpr": 106,
+   "spill": 0,
+   "waves": 5,
+   "blocks": 6,
+   "mfma": 4,
+   "ds_read": 8,
+   "ds_write": 4,
+   "gload": 2,
+   "valu": 52,
+   "salu": 25,
+   "barrier": 1,
+   "waitcnt": 6,
+   "nop": 3,
+   "branch": 4,
+   "total": 163
+  },
+  {
+   "name": "<32,64,64,true>",
+   "bm": 32,
+   "bn": 64,
+   "bk": 64,
+   "k_tail": true,
+   "vgpr": 92,
+   "sgpr": 106,
+   "spill": 0,
+   "waves": 5,
+   "blocks": 10,
+   "mfma": 4,
+   "ds_read": 8,
+   "ds_write": 4,
+   "gload": 2,
+   "valu": 76,
+   "salu": 40,
+   "barrier": 1,
+   "waitcnt": 6,
+   "nop": 1,
+   "branch": 6,
+   "total": 148
+  }
+ ],
+ "cycle_budget": [
+  {
+   "shape_index": 5,
+   "instantiation": "<256,256,32,false>",
+   "trips_per_producer_cta": 112,
+   "gemm_pool_us": {
+    "v": 305.2,
+    "basis": "measured"
+   },
+   "mfma_busy_us_device": {
+    "v": 101.7,
+    "basis": "measured"
+   },
+   "cycles_per_trip": {
+    "v": 5177.5,
+    "basis": "derived",
+    "from": "gemm_pool_us * 1.9GHz / trips"
+   },
+   "pipes": [
+    {
+     "name": "mfma",
+     "scope": "per SIMD",
+     "cycles": 2048,
+     "basis": "counted instrs x measured 16.0 cyc/instr"
+    },
+    {
+     "name": "valu",
+     "scope": "per SIMD",
+     "cycles": 464,
+     "basis": "counted instrs",
+     "rate_assumed": "4 cyc / wave64 op"
+    },
+    {
+     "name": "lds",
+     "scope": "per CU",
+     "cycles": 1024,
+     "bytes": 131072,
+     "basis": "counted bytes",
+     "rate_assumed": "128 B/clk/CU"
+    },
+    {
+     "name": "l1_global",
+     "scope": "per CU",
+     "cycles": 512,
+     "bytes": 32768,
+     "basis": "counted bytes",
+     "rate_assumed": "64 B/clk/CU"
+    },
+    {
+     "name": "scalar",
+     "scope": "per CU",
+     "cycles": 192,
+     "basis": "counted instrs",
+     "rate_assumed": "1 op/clk"
+    },
+    {
+     "name": "issue_slots",
+     "scope": "per SIMD",
+     "cycles": 388,
+     "basis": "counted instrs",
+     "rate_assumed": "1 instr/clk"
+    }
+   ],
+   "mfma_floor_cycles_per_trip": {
+    "v": 2048,
+    "basis": "measured"
+   },
+   "residual_cycles_per_trip": {
+    "v": 3129.5,
+    "basis": "derived"
+   },
+   "residual_share": 0.6044,
+   "residual_us": 184.5,
+   "accounted_cycles_lo_hi": [
+    500,
+    800
+   ],
+   "unaccounted_cycles_lo_hi": [
+    2330,
+    2630
+   ]
+  },
+  {
+   "shape_index": 6,
+   "instantiation": "<256,256,32,true>",
+   "trips_per_producer_cta": 464,
+   "gemm_pool_us": {
+    "v": 992.2,
+    "basis": "measured"
+   },
+   "mfma_busy_us_device": {
+    "v": 421.2,
+    "basis": "measured"
+   },
+   "cycles_per_trip": {
+    "v": 4062.9,
+    "basis": "derived",
+    "from": "gemm_pool_us * 1.9GHz / trips"
+   },
+   "pipes": [
+    {
+     "name": "mfma",
+     "scope": "per SIMD",
+     "cycles": 2048,
+     "basis": "counted instrs x measured 16.0 cyc/instr"
+    },
+    {
+     "name": "valu",
+     "scope": "per SIMD",
+     "cycles": 784,
+     "basis": "counted instrs",
+     "rate_assumed": "4 cyc / wave64 op"
+    },
+    {
+     "name": "lds",
+     "scope": "per CU",
+     "cycles": 1024,
+     "bytes": 131072,
+     "basis": "counted bytes",
+     "rate_assumed": "128 B/clk/CU"
+    },
+    {
+     "name": "l1_global",
+     "scope": "per CU",
+     "cycles": 512,
+     "bytes": 32768,
+     "basis": "counted bytes",
+     "rate_assumed": "64 B/clk/CU"
+    },
+    {
+     "name": "scalar",
+     "scope": "per CU",
+     "cycles": 368,
+     "basis": "counted instrs",
+     "rate_assumed": "1 op/clk"
+    },
+    {
+     "name": "issue_slots",
+     "scope": "per SIMD",
+     "cycles": 514,
+     "basis": "counted instrs",
+     "rate_assumed": "1 instr/clk"
+    }
+   ],
+   "mfma_floor_cycles_per_trip": {
+    "v": 2048,
+    "basis": "measured"
+   },
+   "residual_cycles_per_trip": {
+    "v": 2014.9,
+    "basis": "derived"
+   },
+   "residual_share": 0.4959,
+   "residual_us": 492.1,
+   "accounted_cycles_lo_hi": [
+    500,
+    800
+   ],
+   "unaccounted_cycles_lo_hi": [
+    1215,
+    1515
+   ]
+  }
+ ],
+ "closure_table": [
+  {
+   "arm": "S=2, BK=32  (today)",
+   "lds_bytes": 65536,
+   "barriers_per_tile": 116,
+   "mfma_per_barrier": 2097152,
+   "verdict": "argmax \u2014 incumbent"
+  },
+  {
+   "arm": "S=1, BK=64  (dispatch direction 1)",
+   "lds_bytes": 65536,
+   "barriers_per_tile": 116,
+   "mfma_per_barrier": 2097152,
+   "verdict": "EXACT WASH \u2014 closed"
+  },
+  {
+   "arm": "S=2, BK=16  (dispatch direction 2)",
+   "lds_bytes": 32768,
+   "barriers_per_tile": 231,
+   "mfma_per_barrier": 1048576,
+   "verdict": "strictly worse \u2014 closed"
+  },
+  {
+   "arm": "S=4, BK=16",
+   "lds_bytes": 65536,
+   "barriers_per_tile": 231,
+   "mfma_per_barrier": 1048576,
+   "verdict": "strictly worse \u2014 closed"
+  }
+ ],
+ "candidates": [
+  {
+   "id": "A",
+   "name": "counter pass to split the residual",
+   "dcyc": [
+    0,
+    0
+   ],
+   "s6_us": [
+    0,
+    0
+   ],
+   "s5_us": [
+    0,
+    0
+   ],
+   "risk": "none",
+   "gate": "n/a",
+   "experiment": "rocprofv3 SQ_WAIT_*/SQ_LDS_* on shapes 5,6; 20 min",
+   "basis": "n/a",
+   "rank": 1
+  },
+  {
+   "id": "B",
+   "name": "hoist load_commit above half-1 MFMAs",
+   "dcyc": [
+    -300,
+    -150
+   ],
+   "s6_us": [
+    -73,
+    -37
+   ],
+   "s5_us": [
+    -23,
+    -11
+   ],
+   "risk": "low",
+   "gate": "lds_race_check + M2 ISA position + M3 both tol + M9 null",
+   "experiment": "one-line move; paired M7, 3 draws, half reversed",
+   "basis": "inferred",
+   "rank": 2,
+   "recommended": true
+  },
+  {
+   "id": "C",
+   "name": "prefill swizzled LDS offsets + SGPR LDS bases",
+   "dcyc": [
+    -230,
+    -100
+   ],
+   "s6_us": [
+    -60,
+    -25
+   ],
+   "s5_us": [
+    -18,
+    -8
+   ],
+   "risk": "low-med",
+   "gate": "M2 VGPR<=248 + M3 both tol + lds_race_check",
+   "experiment": "port donor prefill_swizzled_offsets/readfirstlane bases",
+   "basis": "inferred",
+   "rank": 3
+  },
+  {
+   "id": "D",
+   "name": "retire K_TAIL=true on shape 6 (zero-pad in LDS)",
+   "dcyc": [
+    -400,
+    -250
+   ],
+   "s6_us": [
+    -90,
+    -40
+   ],
+   "s5_us": [
+    0,
+    0
+   ],
+   "risk": "med",
+   "gate": "M3 @2e-3 all 17 + NEW fragment-layout fingerprint",
+   "experiment": "adapter prototype; rows 3 and 6 are the only K_TAIL rows",
+   "basis": "inferred",
+   "rank": 4
+  },
+  {
+   "id": "E",
+   "name": "phase-offset warp-group ping-pong (donor)",
+   "dcyc": [
+    -1400,
+    -600
+   ],
+   "s6_us": [
+    -350,
+    -150
+   ],
+   "s5_us": [
+    -105,
+    -45
+   ],
+   "risk": "high",
+   "gate": "protocol-review MANDATORY + full ladder + M9",
+   "experiment": "design now, build only after A reports",
+   "basis": "inferred",
+   "rank": 5
+  },
+  {
+   "id": "F",
+   "name": "wave-private LDS staging (barrier-free)",
+   "dcyc": [
+    -1600,
+    -800
+   ],
+   "s6_us": [
+    -400,
+    -250
+   ],
+   "s5_us": [
+    null,
+    null
+   ],
+   "risk": "high",
+   "gate": "full ladder; may relocate the bound into L2",
+   "experiment": "data-path rewrite",
+   "basis": "inferred",
+   "rank": 6
+  },
+  {
+   "id": "G",
+   "name": "ds_read_b128 via a custom 16x32 shared layout",
+   "dcyc": [
+    -150,
+    -60
+   ],
+   "s6_us": [
+    -50,
+    -20
+   ],
+   "s5_us": [
+    -15,
+    -6
+   ],
+   "risk": "med-high",
+   "gate": "fragment-layout fingerprint + M3 both tol",
+   "experiment": "large; not before A",
+   "basis": "inferred",
+   "rank": 7
+  },
+  {
+   "id": "H",
+   "name": "v_mfma_f32_32x32x8 atom",
+   "dcyc": [
+    -150,
+    -50
+   ],
+   "s6_us": [
+    -60,
+    -20
+   ],
+   "s5_us": [
+    -18,
+    -6
+   ],
+   "risk": "med",
+   "gate": "fragment-layout fingerprint + M3 both tol",
+   "experiment": "new fragment types; identical peak, schedule-only",
+   "basis": "inferred",
+   "rank": 8
+  },
+  {
+   "id": "X",
+   "name": "S=1 BK=64 / rolling half-BK",
+   "dcyc": [
+    0,
+    0
+   ],
+   "s6_us": [
+    0,
+    0
+   ],
+   "s5_us": [
+    0,
+    0
+   ],
+   "risk": "n/a",
+   "gate": "n/a",
+   "experiment": "CLOSED on arithmetic (closure_table)",
+   "basis": "derived",
+   "rank": 99
+  }
+ ],
+ "peak_calibration": {
+  "shape6_gflop_per_rank": 496.1,
+  "shape6_tflops_over_gemm_pool": 500.0,
+  "producer_cu_peak_tflops_at_1900mhz": 996.0,
+  "fraction_of_producer_peak": 0.502,
+  "tuned_library_reference": "0.60-0.75 of peak on MI300X bf16",
+  "basis": "derived from measured pool + counted geometry"
+ },
+ "expected_value": [
+  {
+   "scenario": "today",
+   "shape5_us": 641.9,
+   "shape6_us": 1632.5,
+   "geomean_us": 209.56,
+   "delta_pct": 0.0
+  },
+  {
+   "scenario": "row B at its pre-registered -5% of the pool",
+   "shape5_us": 626.9,
+   "shape6_us": 1582.5,
+   "geomean_us": 207.66,
+   "delta_pct": -0.91
+  },
+  {
+   "scenario": "realistic full capture (~70% of producer peak)",
+   "shape5_us": 551.9,
+   "shape6_us": 1382.5,
+   "geomean_us": 198.77,
+   "delta_pct": -5.15
+  },
+  {
+   "scenario": "entire non-MFMA mainloop (roofline, unreachable)",
+   "shape5_us": 437.9,
+   "shape6_us": 1061.5,
+   "geomean_us": 183.01,
+   "delta_pct": -12.67
+  }
+ ],
+ "graded_gap": {
+  "today_geomean_ratio_vs_rank1": 1.098,
+  "per_shape_ratio": [
+   0.85,
+   1.072,
+   1.102,
+   1.12,
+   1.286,
+   1.208
+  ],
+  "after_row_B": 1.092,
+  "after_realistic_capture": 1.046,
+  "note": "exp_24 measured a ~90 us constant both arms pay per graded call, which compresses the ratio toward 1; netting it out puts the honest kernel-to-kernel ratio near 1.14x. Report both protocols, never blend."
+ }
+}

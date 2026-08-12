@@ -36,6 +36,18 @@ RANK1=/home/subvadla/amd-master/auto-gpu-kernel/k2_mi300x_megakernel/references/
 IRISDST=/usr/local/lib/python3.10/dist-packages
 CB=$ON/compbench
 
+# Shared tools are read from an IMMUTABLE SNAPSHOT, not from $ON/tools, whenever
+# full_runner.sh provides one. Reason, learned at 05:30 tonight: bash reads a
+# script incrementally as it executes it, so when tools/gpu_lease.sh was rewritten
+# under us mid-`acquire` (the tree's owner is actively repairing these tools, and
+# push_scoped truncates-and-rewrites), bash resumed reading at a stale byte offset
+# into a different file and produced `set: Illegal option -o pipefail` followed by
+# a corrupted `exit` argument. The lease was acquired and then instantly lost.
+# A rewrite that lands three hours into a campaign would be far worse and could
+# be silent. The snapshot also makes provenance exact: the sha256s recorded below
+# are of the bytes that actually ran.
+TOOLS=${LAD_TOOLSNAP:-$ON/tools}
+
 PHASE=${1:-all}
 QUICK=${LAD_QUICK:-0}
 ITERS=${LAD_ITERS:-50}
@@ -97,7 +109,7 @@ preflight() {
   done
 
   say "--- pin clocks (idle sclk is ~125 MHz; unpinned short runs are unrepeatable) ---"
-  bash "$ON/tools/set_clocks.sh" pin 1900 2>&1 | tail -6 || say "WARN: clock pin failed"
+  bash "$TOOLS/set_clocks.sh" pin 1900 2>&1 | tail -6 || say "WARN: clock pin failed"
   rocm-smi --showsclkrange 2>&1 | sed -n '1,6p'
   return 0
 }
@@ -120,6 +132,18 @@ provenance() {
       echo "            Windows worktree on branch GEMM-RS); provenance for what"
       echo "            was measured is the module sha256 set below"
     fi
+    echo
+    echo "--- shared-tool snapshot actually executed (see TOOLS, top of file) ---"
+    echo "TOOLS = $TOOLS"
+    [ "$TOOLS" = "$ON/tools" ] && echo "  (LIVE tree -- a mid-run rewrite by the tools owner is possible)"
+    for f in gpu_lease.sh set_clocks.sh patch_rank1.py \
+             run_ours_evaluator.sh run_reference_arm.sh run_rank1_bench3.sh; do
+      if [ -f "$TOOLS/$f" ]; then
+        echo "  $f sha256 $(sha256sum "$TOOLS/$f" | cut -c1-16) mtime $(date -Is -r "$TOOLS/$f")"
+      else
+        echo "  $f MISSING"
+      fi
+    done
     echo
     echo "--- module fingerprints (the config under test) ---"
     for f in gemm_rs_mi300x.so dhk_rt.so; do
@@ -174,7 +198,7 @@ EOF
 
   # Hash-gated: patch_rank1.py refuses to emit unless the frozen source hashes
   # to 7940fcb8...f0dc5. The frozen file is never opened for writing.
-  python3 "$ON/tools/patch_rank1.py" "$RANK1" "$CB/rank1/submission.py" \
+  python3 "$TOOLS/patch_rank1.py" "$RANK1" "$CB/rank1/submission.py" \
     | tee "$D/logs/patch_rank1.txt"
   if ! grep -q '^wrote ' "$D/logs/patch_rank1.txt"; then
     say "ABORT: rank-1 hash gate refused. The frozen submission changed."
@@ -264,11 +288,11 @@ eval_arm() {  # eval_arm <arm> <rotation>
   drain
   case "$arm" in
     ours)
-      bash "$ON/tools/run_ours_evaluator.sh" 2>&1 \
+      bash "$TOOLS/run_ours_evaluator.sh" 2>&1 \
         | tee "$D/logs/eval_rot${rot}_ours.log" | tail -40
       ;;
     reference)
-      bash "$ON/tools/run_reference_arm.sh" 2>&1 \
+      bash "$TOOLS/run_reference_arm.sh" 2>&1 \
         | tee "$D/logs/eval_rot${rot}_reference.log" | tail -40
       ;;
     rank1)
@@ -279,7 +303,7 @@ eval_arm() {  # eval_arm <arm> <rotation>
       # three passes itself in the mandatory warm -> test -> bench order and has
       # its own node-clean preflight. The repair changes only how the arm is
       # LAUNCHED, never what it computes; disclosed in result.md 8.8.
-      bash "$ON/tools/run_rank1_bench3.sh" 2>&1 \
+      bash "$TOOLS/run_rank1_bench3.sh" 2>&1 \
         | tee "$D/logs/eval_rot${rot}_rank1.log" | tail -60
       # bench3 writes {warm,test,bench}.{popcorn,stdout,stderr}.txt, so one
       # capture takes all three passes.

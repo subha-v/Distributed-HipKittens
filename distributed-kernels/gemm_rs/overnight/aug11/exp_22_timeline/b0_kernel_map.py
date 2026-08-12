@@ -26,12 +26,27 @@ import re
 import statistics
 import sys
 
-# Seed rules, in priority order.  Applied to the lowercased kernel name.
-# Derived from the sibling's rccl*/mori* -> xGMI, *gemm*/*mfma* -> MFMA,
-# scatter/quant/combine/copy -> HBM, plus rocBLAS's Cijk* naming which the
-# sibling's MoE stack never produces.
+# Rules in priority order, applied to the lowercased kernel name.  Seeded from
+# the sibling's rccl*/mori* -> xGMI, *gemm*/*mfma* -> MFMA, scatter/quant/
+# combine/copy -> HBM, then CORRECTED against the eight names this node's
+# reference stack actually emits (see result.md for the observed inventory):
+#
+#   ncclDevKernel_Generic_2   the reduce-scatter.  The seed rules looked for
+#                             `rccl*` and `ncclkernel`; ROCm's RCCL exports the
+#                             upstream NCCL symbol names, so neither matched and
+#                             the single most important kernel in the arm landed
+#                             in `unclassified`.  That is the rule working: it
+#                             surfaced the gap instead of bucketing it.
+#   __amd_rocclr_copyBuffer   866 dispatches, and fillBufferAligned 552 more --
+#   __amd_rocclr_*            HIP runtime allocator/staging blits from input
+#                             setup, not operator work.  They are classified as
+#                             `runtime`, EXCLUDED from epoch segmentation and
+#                             from the strips, and reported.  Left in, they cut
+#                             the trace into 718 fragments and no epoch held
+#                             both a GEMM and a collective.
 RULES = [
-    ("xgmi", [r"^rccl", r"rccl", r"^mori", r"ncclkernel", r"nccl_",
+    ("runtime", [r"^__amd_rocclr_", r"^__amd_"]),
+    ("xgmi", [r"^nccl", r"^rccl", r"rccl", r"^mori", r"nccl_",
               r"reduce_?scatter", r"all_?reduce", r"all_?gather",
               r"sendrecv", r"reducescatter"]),
     ("mfma", [r"gemm", r"mfma", r"^cijk", r"_cijk", r"matmul", r"hgemm",
@@ -40,6 +55,9 @@ RULES = [
               r"elementwise", r"vectorized_elementwise", r"add", r"cast",
               r"contiguous", r"fill", r"zero"]),
 ]
+
+# Classes that are operator work and belong on a strip.
+STRIP_CLASSES = ("mfma", "hbm", "xgmi")
 
 
 def classify(name):
@@ -149,7 +167,14 @@ def main():
     print(f"wrote {args.map_json}")
 
     # ---- 2. epochs --------------------------------------------------------
-    epochs = segment(rows, int(args.min_gap_us * 1000))
+    # Segment on operator dispatches only. The allocator blits are real GPU work
+    # but they are the harness setting up inputs, not the operator under study,
+    # and they are scattered densely enough to hide every real epoch boundary.
+    op_rows = [r for r in rows if classify(r[0])[0] in STRIP_CLASSES]
+    runtime_n = len(rows) - len(op_rows)
+    print(f"segmentation input: {len(op_rows)} operator dispatches "
+          f"({runtime_n} runtime/allocator dispatches excluded)")
+    epochs = segment(op_rows, int(args.min_gap_us * 1000))
     spans = [(e[0][1], max(r[2] for r in e), len(e)) for e in epochs]
     print(f"segmented into {len(epochs)} epochs at a {args.min_gap_us} us gap")
 
@@ -201,6 +226,7 @@ def main():
             "epoch_ns": durations[pick],
             "epoch_count_traced": len(epochs),
             "epoch_count_usable": len(usable),
+            "runtime_dispatches_excluded": runtime_n,
             "epoch_durations_ns": durations,
             "intervals": intervals,
             "unclassified_names": sorted(unclassified),

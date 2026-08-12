@@ -1,0 +1,582 @@
+{
+ "isa_file": "/home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_27_mainloop/isa/gemm_rs_mi300x-hip-amdgcn-amd-amdhsa-gfx942.s",
+ "kernels": [
+  {
+   "symbol": "_Z21gemm_rs_mi300x_kernelILi32ELi64ELi128ELb0EEv14mi300x_globals",
+   "instantiation": "<32,64,128,false>",
+   "n_blocks": 167,
+   "k_loop": {
+    "header_block": ".LBB0_91",
+    "latch_block": ".LBB0_91",
+    "n_blocks": 1,
+    "per_block": [
+     {
+      "block": ".LBB0_91",
+      "n": 147,
+      "hist": {
+       "barrier": 1,
+       "branch": 2,
+       "ds_read": 16,
+       "ds_write": 6,
+       "mfma": 8,
+       "nop": 2,
+       "salu": 22,
+       "valu": 81,
+       "vmem_load": 3,
+       "waitcnt": 6
+      }
+     }
+    ],
+    "total_per_trip": {
+     "barrier": 1,
+     "branch": 2,
+     "ds_read": 16,
+     "ds_write": 6,
+     "mfma": 8,
+     "nop": 2,
+     "salu": 22,
+     "valu": 81,
+     "vmem_load": 3,
+     "waitcnt": 6
+    },
+    "memory_widths": {
+     "ds_read_b64": 16,
+     "ds_write_b64": 6,
+     "global_load_dwordx4": 3
+    },
+    "waitcnt_forms": {
+     "lgkmcnt(0)": 4,
+     "vmcnt(0)": 2
+    }
+   }
+  },
+  {
+   "symbol": "_Z21gemm_rs_mi300x_kernelILi64ELi128ELi64ELb0EEv14mi300x_globals",
+   "instantiation": "<64,128,64,false>",
+   "n_blocks": 198,
+   "k_loop": {
+    "header_block": ".LBB1_91",
+    "latch_block": ".LBB1_91",
+    "n_blocks": 1,
+    "per_block": [
+     {
+      "block": ".LBB1_91",
+      "n": 137,
+      "hist": {
+       "barrier": 1,
+       "branch": 1,
+       "ds_read": 16,
+       "ds_write": 6,
+       "mfma": 16,
+       "nop": 2,
+       "salu": 23,
+       "valu": 63,
+       "vmem_load": 3,
+       "waitcnt": 6
+      }
+     }
+    ],
+    "total_per_trip": {
+     "barrier": 1,
+     "branch": 1,
+     "ds_read": 16,
+     "ds_write": 6,
+     "mfma": 16,
+     "nop": 2,
+     "salu": 23,
+     "valu": 63,
+     "vmem_load": 3,
+     "waitcnt": 6
+    },
+    "memory_widths": {
+     "ds_read_b64": 16,
+     "ds_write_b64": 6,
+     "global_load_dwordx4": 3
+    },
+    "waitcnt_forms": {
+     "lgkmcnt(0)": 4,
+     "vmcnt(0)": 2
+    }
+   }
+  },
+  {
+   "symbol": "_Z21gemm_rs_mi300x_kernelILi128ELi192ELi32ELb1EEv14mi300x_globals",
+   "instantiation": "<128,192,32,true>",
+   "n_blocks": 299,
+   "k_loop": {
+    "header_block": ".LBB2_95",
+    "latch_block": "%bb.104",
+    "n_blocks": 10,
+    "per_block": [
+     {
+      "block": ".LBB2_95",
+      "n": 14,
+      "hist": {
+       "branch": 1,
+       "salu": 9,
+       "valu": 2,
+       "vmem_load": 2
+      }
+     },
+     {
+      "block": "%bb.96",
+      "n": 2,
+      "hist": {
+       "valu": 1,
+       "vmem_load": 1
+      }
+     },
+     {
+      "block": ".LBB2_97",
+      "n": 29,
+      "hist": {
+       "branch": 1,
+       "ds_read": 7,
+       "salu": 10,
+       "valu": 10,
+       "waitcnt": 1
+      }
+     },
+     {
+      "block": "%bb.98",
+      "n": 30,
+      "hist": {
+       "salu": 10,
+       "valu": 20
+      }
+     },
+     {
+      "block": ".LBB2_99",
+      "n": 30,
+      "hist": {
+       "branch": 1,
+       "ds_read": 7,
+       "mfma": 12,
+       "salu": 1,
+       "valu": 8,
+       "waitcnt": 1
+      }
+     },
+     {
+      "block": "%bb.100",
+      "n": 30,
+      "hist": {
+       "salu": 10,
+       "valu": 20
+      }
+     },
+     {
+      "block": ".LBB2_101",
+      "n": 45,
+      "hist": {
+       "branch": 1,
+       "ds_write": 4,
+       "mfma": 12,
+       "salu": 9,
+       "valu": 16,
+       "waitcnt": 3
+      }
+     },
+     {
+      "block": "%bb.102",
+      "n": 10,
+      "hist": {
+       "ds_write": 2,
+       "valu": 8
+      }
+     },
+     {
+      "block": ".LBB2_103",
+      "n": 5,
+      "hist": {
+       "barrier": 1,
+       "branch": 1,
+       "salu": 2,
+       "waitcnt": 1
+      }
+     },
+     {
+      "block": "%bb.104",
+      "n": 2,
+      "hist": {
+       "branch": 1,
+       "salu": 1
+      }
+     }
+    ],
+    "total_per_trip": {
+     "barrier": 1,
+     "branch": 6,
+     "ds_read": 14,
+     "ds_write": 6,
+     "mfma": 24,
+     "salu": 52,
+     "valu": 85,
+     "vmem_load": 3,
+     "waitcnt": 6
+    },
+    "memory_widths": {
+     "ds_read_b64": 14,
+     "ds_write_b64": 6,
+     "global_load_dwordx4": 3
+    },
+    "waitcnt_forms": {
+     "lgkmcnt(0)": 4,
+     "vmcnt(0)": 2
+    }
+   }
+  },
+  {
+   "symbol": "_Z21gemm_rs_mi300x_kernelILi256ELi256ELi32ELb0EEv14mi300x_globals",
+   "instantiation": "<256,256,32,false>",
+   "n_blocks": 488,
+   "k_loop": {
+    "header_block": ".LBB3_90",
+    "latch_block": ".LBB3_90",
+    "n_blocks": 1,
+    "per_block": [
+     {
+      "block": ".LBB3_90",
+      "n": 194,
+      "hist": {
+       "barrier": 1,
+       "branch": 2,
+       "ds_read": 24,
+       "ds_write": 8,
+       "mfma": 64,
+       "nop": 3,
+       "salu": 24,
+       "valu": 58,
+       "vmem_load": 4,
+       "waitcnt": 6
+      }
+     }
+    ],
+    "total_per_trip": {
+     "barrier": 1,
+     "branch": 2,
+     "ds_read": 24,
+     "ds_write": 8,
+     "mfma": 64,
+     "nop": 3,
+     "salu": 24,
+     "valu": 58,
+     "vmem_load": 4,
+     "waitcnt": 6
+    },
+    "memory_widths": {
+     "ds_read_b64": 24,
+     "ds_write_b64": 8,
+     "global_load_dwordx4": 4
+    },
+    "waitcnt_forms": {
+     "lgkmcnt(0)": 4,
+     "vmcnt(0)": 2
+    }
+   }
+  },
+  {
+   "symbol": "_Z21gemm_rs_mi300x_kernelILi256ELi256ELi32ELb1EEv14mi300x_globals",
+   "instantiation": "<256,256,32,true>",
+   "n_blocks": 492,
+   "k_loop": {
+    "header_block": ".LBB4_90",
+    "latch_block": ".LBB4_93",
+    "n_blocks": 4,
+    "per_block": [
+     {
+      "block": ".LBB4_90",
+      "n": 90,
+      "hist": {
+       "barrier": 1,
+       "branch": 1,
+       "ds_write": 8,
+       "mfma": 32,
+       "salu": 8,
+       "valu": 36,
+       "waitcnt": 4
+      }
+     },
+     {
+      "block": ".LBB4_91",
+      "n": 52,
+      "hist": {
+       "branch": 1,
+       "ds_read": 12,
+       "nop": 1,
+       "salu": 19,
+       "valu": 14,
+       "vmem_load": 4,
+       "waitcnt": 1
+      }
+     },
+     {
+      "block": "%bb.92",
+      "n": 58,
+      "hist": {
+       "salu": 18,
+       "valu": 40
+      }
+     },
+     {
+      "block": ".LBB4_93",
+      "n": 57,
+      "hist": {
+       "branch": 1,
+       "ds_read": 12,
+       "mfma": 32,
+       "nop": 2,
+       "salu": 1,
+       "valu": 8,
+       "waitcnt": 1
+      }
+     }
+    ],
+    "total_per_trip": {
+     "barrier": 1,
+     "branch": 3,
+     "ds_read": 24,
+     "ds_write": 8,
+     "mfma": 64,
+     "nop": 3,
+     "salu": 46,
+     "valu": 98,
+     "vmem_load": 4,
+     "waitcnt": 6
+    },
+    "memory_widths": {
+     "ds_read_b64": 24,
+     "ds_write_b64": 8,
+     "global_load_dwordx4": 4
+    },
+    "waitcnt_forms": {
+     "lgkmcnt(0)": 4,
+     "vmcnt(0)": 2
+    }
+   }
+  },
+  {
+   "symbol": "_Z21gemm_rs_mi300x_kernelILi32ELi64ELi64ELb0EEv14mi300x_globals",
+   "instantiation": "<32,64,64,false>",
+   "n_blocks": 176,
+   "k_loop": {
+    "header_block": ".LBB5_95",
+    "latch_block": "%bb.100",
+    "n_blocks": 6,
+    "per_block": [
+     {
+      "block": ".LBB5_95",
+      "n": 6,
+      "hist": {
+       "branch": 1,
+       "salu": 5
+      }
+     },
+     {
+      "block": "%bb.96",
+      "n": 4,
+      "hist": {
+       "salu": 2,
+       "valu": 1,
+       "vmem_load": 1
+      }
+     },
+     {
+      "block": ".LBB5_97",
+      "n": 66,
+      "hist": {
+       "branch": 1,
+       "ds_read": 8,
+       "mfma": 4,
+       "nop": 3,
+       "salu": 11,
+       "valu": 35,
+       "vmem_load": 1,
+       "waitcnt": 3
+      }
+     },
+     {
+      "block": "%bb.98",
+      "n": 12,
+      "hist": {
+       "ds_write": 2,
+       "salu": 2,
+       "valu": 8
+      }
+     },
+     {
+      "block": ".LBB5_99",
+      "n": 19,
+      "hist": {
+       "barrier": 1,
+       "branch": 1,
+       "ds_write": 2,
+       "salu": 4,
+       "valu": 8,
+       "waitcnt": 3
+      }
+     },
+     {
+      "block": "%bb.100",
+      "n": 2,
+      "hist": {
+       "branch": 1,
+       "salu": 1
+      }
+     }
+    ],
+    "total_per_trip": {
+     "barrier": 1,
+     "branch": 4,
+     "ds_read": 8,
+     "ds_write": 4,
+     "mfma": 4,
+     "nop": 3,
+     "salu": 25,
+     "valu": 52,
+     "vmem_load": 2,
+     "waitcnt": 6
+    },
+    "memory_widths": {
+     "ds_read_b64": 8,
+     "ds_write_b64": 4,
+     "global_load_dwordx4": 2
+    },
+    "waitcnt_forms": {
+     "lgkmcnt(0)": 4,
+     "vmcnt(0)": 2
+    }
+   }
+  },
+  {
+   "symbol": "_Z21gemm_rs_mi300x_kernelILi32ELi64ELi64ELb1EEv14mi300x_globals",
+   "instantiation": "<32,64,64,true>",
+   "n_blocks": 180,
+   "k_loop": {
+    "header_block": ".LBB6_95",
+    "latch_block": "%bb.104",
+    "n_blocks": 10,
+    "per_block": [
+     {
+      "block": ".LBB6_95",
+      "n": 6,
+      "hist": {
+       "branch": 1,
+       "salu": 5
+      }
+     },
+     {
+      "block": "%bb.96",
+      "n": 4,
+      "hist": {
+       "salu": 2,
+       "valu": 1,
+       "vmem_load": 1
+      }
+     },
+     {
+      "block": ".LBB6_97",
+      "n": 37,
+      "hist": {
+       "branch": 1,
+       "ds_read": 4,
+       "salu": 11,
+       "valu": 19,
+       "vmem_load": 1,
+       "waitcnt": 1
+      }
+     },
+     {
+      "block": "%bb.98",
+      "n": 18,
+      "hist": {
+       "salu": 5,
+       "valu": 13
+      }
+     },
+     {
+      "block": ".LBB6_99",
+      "n": 25,
+      "hist": {
+       "branch": 1,
+       "ds_read": 4,
+       "mfma": 2,
+       "salu": 1,
+       "valu": 16,
+       "waitcnt": 1
+      }
+     },
+     {
+      "block": "%bb.100",
+      "n": 16,
+      "hist": {
+       "salu": 5,
+       "valu": 11
+      }
+     },
+     {
+      "block": ".LBB6_101",
+      "n": 9,
+      "hist": {
+       "branch": 1,
+       "mfma": 2,
+       "nop": 1,
+       "salu": 4,
+       "waitcnt": 1
+      }
+     },
+     {
+      "block": "%bb.102",
+      "n": 12,
+      "hist": {
+       "ds_write": 2,
+       "salu": 2,
+       "valu": 8
+      }
+     },
+     {
+      "block": ".LBB6_103",
+      "n": 19,
+      "hist": {
+       "barrier": 1,
+       "branch": 1,
+       "ds_write": 2,
+       "salu": 4,
+       "valu": 8,
+       "waitcnt": 3
+      }
+     },
+     {
+      "block": "%bb.104",
+      "n": 2,
+      "hist": {
+       "branch": 1,
+       "salu": 1
+      }
+     }
+    ],
+    "total_per_trip": {
+     "barrier": 1,
+     "branch": 6,
+     "ds_read": 8,
+     "ds_write": 4,
+     "mfma": 4,
+     "nop": 1,
+     "salu": 40,
+     "valu": 76,
+     "vmem_load": 2,
+     "waitcnt": 6
+    },
+    "memory_widths": {
+     "ds_read_b64": 8,
+     "ds_write_b64": 4,
+     "global_load_dwordx4": 2
+    },
+    "waitcnt_forms": {
+     "lgkmcnt(0)": 4,
+     "vmcnt(0)": 2
+    }
+   }
+  }
+ ]
+}

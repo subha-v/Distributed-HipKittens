@@ -12,7 +12,7 @@ if pgrep -f "go_gpu.sh" > /dev/null; then
 fi
 : > "$LOG"
 setsid timeout 5400 env EXP22_REUSE_M7="${EXP22_REUSE_M7:-0}" \
-  bash "$E22/go_gpu.sh" all >> "$LOG" 2>&1 < /dev/null &
+  bash "$E22/go_gpu.sh" "${EXP22_ARMS:-all}" >> "$LOG" 2>&1 < /dev/null &
 sleep 5
 echo "launched pid $! ; log=$LOG"
 tail -5 "$LOG"

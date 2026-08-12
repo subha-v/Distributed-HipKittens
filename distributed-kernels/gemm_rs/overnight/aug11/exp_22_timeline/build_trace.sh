@@ -37,9 +37,14 @@ rc=${PIPESTATUS[0]}
 
 if [ -f "$OUT/gemm_rs_mi300x_trace.so" ] && [ "$rc" = "0" ]; then
   echo "OK   gemm_rs_mi300x_trace.so ($(stat -c%s "$OUT/gemm_rs_mi300x_trace.so") bytes)"
+  # The spec name is not cosmetic: CPython resolves a C extension's init symbol
+  # as PyInit_<last component of the spec name>, so loading this .so under any
+  # name other than TK_MODNAME fails with a misleading "does not define module
+  # export function" that reads like a build failure and is not one.
   python3 -c "
 import importlib.util
-spec = importlib.util.spec_from_file_location('t', '$OUT/gemm_rs_mi300x_trace.so')
+name = 'gemm_rs_mi300x_trace'
+spec = importlib.util.spec_from_file_location(name, '$OUT/' + name + '.so')
 mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
 print('  entry points:', [x for x in dir(mod) if not x.startswith('_')])"
 else
