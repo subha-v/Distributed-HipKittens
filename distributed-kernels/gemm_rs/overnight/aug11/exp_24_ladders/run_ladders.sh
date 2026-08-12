@@ -76,11 +76,18 @@ preflight() {
   echo "kfd fds: $(kfd_fds)"
   if [ -n "$pids" ]; then
     say "NODE DIRTY: KFD pids [$pids] hold the GPUs"
-    if [ "${LAD_ALLOW_DIRTY:-0}" != "1" ]; then
+    # LAD_LEASED=1 means tools/gpu_lease.sh already took the lock AND performed
+    # its own wait-for-drain, so this check is a report rather than a gate --
+    # duplicating the abort here would only add a way to lose an acquired lease
+    # to a worker that is still exiting.
+    if [ "${LAD_LEASED:-0}" = "1" ]; then
+      say "LAD_LEASED=1 -- the lease already drained the node; continuing"
+    elif [ "${LAD_ALLOW_DIRTY:-0}" != "1" ]; then
       say "ABORT. Another job owns the devices; a ladder measured against it is void."
       return 1
+    else
+      say "LAD_ALLOW_DIRTY=1 -- proceeding, and this run MUST NOT be reported as timing"
     fi
-    say "LAD_ALLOW_DIRTY=1 -- proceeding, and this run MUST NOT be reported as timing"
   fi
   # Bounded drain wait. SIGTERM only, never SIGKILL: this kernel uses HIP IPC and
   # leaked mappings wedge the node.
@@ -265,21 +272,18 @@ eval_arm() {  # eval_arm <arm> <rotation>
         | tee "$D/logs/eval_rot${rot}_reference.log" | tail -40
       ;;
     rank1)
-      # tools/run_rank1_bench3.sh CANNOT run rank-1 on this node: it predates
-      # exp_10's repair #6 and omits AMDGCN_USE_BUFFER_OPS=0, points PYTHONPATH
-      # at a $ON/compat that does not exist, and calls $ON/patch_rank1.py which
-      # does not exist. See design.md 4. exp_10's r1_eval.sh has all three right.
-      # bench3's pass ORDER is kept: warm -> test -> bench, because eval.py's
-      # test mode hardcodes a 60 s per-rank timeout that a cold compile exceeds.
-      for pass in warm test bench; do
-        local mode=benchmark tmo=1700
-        [ "$pass" = "test" ] && mode=test
-        say "  rank-1 pass=$pass mode=$mode"
-        bash "$ON/experiments/exp_10_rank1/r1_eval.sh" rank1 "$mode" "$tmo" 2>&1 \
-          | tee "$D/logs/eval_rot${rot}_rank1_${pass}.log" | tail -30
-        capture rank1 "${dest}_${pass}"
-        drain
-      done
+      # tools/run_rank1_bench3.sh was REPAIRED 2026-08-12 and is now the driver:
+      # it passes AMDGCN_USE_BUFFER_OPS=0 via `docker exec -e`, points PYTHONPATH
+      # at the real $ON/tools/compat, calls $ON/tools/patch_rank1.py, and runs in
+      # dhk-gemmrs as uid 15523 instead of the root container. It performs all
+      # three passes itself in the mandatory warm -> test -> bench order and has
+      # its own node-clean preflight. The repair changes only how the arm is
+      # LAUNCHED, never what it computes; disclosed in result.md 8.8.
+      bash "$ON/tools/run_rank1_bench3.sh" 2>&1 \
+        | tee "$D/logs/eval_rot${rot}_rank1.log" | tail -60
+      # bench3 writes {warm,test,bench}.{popcorn,stdout,stderr}.txt, so one
+      # capture takes all three passes.
+      capture rank1 "$dest"
       return 0
       ;;
   esac
@@ -298,17 +302,27 @@ instrument_b() {
 }
 
 # -------------------------------------------------------------------- parse ---
-parse() {
-  say "=== aggregate -> ladders.json ==="
-  # Tell the aggregator how many shapes and rotations THIS run was supposed to
-  # produce, so a quick one-shape run stays strict instead of being waved through
-  # with --lenient. A silently partial ladder is the failure mode ladders.py
-  # exists to prevent.
+# Aggregation runs TWICE: once the moment instrument A finishes, so the ladder --
+# which is the deliverable -- is on disk and validated before instrument B spends
+# hours in eval.py, and again after B. Otherwise a B that runs long or dies takes
+# a completed 6-shape ladder down with it at the --expect-b assertion.
+parse() {  # parse <expect_b> [fatal|soft]
+  local expect_b="$1" mode="${2:-fatal}"
   local n_shapes; n_shapes=$(awk -F, '{print NF}' <<< "$SHAPES")
   local out="$D/ladders.json"
   [ "$QUICK" = "1" ] && out="$D/ladders_quick.json"
+  say "=== aggregate -> $(basename "$out")  (expect-a=$n_shapes expect-b=$expect_b) ==="
   python3 "$D/ladders.py" --root "$D" --out "$out" --ladder-dir "$LADDIR" \
-    --expect-a "$n_shapes" --expect-b "$ROTATIONS"
+    --expect-a "$n_shapes" --expect-b "$expect_b"
+  local rc=$?
+  if [ $rc -ne 0 ] && [ "$mode" = "soft" ]; then
+    say "WARN: strict aggregation failed (rc=$rc). Re-running with expect-b=0 so"
+    say "      the instrument-A ladder is preserved; NOTE THIS IN result.md."
+    python3 "$D/ladders.py" --root "$D" --out "$out" --ladder-dir "$LADDIR" \
+      --expect-a "$n_shapes" --expect-b 0
+    rc=$?
+  fi
+  return $rc
 }
 
 # ---------------------------------------------------------------------- main ---
@@ -319,16 +333,18 @@ rc=0
 case "$PHASE" in
   preflight) preflight; rc=$? ;;
   stage)     stage_arms; rc=$? ;;
-  A)         preflight && stage_arms && instrument_a; rc=$? ;;
-  B)         preflight && stage_arms && instrument_b; rc=$? ;;
-  parse)     parse; rc=$? ;;
+  A)         preflight && stage_arms && instrument_a && parse 0; rc=$? ;;
+  B)         preflight && stage_arms && instrument_b && parse "$ROTATIONS" soft; rc=$? ;;
+  parse)     parse "$ROTATIONS" soft; rc=$? ;;
   all)
     preflight || exit 1
     provenance
     stage_arms || exit 1
     instrument_a
+    parse 0 || say "WARN: instrument-A aggregation failed -- see the assertion above"
+    cp -f "$D/ladders.json" "$D/ladders_instrumentA.json" 2>/dev/null
     instrument_b
-    parse; rc=$?
+    parse "$ROTATIONS" soft; rc=$?
     ;;
   *) say "unknown phase: $PHASE"; rc=2 ;;
 esac

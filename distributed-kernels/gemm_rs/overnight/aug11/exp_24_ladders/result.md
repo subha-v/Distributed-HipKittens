@@ -366,19 +366,45 @@ the run is explicitly not reportable as timing.
 different protocol** and is not comparable to anything measured here. The only
 valid denominator is rank-1 measured on this node.
 
-**8.8 `tools/run_rank1_bench3.sh` cannot run rank-1 on this node and was not
-used.** Three defects, all consistent with it predating exp_10's repair #6:
-it omits `AMDGCN_USE_BUFFER_OPS=0` and builds its own `ENVS` string passed
-explicitly to `docker exec`, so the knob cannot be injected from outside; it sets
-`PYTHONPATH` to `$ON/compat`, which **does not exist** (the tree is at
-`$ON/tools/compat`), so repair #3's `sitecustomize.py` is absent; and it invokes
-`$ON/patch_rank1.py`, which **does not exist** either (the tool is at
-`$ON/tools/patch_rank1.py`), so its staging step exits non-zero. It also runs in
-`dhk-eval` rather than `dhk-gemmrs`, and the two containers have separate
-filesystems. The rank-1 evaluator arm is therefore driven by
-`experiments/exp_10_rank1/r1_eval.sh` — the driver that actually produced exp_10
-§4 — keeping bench3's pass order. **Nothing under `tools/` was edited.** This is a
-one-line staging defect in a shared tool and belongs to whoever owns `tools/`.
+**8.8 `tools/run_rank1_bench3.sh` was REPAIRED on 2026-08-12 and is the rank-1
+cross-check driver. The repair is disclosed here and argued
+behaviour-preserving.**
+
+As found by this experiment's dry-run inspection, bench3 could not run rank-1 at
+all — it predated exp_10's repair #6 — and it had **four** independently fatal
+defects, every one found by reading the file rather than by a failed run, which is
+how a "runs but measures nothing" tool survives:
+
+| # | defect | why fatal |
+|---:|---|---|
+| a | `AMDGCN_USE_BUFFER_OPS=0` absent, and the env was built as one `ENVS` string interpolated into `bash -c`, so the knob could not be injected from outside either | the arm faults: Triton 3.6.0 lowers rank-1's peer stores to `buffer_store_dwordx2`, 32-bit voffset, truncating a −4.4-billion-element offset |
+| b | `PYTHONPATH` pointed at `$ON/compat`, which does not exist (the tree is `$ON/tools/compat`) | repair #3's `sitecustomize.py` was silently absent |
+| c | invoked `$ON/patch_rank1.py`, which does not exist (the tool is `$ON/tools/patch_rank1.py`); the `if [ $? -ne 0 ]` guard also tested the wrong command's status | staging exits non-zero |
+| d | ran in container `dhk-eval`, which is **root** | every artifact it wrote under the repo came out root-owned and broke later `sed`/`scp` steps |
+
+The repaired driver passes the knob as `docker exec -e` flags (visible and
+overridable), points `PYTHONPATH` at `$ON/tools/compat`, calls
+`$ON/tools/patch_rank1.py`, and runs in `dhk-gemmrs` as uid 15523 — an env and
+container arrangement that now mirrors `experiments/exp_10_rank1/r1_eval.sh`, the
+driver that actually produced exp_10's measured comparison. It keeps the mandatory
+`warm → test → bench` pass order and adds the node-clean preflight the arm never
+had. Verified mechanically before use: the knob is present and passed via `-e`,
+`tools/compat` is on `PYTHONPATH`, `tools/patch_rank1.py` is the path called,
+`dhk-eval` appears only in a comment, and the three `go` calls are still in
+`warm → test → bench` order.
+
+**Behaviour-preserving argument.** Every change is to **how the arm is launched**,
+never to what it computes: a container identity and uid, two corrected filesystem
+paths, and an environment variable that — per exp_10 §2.6 — *restores* the 64-bit
+peer addressing the kernel requires and cannot be correct without. No algorithm,
+tiling, config, launcher or data movement is touched. **The frozen submission is
+still untouched and still hashes to `7940fcb8…f0dc5`** (re-verified at run time);
+patching remains a copy behind `patch_rank1.py`'s hash gate, whose only diff is
+the 4-line `packed_metadata` repair. The one residual bias, disclosed in §8.3,
+runs *against* rank-1 and so cannot manufacture a win for us.
+
+`tools/` is not this experiment's to edit and was not edited by it; the repair was
+made by the tree's owner after this experiment reported the defects.
 
 **8.9 Means alone are unusable on this node**, even same-run interleaved, because
 the bias is **per-allocation and partly allocation-ORDER**, not positional:

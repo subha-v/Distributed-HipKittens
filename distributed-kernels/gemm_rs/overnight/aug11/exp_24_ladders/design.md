@@ -150,12 +150,22 @@ repairing that line, and is out of scope.
 |---|---|---|
 | `ours` | `tools/run_ours_evaluator.sh` | `dhk-gemmrs` |
 | `reference` | `tools/run_reference_arm.sh` | `dhk-gemmrs` |
-| `rank1` | `experiments/exp_10_rank1/r1_eval.sh rank1 <mode> <timeout>` | `dhk-gemmrs` |
+| `rank1` | `tools/run_rank1_bench3.sh` (**repaired 2026-08-12**; see §4) | `dhk-gemmrs` |
 
 Arm order is rotated per rotation index so no arm is systematically first.
 rank-1 runs `benchmark` (warm) → `test` → `benchmark` (bench) in that order,
 because `eval.py`'s test mode hardcodes a 60 s per-rank timeout that a cold
-compile of rank-1's kernel exceeds. That pass order is bench3's, and it is kept.
+compile of rank-1's kernel exceeds. bench3 performs all three passes itself.
+
+**Two output naming conventions, and the parser has to know.** The two `tools/`
+evaluator drivers name their files after the eval.py **mode**
+(`benchmark.popcorn.txt`, `test.popcorn.txt`); bench3 names them after its **pass
+label** (`warm/test/bench`), two of which are benchmark mode. The first version of
+`build_crosscheck` filtered on a `benchmark` filename prefix and would therefore
+have silently dropped **every rank-1 number**. It now skips only `test*` (which
+carries no timing blocks) and parses everything else, flagging `warm` as
+throwaway: rank-1's warm pass exists to fill the JIT cache and its timings are not
+the cross-check. `bench` is the headline.
 
 `rocm-smi --showpids` preflight runs before **all three** arms, not just the
 reference (which is the only driver that does it itself).

@@ -433,23 +433,43 @@ def build_ratios(protocols, netted):
 # ------------------------------------------------------- crosscheck assembly ---
 
 def build_crosscheck(root, strict):
-    """Instrument B: parse every captured popcorn benchmark run, per rotation."""
-    out, errors = {}, []
+    """Instrument B: parse every captured popcorn benchmark run, per rotation.
+
+    Two output naming conventions have to be handled, because the three drivers
+    do not agree. run_ours_evaluator.sh and run_reference_arm.sh name files after
+    the eval.py MODE (`benchmark.popcorn.txt`, `test.popcorn.txt`), while
+    run_rank1_bench3.sh names them after its PASS LABEL (`warm/test/bench`) --
+    two of which are benchmark mode. Filtering on a `benchmark` prefix, as the
+    first version of this did, would have silently dropped every rank-1 number.
+
+    `warm` is rank-1's JIT-warming pass and its timings are throwaway; it is
+    parsed and retained for the record but flagged `is_warm`, and the headline
+    cross-check must use `bench`.
+    """
+    out, errors, skipped = {}, [], []
     pattern = os.path.join(root, "raw", "eval", "rot*", "*", "*.popcorn.txt")
     for path in sorted(glob.glob(pattern)):
         parts = path.replace("\\", "/").split("/")
         rot, arm_dir = parts[-3], parts[-2]
-        name = os.path.basename(path)
-        if not name.startswith("benchmark"):
-            continue           # test.popcorn.txt has no timing blocks
+        label = os.path.basename(path)[: -len(".popcorn.txt")]
+        # eval.py's test mode emits `test-count:` and no timing blocks at all.
+        # Correctness is gated in instrument A, so these are a skip, not an error.
+        if label.startswith("test"):
+            skipped.append(path)
+            continue
         try:
-            out.setdefault(rot, {})[arm_dir] = parse_popcorn(path)
+            parsed = parse_popcorn(path)
+            parsed["label"] = label
+            parsed["is_warm"] = (label == "warm")
+            parsed["is_headline"] = (label in ("benchmark", "bench"))
+            out.setdefault(rot, {})[f"{arm_dir}/{label}"] = parsed
         except PopcornError as exc:
             errors.append(str(exc))
     if errors and strict:
         raise RuntimeError("instrument B parse failures (pass --lenient to record "
                            "them instead of raising):\n  " + "\n  ".join(errors))
-    return {"rotations": out, "parse_errors": errors}
+    return {"rotations": out, "parse_errors": errors,
+            "skipped_test_mode": skipped}
 
 
 def node_block():
