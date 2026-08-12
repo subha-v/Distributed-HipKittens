@@ -161,6 +161,19 @@ def main():
     with open(args.out, "w") as fh:
         json.dump(out, fh, indent=1)
 
+    # One tidy row per measured point, for whatever plots the paper draws. Long format
+    # on purpose: every panel in Fig 2 is a filter over these columns.
+    csv_path = os.path.splitext(args.out)[0].replace("knees", "saturation") + ".csv"
+    cols = ["mode", "overlay", "protocol", "depth", "fanout", "ctas", "metric", "value",
+            "res_span_us", "gemm_span_us", "concurrent_gemm_tflops", "gemm_slowdown",
+            "rounds", "checksum_ok", "payload_granularity"]
+    with open(csv_path, "w") as fh:
+        fh.write(",".join(cols) + "\n")
+        for p in sorted(points, key=lambda p: (p["mode"], p["fanout"] or "", p["depth"] or 0,
+                                               p["overlay"], p["protocol"], p["ctas"])):
+            fh.write(",".join("" if p.get(c) is None else str(p.get(c)) for c in cols) + "\n")
+    print(f"-> {csv_path} ({len(points)} rows)")
+
     print(f"{'series':<52} {'metric':<7} {'plateau':>9} {'knee90':>7} {'knee75':>7} "
           f"{'@knee':>9} {'c/i':>7} {'proto':>7}")
     for r in rows:

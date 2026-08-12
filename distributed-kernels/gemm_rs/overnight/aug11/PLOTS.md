@@ -10,7 +10,7 @@ under `overnight/experiments/`.
 | paper fig | question | data file | experiment | status |
 |---|---|---|---|---|
 | — | Q3 bottleneck attribution | `aug11/exp_20_attribution/ablation.json`, `counters.json` | exp_20 | **LANDED** — 6 shapes × 5 stages, freshness gate +0.96% |
-| Fig 2 | Q4 saturation vs CTA count | `aug11/exp_21_saturation/saturation.json` | exp_21 | queued |
+| Fig 2 | Q4 saturation vs CTA count | `aug11/exp_21_saturation/saturation.json`, `knees.json`, `saturation.csv`, `ceilings.txt` | exp_21 | **LANDED** — 260 points, 224/224 checksums, 1 distinct fold. **Egress knee C=16 of 304 (5.3%)** for 7-peer, **C=2** single-link; falsifier not triggered. Protocol costs 0.44× of egress at the knee (identical payload bytes); conc/iso 0.957 with GEMM slowdown 1.221. Panel b has **no knee ≤ 304**. H4 linearity falsified past C≈160 (memory-path-bound: 4549 of 4593 GB/s). Ceilings all node-sourced: 64.0 GB/s per xGMI link, 448 GB/s aggregate, 5325 GB/s HBM, 1307.4 TFLOPS bf16. `coarse` cross-check queued |
 | Fig 3 | Q4 per-layer resource timeline | `aug11/exp_22_timeline/events.json`, `timeline_bins.csv`, `b0_kernel_map.json` | exp_22 | **instrumented**, parity gate passed (flag-off byte-identical, 612,896 B, 7/7 tuples); arms (a)+(b) running |
 | — | Q1 rung-distinctness evidence | `aug11/exp_23_waterfall/fingerprints.json` | exp_23 | **LANDED** — proves the four rungs are four binaries, distinguished at the sites their mechanisms predict |
 | Fig 4 | Q1 knob waterfall (**money figure**) | `aug11/exp_23_waterfall/waterfall.json`, `stats.json`, `fingerprints.json` | exp_23 | **LANDED** — 4 draws (2 fwd / 2 rev); a→b 1.084×, b→c 1.115× cumulative; null within 0.2% of c; structural prediction held |
@@ -26,6 +26,7 @@ relevant. Sources are committed under `overnight/experiments/`.
 |---|---|---|
 | xGMI fabric counters at the WGM fix: 117.48 MB carried vs 117.44 MB useful (1.0003×), 99.9% at full 64 B, EA write latency −38.6% | `experiments/exp_08_egress/result.md` | Fig 4 supporting: a task-order change moved zero bytes and −27.9% |
 | effective xGMI links 2.02 → 7.53 of 8 | `experiments/exp_08_egress/result.md` | Fig 2 / Fig 4 |
+| **`s_memrealtime` = 99.7366 MHz on gfx942** (10.0264 ns/tick), 5 reps, spread 0.0101%, measured two-stage against `steady_clock` | `aug11/exp_21_saturation/saturation.json` → `tick_rate_hz` | **exp_22 needs this**; the sibling's 100 MHz is a gfx950 statement, this one is measured here |
 | `NR` curve over {4,8,16,24,32,40,48,56,64,80} × 6 shapes, with null-arm floors | `experiments/exp_13_cta_split/result.md`, `sweep_*.json` | **Fig 4 rung (d)** — the placement-flatness exhibit, already measured |
 | per-call decomposition: clone / host / device / barrier, plus a null-kernel floor at 1…608 CTAs | `experiments/exp_12_percall/result.md` | Q6 caveat: ~92 µs of every graded call is harness machinery both arms pay |
 | ours vs reference GEMM+RCCL, same-run graded | `experiments/exp_07_cold_l2/result.md` | exp_17 prior arm |

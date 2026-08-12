@@ -23,7 +23,11 @@ import sys
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-BUILD = os.path.join(HERE, "build")
+# go_campaign.sh executes a frozen, CR-stripped copy of this file out of logs/run_*/ so
+# that a concurrent push cannot rewrite the driver mid-sweep. The compiled module and
+# the artifacts still belong to the experiment directory, not next to the copy.
+BASE = os.environ.get("SAT_BASE", HERE)
+BUILD = os.path.join(BASE, "build")
 WORLD = 8
 
 
@@ -461,7 +465,7 @@ def ceilings(mod, args):
             out["xgmi"]["raw"][name] = "<skipped>"
         else:
             out["xgmi"]["raw"][name] = sh(cmd)[:8000]
-    with open(os.path.join(HERE, "ceilings.txt"), "w") as fh:
+    with open(os.path.join(BASE, "ceilings.txt"), "w") as fh:
         for k, v in out["xgmi"]["raw"].items():
             fh.write(f"########## {k} ##########\n{v}\n\n")
         fh.write(f"########## hipDeviceProp_t (device 0) ##########\n{json.dumps(props, indent=2)}\n")
@@ -470,7 +474,7 @@ def ceilings(mod, args):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default=os.path.join(HERE, "saturation.json"))
+    ap.add_argument("--out", default=os.path.join(BASE, "saturation.json"))
     ap.add_argument("--modes", default="abc")
     ap.add_argument("--rotations", type=int, default=5)
     ap.add_argument("--warmup-ms", type=float, default=400.0)

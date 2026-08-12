@@ -832,6 +832,81 @@ uniform NR=48 beats the shipped per-shape table is supported. The flatness of th
   already labelled it `bound = HOST` at 10.16× SOL — its whole mainloop is
   ~2-4 µs of ~63 µs.
 
+## exp_21 (Fig 2, saturation vs CTA count) — LANDED, one prediction falsified
+
+Full sweep 2026-08-12 10:34–10:39Z under the lease. 260 points, 224/224
+destination checksums pass with **one** distinct fingerprint, tick spread 0.0101%.
+Artifacts: `exp_21_saturation/{saturation.json,knees.json,saturation.csv,ceilings.txt}`.
+
+- **Communication needs a tiny pool, and the number is 16.** The real 16 B
+  peer-packet emit reaches 90% of its plateau at **C = 16 of 304 CTAs (5.3%)**
+  for the 7-peer round robin and at **C = 2** for a single link. The
+  pre-registered falsifier (≥ 32 CTAs for 75% of plateau) **did not trigger** —
+  the 75% crossing is at C = 2 at every depth. Scaling below the knee is
+  near-ideal (1.99–2.00× per doubling of C to 8), so this is a genuine
+  saturation knee and not a flat curve.
+- **The protocol, not the payload, is what egress costs.** Same 16 B stores, same
+  addresses, same order; the only difference is the release. Protocol-on delivers
+  **0.44×** of protocol-off bandwidth at the rr7 knee and **0.37×** at the
+  single-link knee, and it moves the knee itself (2 → 8 single, 16 → 64 rr7)
+  because each release serialises a drain that more CTAs can hide. This agrees
+  with exp_20's counter pass from the opposite direction (fabric amplification
+  1.0007× at 99.9% full-64 B), so **the egress width axis is closed from both
+  sides and remaining egress cost is release granularity.** RELEASE_GROUP still
+  has room; exp_26 is asking the right question.
+- **Interference is real but second-order next to that.** At the rr7 knee,
+  concurrent/isolated = 0.957 while the GEMM on the *C-matched reserve control*
+  slows by 1.221×. Reading: the emit barely notices the GEMM, the GEMM notices
+  the emit. Above C ≈ 32 the GEMM side collapses (slowdown 3.3–6.9× at C = 32–64),
+  which is an independent argument against large communication pools.
+- **The in-flight bound is a below-the-knee knob.** rr7 at C = 8: depth 1 = 167.9,
+  4 = 230.3, 8 = 245.9, unbounded = 286.6 GB/s (monotone; depth 1 costs 41%). At
+  and above C = 16 the depths converge within 8–14%.
+- **H4 falsified as stated, and the mechanism matters more than the verdict.**
+  MFMA is linear only to C ≈ 160 (per-CTA flat within 1.8%), then falls to 75.2%
+  per-CTA at C = 304. It is *not* occupancy — the body is 1 CTA/CU from its 193
+  VGPRs *and* from its 65,536 B LDS. It is the mainloop's own operand stream:
+  7.813 × 10⁻³ B/FLOP × 582.36 TFLOPS = **4549 GB/s, i.e. 99.0% of the 4593 GB/s
+  memory-path plateau panel b measures independently.** **Consequence for the
+  optimization queue: at full grid this mainloop is memory-path-bound, so E1(a)
+  AGPR accumulators and schedule work buy nothing above C ≈ 160 unless operand
+  traffic drops (better L2/MALL reuse, wider K staging, or fewer redundant tile
+  loads). Re-rank E1 accordingly.**
+- **The reduce is the opposite shape: no knee at 304.** REDV=1 goes
+  263.8 → 4593.2 GB/s from C = 8 to 304, essentially linear to C = 64, reaching
+  86.3% of the node's reported 5325 GB/s HBM. Egress saturates at 16 CTAs; the
+  reduce never saturates. That asymmetry is the argument for where dedicating
+  CTAs pays and where it does not.
+- **A props-derived HBM ceiling is wrong on this node by exactly 2×.**
+  `2 × memoryClockRate × busWidth / 8` gives 2662.4 GB/s and the measurement
+  exceeds it by 1.73×; `amd-smi static` reports 5325 GB/s for the same 8192-bit
+  bus. **Never quote the props derivation on gfx942.** xGMI per link is
+  64.0 GB/s (`rocm-smi --shownodesbw`, `64000 mps`, all 28 pairs), corroborated
+  at two scales by the measurement itself (95.4% of one link, 90.0% of seven).
+- **`s_memrealtime` on gfx942 = 99.7366 MHz** (10.0264 ns/tick), spread 0.0101%
+  over 5 reps of ≈200 ms. Measured here; exp_22 should use this, not the
+  sibling's gfx950 figure.
+
+### Two node-level traps this experiment paid for
+
+- **A KFD process in state `D` with `wchan = exit_mm` is not "draining" — it is
+  dead and unkillable, and it blocked the lease for 30 minutes.** Flat CPU time,
+  zero CU occupancy, VRAM still mapped, ignores SIGTERM (and SIGKILL is
+  forbidden here). It aborted both exp_21's and exp_24's acquire after their full
+  300 s drain window. `gpu_lease.sh` now classifies exiting/zombie KFD pids and
+  ignores them.
+- **Never `scp` over a script another process is executing.** bash reads scripts
+  incrementally by byte offset and `scp` truncates in place, so a push landing
+  mid-run makes the interpreter resume mid-token — it killed one campaign with a
+  syntax error on a line that was never wrong on disk, and later broke a running
+  `run_sweep.sh`'s exit path *after* its data had been written (the phase
+  reported failure on a successful sweep). A CRLF push made it worse by breaking
+  `tools/gpu_lease.sh` for every agent at the same time. **Fix, now standard for
+  exp_21: freeze CR-stripped copies of the whole script chain per run and execute
+  those** (`go_campaign.sh` → `logs/run_<stamp>/`, with `SAT_BASE` keeping the
+  module and artifacts in the experiment directory). `sed -i` is safe where `scp`
+  is not, because it renames instead of truncating.
+
 ## Open validation gap
 
 - **`gemm_rs_mi300x_static_checks.py` has been dead since exp_02.** Its first

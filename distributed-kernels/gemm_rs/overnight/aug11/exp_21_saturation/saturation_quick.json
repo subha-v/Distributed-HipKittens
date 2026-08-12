@@ -1,0 +1,1869 @@
+{
+ "experiment": "exp_21_saturation",
+ "figure": "paper Fig 2 / Q4(a) -- NanoFlow v1 Fig 7 analog, GEMM-RS instance",
+ "generated": "2026-08-12T10:34:12+0000",
+ "wall_minutes": 0.34841023286183676,
+ "node": {
+  "host": "f08d226082a2",
+  "arch": "gfx942:sramecc+:xnack-",
+  "cu_count": 304,
+  "device_props": {
+   "name": "",
+   "gcn_arch_name": "gfx942:sramecc+:xnack-",
+   "multi_processor_count": 304,
+   "clock_rate_khz": 2100000,
+   "memory_clock_rate_khz": 1300000,
+   "memory_bus_width_bits": 8192,
+   "l2_cache_size_bytes": 4194304,
+   "total_global_mem_bytes": 206141652992,
+   "max_shared_memory_per_block": 65536,
+   "warp_size": 64,
+   "hbm_peak_gbps_from_props": 2662.4000000000005
+  },
+  "world": 8,
+  "topology_caveat": "one process drives 8 devices with hipDeviceEnablePeerAccess, NOT the evaluator's one-process-per-rank HIP-IPC topology",
+  "clocks_pinned": "tools/set_clocks.sh pin 1900 (standing rule on this node)"
+ },
+ "ceilings": {
+  "hbm_peak_gbps": {
+   "value": 2662.4000000000005,
+   "source": "hipGetDeviceProperties on this node: 2 x memoryClockRate(1300000 kHz) x memoryBusWidth(8192 bit) / 8"
+  },
+  "mfma_bf16_peak_tflops": {
+   "value": null,
+   "source": "derived in result.md from THIS node's pinned sclk x 304 CU x the gfx942 per-CU bf16 rate implied by v_mfma_f32_16x16x16_bf16; sclk taken from the clocks_before field, not from a datasheet"
+  },
+  "xgmi": {
+   "value": null,
+   "source": "see ceilings.txt: rocm-smi --shownodesbw / --showtopo / amd-smi",
+   "raw": {
+    "shownodesbw": "============================ ROCm System Management Interface ============================\n======================================= Bandwidth ========================================\n       GPU0         GPU1         GPU2         GPU3         GPU4         GPU5         GPU6         GPU7         \nGPU0   N/A          64000-64000  64000-64000  64000-64000  64000-64000  64000-64000  64000-64000  64000-64000  \nGPU1   64000-64000  N/A          64000-64000  64000-64000  64000-64000  64000-64000  64000-64000  64000-64000  \nGPU2   64000-64000  64000-64000  N/A          64000-64000  64000-64000  64000-64000  64000-64000  64000-64000  \nGPU3   64000-64000  64000-64000  64000-64000  N/A          64000-64000  64000-64000  64000-64000  64000-64000  \nGPU4   64000-64000  64000-64000  64000-64000  64000-64000  N/A          64000-64000  64000-64000  64000-64000  \nGPU5   64000-64000  64000-64000  64000-64000  64000-64000  64000-64000  N/A          64000-64000  64000-64000  \nGPU6   64000-64000  64000-64000  64000-64000  64000-64000  64000-64000  64000-64000  N/A          64000-64000  \nGPU7   64000-64000  64000-64000  64000-64000  64000-64000  64000-64000  64000-64000  64000-64000  N/A          \nFormat: min-max; Units: mps\n\"0-0\" min-max bandwidth indicates devices are not connected directly\n================================== End of ROCm SMI Log ===================================",
+    "showtopo": "============================ ROCm System Management Interface ============================\n================================ Weight between two GPUs =================================\n       GPU0         GPU1         GPU2         GPU3         GPU4         GPU5         GPU6         GPU7         \nGPU0   0            15           15           15           15           15           15           15           \nGPU1   15           0            15           15           15           15           15           15           \nGPU2   15           15           0            15           15           15           15           15           \nGPU3   15           15           15           0            15           15           15           15           \nGPU4   15           15           15           15           0            15           15           15           \nGPU5   15           15           15           15           15           0            15           15           \nGPU6   15           15           15           15           15           15           0            15           \nGPU7   15           15           15           15           15           15           15           0            \n\n================================= Hops between two GPUs ==================================\n       GPU0         GPU1         GPU2         GPU3         GPU4         GPU5         GPU6         GPU7         \nGPU0   0            1            1            1            1            1            1            1            \nGPU1   1            0            1            1            1            1            1            1            \nGPU2   1            1            0            1            1            1            1            1            \nGPU3   1            1            1            0            1            1            1            1            \nGPU4   1            1            1            1            0            1            1            1            \nGPU5   1            1            1            1            1            0            1            1            \nGPU6   1            1            1            1            1            1            0            1            \nGPU7   1            1            1            1            1            1            1            0            \n\n=============================== Link Type between two GPUs ===============================\n       GPU0         GPU1         GPU2         GPU3         GPU4         GPU5         GPU6         GPU7         \nGPU0   0            XGMI         XGMI         XGMI         XGMI         XGMI         XGMI         XGMI         \nGPU1   XGMI         0            XGMI         XGMI         XGMI         XGMI         XGMI         XGMI         \nGPU2   XGMI         XGMI         0            XGMI         XGMI         XGMI         XGMI         XGMI         \nGPU3   XGMI         XGMI         XGMI         0            XGMI         XGMI         XGMI         XGMI         \nGPU4   XGMI         XGMI         XGMI         XGMI         0            XGMI         XGMI         XGMI         \nGPU5   XGMI         XGMI         XGMI         XGMI         XGMI         0            XGMI         XGMI         \nGPU6   XGMI         XGMI         XGMI         XGMI         XGMI         XGMI         0            XGMI         \nGPU7   XGMI         XGMI         XGMI         XGMI         XGMI         XGMI         XGMI         0            \n\n======================================= Numa Nodes =======================================\nGPU[0]\t\t: (Topology) Numa Node: 0\nGPU[0]\t\t: (Topology) Numa Affinity: 0\nGPU[1]\t\t: (Topology) Numa Node: 0\nGPU[1]\t\t: (Topology) Numa Affinity: 0\nGPU[2]\t\t: (Topology) Numa Node: 0\nGPU[2]\t\t: (Topology) Numa Affinity: 0\nGPU[3]\t\t: (Topology) Numa Node: 0\nGPU[3]\t\t: (Topology) Numa Affinity: 0\nGPU[4]\t\t: (Topology) Numa Node: 1\nGPU[4]\t\t: (Topology) Numa Affinity: 1\nGPU[5]\t\t: (Topology) Numa Node: 1\nGPU[5]\t\t: (Topology) Numa Affinity: 1\nGPU[6]\t\t: (Topology) Numa Node: 1\nGPU[6]\t\t: (Topology) Numa Affinity: 1\nGPU[7]\t\t: (Topology) Numa Node: 1\nGPU[7]\t\t: (Topology) Numa Affinity: 1\n================================== End of ROCm SMI Log ===================================",
+    "showtopoweight": "============================ ROCm System Management Interface ============================\n================================ Weight between two GPUs =================================\n       GPU0         GPU1         GPU2         GPU3         GPU4         GPU5         GPU6         GPU7         \nGPU0   0            15           15           15           15           15           15           15           \nGPU1   15           0            15           15           15           15           15           15           \nGPU2   15           15           0            15           15           15           15           15           \nGPU3   15           15           15           0            15           15           15           15           \nGPU4   15           15           15           15           0            15           15           15           \nGPU5   15           15           15           15           15           0            15           15           \nGPU6   15           15           15           15           15           15           0            15           \nGPU7   15           15           15           15           15           15           15           0            \n================================== End of ROCm SMI Log ===================================",
+    "showbw": "============================ ROCm System Management Interface ============================\n================================ Measured PCIe Bandwidth =================================\nGPU[0]\t\t: get_PCIe_bandwidth, Not supported on the given system\nGPU[1]\t\t: get_PCIe_bandwidth, Not supported on the given system\nGPU[2]\t\t: get_PCIe_bandwidth, Not supported on the given system\nGPU[3]\t\t: get_PCIe_bandwidth, Not supported on the given system\nGPU[4]\t\t: get_PCIe_bandwidth, Not supported on the given system\nGPU[5]\t\t: get_PCIe_bandwidth, Not supported on the given system\nGPU[6]\t\t: get_PCIe_bandwidth, Not supported on the given system\nGPU[7]\t\t: get_PCIe_bandwidth, Not supported on the given system\n==========================================================================================\n================================== End of ROCm SMI Log ===================================",
+    "showmclk": "============================ ROCm System Management Interface ============================\n================================= Show Valid mclk Range ==================================\nGPU[0]\t\t: Valid mclk range: 900Mhz - 1300Mhz\nGPU[1]\t\t: Valid mclk range: 900Mhz - 1300Mhz\nGPU[2]\t\t: Valid mclk range: 900Mhz - 1300Mhz\nGPU[3]\t\t: Valid mclk range: 900Mhz - 1300Mhz\nGPU[4]\t\t: Valid mclk range: 900Mhz - 1300Mhz\nGPU[5]\t\t: Valid mclk range: 900Mhz - 1300Mhz\nGPU[6]\t\t: Valid mclk range: 900Mhz - 1300Mhz\nGPU[7]\t\t: Valid mclk range: 900Mhz - 1300Mhz\n==========================================================================================\n================================== End of ROCm SMI Log ===================================",
+    "amdsmi_static": "GPU: 0\n    ASIC:\n        MARKET_NAME: AMD Instinct MI300X OAM\n        VENDOR_ID: 0x1002\n        VENDOR_NAME: Advanced Micro Devices Inc. [AMD/ATI]\n        SUBVENDOR_ID: 0x1002\n        DEVICE_ID: 0x74a1\n        SUBSYSTEM_ID: 0x74a1\n        REV_ID: 0x00\n        ASIC_SERIAL: 0x8D51CDD6FA6C06F1\n        OAM_ID: 2\n        NUM_COMPUTE_UNITS: 304\n        TARGET_GRAPHICS_VERSION: gfx942\n    BUS:\n        BDF: 0000:0c:00.0\n        MAX_PCIE_WIDTH: 16\n        MAX_PCIE_SPEED: 32 GT/s\n        PCIE_LEVELS: N/A\n        PCIE_INTERFACE_VERSION: Gen 5\n        SLOT_TYPE: OAM\n    IFWI:\n        NAME: AMD MI300X_HW_SRIOV_CVS_1VF\n        BUILD_DATE: 2025/10/22 09:27\n        PART_NUMBER: 113-M3000108-103\n        VERSION: 00167171\n    LIMIT:\n        PPT0:\n            MAX_POWER_LIMIT: 750 W\n            MIN_POWER_LIMIT: 0 W\n            SOCKET_POWER_LIMIT: 750 W\n        PPT1:\n            MAX_POWER_LIMIT: N/A\n            MIN_POWER_LIMIT: N/A\n            SOCKET_POWER_LIMIT: N/A\n        SLOWDOWN_EDGE_TEMPERATURE: N/A\n        SLOWDOWN_HOTSPOT_TEMPERATURE: 100 \u00b0C\n        SLOWDOWN_VRAM_TEMPERATURE: 105 \u00b0C\n        SHUTDOWN_EDGE_TEMPERATURE: N/A\n        SHUTDOWN_HOTSPOT_TEMPERATURE: 110 \u00b0C\n        SHUTDOWN_VRAM_TEMPERATURE: 115 \u00b0C\n        PTL_STATE: N/A\n        PTL_FORMAT: N/A\n    DRIVER:\n        NAME: amdgpu\n        VERSION: 6.19.5\n    BOARD:\n        MODEL_NUMBER: 102-G30221-00\n        PRODUCT_SERIAL: 692424006813\n        FRU_ID: 113-AMDG302210001-MP\n        PRODUCT_NAME: AMD Instinct MI300X OAM\n        MANUFACTURER_NAME: AMD\n    RAS:\n        EEPROM_VERSION: 0x30000\n        BAD_PAGE_THRESHOLD: N/A\n        BAD_PAGE_THRESHOLD_EXCEEDED: N/A\n        PARITY_SCHEMA: DISABLED\n        SINGLE_BIT_SCHEMA: DISABLED\n        DOUBLE_BIT_SCHEMA: DISABLED\n        POISON_SCHEMA: ENABLED\n        ECC_BLOCK_STATE:\n            UMC: ENABLED\n            SDMA: ENABLED\n            GFX: ENABLED\n            MMHUB: ENABLED\n            ATHUB: ENABLED\n            PCIE_BIF: ENABLED\n            HDP: ENABLED\n            XGMI_WAFL: ENABLED\n            DF: ENABLED\n            SMN: ENABLED\n            SEM: DISABLED\n            MP0: ENABLED\n            MP1: ENABLED\n            FUSE: DISABLED\n            MCA: ENABLED\n            VCN: ENABLED\n            JPEG: ENABLED\n            IH: ENABLED\n            MPIO: ENABLED\n    SOC_PSTATE:\n        NUM_SUPPORTED: 4\n        CURRENT_ID: 0\n        POLICIES:\n            POLICY_ID: 0\n            POLICY_DESCRIPTION: soc_pstate_default\n            POLICY_ID: 0\n            POLICY_DESCRIPTION: \n            POLICY_ID: 0\n            POLICY_DESCRIPTION: \n            POLICY_ID: 0\n            POLICY_DESCRIPTION: \n    XGMI_PLPD:\n        NUM_SUPPORTED: 3\n        CURRENT_ID: 0\n        PLPDS:\n            POLICY_ID: 0\n            POLICY_DESCRIPTION: plpd_disallow\n            POLICY_ID: 0\n            POLICY_DESCRIPTION: \n            POLICY_ID: 0\n            POLICY_DESCRIPTION: \n        POLICIES:\n            POLICY_ID: 0\n            POLICY_DESCRIPTION: plpd_disallow\n            POLICY_ID: 0\n            POLICY_DESCRIPTION: \n            POLICY_ID: 0\n            POLICY_DESCRIPTION: \n    PROCESS_ISOLATION: Disabled\n    NUMA:\n        NODE: 0\n        AFFINITY: 0\n        CPU_AFFINITY:\n            CPU_LIST_0:\n                BITMASK: 00FFFFFFFFFFFFFF\n                CPU_CORES_AFFINITY: 0-55\n            CPU_LIST_1:\n                BITMASK: FFFF000000000000\n                CPU_CORES_AFFINITY: 112-127\n            CPU_LIST_2:\n                BITMASK: 000000FFFFFFFFFF\n                CPU_CORES_AFFINITY: 128-167\n            CPU_LIST_3:\n                BITMASK: 0000000000000000\n                CPU_CORES_AFFINITY: N/A\n        SOCKET_AFFINITY:\n            CPU_LIST_0:\n                BITMASK: 00FFFFFFFFFFFFFF\n                CPU_CORES_AFFINITY: 0-55\n            CPU_LIST_1:\n                BITMASK: FFFF000000000000\n                CPU_CORES_AFFINITY: 112-127\n            CPU_LIST_2:\n                BITMASK: 000000FFFFFFFFFF\n                CPU_CORES_AFFINITY: 128-167\n            CPU_LIST_3:\n                BITMASK: 0000000000000000\n                CPU_CORES_AFFINITY: N/A\n    VRAM:\n        TYPE: HBM\n        VENDOR: SAMSUNG\n        SIZE: 196592 MB\n        BIT_WIDTH: 8192\n        MAX_BANDWIDTH: 5325 GB/s\n    CACHE_INFO:\n        CACHE_0:\n            CACHE_PROPERTIES: DATA_CACHE, SIMD_CACHE\n            CACHE_SIZE: 32 KB\n            CACHE_LEVEL: 1\n            MAX_NUM_CU_SHARED: 1\n            NUM_CACHE_INSTANCE: 304\n        CACHE_1:\n            CACHE_PROPERTIES: INST_CACHE, SIMD_CACHE\n            CACHE_SIZE: 64 KB\n            CACHE_LEVEL: 1\n            MAX_NUM_CU_SHARED: 2\n            NUM_CACHE_INSTANCE: 144\n        CACHE_2:\n            CACHE_PROPERTIES: INST_CACHE, SIMD_CACHE\n            CACHE_SIZE: 64 KB\n            CACHE_LEVEL: 1\n            MAX_NUM_CU_SHARED: 1\n            NUM_CACHE_INSTANCE: 16\n        CACHE_3:\n            CACHE_PROPERTIES: DATA_CACHE, SIMD_CACHE\n            CACHE_SIZE: 16 KB\n            CACHE_LEVEL: 1\n            MAX_NUM_CU_SHARED: 2\n            NUM_CACHE_INSTANCE: 144\n        CACHE_4:\n            CACHE_PROPERTIES: DATA_CACHE, SIMD_CACHE\n            CACHE_SIZE: 16 KB\n            CACHE_LEVEL: 1\n            MAX_NUM_CU_SHARED: 1\n            NUM_CACHE_INSTANCE: 16\n        CACHE_5:\n            CACHE_PROPERTIES: DATA_CACHE, SIMD_CACHE\n            CACHE_SIZE: 4096 KB\n            CACHE_LEVEL: 2\n            MAX_NUM_CU_SHARED: 304\n            NUM_CACHE_INSTANCE: 1\n        CACHE_6:\n            CACHE_PROPERTIES: DATA_CACHE, SIMD_CACHE\n            CACHE_SIZE: 262144 KB\n            CACHE_LEVEL: 3\n            MAX_NUM_CU_SHARED: 304\n            NUM_CACHE_INSTANCE: 1\n    CLOCK:\n        SYS:\n            CURRENT_LEVEL: 0\n            CURRENT_FREQUENCY: 120MHz\n            FREQUENCY_LEVELS:\n                LEVEL 0: 120 MHz\n                LEVEL 1: 500 MHz\n                LEVEL 2: 2100 MHz\n        MEM:\n            CURRENT_LEVEL: 0\n            CURRENT_FREQUENCY: 900MHz\n            FREQUENCY_LEVELS:\n                LEVEL 0: 900 MHz\n                LEVEL 1: 1100 MHz\n                LEVEL 2: 1300 MHz\n        DF:\n            CURRENT_LEVEL: 0\n            CURRENT_FREQUENCY: 1300MHz\n            FREQUENCY_LEVELS:\n                LEVEL 0: 1300 MHz\n                LEVEL 1: 1550 MHz\n                LEVEL 2: 1800 MHz\n        SOC:\n            CURRENT_LEVEL: 0\n            CURRENT_FREQUENCY: 30MHz\n            FREQUENCY_LEVELS:\n                LEVEL 0: 30 MHz\n                LEVEL 1: 889 MHz\n                LEVEL 2: 1000 MHz\n                LEVEL 3: 1143 MHz\n        DCEF: N/A\n        VCLK0:\n            CURRENT_LEVEL: 0\n            CURRENT_FREQUENCY: 29MHz\n            FREQUENCY_LEVELS:\n                LEVEL 0: 29 MHz\n        VCLK1:\n            CURRENT_LEVEL: 0\n            CURRENT_FREQUENCY: 29MHz\n            FREQUENCY_LEVELS:\n                LEVEL 0: 29 MHz\n        DCLK0:\n            CURRENT_LEVEL: 0\n            CURRENT_FREQUENCY: 22MHz\n            FREQUENCY_LEVELS:\n                LEVEL 0: 22 MHz\n        DCLK1:\n            CURRENT_LEVEL: 0\n            CURRENT_FREQUENCY: 22MHz\n            FREQUENCY_LEVELS:\n                LEVEL 0: 22 MHz\n\nGPU: 1\n    ASIC:\n        MARKET_NAME: AMD Instinct MI300X OAM\n        VENDOR_ID: 0x1002\n        VENDOR_NAME: Advanced Micro Devices Inc. [AMD/ATI]\n        SUBVENDOR_ID: 0x1002\n        DEVICE_ID: 0x74a1\n        SUBSYSTEM_ID: 0x74a1\n        REV_ID: 0x00\n        ASIC_SERIAL: 0xE084D25604FB6E1B\n        OAM_ID: 1\n        NUM_COMPUTE_UNITS: 304\n        TARGET_GRAPHICS_VERSION: gfx942\n    BUS:\n        BDF: 0000:27:00.0\n        MAX_PCIE_WIDTH: 16\n        MAX_PCIE_SPEED: 32 GT/s\n        PCIE_LEVELS: N/A\n        PCIE_INTERFACE_VERSION: Gen 5\n        SLOT_TYPE: OAM\n    IFWI:\n        NAME: AMD MI300X_HW_SRIOV_CVS_1VF\n        BUILD_DATE: 2025/10/22 09:27\n        PART_NUMBER: 113-M3000108-103\n        VERSION: 00167171\n    LIMIT:\n        PPT0:\n            MAX_POWER_LIMIT: 750 W\n            MIN_POWER_LIMIT: 0 W\n            SOCKET_POWER_LIMIT: 750 W\n        PPT1:\n            MAX_POWER_LIMIT: N/A\n            MIN_POWER_LIMIT: N/A",
+    "amdsmi_metric": "GPU: 0\n    USAGE:\n        GFX_ACTIVITY: 0 %\n        UMC_ACTIVITY: 0 %\n        MM_ACTIVITY: N/A\n        VCN_ACTIVITY: [N/A, N/A, N/A, N/A]\n        JPEG_ACTIVITY: [N/A, N/A, N/A, N/A, N/A, N/A, N/A, N/A, N/A, N/A, N/A, N/A, N/A, N/A, N/A, N/A, N/A, N/A, N/A, N/A, N/A, N/A, N/A, N/A, N/A, N/A, N/A, N/A, N/A, N/A, N/A, N/A]\n        GFX_BUSY_INST:\n            XCP_0: [0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %]\n        JPEG_BUSY:\n            XCP_0: [0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %, 0 %, N/A, N/A, N/A, N/A, N/A, N/A, N/A, N/A]\n        VCN_BUSY:\n            XCP_0: [0 %, 0 %, 0 %, 0 %]\n    POWER:\n        SOCKET_POWER: 140 W\n        GFX_VOLTAGE: N/A\n        SOC_VOLTAGE: N/A\n        MEM_VOLTAGE: N/A\n        THROTTLE_STATUS: N/A\n        POWER_MANAGEMENT: ENABLED\n    CLOCK:\n        GFX_0:\n            CLK: 120 MHz\n            MIN_CLK: 500 MHz\n            MAX_CLK: 1900 MHz\n            CLK_LOCKED: DISABLED\n            DEEP_SLEEP: ENABLED\n        GFX_1:\n            CLK: 120 MHz\n            MIN_CLK: 500 MHz\n            MAX_CLK: 1900 MHz\n            CLK_LOCKED: DISABLED\n            DEEP_SLEEP: ENABLED\n        GFX_2:\n            CLK: 120 MHz\n            MIN_CLK: 500 MHz\n            MAX_CLK: 1900 MHz\n            CLK_LOCKED: DISABLED\n            DEEP_SLEEP: ENABLED\n        GFX_3:\n            CLK: 120 MHz\n            MIN_CLK: 500 MHz\n            MAX_CLK: 1900 MHz\n            CLK_LOCKED: DISABLED\n            DEEP_SLEEP: ENABLED\n        GFX_4:\n            CLK: 120 MHz\n            MIN_CLK: 500 MHz\n            MAX_CLK: 1900 MHz\n            CLK_LOCKED: DISABLED\n            DEEP_SLEEP: ENABLED\n        GFX_5:\n            CLK: 120 MHz\n            MIN_CLK: 500 MHz\n            MAX_CLK: 1900 MHz\n            CLK_LOCKED: DISABLED\n            DEEP_SLEEP: ENABLED\n        GFX_6:\n            CLK: 120 MHz\n            MIN_CLK: 500 MHz\n            MAX_CLK: 1900 MHz\n            CLK_LOCKED: DISABLED\n            DEEP_SLEEP: ENABLED\n        GFX_7:\n            CLK: 120 MHz\n            MIN_CLK: 500 MHz\n            MAX_CLK: 1900 MHz\n            CLK_LOCKED: DISABLED\n            DEEP_SLEEP: ENABLED\n        MEM_0:\n            CLK: 900 MHz\n            MIN_CLK: 900 MHz\n            MAX_CLK: 1800 MHz\n            DEEP_SLEEP: DISABLED\n        VCLK_0:\n            CLK: 29 MHz\n            MIN_CLK: 914 MHz\n            MAX_CLK: 1333 MHz\n            DEEP_SLEEP: ENABLED\n        VCLK_1:\n            CLK: 29 MHz\n            MIN_CLK: 914 MHz\n            MAX_CLK: 1333 MHz\n            DEEP_SLEEP: ENABLED\n        VCLK_2:\n            CLK: 29 MHz\n            MIN_CLK: 914 MHz\n            MAX_CLK: 1333 MHz\n            DEEP_SLEEP: ENABLED\n        VCLK_3:\n            CLK: 29 MHz\n            MIN_CLK: 914 MHz\n            MAX_CLK: 1333 MHz\n            DEEP_SLEEP: ENABLED\n        DCLK_0:\n            CLK: 22 MHz\n            MIN_CLK: 711 MHz\n            MAX_CLK: 1143 MHz\n            DEEP_SLEEP: ENABLED\n        DCLK_1:\n            CLK: 22 MHz\n            MIN_CLK: 711 MHz\n            MAX_CLK: 1143 MHz\n            DEEP_SLEEP: ENABLED\n        DCLK_2:\n            CLK: 22 MHz\n            MIN_CLK: 711 MHz\n            MAX_CLK: 1143 MHz\n            DEEP_SLEEP: ENABLED\n        DCLK_3:\n            CLK: 22 MHz\n            MIN_CLK: 711 MHz\n            MAX_CLK: 1143 MHz\n            DEEP_SLEEP: ENABLED\n        FCLK_0:\n            CLK: 1300 MHz\n            MIN_CLK: 1300 MHz\n            MAX_CLK: 1800 MHz\n            DEEP_SLEEP: DISABLED\n        SOCCLK_0:\n            CLK: 29 MHz\n            MIN_CLK: 889 MHz\n            MAX_CLK: 1143 MHz\n            DEEP_SLEEP: ENABLED\n    TEMPERATURE:\n        EDGE: N/A\n        HOTSPOT: 47 \u00b0C\n        MEM: 40 \u00b0C\n    PCIE:\n        WIDTH: 16\n        SPEED: 32 GT/s\n        BANDWIDTH: 18 Mb/s\n        REPLAY_COUNT: 0\n        L0_TO_RECOVERY_COUNT: 0\n        REPLAY_ROLL_OVER_COUNT: 0\n        NAK_SENT_COUNT: 0\n        NAK_RECEIVED_COUNT: 0\n        CURRENT_BANDWIDTH_SENT: N/A\n        CURRENT_BANDWIDTH_RECEIVED: N/A\n        MAX_PACKET_SIZE: N/A\n        LC_PERF_OTHER_END_RECOVERY: 0\n    ECC:\n        TOTAL_CORRECTABLE_COUNT: 0\n        TOTAL_UNCORRECTABLE_COUNT: 0\n        TOTAL_DEFERRED_COUNT: 0\n        CACHE_CORRECTABLE_COUNT: 0\n        CACHE_UNCORRECTABLE_COUNT: 0\n    ECC_BLOCKS:\n        UMC:\n            CORRECTABLE_COUNT: 0\n            UNCORRECTABLE_COUNT: 0\n            DEFERRED_COUNT: 0\n        SDMA:\n            CORRECTABLE_COUNT: 0\n            UNCORRECTABLE_COUNT: 0\n            DEFERRED_COUNT: 0\n        GFX:\n            CORRECTABLE_COUNT: 0\n            UNCORRECTABLE_COUNT: 0\n            DEFERRED_COUNT: 0\n        MMHUB:\n            CORRECTABLE_COUNT: 0\n            UNCORRECTABLE_COUNT: 0\n            DEFERRED_COUNT: 0\n        PCIE_BIF:\n            CORRECTABLE_COUNT: N/A\n            UNCORRECTABLE_COUNT: N/A\n            DEFERRED_COUNT: N/A\n        HDP:\n            CORRECTABLE_COUNT: N/A\n            UNCORRECTABLE_COUNT: N/A\n            DEFERRED_COUNT: N/A\n        XGMI_WAFL:\n            CORRECTABLE_COUNT: 0\n            UNCORRECTABLE_COUNT: 0\n            DEFERRED_COUNT: 0\n    FAN:\n        SPEED: N/A\n        MAX: N/A\n        RPM: N/A\n        USAGE: N/A\n    VOLTAGE_CURVE:\n        POINT_0_FREQUENCY: N/A\n        POINT_0_VOLTAGE: N/A\n        POINT_1_FREQUENCY: N/A\n        POINT_1_VOLTAGE: N/A\n        POINT_2_FREQUENCY: N/A\n        POINT_2_VOLTAGE: N/A\n    OVERDRIVE: N/A\n    MEM_OVERDRIVE: N/A\n    PERF_LEVEL: AMDSMI_DEV_PERF_LEVEL_DETERMINISM\n    XGMI_ERR: N/A\n    VOLTAGE:\n        VDDBOARD: 53671 mV\n    ENERGY:\n        TOTAL_ENERGY_CONSUMPTION: 1361287813.357 J\n    MEM_USAGE:\n        TOTAL_VRAM: 196592 MB\n        USED_VRAM: 2262 MB\n        FREE_VRAM: 194330 MB\n        TOTAL_VISIBLE_VRAM: 196592 MB\n        USED_VISIBLE_VRAM: 2262 MB\n        FREE_VISIBLE_VRAM: 194330 MB\n        TOTAL_GTT: 515854 MB\n        USED_GTT: 34 MB\n        FREE_GTT: 515820 MB\n    THROTTLE:\n        ACCUMULATION_COUNTER: N/A\n        PROCHOT_ACCUMULATED: 0\n        PPT_ACCUMULATED: 119856922\n        SOCKET_THERMAL_ACCUMULATED: 2\n        VR_THERMAL_ACCUMULATED: 0\n        HBM_THERMAL_ACCUMULATED: 0\n        GFX_CLK_BELOW_HOST_LIMIT_ACCUMULATED: N/A\n        GFX_CLK_BELOW_HOST_LIMIT_POWER_ACCUMULATED:\n            XCP_0: [0, 0, 0, 0, 0, 0, 0, 0]\n        GFX_CLK_BELOW_HOST_LIMIT_THERMAL_ACCUMULATED:\n            XCP_0: [0, 0, 0, 0, 0, 0, 0, 0]\n        TOTAL_GFX_CLK_BELOW_HOST_LIMIT_ACCUMULATED:\n            XCP_0: [6595847024, 6595954059, 6595954880, 6595954848, 6595956607, 6595968703, 6595971214, 6595971552]\n        LOW_UTILIZATION_ACCUMULATED:\n            XCP_0: [6595847024, 6595954059, 6595954880, 6595954848, 6595956607, 6595968703, 6595971214, 6595971552]\n        PROCHOT_VIOLATION_STATUS: N/A\n        PPT_VIOLATION_STATUS: N/A\n        SOCKET_THERMAL_VIOLATION_STATUS: N/A\n        VR_THERMAL_VIOLATION_STATUS: N/A\n        HBM_THERMAL_VIOLATION_STATUS: N/A\n        GFX_CLK_BELOW_HOST_LIMIT_VIOLATION_STATUS: N/A\n        GFX_CLK_BELOW_HOST_LIMIT_POWER_VIOLATION_STATUS:\n            XCP_0: [N/A, N/A, N/A, N/A, N/A, N/A, N/A, N/A]\n        GFX_CLK_BELOW_HOST_LIMIT_THERMAL_VIOLATION_STATUS:\n            XCP_0: [N/A, N/A, N/A, N/A, N/A, N/A, N/A, N/A]\n        TOTAL_GFX_CLK_BELOW_HOST_LIMIT_VIOLATION_STATUS:\n            XCP_0: [N/A, N/A, N/A, N/A, N/A, N/A, N/A, N/A]\n        LOW_UTILIZATION_VIOLATION_STATUS:\n            XCP_0: [N/A, N/A, N/A, N/A, N/A, N/A, N/A, N/A]\n        PROCHOT_VIOLATION_ACTIVITY: N/A\n        PPT_VIOLATION_ACTIVITY: N/A\n        SOCKET_THERMAL_VIOLATION_ACTIVITY: N/A\n        VR_THERMAL_VIOLATION_ACTIVITY: N/A\n        HBM_THERMAL_VIOLATION_ACTIVITY: N/A\n        GFX_CLK_BELOW_HOST_LIMIT_VIOLATION_ACTIVITY: N/A\n        GFX_CLK_BELOW_HOST_LIMIT_POWER_VIOLATION_ACTIVITY:\n            XCP_0: [N/A, N/A, N/A, N/A, N/A, N/A, N/A, N/A]\n        GFX_CLK_BELOW_HOST_LIMIT_THERMAL_VIOLATION_ACTIVITY:\n            XCP_0: [N/A, N/A, N/A, N/A, N/A, N/A, N/A, N/A]\n        TOTAL_GFX_CLK_BELOW_HOST_LIMIT_VIOLATION_ACTIVITY:\n            XCP_0: [N/A, N/A, N/A, N/A, N/A, N/A, N/A, "
+   }
+  },
+  "note": "MI350X figures from the sibling spec (76.8 / 537.6 GB/s per-link and aggregate xGMI, 8 TB/s HBM3E, 148 GB/s service rate) are gfx950 facts and are deliberately absent here. If this node reports no per-link xGMI number, result.md uses the measured plateau as the empirical ceiling and says so."
+ },
+ "tick_rate_hz": 99735808.47421193,
+ "tick_rate_spread_pct": 0.013814634941104919,
+ "tick_rate_samples_hz": [
+  99722860.69111077,
+  99734045.96389128,
+  99735808.47421193,
+  99736268.66652049,
+  99736637.04026808
+ ],
+ "geometry": {
+  "N": 8192,
+  "BM": 256,
+  "BN": 256,
+  "BK": 32,
+  "WIN_ROWS": 32,
+  "WIN_BYTES": 16384,
+  "mode_a": {
+   "tiles_m": 4,
+   "tiles_n": 4,
+   "k_iters": 116,
+   "K": 3712,
+   "work_tiles": 760,
+   "flops_per_tile": 486539264,
+   "operand_bytes": 15204352
+  },
+  "mode_b": {
+   "strip_rows": 256,
+   "cols_per_row": 32,
+   "row_bands": 16,
+   "work_strips": 3168,
+   "distinct_strips": 512,
+   "bytes_per_strip": 1179648,
+   "working_set_bytes": 603979776
+  },
+  "mode_c": {
+   "work_windows": 4096,
+   "cols_per_row": 32,
+   "slot_rows": 4096,
+   "bytes_per_launch_per_rank": 67108864,
+   "heap_bytes_per_rank": 536870912
+  }
+ },
+ "config": {
+  "out": "/home/subvadla/dhk/distributed-kernels/gemm_rs/overnight/aug11/exp_21_saturation/saturation_quick.json",
+  "modes": "abc",
+  "rotations": 1,
+  "warmup_ms": 50.0,
+  "n": 8192,
+  "k_iters": 116,
+  "a_work": 760,
+  "b_work": 3168,
+  "c_work": 4096,
+  "red_slot_rows": 4096,
+  "release_group": 4,
+  "payload_coarse": false,
+  "no_checksum": false,
+  "skip_smi": false,
+  "quick": true,
+  "probe": false
+ },
+ "schema": {
+  "points[]": "mode a|b|c, ctas, depth (mode c; 0 = unbounded in-flight bound = the production shape), fanout single|rr7, overlay isolated|concurrent|reserve_control, protocol bool, metric TFLOPS|GBps, value = median over rotations of the per-rank median, samples = one per rotation, per_rank = {resource, gemm_tflops} from the median rotation, concurrent_gemm_tflops, gemm_slowdown = control/live TFLOPS on the same 304-C CTAs, res_span_us and gemm_span_us from s_memrealtime, rounds = ceil(work/ctas), checksum_ok, checksum_mismatches, checksum_fold, payload_granularity, clocks_before, clocks_after"
+ },
+ "points": [
+  {
+   "mode": "a",
+   "ctas": 32,
+   "depth": null,
+   "fanout": null,
+   "overlay": "isolated",
+   "protocol": false,
+   "metric": "TFLOPS",
+   "payload_granularity": "fine",
+   "value": 80.60017776441592,
+   "samples": [
+    80.60017776441592
+   ],
+   "per_rank": {
+    "resource": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ],
+    "gemm_tflops": [
+     80.6997334879909,
+     80.55607033852743,
+     80.57947981893503,
+     80.70114621806994,
+     80.54744922139814,
+     80.65120094651267,
+     80.62087570989681,
+     80.39661491859015
+    ]
+   },
+   "concurrent_gemm_tflops": null,
+   "gemm_tflops": 80.60017776441592,
+   "res_span_us": 4587.705328706571,
+   "gemm_span_us": 4587.705328706571,
+   "host_wall_ms": 4.715483635663986,
+   "rounds": 24,
+   "checksum_ok": null,
+   "checksum_mismatches": null,
+   "checksum_fold": null,
+   "clocks_before": "GPU[0]\t\t: socclk clock level: S: (30Mhz) | GPU[1]\t\t: socclk clock level: S: (30Mhz) | GPU[2]\t\t: socclk clock level: S: (29Mhz) | GPU[3]\t\t: socclk clock level: S: (30Mhz) | GPU[4]\t\t: socclk clock level: S: (30Mhz) | GPU[5]\t\t: socclk clock level: S: (30Mhz) | GPU[6]\t\t: socclk clock level: S: (30Mhz) | GPU[7]\t\t: socclk clock level: S: (30Mhz)",
+   "clocks_after": "GPU[0]\t\t: mclk clock level: 1: (1100Mhz) | GPU[0]\t\t: socclk clock level: S: (32Mhz) | GPU[1]\t\t: socclk clock level: S: (32Mhz) | GPU[2]\t\t: socclk clock level: S: (32Mhz) | GPU[3]\t\t: socclk clock level: S: (32Mhz) | GPU[4]\t\t: socclk clock level: S: (32Mhz) | GPU[5]\t\t: socclk clock level: S: (32Mhz) | GPU[6]\t\t: socclk clock level: S: (32Mhz) | GPU[7]\t\t: socclk clock level: S: (31Mhz)"
+  },
+  {
+   "mode": "a",
+   "ctas": 152,
+   "depth": null,
+   "fanout": null,
+   "overlay": "isolated",
+   "protocol": false,
+   "metric": "TFLOPS",
+   "payload_granularity": "fine",
+   "value": 380.7937957257328,
+   "samples": [
+    380.7937957257328
+   ],
+   "per_rank": {
+    "resource": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ],
+    "gemm_tflops": [
+     382.3154370651018,
+     381.02774081363486,
+     380.55985063783083,
+     381.86810393483796,
+     378.46654494490076,
+     381.89973910209295,
+     380.34006441164667,
+     379.09679083089276
+    ]
+   },
+   "concurrent_gemm_tflops": null,
+   "gemm_tflops": 380.7937957257328,
+   "res_span_us": 971.0504329549955,
+   "gemm_span_us": 971.0504329549955,
+   "host_wall_ms": 1.0938607156276703,
+   "rounds": 5,
+   "checksum_ok": null,
+   "checksum_mismatches": null,
+   "checksum_fold": null,
+   "clocks_before": "GPU[0]\t\t: fclk clock level: 0: (1300Mhz) | GPU[0]\t\t: mclk clock level: 0: (900Mhz) | GPU[0]\t\t: socclk clock level: S: (28Mhz) | GPU[1]\t\t: fclk clock level: 0: (1300Mhz) | GPU[1]\t\t: mclk clock level: 0: (900Mhz) | GPU[1]\t\t: socclk clock level: S: (28Mhz) | GPU[2]\t\t: fclk clock level: 0: (1300Mhz) | GPU[2]\t\t: mclk clock level: 0: (900Mhz) | GPU[2]\t\t: socclk clock level: S: (28Mhz) | GPU[3]\t\t: fclk clock level: 0: (1300Mhz) | GPU[3]\t\t: mclk clock level: 0: (900Mhz) | GPU[3]\t\t: socclk clock level: S: (28Mhz) | GPU[4]\t\t: fclk clock level: 0: (1300Mhz) | GPU[4]\t\t: mclk clock level: 0: (900Mhz) | GPU[4]\t\t: socclk clock level: S: (28Mhz) | GPU[5]\t\t: fclk clock level: 0: (1300Mhz) | GPU[5]\t\t: mclk clock level: 0: (900Mhz) | GPU[5]\t\t: socclk clock level: S: (28Mhz) | GPU[6]\t\t: fclk clock level: 0: (1300Mhz) | GPU[6]\t\t: mclk clock level: 0: (900Mhz) | GPU[6]\t\t: socclk clock level: S: (28Mhz) | GPU[7]\t\t: fclk clock level: 0: (1300Mhz) | GPU[7]\t\t: mclk clock level: 0: (900Mhz) | GPU[7]\t\t: socclk clock level: S: (28Mhz)",
+   "clocks_after": "GPU[0]\t\t: fclk clock level: 1: (1550Mhz) | GPU[0]\t\t: mclk clock level: 1: (1100Mhz) | GPU[0]\t\t: socclk clock level: S: (35Mhz) | GPU[1]\t\t: fclk clock level: 1: (1550Mhz) | GPU[1]\t\t: mclk clock level: 1: (1100Mhz) | GPU[1]\t\t: socclk clock level: S: (35Mhz) | GPU[2]\t\t: fclk clock level: 1: (1550Mhz) | GPU[2]\t\t: mclk clock level: 1: (1100Mhz) | GPU[2]\t\t: socclk clock level: S: (35Mhz) | GPU[3]\t\t: fclk clock level: 1: (1550Mhz) | GPU[3]\t\t: mclk clock level: 1: (1100Mhz) | GPU[3]\t\t: socclk clock level: S: (34Mhz) | GPU[4]\t\t: fclk clock level: 1: (1550Mhz) | GPU[4]\t\t: mclk clock level: 1: (1100Mhz) | GPU[4]\t\t: socclk clock level: S: (34Mhz) | GPU[5]\t\t: fclk clock level: 1: (1550Mhz) | GPU[5]\t\t: mclk clock level: 1: (1100Mhz) | GPU[5]\t\t: socclk clock level: S: (34Mhz) | GPU[6]\t\t: fclk clock level: 1: (1550Mhz) | GPU[6]\t\t: mclk clock level: 1: (1100Mhz) | GPU[6]\t\t: socclk clock level: S: (34Mhz) | GPU[7]\t\t: mclk clock level: 1: (1100Mhz) | GPU[7]\t\t: socclk clock level: S: (34Mhz)"
+  },
+  {
+   "mode": "a",
+   "ctas": 304,
+   "depth": null,
+   "fanout": null,
+   "overlay": "isolated",
+   "protocol": false,
+   "metric": "TFLOPS",
+   "payload_granularity": "fine",
+   "value": 518.8075545925609,
+   "samples": [
+    518.8075545925609
+   ],
+   "per_rank": {
+    "resource": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ],
+    "gemm_tflops": [
+     520.386826477175,
+     514.9588640193659,
+     513.5247577922873,
+     533.2614304290307,
+     519.82203373849,
+     517.7930754466319,
+     526.516104243203,
+     517.4370940694358
+    ]
+   },
+   "concurrent_gemm_tflops": null,
+   "gemm_tflops": 518.8075545925609,
+   "res_span_us": 712.7329801350135,
+   "gemm_span_us": 712.7329801350135,
+   "host_wall_ms": 0.8305907249450684,
+   "rounds": 3,
+   "checksum_ok": null,
+   "checksum_mismatches": null,
+   "checksum_fold": null,
+   "clocks_before": "GPU[0]\t\t: fclk clock level: 0: (1300Mhz) | GPU[0]\t\t: mclk clock level: 0: (900Mhz) | GPU[0]\t\t: socclk clock level: S: (28Mhz) | GPU[1]\t\t: fclk clock level: 0: (1300Mhz) | GPU[1]\t\t: mclk clock level: 0: (900Mhz) | GPU[1]\t\t: socclk clock level: S: (28Mhz) | GPU[2]\t\t: fclk clock level: 0: (1300Mhz) | GPU[2]\t\t: mclk clock level: 0: (900Mhz) | GPU[2]\t\t: socclk clock level: S: (28Mhz) | GPU[3]\t\t: fclk clock level: 0: (1300Mhz) | GPU[3]\t\t: mclk clock level: 0: (900Mhz) | GPU[3]\t\t: socclk clock level: S: (28Mhz) | GPU[4]\t\t: fclk clock level: 0: (1300Mhz) | GPU[4]\t\t: mclk clock level: 0: (900Mhz) | GPU[4]\t\t: socclk clock level: S: (28Mhz) | GPU[5]\t\t: fclk clock level: 0: (1300Mhz) | GPU[5]\t\t: mclk clock level: 0: (900Mhz) | GPU[5]\t\t: socclk clock level: S: (28Mhz) | GPU[6]\t\t: fclk clock level: 0: (1300Mhz) | GPU[6]\t\t: mclk clock level: 0: (900Mhz) | GPU[6]\t\t: socclk clock level: S: (28Mhz) | GPU[7]\t\t: fclk clock level: 0: (1300Mhz) | GPU[7]\t\t: mclk clock level: 0: (900Mhz) | GPU[7]\t\t: socclk clock level: S: (28Mhz)",
+   "clocks_after": "GPU[0]\t\t: mclk clock level: 1: (1100Mhz) | GPU[0]\t\t: socclk clock level: S: (34Mhz) | GPU[1]\t\t: socclk clock level: S: (34Mhz) | GPU[2]\t\t: socclk clock level: S: (34Mhz) | GPU[3]\t\t: socclk clock level: S: (33Mhz) | GPU[4]\t\t: socclk clock level: S: (33Mhz) | GPU[5]\t\t: socclk clock level: S: (33Mhz) | GPU[6]\t\t: socclk clock level: S: (33Mhz) | GPU[7]\t\t: socclk clock level: S: (33Mhz)"
+  },
+  {
+   "mode": "b",
+   "ctas": 8,
+   "depth": null,
+   "fanout": null,
+   "overlay": "isolated",
+   "protocol": false,
+   "metric": "GBps",
+   "payload_granularity": "fine",
+   "value": 392.97755252770946,
+   "samples": [
+    392.97755252770946
+   ],
+   "per_rank": {
+    "resource": [
+     377.6053411086069,
+     387.5122496131058,
+     412.17711435801067,
+     464.3451016956974,
+     388.70644652244306,
+     395.10217655127747,
+     447.83842100471395,
+     390.8529285041414
+    ],
+    "gemm_tflops": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
+   },
+   "concurrent_gemm_tflops": null,
+   "gemm_tflops": null,
+   "res_span_us": 9510.044732281342,
+   "gemm_span_us": 0.0,
+   "host_wall_ms": 11.342018842697144,
+   "rounds": 396,
+   "checksum_ok": null,
+   "checksum_mismatches": null,
+   "checksum_fold": null,
+   "clocks_before": "GPU[0]\t\t: fclk clock level: 0: (1300Mhz) | GPU[0]\t\t: mclk clock level: 0: (900Mhz) | GPU[0]\t\t: socclk clock level: S: (28Mhz) | GPU[1]\t\t: fclk clock level: 0: (1300Mhz) | GPU[1]\t\t: mclk clock level: 0: (900Mhz) | GPU[1]\t\t: socclk clock level: S: (28Mhz) | GPU[2]\t\t: fclk clock level: 0: (1300Mhz) | GPU[2]\t\t: mclk clock level: 0: (900Mhz) | GPU[2]\t\t: socclk clock level: S: (28Mhz) | GPU[3]\t\t: fclk clock level: 0: (1300Mhz) | GPU[3]\t\t: mclk clock level: 0: (900Mhz) | GPU[3]\t\t: socclk clock level: S: (28Mhz) | GPU[4]\t\t: fclk clock level: 0: (1300Mhz) | GPU[4]\t\t: mclk clock level: 0: (900Mhz) | GPU[4]\t\t: socclk clock level: S: (28Mhz) | GPU[5]\t\t: fclk clock level: 0: (1300Mhz) | GPU[5]\t\t: mclk clock level: 0: (900Mhz) | GPU[5]\t\t: socclk clock level: S: (28Mhz) | GPU[6]\t\t: fclk clock level: 0: (1300Mhz) | GPU[6]\t\t: mclk clock level: 0: (900Mhz) | GPU[6]\t\t: socclk clock level: S: (28Mhz) | GPU[7]\t\t: fclk clock level: 0: (1300Mhz) | GPU[7]\t\t: mclk clock level: 0: (900Mhz) | GPU[7]\t\t: socclk clock level: S: (28Mhz)",
+   "clocks_after": "GPU[0]\t\t: fclk clock level: 1: (1550Mhz) | GPU[0]\t\t: mclk clock level: 1: (1100Mhz) | GPU[0]\t\t: socclk clock level: S: (32Mhz) | GPU[1]\t\t: socclk clock level: S: (32Mhz) | GPU[2]\t\t: socclk clock level: S: (32Mhz) | GPU[3]\t\t: socclk clock level: S: (31Mhz) | GPU[4]\t\t: socclk clock level: S: (31Mhz) | GPU[5]\t\t: socclk clock level: S: (31Mhz) | GPU[6]\t\t: socclk clock level: S: (31Mhz) | GPU[7]\t\t: socclk clock level: S: (31Mhz)"
+  },
+  {
+   "mode": "b",
+   "ctas": 8,
+   "depth": null,
+   "fanout": null,
+   "overlay": "concurrent",
+   "protocol": false,
+   "metric": "GBps",
+   "payload_granularity": "fine",
+   "value": 305.6479228130669,
+   "samples": [
+    305.6479228130669
+   ],
+   "per_rank": {
+    "resource": [
+     281.4409298477281,
+     286.5688254470997,
+     332.76923487896687,
+     306.95512324327564,
+     295.97476854868546,
+     309.49040053351257,
+     339.77018034782327,
+     304.3407223828582
+    ],
+    "gemm_tflops": [
+     551.4403958025454,
+     561.3667402207653,
+     548.7903916428714,
+     571.4884538703064,
+     554.2016329174476,
+     555.5358734979544,
+     554.1415102115118,
+     548.072449866546
+    ]
+   },
+   "concurrent_gemm_tflops": 554.1715715644797,
+   "gemm_tflops": 554.1715715644797,
+   "res_span_us": 12227.118009629548,
+   "gemm_span_us": 12446.923717683425,
+   "host_wall_ms": 15.401411801576614,
+   "rounds": 396,
+   "checksum_ok": null,
+   "checksum_mismatches": null,
+   "checksum_fold": null,
+   "clocks_before": "GPU[0]\t\t: fclk clock level: 0: (1300Mhz) | GPU[0]\t\t: mclk clock level: 0: (900Mhz) | GPU[0]\t\t: socclk clock level: S: (28Mhz) | GPU[1]\t\t: fclk clock level: 0: (1300Mhz) | GPU[1]\t\t: mclk clock level: 0: (900Mhz) | GPU[1]\t\t: socclk clock level: S: (28Mhz) | GPU[2]\t\t: fclk clock level: 0: (1300Mhz) | GPU[2]\t\t: mclk clock level: 0: (900Mhz) | GPU[2]\t\t: socclk clock level: S: (28Mhz) | GPU[3]\t\t: fclk clock level: 0: (1300Mhz) | GPU[3]\t\t: mclk clock level: 0: (900Mhz) | GPU[3]\t\t: socclk clock level: S: (28Mhz) | GPU[4]\t\t: fclk clock level: 0: (1300Mhz) | GPU[4]\t\t: mclk clock level: 0: (900Mhz) | GPU[4]\t\t: socclk clock level: S: (28Mhz) | GPU[5]\t\t: fclk clock level: 0: (1300Mhz) | GPU[5]\t\t: mclk clock level: 0: (900Mhz) | GPU[5]\t\t: socclk clock level: S: (28Mhz) | GPU[6]\t\t: fclk clock level: 0: (1300Mhz) | GPU[6]\t\t: mclk clock level: 0: (900Mhz) | GPU[6]\t\t: socclk clock level: S: (28Mhz) | GPU[7]\t\t: fclk clock level: 0: (1300Mhz) | GPU[7]\t\t: mclk clock level: 0: (900Mhz) | GPU[7]\t\t: socclk clock level: S: (28Mhz)",
+   "clocks_after": "GPU[0]\t\t: fclk clock level: 1: (1550Mhz) | GPU[0]\t\t: mclk clock level: 1: (1100Mhz) | GPU[0]\t\t: socclk clock level: S: (33Mhz) | GPU[1]\t\t: fclk clock level: 1: (1550Mhz) | GPU[1]\t\t: mclk clock level: 1: (1100Mhz) | GPU[1]\t\t: socclk clock level: S: (33Mhz) | GPU[2]\t\t: fclk clock level: 1: (1550Mhz) | GPU[2]\t\t: mclk clock level: 1: (1100Mhz) | GPU[2]\t\t: socclk clock level: S: (32Mhz) | GPU[3]\t\t: fclk clock level: 1: (1550Mhz) | GPU[3]\t\t: mclk clock level: 1: (1100Mhz) | GPU[3]\t\t: socclk clock level: S: (32Mhz) | GPU[4]\t\t: fclk clock level: 1: (1550Mhz) | GPU[4]\t\t: mclk clock level: 1: (1100Mhz) | GPU[4]\t\t: socclk clock level: S: (32Mhz) | GPU[5]\t\t: fclk clock level: 1: (1550Mhz) | GPU[5]\t\t: mclk clock level: 1: (1100Mhz) | GPU[5]\t\t: socclk clock level: S: (32Mhz) | GPU[6]\t\t: fclk clock level: 1: (1550Mhz) | GPU[6]\t\t: mclk clock level: 1: (1100Mhz) | GPU[6]\t\t: socclk clock level: S: (32Mhz) | GPU[7]\t\t: fclk clock level: 1: (1550Mhz) | GPU[7]\t\t: mclk clock level: 1: (1100Mhz) | GPU[7]\t\t: socclk clock level: S: (32Mhz)",
+   "gemm_slowdown": 1.0624255620903091
+  },
+  {
+   "mode": "b",
+   "ctas": 8,
+   "depth": null,
+   "fanout": null,
+   "overlay": "reserve_control",
+   "protocol": false,
+   "metric": "TFLOPS",
+   "payload_granularity": "fine",
+   "value": 588.7660434138623,
+   "samples": [
+    588.7660434138623
+   ],
+   "per_rank": {
+    "resource": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ],
+    "gemm_tflops": [
+     588.6923975392766,
+     588.8396892884481,
+     589.2595916507968,
+     610.0561037232903,
+     587.6980863490754,
+     588.4039572388172,
+     594.8614309903815,
+     587.4255345818106
+    ]
+   },
+   "concurrent_gemm_tflops": 588.7660434138623,
+   "gemm_tflops": 588.7660434138623,
+   "res_span_us": 12231.33414831066,
+   "gemm_span_us": 12460.700113754403,
+   "host_wall_ms": 12.604326009750366,
+   "rounds": 396,
+   "checksum_ok": null,
+   "checksum_mismatches": null,
+   "checksum_fold": null,
+   "clocks_before": "GPU[0]\t\t: fclk clock level: 0: (1300Mhz) | GPU[0]\t\t: mclk clock level: 0: (900Mhz) | GPU[0]\t\t: socclk clock level: S: (28Mhz) | GPU[1]\t\t: fclk clock level: 0: (1300Mhz) | GPU[1]\t\t: mclk clock level: 0: (900Mhz) | GPU[1]\t\t: socclk clock level: S: (28Mhz) | GPU[2]\t\t: fclk clock level: 0: (1300Mhz) | GPU[2]\t\t: mclk clock level: 0: (900Mhz) | GPU[2]\t\t: socclk clock level: S: (28Mhz) | GPU[3]\t\t: fclk clock level: 0: (1300Mhz) | GPU[3]\t\t: mclk clock level: 0: (900Mhz) | GPU[3]\t\t: socclk clock level: S: (28Mhz) | GPU[4]\t\t: fclk clock level: 0: (1300Mhz) | GPU[4]\t\t: mclk clock level: 0: (900Mhz) | GPU[4]\t\t: socclk clock level: S: (28Mhz) | GPU[5]\t\t: fclk clock level: 0: (1300Mhz) | GPU[5]\t\t: mclk clock level: 0: (900Mhz) | GPU[5]\t\t: socclk clock level: S: (28Mhz) | GPU[6]\t\t: fclk clock level: 0: (1300Mhz) | GPU[6]\t\t: mclk clock level: 0: (900Mhz) | GPU[6]\t\t: socclk clock level: S: (28Mhz) | GPU[7]\t\t: fclk clock level: 0: (1300Mhz) | GPU[7]\t\t: mclk clock level: 0: (900Mhz) | GPU[7]\t\t: socclk clock level: S: (28Mhz)",
+   "clocks_after": "GPU[0]\t\t: fclk clock level: 1: (1550Mhz) | GPU[0]\t\t: mclk clock level: 1: (1100Mhz) | GPU[0]\t\t: socclk clock level: S: (32Mhz) | GPU[1]\t\t: fclk clock level: 1: (1550Mhz) | GPU[1]\t\t: mclk clock level: 1: (1100Mhz) | GPU[1]\t\t: socclk clock level: S: (32Mhz) | GPU[2]\t\t: fclk clock level: 1: (1550Mhz) | GPU[2]\t\t: mclk clock level: 1: (1100Mhz) | GPU[2]\t\t: socclk clock level: S: (32Mhz) | GPU[3]\t\t: fclk clock level: 1: (1550Mhz) | GPU[3]\t\t: mclk clock level: 1: (1100Mhz) | GPU[3]\t\t: socclk clock level: S: (32Mhz) | GPU[4]\t\t: mclk clock level: 1: (1100Mhz) | GPU[4]\t\t: socclk clock level: S: (32Mhz) | GPU[5]\t\t: mclk clock level: 1: (1100Mhz) | GPU[5]\t\t: socclk clock level: S: (32Mhz) | GPU[6]\t\t: socclk clock level: S: (31Mhz) | GPU[7]\t\t: socclk clock level: S: (31Mhz)"
+  },
+  {
+   "mode": "b",
+   "ctas": 64,
+   "depth": null,
+   "fanout": null,
+   "overlay": "isolated",
+   "protocol": false,
+   "metric": "GBps",
+   "payload_granularity": "fine",
+   "value": 3189.490939602727,
+   "samples": [
+    3189.490939602727
+   ],
+   "per_rank": {
+    "resource": [
+     3071.261049284514,
+     3343.3363802563554,
+     3223.9036239879542,
+     3340.968875424601,
+     3295.5364251115766,
+     3069.414731537974,
+     3049.3256240601427,
+     3155.0782552174996
+    ],
+    "gemm_tflops": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
+   },
+   "concurrent_gemm_tflops": null,
+   "gemm_tflops": null,
+   "res_span_us": 1171.8358911204834,
+   "gemm_span_us": 0.0,
+   "host_wall_ms": 1.4235712587833405,
+   "rounds": 50,
+   "checksum_ok": null,
+   "checksum_mismatches": null,
+   "checksum_fold": null,
+   "clocks_before": "GPU[0]\t\t: fclk clock level: 0: (1300Mhz) | GPU[0]\t\t: mclk clock level: 0: (900Mhz) | GPU[0]\t\t: socclk clock level: S: (28Mhz) | GPU[1]\t\t: fclk clock level: 0: (1300Mhz) | GPU[1]\t\t: mclk clock level: 0: (900Mhz) | GPU[1]\t\t: socclk clock level: S: (28Mhz) | GPU[2]\t\t: fclk clock level: 0: (1300Mhz) | GPU[2]\t\t: mclk clock level: 0: (900Mhz) | GPU[2]\t\t: socclk clock level: S: (28Mhz) | GPU[3]\t\t: fclk clock level: 0: (1300Mhz) | GPU[3]\t\t: mclk clock level: 0: (900Mhz) | GPU[3]\t\t: socclk clock level: S: (28Mhz) | GPU[4]\t\t: fclk clock level: 0: (1300Mhz) | GPU[4]\t\t: mclk clock level: 0: (900Mhz) | GPU[4]\t\t: socclk clock level: S: (28Mhz) | GPU[5]\t\t: fclk clock level: 0: (1300Mhz) | GPU[5]\t\t: mclk clock level: 0: (900Mhz) | GPU[5]\t\t: socclk clock level: S: (28Mhz) | GPU[6]\t\t: fclk clock level: 0: (1300Mhz) | GPU[6]\t\t: mclk clock level: 0: (900Mhz) | GPU[6]\t\t: socclk clock level: S: (29Mhz) | GPU[7]\t\t: fclk clock level: 0: (1300Mhz) | GPU[7]\t\t: mclk clock level: 0: (900Mhz) | GPU[7]\t\t: socclk clock level: S: (29Mhz)",
+   "clocks_after": "GPU[0]\t\t: socclk clock level: S: (33Mhz) | GPU[1]\t\t: socclk clock level: S: (33Mhz) | GPU[2]\t\t: socclk clock level: S: (33Mhz) | GPU[3]\t\t: socclk clock level: S: (33Mhz) | GPU[4]\t\t: socclk clock level: S: (34Mhz) | GPU[5]\t\t: socclk clock level: S: (33Mhz) | GPU[6]\t\t: socclk clock level: S: (32Mhz) | GPU[7]\t\t: socclk clock level: S: (32Mhz)"
+  },
+  {
+   "mode": "b",
+   "ctas": 64,
+   "depth": null,
+   "fanout": null,
+   "overlay": "concurrent",
+   "protocol": false,
+   "metric": "GBps",
+   "payload_granularity": "fine",
+   "value": 2029.2075538742988,
+   "samples": [
+    2029.2075538742988
+   ],
+   "per_rank": {
+    "resource": [
+     2015.9729221256305,
+     2066.172764505024,
+     2036.4491013900642,
+     2121.420918405196,
+     2073.1024894467428,
+     1981.2844239147753,
+     2021.9660063585331,
+     1970.9645793944164
+    ],
+    "gemm_tflops": [
+     352.1293945941482,
+     355.9246809522156,
+     354.2142679308912,
+     365.6390996884629,
+     354.22504163547075,
+     351.38568371348066,
+     357.93749135981335,
+     344.1618500510396
+    ]
+   },
+   "concurrent_gemm_tflops": 354.219654783181,
+   "gemm_tflops": 354.219654783181,
+   "res_span_us": 1841.6905904712612,
+   "gemm_span_us": 1977.9154850988814,
+   "host_wall_ms": 2.177305519580841,
+   "rounds": 50,
+   "checksum_ok": null,
+   "checksum_mismatches": null,
+   "checksum_fold": null,
+   "clocks_before": "GPU[0]\t\t: socclk clock level: S: (29Mhz) | GPU[1]\t\t: socclk clock level: S: (29Mhz) | GPU[2]\t\t: socclk clock level: S: (30Mhz) | GPU[3]\t\t: socclk clock level: S: (29Mhz) | GPU[4]\t\t: socclk clock level: S: (29Mhz) | GPU[5]\t\t: socclk clock level: S: (29Mhz) | GPU[6]\t\t: socclk clock level: S: (29Mhz) | GPU[7]\t\t: socclk clock level: S: (29Mhz)",
+   "clocks_after": "GPU[0]\t\t: fclk clock level: 1: (1550Mhz) | GPU[0]\t\t: mclk clock level: 1: (1100Mhz) | GPU[0]\t\t: socclk clock level: S: (34Mhz) | GPU[1]\t\t: fclk clock level: 1: (1550Mhz) | GPU[1]\t\t: mclk clock level: 1: (1100Mhz) | GPU[1]\t\t: socclk clock level: S: (35Mhz) | GPU[2]\t\t: fclk clock level: 1: (1550Mhz) | GPU[2]\t\t: mclk clock level: 1: (1100Mhz) | GPU[2]\t\t: socclk clock level: S: (34Mhz) | GPU[3]\t\t: fclk clock level: 1: (1550Mhz) | GPU[3]\t\t: mclk clock level: 1: (1100Mhz) | GPU[3]\t\t: socclk clock level: S: (34Mhz) | GPU[4]\t\t: fclk clock level: 1: (1550Mhz) | GPU[4]\t\t: mclk clock level: 1: (1100Mhz) | GPU[4]\t\t: socclk clock level: S: (33Mhz) | GPU[5]\t\t: fclk clock level: 1: (1550Mhz) | GPU[5]\t\t: mclk clock level: 1: (1100Mhz) | GPU[5]\t\t: socclk clock level: S: (33Mhz) | GPU[6]\t\t: fclk clock level: 1: (1550Mhz) | GPU[6]\t\t: mclk clock level: 1: (1100Mhz) | GPU[6]\t\t: socclk clock level: S: (33Mhz) | GPU[7]\t\t: fclk clock level: 1: (1550Mhz) | GPU[7]\t\t: mclk clock level: 1: (1100Mhz) | GPU[7]\t\t: socclk clock level: S: (33Mhz)",
+   "gemm_slowdown": 1.5940064049580314
+  },
+  {
+   "mode": "b",
+   "ctas": 64,
+   "depth": null,
+   "fanout": null,
+   "overlay": "reserve_control",
+   "protocol": false,
+   "metric": "TFLOPS",
+   "payload_granularity": "fine",
+   "value": 564.6283984864133,
+   "samples": [
+    564.6283984864133
+   ],
+   "per_rank": {
+    "resource": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ],
+    "gemm_tflops": [
+     559.4669157853864,
+     560.038101669529,
+     564.9582776585577,
+     564.298519314269,
+     578.8431600964793,
+     566.5446605972918,
+     570.2330255863798,
+     530.1728856389478
+    ]
+   },
+   "concurrent_gemm_tflops": 564.6283984864133,
+   "gemm_tflops": 564.6283984864133,
+   "res_span_us": 1845.490629853285,
+   "gemm_span_us": 2035.1466850793363,
+   "host_wall_ms": 2.1667741239070892,
+   "rounds": 50,
+   "checksum_ok": null,
+   "checksum_mismatches": null,
+   "checksum_fold": null,
+   "clocks_before": "GPU[0]\t\t: socclk clock level: S: (30Mhz) | GPU[1]\t\t: socclk clock level: S: (29Mhz) | GPU[2]\t\t: socclk clock level: S: (29Mhz) | GPU[3]\t\t: socclk clock level: S: (29Mhz) | GPU[4]\t\t: socclk clock level: S: (29Mhz) | GPU[5]\t\t: socclk clock level: S: (29Mhz) | GPU[6]\t\t: socclk clock level: S: (29Mhz) | GPU[7]\t\t: socclk clock level: S: (29Mhz)",
+   "clocks_after": "GPU[0]\t\t: socclk clock level: S: (31Mhz) | GPU[1]\t\t: socclk clock level: S: (31Mhz) | GPU[2]\t\t: socclk clock level: S: (31Mhz) | GPU[3]\t\t: socclk clock level: S: (31Mhz) | GPU[4]\t\t: socclk clock level: S: (31Mhz) | GPU[5]\t\t: socclk clock level: S: (31Mhz) | GPU[6]\t\t: socclk clock level: S: (30Mhz) | GPU[7]\t\t: socclk clock level: S: (30Mhz)"
+  },
+  {
+   "mode": "b",
+   "ctas": 304,
+   "depth": null,
+   "fanout": null,
+   "overlay": "isolated",
+   "protocol": false,
+   "metric": "GBps",
+   "payload_granularity": "fine",
+   "value": 4189.218143042876,
+   "samples": [
+    4189.218143042876
+   ],
+   "per_rank": {
+    "resource": [
+     4148.258446540599,
+     4168.346078866887,
+     4239.897731519177,
+     4199.247067148708,
+     4234.887683411761,
+     4162.945581344733,
+     4179.189218937045,
+     4211.679017380272
+    ],
+    "gemm_tflops": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
+   },
+   "concurrent_gemm_tflops": null,
+   "gemm_tflops": null,
+   "res_span_us": 892.0868177752346,
+   "gemm_span_us": 0.0,
+   "host_wall_ms": 1.0272972285747528,
+   "rounds": 11,
+   "checksum_ok": null,
+   "checksum_mismatches": null,
+   "checksum_fold": null,
+   "clocks_before": "GPU[0]\t\t: fclk clock level: 0: (1300Mhz) | GPU[0]\t\t: mclk clock level: 0: (900Mhz) | GPU[0]\t\t: socclk clock level: S: (28Mhz) | GPU[1]\t\t: fclk clock level: 0: (1300Mhz) | GPU[1]\t\t: mclk clock level: 0: (900Mhz) | GPU[1]\t\t: socclk clock level: S: (28Mhz) | GPU[2]\t\t: fclk clock level: 0: (1300Mhz) | GPU[2]\t\t: mclk clock level: 0: (900Mhz) | GPU[2]\t\t: socclk clock level: S: (28Mhz) | GPU[3]\t\t: fclk clock level: 0: (1300Mhz) | GPU[3]\t\t: mclk clock level: 0: (900Mhz) | GPU[3]\t\t: socclk clock level: S: (28Mhz) | GPU[4]\t\t: fclk clock level: 0: (1300Mhz) | GPU[4]\t\t: mclk clock level: 0: (900Mhz) | GPU[4]\t\t: socclk clock level: S: (28Mhz) | GPU[5]\t\t: fclk clock level: 0: (1300Mhz) | GPU[5]\t\t: mclk clock level: 0: (900Mhz) | GPU[5]\t\t: socclk clock level: S: (28Mhz) | GPU[6]\t\t: fclk clock level: 0: (1300Mhz) | GPU[6]\t\t: mclk clock level: 0: (900Mhz) | GPU[6]\t\t: socclk clock level: S: (28Mhz) | GPU[7]\t\t: fclk clock level: 0: (1300Mhz) | GPU[7]\t\t: mclk clock level: 0: (900Mhz) | GPU[7]\t\t: socclk clock level: S: (28Mhz)",
+   "clocks_after": "GPU[0]\t\t: fclk clock level: 1: (1550Mhz) | GPU[0]\t\t: mclk clock level: 1: (1100Mhz) | GPU[0]\t\t: socclk clock level: S: (35Mhz) | GPU[1]\t\t: fclk clock level: 1: (1550Mhz) | GPU[1]\t\t: mclk clock level: 1: (1100Mhz) | GPU[1]\t\t: socclk clock level: S: (35Mhz) | GPU[2]\t\t: fclk clock level: 1: (1550Mhz) | GPU[2]\t\t: mclk clock level: 1: (1100Mhz) | GPU[2]\t\t: socclk clock level: S: (35Mhz) | GPU[3]\t\t: fclk clock level: 1: (1550Mhz) | GPU[3]\t\t: mclk clock level: 1: (1100Mhz) | GPU[3]\t\t: socclk clock level: S: (34Mhz) | GPU[4]\t\t: fclk clock level: 1: (1550Mhz) | GPU[4]\t\t: mclk clock level: 1: (1100Mhz) | GPU[4]\t\t: socclk clock level: S: (34Mhz) | GPU[5]\t\t: fclk clock level: 1: (1550Mhz) | GPU[5]\t\t: mclk clock level: 1: (1100Mhz) | GPU[5]\t\t: socclk clock level: S: (34Mhz) | GPU[6]\t\t: fclk clock level: 1: (1550Mhz) | GPU[6]\t\t: mclk clock level: 1: (1100Mhz) | GPU[6]\t\t: socclk clock level: S: (34Mhz) | GPU[7]\t\t: mclk clock level: 1: (1100Mhz) | GPU[7]\t\t: socclk clock level: S: (34Mhz)"
+  },
+  {
+   "mode": "c",
+   "ctas": 1,
+   "depth": 0,
+   "fanout": "single",
+   "overlay": "isolated",
+   "protocol": false,
+   "metric": "GBps",
+   "payload_granularity": "fine",
+   "value": 36.258406571089495,
+   "samples": [
+    36.258406571089495
+   ],
+   "per_rank": {
+    "resource": [
+     36.25683520847834,
+     35.92522493304601,
+     36.22465365661768,
+     36.38059750633743,
+     36.259977933700654,
+     36.26154950062811,
+     36.096496714696784,
+     36.27569973565339
+    ],
+    "gemm_tflops": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
+   },
+   "concurrent_gemm_tflops": null,
+   "gemm_tflops": null,
+   "res_span_us": 1850.8497882957438,
+   "gemm_span_us": 0.0,
+   "host_wall_ms": 2.795431762933731,
+   "rounds": 4096,
+   "checksum_ok": true,
+   "checksum_mismatches": 0,
+   "checksum_fold": 0,
+   "clocks_before": "GPU[0]\t\t: fclk clock level: 0: (1300Mhz) | GPU[0]\t\t: mclk clock level: 0: (900Mhz) | GPU[0]\t\t: socclk clock level: S: (28Mhz) | GPU[1]\t\t: fclk clock level: 0: (1300Mhz) | GPU[1]\t\t: mclk clock level: 0: (900Mhz) | GPU[1]\t\t: socclk clock level: S: (28Mhz) | GPU[2]\t\t: fclk clock level: 0: (1300Mhz) | GPU[2]\t\t: mclk clock level: 0: (900Mhz) | GPU[2]\t\t: socclk clock level: S: (28Mhz) | GPU[3]\t\t: fclk clock level: 0: (1300Mhz) | GPU[3]\t\t: mclk clock level: 0: (900Mhz) | GPU[3]\t\t: socclk clock level: S: (28Mhz) | GPU[4]\t\t: fclk clock level: 0: (1300Mhz) | GPU[4]\t\t: mclk clock level: 0: (900Mhz) | GPU[4]\t\t: socclk clock level: S: (28Mhz) | GPU[5]\t\t: fclk clock level: 0: (1300Mhz) | GPU[5]\t\t: mclk clock level: 0: (900Mhz) | GPU[5]\t\t: socclk clock level: S: (28Mhz) | GPU[6]\t\t: fclk clock level: 0: (1300Mhz) | GPU[6]\t\t: mclk clock level: 0: (900Mhz) | GPU[6]\t\t: socclk clock level: S: (28Mhz) | GPU[7]\t\t: fclk clock level: 0: (1300Mhz) | GPU[7]\t\t: mclk clock level: 0: (900Mhz) | GPU[7]\t\t: socclk clock level: S: (28Mhz)",
+   "clocks_after": "GPU[0]\t\t: mclk clock level: 1: (1100Mhz) | GPU[0]\t\t: socclk clock level: S: (33Mhz) | GPU[1]\t\t: socclk clock level: S: (33Mhz) | GPU[2]\t\t: socclk clock level: S: (32Mhz) | GPU[3]\t\t: socclk clock level: S: (32Mhz) | GPU[4]\t\t: socclk clock level: S: (32Mhz) | GPU[5]\t\t: socclk clock level: S: (32Mhz) | GPU[6]\t\t: socclk clock level: S: (32Mhz) | GPU[7]\t\t: socclk clock level: S: (32Mhz)"
+  },
+  {
+   "mode": "c",
+   "ctas": 1,
+   "depth": 0,
+   "fanout": "single",
+   "overlay": "concurrent",
+   "protocol": false,
+   "metric": "GBps",
+   "payload_granularity": "fine",
+   "value": 27.07196634569725,
+   "samples": [
+    27.07196634569725
+   ],
+   "per_rank": {
+    "resource": [
+     26.158631821196618,
+     27.101311938493794,
+     27.225662247095414,
+     28.14758022619281,
+     28.013279342839418,
+     27.042620752900707,
+     26.497057825914236,
+     26.09621337658272
+    ],
+    "gemm_tflops": [
+     534.4788405197814,
+     524.5326583721591,
+     568.7225915998106,
+     597.7569023315639,
+     570.6431815336052,
+     528.6598096722344,
+     576.6696346771038,
+     528.1243162955589
+    ]
+   },
+   "concurrent_gemm_tflops": 551.600716059796,
+   "gemm_tflops": 551.600716059796,
+   "res_span_us": 2478.909067688826,
+   "gemm_span_us": 2711.714118905748,
+   "host_wall_ms": 3.7273578345775604,
+   "rounds": 4096,
+   "checksum_ok": true,
+   "checksum_mismatches": 0,
+   "checksum_fold": 0,
+   "clocks_before": "GPU[0]\t\t: socclk clock level: S: (31Mhz) | GPU[1]\t\t: socclk clock level: S: (31Mhz) | GPU[2]\t\t: socclk clock level: S: (31Mhz) | GPU[3]\t\t: socclk clock level: S: (31Mhz) | GPU[4]\t\t: socclk clock level: S: (31Mhz) | GPU[5]\t\t: socclk clock level: S: (30Mhz) | GPU[6]\t\t: socclk clock level: S: (30Mhz) | GPU[7]\t\t: socclk clock level: S: (30Mhz)",
+   "clocks_after": "GPU[0]\t\t: fclk clock level: 1: (1550Mhz) | GPU[0]\t\t: mclk clock level: 1: (1100Mhz) | GPU[0]\t\t: socclk clock level: S: (33Mhz) | GPU[1]\t\t: fclk clock level: 1: (1550Mhz) | GPU[1]\t\t: mclk clock level: 1: (1100Mhz) | GPU[1]\t\t: socclk clock level: S: (33Mhz) | GPU[2]\t\t: mclk clock level: 1: (1100Mhz) | GPU[2]\t\t: socclk clock level: S: (33Mhz) | GPU[3]\t\t: socclk clock level: S: (33Mhz) | GPU[4]\t\t: socclk clock level: S: (32Mhz) | GPU[5]\t\t: socclk clock level: S: (32Mhz) | GPU[6]\t\t: socclk clock level: S: (32Mhz) | GPU[7]\t\t: socclk clock level: S: (32Mhz)",
+   "gemm_slowdown": 0.9823811767037018
+  },
+  {
+   "mode": "c",
+   "ctas": 1,
+   "depth": 0,
+   "fanout": "single",
+   "overlay": "isolated",
+   "protocol": true,
+   "metric": "GBps",
+   "payload_granularity": "fine",
+   "value": 14.275390885682032,
+   "samples": [
+    14.275390885682032
+   ],
+   "per_rank": {
+    "resource": [
+     14.525205962781657,
+     14.265891414717709,
+     14.437975768639578,
+     14.306875190937557,
+     14.113676021073939,
+     14.259569659606154,
+     14.284890356646354,
+     14.191120435807381
+    ],
+    "gemm_tflops": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
+   },
+   "concurrent_gemm_tflops": null,
+   "gemm_tflops": null,
+   "res_span_us": 4701.0196956615655,
+   "gemm_span_us": 0.0,
+   "host_wall_ms": 4.891369491815567,
+   "rounds": 4096,
+   "checksum_ok": true,
+   "checksum_mismatches": 0,
+   "checksum_fold": 0,
+   "clocks_before": "GPU[0]\t\t: socclk clock level: S: (32Mhz) | GPU[1]\t\t: socclk clock level: S: (32Mhz) | GPU[2]\t\t: socclk clock level: S: (31Mhz) | GPU[3]\t\t: socclk clock level: S: (31Mhz) | GPU[4]\t\t: socclk clock level: S: (31Mhz) | GPU[5]\t\t: socclk clock level: S: (31Mhz) | GPU[6]\t\t: socclk clock level: S: (31Mhz) | GPU[7]\t\t: socclk clock level: S: (31Mhz)",
+   "clocks_after": "GPU[0]\t\t: socclk clock level: S: (29Mhz) | GPU[1]\t\t: socclk clock level: S: (29Mhz) | GPU[2]\t\t: socclk clock level: S: (29Mhz) | GPU[3]\t\t: socclk clock level: S: (29Mhz) | GPU[4]\t\t: socclk clock level: S: (29Mhz) | GPU[5]\t\t: socclk clock level: S: (29Mhz) | GPU[6]\t\t: socclk clock level: S: (29Mhz) | GPU[7]\t\t: socclk clock level: S: (29Mhz)"
+  },
+  {
+   "mode": "c",
+   "ctas": 1,
+   "depth": 0,
+   "fanout": "single",
+   "overlay": "concurrent",
+   "protocol": true,
+   "metric": "GBps",
+   "payload_granularity": "fine",
+   "value": 12.216912162906677,
+   "samples": [
+    12.216912162906677
+   ],
+   "per_rank": {
+    "resource": [
+     12.08020215649196,
+     12.056613791783638,
+     12.411375263920396,
+     12.459895465966342,
+     12.268325635170092,
+     12.212987480431826,
+     12.220836845381527,
+     11.880949755793777
+    ],
+    "gemm_tflops": [
+     569.492157074563,
+     576.2784542741039,
+     587.4521040550443,
+     608.7927728231072,
+     587.5193879446272,
+     578.5419324101694,
+     596.3021765381803,
+     570.9652620979479
+    ]
+   },
+   "concurrent_gemm_tflops": 582.9970182326068,
+   "gemm_tflops": 582.9970182326068,
+   "res_span_us": 5493.112337297158,
+   "gemm_span_us": 5715.199071629162,
+   "host_wall_ms": 5.979660898447037,
+   "rounds": 4096,
+   "checksum_ok": true,
+   "checksum_mismatches": 0,
+   "checksum_fold": 0,
+   "clocks_before": "GPU[0]\t\t: socclk clock level: S: (29Mhz) | GPU[1]\t\t: socclk clock level: S: (29Mhz) | GPU[2]\t\t: socclk clock level: S: (29Mhz) | GPU[3]\t\t: socclk clock level: S: (29Mhz) | GPU[4]\t\t: socclk clock level: S: (29Mhz) | GPU[5]\t\t: socclk clock level: S: (29Mhz) | GPU[6]\t\t: socclk clock level: S: (29Mhz) | GPU[7]\t\t: socclk clock level: S: (29Mhz)",
+   "clocks_after": "GPU[0]\t\t: socclk clock level: S: (29Mhz) | GPU[1]\t\t: socclk clock level: S: (29Mhz) | GPU[2]\t\t: socclk clock level: S: (29Mhz) | GPU[3]\t\t: socclk clock level: S: (29Mhz) | GPU[4]\t\t: socclk clock level: S: (29Mhz) | GPU[5]\t\t: socclk clock level: S: (29Mhz) | GPU[6]\t\t: socclk clock level: S: (29Mhz) | GPU[7]\t\t: socclk clock level: S: (29Mhz)",
+   "gemm_slowdown": 0.9294767272672814
+  },
+  {
+   "mode": "c",
+   "ctas": 1,
+   "depth": 1,
+   "fanout": "single",
+   "overlay": "isolated",
+   "protocol": false,
+   "metric": "GBps",
+   "payload_granularity": "fine",
+   "value": 21.527359230081114,
+   "samples": [
+    21.527359230081114
+   ],
+   "per_rank": {
+    "resource": [
+     21.47141961102108,
+     21.521127724485652,
+     21.610626531486705,
+     21.550230555424413,
+     21.61788563371554,
+     21.329099714554104,
+     21.47004210770997,
+     21.533590735676576
+    ],
+    "gemm_tflops": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
+   },
+   "concurrent_gemm_tflops": null,
+   "gemm_tflops": null,
+   "res_span_us": 3117.3758428036513,
+   "gemm_span_us": 0.0,
+   "host_wall_ms": 3.7555210292339325,
+   "rounds": 4096,
+   "checksum_ok": true,
+   "checksum_mismatches": 0,
+   "checksum_fold": 0,
+   "clocks_before": "GPU[0]\t\t: socclk clock level: S: (29Mhz) | GPU[1]\t\t: socclk clock level: S: (29Mhz) | GPU[2]\t\t: socclk clock level: S: (29Mhz) | GPU[3]\t\t: socclk clock level: S: (29Mhz) | GPU[4]\t\t: socclk clock level: S: (29Mhz) | GPU[5]\t\t: socclk clock level: S: (29Mhz) | GPU[6]\t\t: socclk clock level: S: (29Mhz) | GPU[7]\t\t: socclk clock level: S: (29Mhz)",
+   "clocks_after": "GPU[0]\t\t: socclk clock level: S: (31Mhz) | GPU[1]\t\t: socclk clock level: S: (31Mhz) | GPU[2]\t\t: socclk clock level: S: (30Mhz) | GPU[3]\t\t: socclk clock level: S: (30Mhz) | GPU[4]\t\t: socclk clock level: S: (30Mhz) | GPU[5]\t\t: socclk clock level: S: (30Mhz) | GPU[6]\t\t: socclk clock level: S: (30Mhz) | GPU[7]\t\t: socclk clock level: S: (30Mhz)"
+  },
+  {
+   "mode": "c",
+   "ctas": 1,
+   "depth": 1,
+   "fanout": "single",
+   "overlay": "concurrent",
+   "protocol": false,
+   "metric": "GBps",
+   "payload_granularity": "fine",
+   "value": 16.074208580802583,
+   "samples": [
+    16.074208580802583
+   ],
+   "per_rank": {
+    "resource": [
+     15.794985762488286,
+     16.350454877480573,
+     16.156586573971282,
+     16.61723605412811,
+     16.663405615647587,
+     15.833246926690299,
+     15.82186881093141,
+     15.991830587633887
+    ],
+    "gemm_tflops": [
+     576.2382217817069,
+     583.7502485169164,
+     591.5975089668027,
+     612.7684467488713,
+     592.7063008134902,
+     572.1747302863193,
+     594.8615210338987,
+     570.0636002598889
+    ]
+   },
+   "concurrent_gemm_tflops": 587.6738787418595,
+   "gemm_tflops": 587.6738787418595,
+   "res_span_us": 4175.050128637264,
+   "gemm_span_us": 4394.996207539025,
+   "host_wall_ms": 4.969336092472076,
+   "rounds": 4096,
+   "checksum_ok": true,
+   "checksum_mismatches": 0,
+   "checksum_fold": 0,
+   "clocks_before": "GPU[0]\t\t: socclk clock level: S: (29Mhz) | GPU[1]\t\t: socclk clock level: S: (29Mhz) | GPU[2]\t\t: socclk clock level: S: (29Mhz) | GPU[3]\t\t: socclk clock level: S: (29Mhz) | GPU[4]\t\t: socclk clock level: S: (29Mhz) | GPU[5]\t\t: socclk clock level: S: (29Mhz) | GPU[6]\t\t: socclk clock level: S: (29Mhz) | GPU[7]\t\t: socclk clock level: S: (29Mhz)",
+   "clocks_after": "GPU[0]\t\t: socclk clock level: S: (30Mhz) | GPU[1]\t\t: socclk clock level: S: (30Mhz) | GPU[2]\t\t: socclk clock level: S: (30Mhz) | GPU[3]\t\t: socclk clock level: S: (30Mhz) | GPU[4]\t\t: socclk clock level: S: (30Mhz) | GPU[5]\t\t: socclk clock level: S: (30Mhz) | GPU[6]\t\t: socclk clock level: S: (30Mhz) | GPU[7]\t\t: socclk clock level: S: (30Mhz)",
+   "gemm_slowdown": 0.9220797114098941
+  },
+  {
+   "mode": "c",
+   "ctas": 1,
+   "depth": 1,
+   "fanout": "single",
+   "overlay": "isolated",
+   "protocol": true,
+   "metric": "GBps",
+   "payload_granularity": "fine",
+   "value": 11.122260880908275,
+   "samples": [
+    11.122260880908275
+   ],
+   "per_rank": {
+    "resource": [
+     11.768394709051476,
+     11.003486586394885,
+     11.34910404174286,
+     11.204111269846424,
+     10.769705874406153,
+     11.203061071950215,
+     11.041460689866337,
+     11.013626112898026
+    ],
+    "gemm_tflops": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
+   },
+   "concurrent_gemm_tflops": null,
+   "gemm_tflops": null,
+   "res_span_us": 6034.061479088595,
+   "gemm_span_us": 0.0,
+   "host_wall_ms": 6.373155862092972,
+   "rounds": 4096,
+   "checksum_ok": true,
+   "checksum_mismatches": 0,
+   "checksum_fold": 0,
+   "clocks_before": "GPU[0]\t\t: fclk clock level: 1: (1550Mhz) | GPU[0]\t\t: mclk clock level: 1: (1100Mhz) | GPU[0]\t\t: socclk clock level: S: (32Mhz) | GPU[1]\t\t: fclk clock level: 1: (1550Mhz) | GPU[1]\t\t: mclk clock level: 1: (1100Mhz) | GPU[1]\t\t: socclk clock level: S: (32Mhz) | GPU[2]\t\t: fclk clock level: 1: (1550Mhz) | GPU[2]\t\t: mclk clock level: 1: (1100Mhz) | GPU[2]\t\t: socclk clock level: S: (32Mhz) | GPU[3]\t\t: fclk clock level: 1: (1550Mhz) | GPU[3]\t\t: mclk clock level: 1: (1100Mhz) | GPU[3]\t\t: socclk clock level: S: (32Mhz) | GPU[4]\t\t: mclk clock level: 1: (1100Mhz) | GPU[4]\t\t: socclk clock level: S: (32Mhz) | GPU[5]\t\t: socclk clock level: S: (32Mhz) | GPU[6]\t\t: socclk clock level: S: (31Mhz) | GPU[7]\t\t: socclk clock level: S: (31Mhz)",
+   "clocks_after": "GPU[0]\t\t: socclk clock level: S: (30Mhz) | GPU[1]\t\t: socclk clock level: S: (30Mhz) | GPU[2]\t\t: socclk clock level: S: (29Mhz) | GPU[3]\t\t: socclk clock level: S: (29Mhz) | GPU[4]\t\t: socclk clock level: S: (29Mhz) | GPU[5]\t\t: socclk clock level: S: (29Mhz) | GPU[6]\t\t: socclk clock level: S: (29Mhz) | GPU[7]\t\t: socclk clock level: S: (29Mhz)"
+  },
+  {
+   "mode": "c",
+   "ctas": 1,
+   "depth": 1,
+   "fanout": "single",
+   "overlay": "concurrent",
+   "protocol": true,
+   "metric": "GBps",
+   "payload_granularity": "fine",
+   "value": 8.77996641036603,
+   "samples": [
+    8.77996641036603
+   ],
+   "per_rank": {
+    "resource": [
+     9.066468003047735,
+     8.787360580330239,
+     8.817737830708058,
+     8.947065846650826,
+     8.562045948219493,
+     8.708380571679413,
+     8.772572240401823,
+     8.613214607023647
+    ],
+    "gemm_tflops": [
+     571.9245615079416,
+     576.1363377364039,
+     574.6963954409299,
+     596.2361500140419,
+     581.7429093544382,
+     567.7699764516332,
+     583.2103335353466,
+     570.513305260234
+    ]
+   },
+   "concurrent_gemm_tflops": 575.416366588667,
+   "gemm_tflops": 575.416366588667,
+   "res_span_us": 7643.413250087694,
+   "gemm_span_us": 7848.96129059213,
+   "host_wall_ms": 8.183415979146957,
+   "rounds": 4096,
+   "checksum_ok": true,
+   "checksum_mismatches": 0,
+   "checksum_fold": 0,
+   "clocks_before": "GPU[0]\t\t: socclk clock level: S: (29Mhz) | GPU[1]\t\t: socclk clock level: S: (29Mhz) | GPU[2]\t\t: socclk clock level: S: (29Mhz) | GPU[3]\t\t: socclk clock level: S: (29Mhz) | GPU[4]\t\t: socclk clock level: S: (29Mhz) | GPU[5]\t\t: socclk clock level: S: (29Mhz) | GPU[6]\t\t: socclk clock level: S: (29Mhz) | GPU[7]\t\t: socclk clock level: S: (29Mhz)",
+   "clocks_after": "GPU[0]\t\t: socclk clock level: S: (30Mhz) | GPU[1]\t\t: socclk clock level: S: (30Mhz) | GPU[2]\t\t: socclk clock level: S: (29Mhz) | GPU[3]\t\t: socclk clock level: S: (29Mhz) | GPU[4]\t\t: socclk clock level: S: (29Mhz) | GPU[5]\t\t: socclk clock level: S: (30Mhz) | GPU[6]\t\t: socclk clock level: S: (29Mhz) | GPU[7]\t\t: socclk clock level: S: (30Mhz)",
+   "gemm_slowdown": 0.941721841743838
+  },
+  {
+   "mode": "c",
+   "ctas": 1,
+   "depth": 0,
+   "fanout": "single",
+   "overlay": "reserve_control",
+   "protocol": false,
+   "metric": "TFLOPS",
+   "payload_granularity": "fine",
+   "value": 541.8821605134269,
+   "samples": [
+    541.8821605134269
+   ],
+   "per_rank": {
+    "resource": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ],
+    "gemm_tflops": [
+     545.0774700326189,
+     538.686850994235,
+     556.6893294763701,
+     575.5127954016122,
+     537.7969146479146,
+     529.2805498448745,
+     549.4897662146459,
+     501.00143997712706
+    ]
+   },
+   "concurrent_gemm_tflops": 541.8821605134269,
+   "gemm_tflops": 541.8821605134269,
+   "res_span_us": 2479.671080863058,
+   "gemm_span_us": 2696.213166703613,
+   "host_wall_ms": 2.8419047594070435,
+   "rounds": 4096,
+   "checksum_ok": null,
+   "checksum_mismatches": null,
+   "checksum_fold": null,
+   "clocks_before": "GPU[0]\t\t: socclk clock level: S: (29Mhz) | GPU[1]\t\t: socclk clock level: S: (29Mhz) | GPU[2]\t\t: socclk clock level: S: (29Mhz) | GPU[3]\t\t: socclk clock level: S: (29Mhz) | GPU[4]\t\t: socclk clock level: S: (29Mhz) | GPU[5]\t\t: socclk clock level: S: (29Mhz) | GPU[6]\t\t: socclk clock level: S: (29Mhz) | GPU[7]\t\t: socclk clock level: S: (29Mhz)",
+   "clocks_after": "GPU[0]\t\t: socclk clock level: S: (30Mhz) | GPU[1]\t\t: socclk clock level: S: (30Mhz) | GPU[2]\t\t: socclk clock level: S: (30Mhz) | GPU[3]\t\t: socclk clock level: S: (30Mhz) | GPU[4]\t\t: socclk clock level: S: (29Mhz) | GPU[5]\t\t: socclk clock level: S: (29Mhz) | GPU[6]\t\t: socclk clock level: S: (29Mhz) | GPU[7]\t\t: socclk clock level: S: (29Mhz)"
+  },
+  {
+   "mode": "c",
+   "ctas": 8,
+   "depth": 0,
+   "fanout": "single",
+   "overlay": "isolated",
+   "protocol": false,
+   "metric": "GBps",
+   "payload_granularity": "fine",
+   "value": 56.3399510626452,
+   "samples": [
+    56.3399510626452
+   ],
+   "per_rank": {
+    "resource": [
+     56.77651974641549,
+     56.64006775684129,
+     56.19354378616172,
+     56.31600174022664,
+     56.298948629997945,
+     56.545323117953636,
+     55.82608498265901,
+     56.36390038506376
+    ],
+    "gemm_tflops": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
+   },
+   "concurrent_gemm_tflops": null,
+   "gemm_tflops": null,
+   "res_span_us": 1191.1418959492091,
+   "gemm_span_us": 0.0,
+   "host_wall_ms": 1.5163198113441467,
+   "rounds": 512,
+   "checksum_ok": true,
+   "checksum_mismatches": 0,
+   "checksum_fold": 0,
+   "clocks_before": "GPU[0]\t\t: fclk clock level: 0: (1300Mhz) | GPU[0]\t\t: mclk clock level: 0: (900Mhz) | GPU[0]\t\t: socclk clock level: S: (28Mhz) | GPU[1]\t\t: fclk clock level: 0: (1300Mhz) | GPU[1]\t\t: mclk clock level: 0: (900Mhz) | GPU[1]\t\t: socclk clock level: S: (28Mhz) | GPU[2]\t\t: fclk clock level: 0: (1300Mhz) | GPU[2]\t\t: mclk clock level: 0: (900Mhz) | GPU[2]\t\t: socclk clock level: S: (28Mhz) | GPU[3]\t\t: fclk clock level: 0: (1300Mhz) | GPU[3]\t\t: mclk clock level: 0: (900Mhz) | GPU[3]\t\t: socclk clock level: S: (28Mhz) | GPU[4]\t\t: fclk clock level: 0: (1300Mhz) | GPU[4]\t\t: mclk clock level: 0: (900Mhz) | GPU[4]\t\t: socclk clock level: S: (28Mhz) | GPU[5]\t\t: fclk clock level: 0: (1300Mhz) | GPU[5]\t\t: mclk clock level: 0: (900Mhz) | GPU[5]\t\t: socclk clock level: S: (28Mhz) | GPU[6]\t\t: fclk clock level: 0: (1300Mhz) | GPU[6]\t\t: mclk clock level: 0: (900Mhz) | GPU[6]\t\t: socclk clock level: S: (28Mhz) | GPU[7]\t\t: fclk clock level: 0: (1300Mhz) | GPU[7]\t\t: mclk clock level: 0: (900Mhz) | GPU[7]\t\t: socclk clock level: S: (28Mhz)",
+   "clocks_after": "GPU[0]\t\t: socclk clock level: S: (30Mhz) | GPU[1]\t\t: socclk clock level: S: (30Mhz) | GPU[2]\t\t: socclk clock level: S: (30Mhz) | GPU[3]\t\t: socclk clock level: S: (30Mhz) | GPU[4]\t\t: socclk clock level: S: (29Mhz) | GPU[5]\t\t: socclk clock level: S: (29Mhz) | GPU[6]\t\t: socclk clock level: S: (29Mhz) | GPU[7]\t\t: socclk clock level: S: (29Mhz)"
+  },
+  {
+   "mode": "c",
+   "ctas": 8,
+   "depth": 0,
+   "fanout": "single",
+   "overlay": "concurrent",
+   "protocol": false,
+   "metric": "GBps",
+   "payload_granularity": "fine",
+   "value": 55.63282944854645,
+   "samples": [
+    55.63282944854645
+   ],
+   "per_rank": {
+    "resource": [
+     55.61040235651919,
+     55.82841324257588,
+     55.513082192155,
+     55.173081037539035,
+     55.912827209987185,
+     55.75028992158606,
+     55.169442852175536,
+     55.65525654057372
+    ],
+    "gemm_tflops": [
+     243.2020742879861,
+     224.46643835150186,
+     241.6993314079825,
+     218.44394334256438,
+     223.8127738696928,
+     241.72048243829656,
+     239.90210025735496,
+     217.76685337357674
+    ]
+   },
+   "concurrent_gemm_tflops": 232.18426930442843,
+   "gemm_tflops": 232.18426930442843,
+   "res_span_us": 1206.281894542497,
+   "gemm_span_us": 1489.5502655740002,
+   "host_wall_ms": 1.6411654651165009,
+   "rounds": 512,
+   "checksum_ok": true,
+   "checksum_mismatches": 0,
+   "checksum_fold": 0,
+   "clocks_before": "GPU[0]\t\t: socclk clock level: S: (30Mhz) | GPU[1]\t\t: socclk clock level: S: (30Mhz) | GPU[2]\t\t: socclk clock level: S: (30Mhz) | GPU[3]\t\t: socclk clock level: S: (30Mhz) | GPU[4]\t\t: socclk clock level: S: (30Mhz) | GPU[5]\t\t: socclk clock level: S: (29Mhz) | GPU[6]\t\t: socclk clock level: S: (29Mhz) | GPU[7]\t\t: socclk clock level: S: (29Mhz)",
+   "clocks_after": "GPU[0]\t\t: socclk clock level: S: (29Mhz) | GPU[1]\t\t: socclk clock level: S: (29Mhz) | GPU[2]\t\t: socclk clock level: S: (29Mhz) | GPU[3]\t\t: socclk clock level: S: (29Mhz) | GPU[4]\t\t: socclk clock level: S: (29Mhz) | GPU[5]\t\t: socclk clock level: S: (29Mhz) | GPU[6]\t\t: socclk clock level: S: (29Mhz) | GPU[7]\t\t: socclk clock level: S: (29Mhz)",
+   "gemm_slowdown": 2.37986936799533
+  },
+  {
+   "mode": "c",
+   "ctas": 8,
+   "depth": 0,
+   "fanout": "single",
+   "overlay": "isolated",
+   "protocol": true,
+   "metric": "GBps",
+   "payload_granularity": "fine",
+   "value": 48.527552378450864,
+   "samples": [
+    48.527552378450864
+   ],
+   "per_rank": {
+    "resource": [
+     48.991405344980826,
+     48.572939757510646,
+     48.712577105158886,
+     47.902356821083806,
+     48.1917313971598,
+     48.86764360841045,
+     47.983746321016405,
+     48.48216499939108
+    ],
+    "gemm_tflops": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
+   },
+   "concurrent_gemm_tflops": null,
+   "gemm_tflops": null,
+   "res_span_us": 1382.9035138935321,
+   "gemm_span_us": 0.0,
+   "host_wall_ms": 1.5179924666881561,
+   "rounds": 512,
+   "checksum_ok": true,
+   "checksum_mismatches": 0,
+   "checksum_fold": 0,
+   "clocks_before": "GPU[0]\t\t: socclk clock level: S: (29Mhz) | GPU[1]\t\t: socclk clock level: S: (29Mhz) | GPU[2]\t\t: socclk clock level: S: (29Mhz) | GPU[3]\t\t: socclk clock level: S: (29Mhz) | GPU[4]\t\t: socclk clock level: S: (29Mhz) | GPU[5]\t\t: socclk clock level: S: (29Mhz) | GPU[6]\t\t: socclk clock level: S: (29Mhz) | GPU[7]\t\t: socclk clock level: S: (29Mhz)",
+   "clocks_after": "GPU[0]\t\t: socclk clock level: S: (30Mhz) | GPU[1]\t\t: socclk clock level: S: (30Mhz) | GPU[2]\t\t: socclk clock level: S: (30Mhz) | GPU[3]\t\t: socclk clock level: S: (30Mhz) | GPU[4]\t\t: socclk clock level: S: (30Mhz) | GPU[5]\t\t: socclk clock level: S: (30Mhz) | GPU[6]\t\t: socclk clock level: S: (30Mhz) | GPU[7]\t\t: socclk clock level: S: (30Mhz)"
+  },
+  {
+   "mode": "c",
+   "ctas": 8,
+   "depth": 0,
+   "fanout": "single",
+   "overlay": "concurrent",
+   "protocol": true,
+   "metric": "GBps",
+   "payload_granularity": "fine",
+   "value": 47.996666555014336,
+   "samples": [
+    47.996666555014336
+   ],
+   "per_rank": {
+    "resource": [
+     49.05531919896465,
+     48.63788628045473,
+     47.81611841106708,
+     47.09742815102022,
+     46.91092394641035,
+     48.756578354902395,
+     48.025061756112855,
+     47.96827135391582
+    ],
+    "gemm_tflops": [
+     287.8118369012826,
+     286.00545960441457,
+     279.39014693276005,
+     287.4259423515965,
+     276.983350112472,
+     277.8314303550406,
+     293.95991328325516,
+     279.6688897262108
+    ]
+   },
+   "concurrent_gemm_tflops": 282.83717466531266,
+   "gemm_tflops": 282.83717466531266,
+   "res_span_us": 1398.1989230684067,
+   "gemm_span_us": 1582.8968794173845,
+   "host_wall_ms": 1.7590336501598358,
+   "rounds": 512,
+   "checksum_ok": true,
+   "checksum_mismatches": 0,
+   "checksum_fold": 0,
+   "clocks_before": "GPU[0]\t\t: socclk clock level: S: (33Mhz) | GPU[1]\t\t: mclk clock level: 1: (1100Mhz) | GPU[1]\t\t: socclk clock level: S: (33Mhz) | GPU[2]\t\t: fclk clock level: 1: (1550Mhz) | GPU[2]\t\t: mclk clock level: 1: (1100Mhz) | GPU[2]\t\t: socclk clock level: S: (33Mhz) | GPU[3]\t\t: fclk clock level: 1: (1550Mhz) | GPU[3]\t\t: mclk clock level: 1: (1100Mhz) | GPU[3]\t\t: socclk clock level: S: (33Mhz) | GPU[4]\t\t: fclk clock level: 1: (1550Mhz) | GPU[4]\t\t: mclk clock level: 1: (1100Mhz) | GPU[4]\t\t: socclk clock level: S: (32Mhz) | GPU[5]\t\t: fclk clock level: 1: (1550Mhz) | GPU[5]\t\t: mclk clock level: 1: (1100Mhz) | GPU[5]\t\t: socclk clock level: S: (32Mhz) | GPU[6]\t\t: fclk clock level: 1: (1550Mhz) | GPU[6]\t\t: mclk clock level: 1: (1100Mhz) | GPU[6]\t\t: socclk clock level: S: (32Mhz) | GPU[7]\t\t: fclk clock level: 1: (1550Mhz) | GPU[7]\t\t: mclk clock level: 1: (1100Mhz) | GPU[7]\t\t: socclk clock level: S: (32Mhz)",
+   "clocks_after": "GPU[0]\t\t: socclk clock level: S: (29Mhz) | GPU[1]\t\t: socclk clock level: S: (29Mhz) | GPU[2]\t\t: socclk clock level: S: (29Mhz) | GPU[3]\t\t: socclk clock level: S: (29Mhz) | GPU[4]\t\t: socclk clock level: S: (29Mhz) | GPU[5]\t\t: socclk clock level: S: (29Mhz) | GPU[6]\t\t: socclk clock level: S: (29Mhz) | GPU[7]\t\t: socclk clock level: S: (29Mhz)",
+   "gemm_slowdown": 1.953661964350526
+  },
+  {
+   "mode": "c",
+   "ctas": 8,
+   "depth": 1,
+   "fanout": "single",
+   "overlay": "isolated",
+   "protocol": false,
+   "metric": "GBps",
+   "payload_granularity": "fine",
+   "value": 50.18989685284083,
+   "samples": [
+    50.18989685284083
+   ],
+   "per_rank": {
+    "resource": [
+     50.71418574933652,
+     50.04304218998367,
+     50.3650064851116,
+     50.31616429482293,
+     50.063629410858724,
+     50.60490694166876,
+     49.593266253406064,
+     49.622680783994305
+    ],
+    "gemm_tflops": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
+   },
+   "concurrent_gemm_tflops": null,
+   "gemm_tflops": null,
+   "res_span_us": 1337.1075247711199,
+   "gemm_span_us": 0.0,
+   "host_wall_ms": 1.531362533569336,
+   "rounds": 512,
+   "checksum_ok": true,
+   "checksum_mismatches": 0,
+   "checksum_fold": 0,
+   "clocks_before": "GPU[0]\t\t: socclk clock level: S: (31Mhz) | GPU[1]\t\t: socclk clock level: S: (30Mhz) | GPU[2]\t\t: socclk clock level: S: (30Mhz) | GPU[3]\t\t: socclk clock level: S: (30Mhz) | GPU[4]\t\t: socclk clock level: S: (30Mhz) | GPU[5]\t\t: socclk clock level: S: (30Mhz) | GPU[6]\t\t: socclk clock level: S: (30Mhz) | GPU[7]\t\t: socclk clock level: S: (30Mhz)",
+   "clocks_after": "GPU[0]\t\t: socclk clock level: S: (30Mhz) | GPU[1]\t\t: socclk clock level: S: (30Mhz) | GPU[2]\t\t: socclk clock level: S: (30Mhz) | GPU[3]\t\t: socclk clock level: S: (30Mhz) | GPU[4]\t\t: socclk clock level: S: (30Mhz) | GPU[5]\t\t: socclk clock level: S: (29Mhz) | GPU[6]\t\t: socclk clock level: S: (29Mhz) | GPU[7]\t\t: socclk clock level: S: (29Mhz)"
+  },
+  {
+   "mode": "c",
+   "ctas": 8,
+   "depth": 1,
+   "fanout": "single",
+   "overlay": "concurrent",
+   "protocol": false,
+   "metric": "GBps",
+   "payload_granularity": "fine",
+   "value": 49.98814757496966,
+   "samples": [
+    49.98814757496966
+   ],
+   "per_rank": {
+    "resource": [
+     50.62213017006713,
+     49.93998691895434,
+     50.32713606600299,
+     50.03630823098498,
+     49.83772631833399,
+     50.51477223847678,
+     49.57710312081727,
+     49.571228229874876
+    ],
+    "gemm_tflops": [
+     367.7083247239588,
+     365.3792364132012,
+     368.5125717076342,
+     373.06376394292323,
+     370.96332616507084,
+     367.1185816600245,
+     365.79564023909586,
+     364.85948364309064
+    ]
+   },
+   "concurrent_gemm_tflops": 367.41345319199166,
+   "gemm_tflops": 367.41345319199166,
+   "res_span_us": 1342.4967626809823,
+   "gemm_span_us": 1567.8872251828468,
+   "host_wall_ms": 1.6966573894023895,
+   "rounds": 512,
+   "checksum_ok": true,
+   "checksum_mismatches": 0,
+   "checksum_fold": 0,
+   "clocks_before": "GPU[0]\t\t: socclk clock level: S: (33Mhz) | GPU[1]\t\t: mclk clock level: 1: (1100Mhz) | GPU[1]\t\t: socclk clock level: S: (33Mhz) | GPU[2]\t\t: fclk clock level: 1: (1550Mhz) | GPU[2]\t\t: mclk clock level: 1: (1100Mhz) | GPU[2]\t\t: socclk clock level: S: (33Mhz) | GPU[3]\t\t: fclk clock level: 1: (1550Mhz) | GPU[3]\t\t: mclk clock level: 1: (1100Mhz) | GPU[3]\t\t: socclk clock level: S: (33Mhz) | GPU[4]\t\t: fclk clock level: 1: (1550Mhz) | GPU[4]\t\t: mclk clock level: 1: (1100Mhz) | GPU[4]\t\t: socclk clock level: S: (33Mhz) | GPU[5]\t\t: fclk clock level: 1: (1550Mhz) | GPU[5]\t\t: mclk clock level: 1: (1100Mhz) | GPU[5]\t\t: socclk clock level: S: (33Mhz) | GPU[6]\t\t: fclk clock level: 1: (1550Mhz) | GPU[6]\t\t: mclk clock level: 1: (1100Mhz) | GPU[6]\t\t: socclk clock level: S: (33Mhz) | GPU[7]\t\t: fclk clock level: 1: (1550Mhz) | GPU[7]\t\t: mclk clock level: 1: (1100Mhz) | GPU[7]\t\t: socclk clock level: S: (32Mhz)",
+   "clocks_after": "GPU[0]\t\t: socclk clock level: S: (31Mhz) | GPU[1]\t\t: socclk clock level: S: (31Mhz) | GPU[2]\t\t: socclk clock level: S: (31Mhz) | GPU[3]\t\t: socclk clock level: S: (31Mhz) | GPU[4]\t\t: socclk clock level: S: (31Mhz) | GPU[5]\t\t: socclk clock level: S: (31Mhz) | GPU[6]\t\t: socclk clock level: S: (30Mhz) | GPU[7]\t\t: socclk clock level: S: (30Mhz)",
+   "gemm_slowdown": 1.5039412015194866
+  },
+  {
+   "mode": "c",
+   "ctas": 8,
+   "depth": 1,
+   "fanout": "single",
+   "overlay": "isolated",
+   "protocol": true,
+   "metric": "GBps",
+   "payload_granularity": "fine",
+   "value": 47.916153239200725,
+   "samples": [
+    47.916153239200725
+   ],
+   "per_rank": {
+    "resource": [
+     48.02575094948507,
+     48.33232338373172,
+     48.52610260950153,
+     47.57785017434095,
+     47.6897198878925,
+     48.76901245118794,
+     47.80655552891637,
+     47.447660684695855
+    ],
+    "gemm_tflops": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
+   },
+   "concurrent_gemm_tflops": null,
+   "gemm_tflops": null,
+   "res_span_us": 1400.5551480150443,
+   "gemm_span_us": 0.0,
+   "host_wall_ms": 1.5326812863349915,
+   "rounds": 512,
+   "checksum_ok": true,
+   "checksum_mismatches": 0,
+   "checksum_fold": 0,
+   "clocks_before": "GPU[0]\t\t: socclk clock level: S: (30Mhz) | GPU[1]\t\t: socclk clock level: S: (29Mhz) | GPU[2]\t\t: socclk clock level: S: (29Mhz) | GPU[3]\t\t: socclk clock level: S: (29Mhz) | GPU[4]\t\t: socclk clock level: S: (29Mhz) | GPU[5]\t\t: socclk clock level: S: (29Mhz) | GPU[6]\t\t: socclk clock level: S: (29Mhz) | GPU[7]\t\t: socclk clock level: S: (29Mhz)",
+   "clocks_after": "GPU[0]\t\t: socclk clock level: S: (31Mhz) | GPU[1]\t\t: socclk clock level: S: (30Mhz) | GPU[2]\t\t: socclk clock level: S: (30Mhz) | GPU[3]\t\t: socclk clock level: S: (30Mhz) | GPU[4]\t\t: socclk clock level: S: (30Mhz) | GPU[5]\t\t: socclk clock level: S: (30Mhz) | GPU[6]\t\t: socclk clock level: S: (30Mhz) | GPU[7]\t\t: socclk clock level: S: (30Mhz)"
+  },
+  {
+   "mode": "c",
+   "ctas": 8,
+   "depth": 1,
+   "fanout": "single",
+   "overlay": "concurrent",
+   "protocol": true,
+   "metric": "GBps",
+   "payload_granularity": "fine",
+   "value": 45.55178124763326,
+   "samples": [
+    45.55178124763326
+   ],
+   "per_rank": {
+    "resource": [
+     47.26538618457952,
+     46.495108206968446,
+     44.679724750678794,
+     42.90980245685999,
+     39.609165622120585,
+     48.192772382695765,
+     46.42383774458773,
+     43.038103916780386
+    ],
+    "gemm_tflops": [
+     372.5891381844215,
+     374.46746160949067,
+     353.1526902851074,
+     344.2976694669291,
+     335.02002415119,
+     370.78616623079296,
+     362.48644774476395,
+     338.96369106401113
+    ]
+   },
+   "concurrent_gemm_tflops": 357.81956901493567,
+   "gemm_tflops": 357.81956901493567,
+   "res_span_us": 1473.783611409798,
+   "gemm_span_us": 1636.6789671355277,
+   "host_wall_ms": 2.0183101296424866,
+   "rounds": 512,
+   "checksum_ok": true,
+   "checksum_mismatches": 0,
+   "checksum_fold": 0,
+   "clocks_before": "GPU[0]\t\t: socclk clock level: S: (29Mhz) | GPU[1]\t\t: socclk clock level: S: (29Mhz) | GPU[2]\t\t: socclk clock level: S: (29Mhz) | GPU[3]\t\t: socclk clock level: S: (29Mhz) | GPU[4]\t\t: socclk clock level: S: (29Mhz) | GPU[5]\t\t: socclk clock level: S: (29Mhz) | GPU[6]\t\t: socclk clock level: S: (28Mhz) | GPU[7]\t\t: socclk clock level: S: (28Mhz)",
+   "clocks_after": "GPU[0]\t\t: fclk clock level: 1: (1550Mhz) | GPU[0]\t\t: mclk clock level: 1: (1100Mhz) | GPU[0]\t\t: socclk clock level: S: (33Mhz) | GPU[1]\t\t: mclk clock level: 1: (1100Mhz) | GPU[1]\t\t: socclk clock level: S: (33Mhz) | GPU[2]\t\t: socclk clock level: S: (33Mhz) | GPU[3]\t\t: socclk clock level: S: (33Mhz) | GPU[4]\t\t: socclk clock level: S: (32Mhz) | GPU[5]\t\t: socclk clock level: S: (32Mhz) | GPU[6]\t\t: socclk clock level: S: (32Mhz) | GPU[7]\t\t: socclk clock level: S: (32Mhz)",
+   "gemm_slowdown": 1.5442649818431897
+  },
+  {
+   "mode": "c",
+   "ctas": 8,
+   "depth": 0,
+   "fanout": "single",
+   "overlay": "reserve_control",
+   "protocol": false,
+   "metric": "TFLOPS",
+   "payload_granularity": "fine",
+   "value": 552.5682302479876,
+   "samples": [
+    552.5682302479876
+   ],
+   "per_rank": {
+    "resource": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ],
+    "gemm_tflops": [
+     514.5568103862922,
+     523.7012005340904,
+     551.0312792812364,
+     573.6561068822363,
+     546.4949669609153,
+     554.1051812147388,
+     568.4288334803575,
+     564.7012261337833
+    ]
+   },
+   "concurrent_gemm_tflops": 552.5682302479876,
+   "gemm_tflops": 552.5682302479876,
+   "res_span_us": 1210.1220398810594,
+   "gemm_span_us": 1407.0723659525524,
+   "host_wall_ms": 1.5832111239433289,
+   "rounds": 512,
+   "checksum_ok": null,
+   "checksum_mismatches": null,
+   "checksum_fold": null,
+   "clocks_before": "GPU[0]\t\t: socclk clock level: S: (30Mhz) | GPU[1]\t\t: socclk clock level: S: (30Mhz) | GPU[2]\t\t: socclk clock level: S: (30Mhz) | GPU[3]\t\t: socclk clock level: S: (29Mhz) | GPU[4]\t\t: socclk clock level: S: (29Mhz) | GPU[5]\t\t: socclk clock level: S: (29Mhz) | GPU[6]\t\t: socclk clock level: S: (29Mhz) | GPU[7]\t\t: socclk clock level: S: (29Mhz)",
+   "clocks_after": "GPU[0]\t\t: socclk clock level: S: (31Mhz) | GPU[1]\t\t: socclk clock level: S: (30Mhz) | GPU[2]\t\t: socclk clock level: S: (30Mhz) | GPU[3]\t\t: socclk clock level: S: (30Mhz) | GPU[4]\t\t: socclk clock level: S: (30Mhz) | GPU[5]\t\t: socclk clock level: S: (30Mhz) | GPU[6]\t\t: socclk clock level: S: (30Mhz) | GPU[7]\t\t: socclk clock level: S: (30Mhz)"
+  },
+  {
+   "mode": "c",
+   "ctas": 64,
+   "depth": 0,
+   "fanout": "single",
+   "overlay": "isolated",
+   "protocol": false,
+   "metric": "GBps",
+   "payload_granularity": "fine",
+   "value": 53.51110364999058,
+   "samples": [
+    53.51110364999058
+   ],
+   "per_rank": {
+    "resource": [
+     54.685334304181055,
+     53.819085963992286,
+     53.70982134721535,
+     53.16544054733731,
+     54.52940108539673,
+     51.52902669796934,
+     51.90223723276702,
+     53.31238595276581
+    ],
+    "gemm_tflops": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
+   },
+   "concurrent_gemm_tflops": null,
+   "gemm_tflops": null,
+   "res_span_us": 1254.1283006929405,
+   "gemm_span_us": 0.0,
+   "host_wall_ms": 1.5122555196285248,
+   "rounds": 64,
+   "checksum_ok": true,
+   "checksum_mismatches": 0,
+   "checksum_fold": 0,
+   "clocks_before": "GPU[0]\t\t: fclk clock level: 0: (1300Mhz) | GPU[0]\t\t: mclk clock level: 0: (900Mhz) | GPU[0]\t\t: socclk clock level: S: (28Mhz) | GPU[1]\t\t: fclk clock level: 0: (1300Mhz) | GPU[1]\t\t: mclk clock level: 0: (900Mhz) | GPU[1]\t\t: socclk clock level: S: (28Mhz) | GPU[2]\t\t: fclk clock level: 0: (1300Mhz) | GPU[2]\t\t: mclk clock level: 0: (900Mhz) | GPU[2]\t\t: socclk clock level: S: (28Mhz) | GPU[3]\t\t: fclk clock level: 0: (1300Mhz) | GPU[3]\t\t: mclk clock level: 0: (900Mhz) | GPU[3]\t\t: socclk clock level: S: (28Mhz) | GPU[4]\t\t: fclk clock level: 0: (1300Mhz) | GPU[4]\t\t: mclk clock level: 0: (900Mhz) | GPU[4]\t\t: socclk clock level: S: (28Mhz) | GPU[5]\t\t: fclk clock level: 0: (1300Mhz) | GPU[5]\t\t: mclk clock level: 0: (900Mhz) | GPU[5]\t\t: socclk clock level: S: (28Mhz) | GPU[6]\t\t: fclk clock level: 0: (1300Mhz) | GPU[6]\t\t: mclk clock level: 0: (900Mhz) | GPU[6]\t\t: socclk clock level: S: (28Mhz) | GPU[7]\t\t: fclk clock level: 0: (1300Mhz) | GPU[7]\t\t: mclk clock level: 0: (900Mhz) | GPU[7]\t\t: socclk clock level: S: (28Mhz)",
+   "clocks_after": "GPU[0]\t\t: socclk clock level: S: (30Mhz) | GPU[1]\t\t: socclk clock level: S: (30Mhz) | GPU[2]\t\t: socclk clock level: S: (30Mhz) | GPU[3]\t\t: socclk clock level: S: (30Mhz) | GPU[4]\t\t: socclk clock level: S: (30Mhz) | GPU[5]\t\t: socclk clock level: S: (30Mhz) | GPU[6]\t\t: socclk clock level: S: (30Mhz) | GPU[7]\t\t: socclk clock level: S: (30Mhz)"
+  },
+  {
+   "mode": "c",
+   "ctas": 64,
+   "depth": 0,
+   "fanout": "single",
+   "overlay": "concurrent",
+   "protocol": false,
+   "metric": "GBps",
+   "payload_granularity": "fine",
+   "value": 52.640492757626134,
+   "samples": [
+    52.640492757626134
+   ],
+   "per_rank": {
+    "resource": [
+     52.345086315564224,
+     53.556394184597885,
+     53.476376881184514,
+     53.83033993490273,
+     52.55841760564391,
+     52.54026427946979,
+     52.6059230918789,
+     52.67506242337336
+    ],
+    "gemm_tflops": [
+     154.50869444613107,
+     125.57663281200455,
+     115.55421304706202,
+     125.74016578055874,
+     134.96859318546635,
+     135.51062491628917,
+     134.3759270304741,
+     119.37835672888356
+    ]
+   },
+   "concurrent_gemm_tflops": 130.05804640551642,
+   "gemm_tflops": 130.05804640551642,
+   "res_span_us": 1274.853053734216,
+   "gemm_span_us": 1512.7615879206635,
+   "host_wall_ms": 1.6483068466186523,
+   "rounds": 64,
+   "checksum_ok": true,
+   "checksum_mismatches": 0,
+   "checksum_fold": 0,
+   "clocks_before": "GPU[0]\t\t: socclk clock level: S: (31Mhz) | GPU[1]\t\t: socclk clock level: S: (31Mhz) | GPU[2]\t\t: socclk clock level: S: (31Mhz) | GPU[3]\t\t: socclk clock level: S: (31Mhz) | GPU[4]\t\t: socclk clock level: S: (31Mhz) | GPU[5]\t\t: socclk clock level: S: (31Mhz) | GPU[6]\t\t: socclk clock level: S: (31Mhz) | GPU[7]\t\t: socclk clock level: S: (31Mhz)",
+   "clocks_after": "GPU[0]\t\t: socclk clock level: S: (30Mhz) | GPU[1]\t\t: socclk clock level: S: (30Mhz) | GPU[2]\t\t: socclk clock level: S: (30Mhz) | GPU[3]\t\t: socclk clock level: S: (30Mhz) | GPU[4]\t\t: socclk clock level: S: (30Mhz) | GPU[5]\t\t: socclk clock level: S: (30Mhz) | GPU[6]\t\t: socclk clock level: S: (30Mhz) | GPU[7]\t\t: socclk clock level: S: (30Mhz)",
+   "gemm_slowdown": 4.287095679215455
+  },
+  {
+   "mode": "c",
+   "ctas": 64,
+   "depth": 0,
+   "fanout": "single",
+   "overlay": "isolated",
+   "protocol": true,
+   "metric": "GBps",
+   "payload_granularity": "fine",
+   "value": 48.18097861745974,
+   "samples": [
+    48.18097861745974
+   ],
+   "per_rank": {
+    "resource": [
+     47.99269196502227,
+     48.15844358856497,
+     48.55849160113711,
+     48.10928960370559,
+     48.59021834831928,
+     48.995350249077184,
+     48.17265462912989,
+     48.18930260578961
+    ],
+    "gemm_tflops": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
+   },
+   "concurrent_gemm_tflops": null,
+   "gemm_tflops": null,
+   "res_span_us": 1392.8497911150828,
+   "gemm_span_us": 0.0,
+   "host_wall_ms": 1.5379786491394043,
+   "rounds": 64,
+   "checksum_ok": true,
+   "checksum_mismatches": 0,
+   "checksum_fold": 0,
+   "clocks_before": "GPU[0]\t\t: fclk clock level: 1: (1550Mhz) | GPU[0]\t\t: mclk clock level: 1: (1100Mhz) | GPU[0]\t\t: socclk clock level: S: (32Mhz) | GPU[1]\t\t: mclk clock level: 1: (1100Mhz) | GPU[1]\t\t: socclk clock level: S: (32Mhz) | GPU[2]\t\t: mclk clock level: 1: (1100Mhz) | GPU[2]\t\t: socclk clock level: S: (32Mhz) | GPU[3]\t\t: socclk clock level: S: (32Mhz) | GPU[4]\t\t: socclk clock level: S: (32Mhz) | GPU[5]\t\t: socclk clock level: S: (31Mhz) | GPU[6]\t\t: socclk clock level: S: (31Mhz) | GPU[7]\t\t: socclk clock level: S: (31Mhz)",
+   "clocks_after": "GPU[0]\t\t: socclk clock level: S: (30Mhz) | GPU[1]\t\t: socclk clock level: S: (30Mhz) | GPU[2]\t\t: socclk clock level: S: (30Mhz) | GPU[3]\t\t: socclk clock level: S: (30Mhz) | GPU[4]\t\t: socclk clock level: S: (30Mhz) | GPU[5]\t\t: socclk clock level: S: (30Mhz) | GPU[6]\t\t: socclk clock level: S: (30Mhz) | GPU[7]\t\t: socclk clock level: S: (29Mhz)"
+  },
+  {
+   "mode": "c",
+   "ctas": 64,
+   "depth": 0,
+   "fanout": "single",
+   "overlay": "concurrent",
+   "protocol": true,
+   "metric": "GBps",
+   "payload_granularity": "fine",
+   "value": 48.19635497754486,
+   "samples": [
+    48.19635497754486
+   ],
+   "per_rank": {
+    "resource": [
+     48.04091820980129,
+     48.09684396971785,
+     48.70974104189636,
+     47.95486778742109,
+     48.566243201581365,
+     48.959868966665475,
+     48.12277964428901,
+     48.269930310800696
+    ],
+    "gemm_tflops": [
+     109.80802616046272,
+     113.69140579363825,
+     114.76169034374819,
+     112.80018638980096,
+     114.38147325499548,
+     113.43891572388694,
+     112.62056710063949,
+     112.35835053297717
+    ]
+   },
+   "concurrent_gemm_tflops": 113.11955105684395,
+   "gemm_tflops": 113.11955105684395,
+   "res_span_us": 1392.4086255931593,
+   "gemm_span_us": 1548.4107700388324,
+   "host_wall_ms": 1.7008595168590546,
+   "rounds": 64,
+   "checksum_ok": true,
+   "checksum_mismatches": 0,
+   "checksum_fold": 0,
+   "clocks_before": "GPU[0]\t\t: socclk clock level: S: (30Mhz) | GPU[1]\t\t: socclk clock level: S: (30Mhz) | GPU[2]\t\t: socclk clock level: S: (30Mhz) | GPU[3]\t\t: socclk clock level: S: (30Mhz) | GPU[4]\t\t: socclk clock level: S: (30Mhz) | GPU[5]\t\t: socclk clock level: S: (30Mhz) | GPU[6]\t\t: socclk clock level: S: (30Mhz) | GPU[7]\t\t: socclk clock level: S: (29Mhz)",
+   "clocks_after": "GPU[0]\t\t: socclk clock level: S: (30Mhz) | GPU[1]\t\t: socclk clock level: S: (30Mhz) | GPU[2]\t\t: socclk clock level: S: (30Mhz) | GPU[3]\t\t: socclk clock level: S: (30Mhz) | GPU[4]\t\t: socclk clock level: S: (30Mhz) | GPU[5]\t\t: socclk clock level: S: (30Mhz) | GPU[6]\t\t: socclk clock level: S: (29Mhz) | GPU[7]\t\t: socclk clock level: S: (29Mhz)",
+   "gemm_slowdown": 4.929044392265191
+  },
+  {
+   "mode": "c",
+   "ctas": 64,
+   "depth": 1,
+   "fanout": "single",
+   "overlay": "isolated",
+   "protocol": false,
+   "metric": "GBps",
+   "payload_granularity": "fine",
+   "value": 50.175101979369046,
+   "samples": [
+    50.175101979369046
+   ],
+   "per_rank": {
+    "resource": [
+     51.09826093495439,
+     50.154790609411286,
+     50.86101360081109,
+     50.12248986659729,
+     50.19541334932681,
+     50.98421534918712,
+     50.0071486717816,
+     49.828079708363575
+    ],
+    "gemm_tflops": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
+   },
+   "concurrent_gemm_tflops": null,
+   "gemm_tflops": null,
+   "res_span_us": 1337.493544602803,
+   "gemm_span_us": 0.0,
+   "host_wall_ms": 1.5106163918972015,
+   "rounds": 64,
+   "checksum_ok": true,
+   "checksum_mismatches": 0,
+   "checksum_fold": 0,
+   "clocks_before": "GPU[0]\t\t: socclk clock level: S: (29Mhz) | GPU[1]\t\t: socclk clock level: S: (29Mhz) | GPU[2]\t\t: socclk clock level: S: (29Mhz) | GPU[3]\t\t: socclk clock level: S: (29Mhz) | GPU[4]\t\t: socclk clock level: S: (29Mhz) | GPU[5]\t\t: socclk clock level: S: (29Mhz) | GPU[6]\t\t: socclk clock level: S: (29Mhz) | GPU[7]\t\t: socclk clock level: S: (29Mhz)",
+   "clocks_after": "GPU[0]\t\t: socclk clock level: S: (31Mhz) | GPU[1]\t\t: socclk clock level: S: (30Mhz) | GPU[2]\t\t: socclk clock level: S: (30Mhz) | GPU[3]\t\t: socclk clock level: S: (30Mhz) | GPU[4]\t\t: socclk clock level: S: (30Mhz) | GPU[5]\t\t: socclk clock level: S: (30Mhz) | GPU[6]\t\t: socclk clock level: S: (30Mhz) | GPU[7]\t\t: socclk clock level: S: (30Mhz)"
+  },
+  {
+   "mode": "c",
+   "ctas": 64,
+   "depth": 1,
+   "fanout": "single",
+   "overlay": "concurrent",
+   "protocol": false,
+   "metric": "GBps",
+   "payload_granularity": "fine",
+   "value": 50.08409249707446,
+   "samples": [
+    50.08409249707446
+   ],
+   "per_rank": {
+    "resource": [
+     50.573552509168735,
+     50.132250818859525,
+     50.43331705881064,
+     49.95638757147288,
+     50.03593417528939,
+     50.393067308336434,
+     49.64660579475683,
+     49.73625323672606
+    ],
+    "gemm_tflops": [
+     156.45254597925978,
+     154.99604519520253,
+     155.98316214802784,
+     155.38897427385825,
+     155.49789832335892,
+     155.2067386837935,
+     154.15079872769198,
+     154.43595843917132
+    ]
+   },
+   "concurrent_gemm_tflops": 155.29785647882588,
+   "gemm_tflops": 155.29785647882588,
+   "res_span_us": 1339.9249682179502,
+   "gemm_span_us": 1503.8129463680082,
+   "host_wall_ms": 1.635957509279251,
+   "rounds": 64,
+   "checksum_ok": true,
+   "checksum_mismatches": 0,
+   "checksum_fold": 0,
+   "clocks_before": "GPU[0]\t\t: socclk clock level: S: (34Mhz) | GPU[1]\t\t: fclk clock level: 1: (1550Mhz) | GPU[1]\t\t: mclk clock level: 1: (1100Mhz) | GPU[1]\t\t: socclk clock level: S: (33Mhz) | GPU[2]\t\t: fclk clock level: 1: (1550Mhz) | GPU[2]\t\t: mclk clock level: 1: (1100Mhz) | GPU[2]\t\t: socclk clock level: S: (33Mhz) | GPU[3]\t\t: fclk clock level: 1: (1550Mhz) | GPU[3]\t\t: mclk clock level: 1: (1100Mhz) | GPU[3]\t\t: socclk clock level: S: (33Mhz) | GPU[4]\t\t: mclk clock level: 1: (1100Mhz) | GPU[4]\t\t: socclk clock level: S: (33Mhz) | GPU[5]\t\t: fclk clock level: 1: (1550Mhz) | GPU[5]\t\t: mclk clock level: 1: (1100Mhz) | GPU[5]\t\t: socclk clock level: S: (32Mhz) | GPU[6]\t\t: fclk clock level: 1: (1550Mhz) | GPU[6]\t\t: mclk clock level: 1: (1100Mhz) | GPU[6]\t\t: socclk clock level: S: (32Mhz) | GPU[7]\t\t: fclk clock level: 1: (1550Mhz) | GPU[7]\t\t: mclk clock level: 1: (1100Mhz) | GPU[7]\t\t: socclk clock level: S: (32Mhz)",
+   "clocks_after": "GPU[0]\t\t: socclk clock level: S: (37Mhz) | GPU[1]\t\t: socclk clock level: S: (36Mhz) | GPU[2]\t\t: socclk clock level: S: (36Mhz) | GPU[3]\t\t: socclk clock level: S: (36Mhz) | GPU[4]\t\t: socclk clock level: S: (36Mhz) | GPU[5]\t\t: socclk clock level: S: (35Mhz) | GPU[6]\t\t: socclk clock level: S: (35Mhz) | GPU[7]\t\t: socclk clock level: S: (35Mhz)",
+   "gemm_slowdown": 3.5903347376099477
+  },
+  {
+   "mode": "c",
+   "ctas": 64,
+   "depth": 1,
+   "fanout": "single",
+   "overlay": "isolated",
+   "protocol": true,
+   "metric": "GBps",
+   "payload_granularity": "fine",
+   "value": 48.09842965057187,
+   "samples": [
+    48.09842965057187
+   ],
+   "per_rank": {
+    "resource": [
+     48.0602358567485,
+     47.12826930591421,
+     48.55849160113711,
+     47.48468867024658,
+     48.73208398370492,
+     48.902276695983986,
+     46.973477112640616,
+     48.13662344439524
+    ],
+    "gemm_tflops": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
+   },
+   "concurrent_gemm_tflops": null,
+   "gemm_tflops": null,
+   "res_span_us": 1395.2411087736916,
+   "gemm_span_us": 0.0,
+   "host_wall_ms": 1.5588700771331787,
+   "rounds": 64,
+   "checksum_ok": true,
+   "checksum_mismatches": 0,
+   "checksum_fold": 0,
+   "clocks_before": "GPU[0]\t\t: socclk clock level: S: (29Mhz) | GPU[1]\t\t: socclk clock level: S: (29Mhz) | GPU[2]\t\t: socclk clock level: S: (29Mhz) | GPU[3]\t\t: socclk clock level: S: (29Mhz) | GPU[4]\t\t: socclk clock level: S: (29Mhz) | GPU[5]\t\t: socclk clock level: S: (29Mhz) | GPU[6]\t\t: socclk clock level: S: (29Mhz) | GPU[7]\t\t: socclk clock level: S: (29Mhz)",
+   "clocks_after": "GPU[0]\t\t: mclk clock level: 1: (1100Mhz) | GPU[0]\t\t: socclk clock level: S: (33Mhz) | GPU[1]\t\t: socclk clock level: S: (33Mhz) | GPU[2]\t\t: socclk clock level: S: (33Mhz) | GPU[3]\t\t: socclk clock level: S: (33Mhz) | GPU[4]\t\t: socclk clock level: S: (32Mhz) | GPU[5]\t\t: socclk clock level: S: (32Mhz) | GPU[6]\t\t: socclk clock level: S: (32Mhz) | GPU[7]\t\t: socclk clock level: S: (32Mhz)"
+  },
+  {
+   "mode": "c",
+   "ctas": 64,
+   "depth": 1,
+   "fanout": "single",
+   "overlay": "concurrent",
+   "protocol": true,
+   "metric": "GBps",
+   "payload_granularity": "fine",
+   "value": 48.17613879163582,
+   "samples": [
+    48.17613879163582
+   ],
+   "per_rank": {
+    "resource": [
+     48.14770422065516,
+     48.090623567129406,
+     48.627638616589074,
+     47.11964298062554,
+     48.55109465410738,
+     48.74841082903085,
+     47.58393862381584,
+     48.204573362616486
+    ],
+    "gemm_tflops": [
+     110.1063253800065,
+     114.30139409958316,
+     114.05884907720534,
+     112.60241888497933,
+     115.06480875916014,
+     116.33993490646856,
+     114.10503971871226,
+     115.79395525649389
+    ]
+   },
+   "concurrent_gemm_tflops": 114.20321690914771,
+   "gemm_tflops": 114.20321690914771,
+   "res_span_us": 1392.9901619629677,
+   "gemm_span_us": 1533.706923722901,
+   "host_wall_ms": 1.7161034047603607,
+   "rounds": 64,
+   "checksum_ok": true,
+   "checksum_mismatches": 0,
+   "checksum_fold": 0,
+   "clocks_before": "GPU[0]\t\t: socclk clock level: S: (30Mhz) | GPU[1]\t\t: socclk clock level: S: (30Mhz) | GPU[2]\t\t: socclk clock level: S: (30Mhz) | GPU[3]\t\t: socclk clock level: S: (30Mhz) | GPU[4]\t\t: socclk clock level: S: (30Mhz) | GPU[5]\t\t: socclk clock level: S: (30Mhz) | GPU[6]\t\t: socclk clock level: S: (30Mhz) | GPU[7]\t\t: socclk clock level: S: (30Mhz)",
+   "clocks_after": "GPU[0]\t\t: socclk clock level: S: (30Mhz) | GPU[1]\t\t: socclk clock level: S: (30Mhz) | GPU[2]\t\t: socclk clock level: S: (30Mhz) | GPU[3]\t\t: socclk clock level: S: (30Mhz) | GPU[4]\t\t: socclk clock level: S: (30Mhz) | GPU[5]\t\t: socclk clock level: S: (30Mhz) | GPU[6]\t\t: socclk clock level: S: (30Mhz) | GPU[7]\t\t: socclk clock level: S: (29Mhz)",
+   "gemm_slowdown": 4.882273055721875
+  },
+  {
+   "mode": "c",
+   "ctas": 64,
+   "depth": 0,
+   "fanout": "single",
+   "overlay": "reserve_control",
+   "protocol": false,
+   "metric": "TFLOPS",
+   "payload_granularity": "fine",
+   "value": 557.5712887922926,
+   "samples": [
+    557.5712887922926
+   ],
+   "per_rank": {
+    "resource": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ],
+    "gemm_tflops": [
+     554.6739553059718,
+     558.2672494805099,
+     556.8753281040754,
+     573.8041436655539,
+     575.0264502662013,
+     556.464801654186,
+     575.7615237348413,
+     553.4576393758183
+    ]
+   },
+   "concurrent_gemm_tflops": 557.5712887922926,
+   "gemm_tflops": 557.5712887922926,
+   "res_span_us": 1278.5628547140286,
+   "gemm_span_us": 1465.9779896184903,
+   "host_wall_ms": 1.5950649976730347,
+   "rounds": 64,
+   "checksum_ok": null,
+   "checksum_mismatches": null,
+   "checksum_fold": null,
+   "clocks_before": "GPU[0]\t\t: fclk clock level: 1: (1550Mhz) | GPU[0]\t\t: mclk clock level: 1: (1100Mhz) | GPU[0]\t\t: socclk clock level: S: (32Mhz) | GPU[1]\t\t: fclk clock level: 1: (1550Mhz) | GPU[1]\t\t: mclk clock level: 1: (1100Mhz) | GPU[1]\t\t: socclk clock level: S: (32Mhz) | GPU[2]\t\t: fclk clock level: 1: (1550Mhz) | GPU[2]\t\t: mclk clock level: 1: (1100Mhz) | GPU[2]\t\t: socclk clock level: S: (32Mhz) | GPU[3]\t\t: mclk clock level: 1: (1100Mhz) | GPU[3]\t\t: socclk clock level: S: (32Mhz) | GPU[4]\t\t: socclk clock level: S: (32Mhz) | GPU[5]\t\t: socclk clock level: S: (31Mhz) | GPU[6]\t\t: socclk clock level: S: (31Mhz) | GPU[7]\t\t: socclk clock level: S: (31Mhz)",
+   "clocks_after": "GPU[0]\t\t: socclk clock level: S: (29Mhz) | GPU[1]\t\t: socclk clock level: S: (29Mhz) | GPU[2]\t\t: socclk clock level: S: (29Mhz) | GPU[3]\t\t: socclk clock level: S: (29Mhz) | GPU[4]\t\t: socclk clock level: S: (29Mhz) | GPU[5]\t\t: socclk clock level: S: (29Mhz) | GPU[6]\t\t: socclk clock level: S: (29Mhz) | GPU[7]\t\t: socclk clock level: S: (29Mhz)"
+  }
+ ]
+}
