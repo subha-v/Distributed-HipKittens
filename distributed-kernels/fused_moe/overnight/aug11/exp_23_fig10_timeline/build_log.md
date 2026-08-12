@@ -9,7 +9,7 @@ Zero GPU. Four CPU-only `hipcc --genco` builds in container `subha_k1`, from the
 scratch clone `~/e23/DHK` pinned at `5b1450d4` (0 dirty files). The pinned
 checkout `~/Distributed-HipKittens` (`291dfa08`, held by the mode-14 campaign)
 was never read or written. Gate script: `tools/e23_gate_A.sh`; raw output:
-`gate_A_output.txt`.
+`gate_A_output.md`.
 
 ## What was built
 

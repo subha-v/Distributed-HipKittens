@@ -7,7 +7,7 @@ SGPR 106 / VGPR 256 / AGPR 256 / scratch 128 B per lane / LDS 155,496 / MFMA 180
 zero scratch ops inside either MFMA span. G7 is green in both halves: the source
 census (`ts_mark` 5, `ts_last` 0, `e23_mark` 0) and the ISA `s_memrealtime`
 census (12 == 12, delta 0). Numbers, the ring-on tuple and the cost attribution
-are in `build_log.md`; raw gate output in `gate_A_output.txt`. **GO for the three
+are in `build_log.md`; raw gate output in `gate_A_output.md`. **GO for the three
 trace arms.**
 
 Still zero GPU: the mode-14 decision campaign holds the lease. Everything below
