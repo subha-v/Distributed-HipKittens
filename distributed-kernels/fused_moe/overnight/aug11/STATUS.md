@@ -240,6 +240,56 @@ and `ts_combine_us` are predicted to move in **opposite** directions and one
 total cannot separate them. If M6 drops and the combine rises by more, the
 response is to chase the epilogue's register allocation — not to close the axis.
 
+## exp_30 — the per-row readiness protocol is pure cost. Predicted ~6,215 µs.
+
+**Q1 answered definitively: consumer early-start is NOT load-bearing.** Nothing
+reduces a token before this rank's M7 is done, for two independent reasons:
+
+1. **The drain is a de-facto local barrier.** Every CTA enters it
+   (`k0pf6gm_device_tile_mps.hip:1440`) and it breaks only when a monotone
+   ticket exhausts `events_total` (`moe_mps_adapter.cuh:748-755`) — with 1,024
+   waves against ~16,720 events, **93.9 % of local M7 must complete first.** So
+   the 130–210 µs finish spread is *already absorbed inside the drain*.
+2. The parity arm publishes `row_ready` in bulk after a grid barrier
+   (`:1573-1613`) — 19.6k stores carrying 8 bits. **Coarse readiness is already
+   mode 0's semantics.**
+
+So ~926k atomics per rank per epoch are buying an overlap that does not happen.
+Replace them with **one grid barrier plus 8 publishes**:
+
+| deleted | count |
+|---|---:|
+| `nc_arr` | 535,040 |
+| `pushed` | ~314,000 |
+| `row_ready` | ~19,600 |
+| `row_rem` clean | ~19,600 |
+| M8 polls | ~21,500 |
+| `ev_next` | ~16,700 |
+| **total** | **~926,000 — effectively the entire baseline** |
+
+**The one structural catch:** `nc_arr` is not purely a readiness structure — it
+is also the **push trigger** on mode 2's transport (`target = row_rem[r]`,
+`adapter:789-822,921`), so deleting it there would expose the whole ~430 µs
+push. **Mode 14 must therefore ride mode 12's remote-accumulate transport**,
+where `part` is never written and the counting is bookkeeping only. That is a
+real constraint on the build, not a detail.
+
+**Net: +590…860 µs saved against 165…345 µs of costs (finish spread, skew,
+barrier) ⇒ +245 to +695 µs ⇒ 5,990–6,440 µs, point estimate ~6,215.** The
+0.80× target (6,172) sits at the optimistic edge of that band.
+
+**And the service pool degenerates.** With bookkeeping, push and flags all gone,
+mode 14 is a **homogeneous** megakernel. Per the standing mandate the number
+gets **banked, not ratcheted as a role-split result** — and the degeneration is
+itself a finding for the research question: on this workload, once the protocol
+the pool existed to run is shown to be unnecessary, the role split has no
+remaining job at this boundary.
+
+~9 h across six stages. **The NaN poison is a blocking prerequisite** (this
+change is precisely the "row not written" shape that identical per-iteration
+inputs hide). Correction to an earlier note: the mode validator is at
+`moe_mps_adapter.cuh:370`, not `:271`.
+
 ## exp_24 MEASURED — A is real (−91 µs end-to-end), B is closed
 
 **Mechanism A (delete the 448 MiB dead `part` zero-fill): CONFIRMED.**
