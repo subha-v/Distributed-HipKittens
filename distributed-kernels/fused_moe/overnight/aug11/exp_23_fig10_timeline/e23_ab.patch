@@ -1,0 +1,97 @@
+# exp_23 tier A -- node harness edit (file lives OUTSIDE this repo).
+# target:      ~/amd-master/auto-gpu-kernel/k0_fused_moe/prefill_opt/host/e004pf_k0pf_ab.py
+# base sha256: 6aa0c8d2e56943a74496f68d29fdc35fe06207db9370705d730e6aa112033ccc
+# post sha256: 587c38890aee020a78a2e3c31ac7f6a7be21b955ec1d808ba1bf599dbd337629
+# backup to:   ~/amd-master/auto-gpu-kernel/k0_fused_moe/prefill_opt/host/e004pf_k0pf_ab.py.e23bak
+# apply:  cd ~/amd-master/auto-gpu-kernel/k0_fused_moe \
+#           && cp prefill_opt/host/e004pf_k0pf_ab.py prefill_opt/host/e004pf_k0pf_ab.py.e23bak \
+#           && git apply -p1 --check <this> && git apply -p1 <this>
+# revert: cp prefill_opt/host/e004pf_k0pf_ab.py.e23bak prefill_opt/host/e004pf_k0pf_ab.py
+#
+# NOT APPLIED YET AS OF WRITING: another agent's campaign was reading
+# the live harness, and editing it mid-flight would have made some of
+# its rotations a different arm. Apply at lease handover.
+--- a/prefill_opt/host/e004pf_k0pf_ab.py
++++ b/prefill_opt/host/e004pf_k0pf_ab.py
+@@ -1513,14 +1513,28 @@ if PF6_REQUESTED:
+         _pf6_mps_pushed = torch.zeros(
+             (_pf6_mps_t_ext,), dtype=torch.int32, device="cuda"
+         )
+         _pf6_mps_claim = torch.zeros(
+             (_pf6_mps_t_ext,), dtype=torch.int32, device="cuda"
+         )
+-        # 8 u32 words followed by 8 u64 timestamps = 96 bytes.
+-        _pf6_mps_state = torch.zeros((12,), dtype=torch.int64, device="cuda")
++        # 8 u32 words followed by 8 u64 timestamps = 96 bytes, then exp_23's
++        # per-CTA phase ring: 256 CTAs x 16 slots x 8 B = 32 KiB of ADDITIVE
++        # tail space in the SAME descriptor slot (K0P6_D_MPS_STATE). No new
++        # slot, no host-bridge signature change, no kernel ABI change -- the
++        # kernel finds the ring at u64 offset 12. This zero-init is the ring's
++        # ONLY floor: M0 deliberately does not widen its reset loop, because
++        # that would put a grid-wide 32 KiB store into the reset path of an arm
++        # that ships with the ring off (see the K0P6_MPS_E23_* block in
++        # moe_mps_adapter.cuh). Sound because every CTA rewrites the slots it
++        # owns on every epoch, so a final-epoch read is current.
++        _pf6_e23_slots = 16
++        _pf6_e23_ctas = 256
++        _pf6_mps_state = torch.zeros(
++            (12 + _pf6_e23_ctas * _pf6_e23_slots,), dtype=torch.int64,
++            device="cuda",
++        )
+         _pf6_mps_slots, _pf6_mps_slotsp = mori_t(
+             (WORLD, MAXTOK, H), "bfloat16"
+         )
+         _pf6_mps_slots.zero_()
+         # Snapshot the exact MoRI heap base and P2P peer heap bases from an
+         # init_shmem=True module. The 9-word tensor is the device-visible
+@@ -5113,12 +5127,50 @@ if K0_BENCHMARK_PROTOCOL == "mok_eager":
+                 _sdm = pf6_state["spin_dbg"].detach().cpu().numpy().reshape(-1).tolist()
+                 print(f"[MPS SPIN] chunk_poll success_max={int(_sdm[0])} "
+                       f"fail_max={int(_sdm[1])} limit={os.environ.get('K0_SPIN_LIMIT','?')}",
+                       flush=True)
+             except Exception as _e2:
+                 print(f"[MPS SPIN] unavailable: {type(_e2).__name__}: {_e2}", flush=True)
++            # --- exp_23 (paper Fig 3 / Q4b): per-CTA phase event ring dump.
++            # Fixed slots in the tail of the same mps_state buffer, from u64
++            # offset 12: cell (b, k) is the last time CTA b crossed boundary k,
++            # in raw s_memrealtime ticks (100 MHz HSA domain, 1 tick = 0.01 us).
++            # Like the [MPS TS] block above, these are FINAL-EPOCH values after
++            # the soak.
++            # OPT-IN on K0_E23_DUMP so that every existing arm's stdout stays
++            # byte-identical: without the flag this block prints nothing, which
++            # is what lets the patch sit in the harness while other campaigns
++            # run. Needs K0_MPS_CFG timestamps=1 to have anything to print.
++            if os.environ.get("K0_E23_DUMP", "0").strip() not in ("", "0"):
++                try:
++                    _e23t = None
++                    try:
++                        _e23t = pf6_state["mps_state"]
++                    except Exception:
++                        _e23t = _pf6_mps_state
++                    _e23 = _e23t.detach().cpu().tolist()[12:]
++                    _e23ns = 16
++                    _e23nc = len(_e23) // _e23ns
++                    print(f"[MPS E23] slots={_e23ns} ctas={_e23nc} tick_us=0.01 "
++                          "names=KSTART,M2_DONE,M5_DONE,M6_DONE,M7_DONE,"
++                          "SVC_ENTER,SVC_EXIT,M75_ENTER,M75_BAR,M75_EXIT,"
++                          "M8_ENTER,REDUCE_DONE,M9_DONE,rsv13,rsv14,META",
++                          flush=True)
++                    _e23live = 0
++                    for _e23b in range(_e23nc):
++                        _e23row = [int(x) & 0xFFFFFFFFFFFFFFFF for x in
++                                   _e23[_e23b * _e23ns:(_e23b + 1) * _e23ns]]
++                        if not any(_e23row):
++                            continue
++                        _e23live += 1
++                        print(f"[MPS E23 CTA] {_e23b} "
++                              + " ".join(str(_v) for _v in _e23row), flush=True)
++                    print(f"[MPS E23] live_ctas={_e23live}", flush=True)
++                except Exception as _e3:
++                    print(f"[MPS E23] unavailable: "
++                          f"{type(_e3).__name__}: {_e3}", flush=True)
+         if not R["mps_soak"]["pass"]:
+             # Terminal protocol failure: preserve pperr and exit. Never clear it
+             # and retry this epoch/configuration.
+             R["mok_eager"] = {
+                 "status": "blocked_pre_timing_mps_soak",
+                 "reference_method": "same-run production",

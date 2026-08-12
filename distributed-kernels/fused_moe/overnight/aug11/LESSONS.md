@@ -264,3 +264,55 @@ says so and names it.
   granularity rung** and is to be reported as such. The number is **BANKED, not
   ratcheted** — at `C = 0` mode 14 is a homogeneous megakernel and cannot be a
   role-split ratchet however fast it is; **the degeneration is the finding.**
+
+- **exp_23 tier A — a per-CTA phase timeline can be instrumented for FREE on
+  this kernel. Parity gate GREEN.** Five `ts_last` → fused `ts_mark` swaps plus
+  a 32 KiB fixed-slot ring in the spare tail of `K0P6_D_MPS_STATE`
+  (`K0P6_MPS_SRC_REV` 28 → 29, base `5b1450d4`). Compiled in and runtime-off, the
+  instrumented TU is **exactly** the arm: `SGPR 106 / VGPR 256 / AGPR 256 /
+  scratch 128 B per lane / LDS 155,496 / occupancy 1 (asserted, not assumed) /
+  MFMA 180 (96+84) / flat_atomic_pk_add_bf16 282 / spills 217-17 / zero scratch
+  ops inside either MFMA span`. The `.text` differs (192,640 vs 192,448 B) so the
+  instrument really is in there.
+- **Generalizable: the free-instrumentation trick is that both VGPR and AGPR are
+  already pinned at 256.** There is no headroom for the allocator to *use*, so a
+  handful of extra values in a `tid == 0`, runtime-predicated block cannot move
+  the tuple. Expect the same to hold for any future diagnostic shaped like this
+  one (scalar-uniform, one lane, behind a runtime flag, no LDS); do NOT expect it
+  for anything that touches LDS or lives across an MFMA span.
+- **What the instrument costs when it IS collecting is not the ring — it is
+  `timestamps=1`.** A 2×2 of force-on builds (`TAON` = coarse + ring forced on,
+  `TCON` = coarse forced on with the ring compiled out) came out **identical**:
+  scratch 128 → 144 B per lane, VGPR spills 17 → 21, scratch ops 168 → 172 on
+  both. So the entire allocation cost belongs to folding the **pre-existing**
+  coarse `atomicMax` stamps unconditional (already priced at ~15 µs end-to-end),
+  and the ring itself adds **zero** registers and **zero** scratch even when
+  unconditionally active — its whole cost is 5 × 8 B of plain global stores per
+  CTA per epoch. Occupancy stayed 1 in all four builds.
+- **G7 (the named quiet risk) is mechanizable, and the mechanization is worth
+  more than the gate.** Writing `ts_last(); e23_mark()` instead of the fused
+  `ts_mark()` compiles, passes the tuple, and silently demotes the coarse/per-CTA
+  reconciliation from an identity to a few-tick approximation. Two grep-level
+  checks catch it: a **source census** (`ts_mark` 5, `ts_last` 0, `e23_mark` 0)
+  and an **ISA `s_memrealtime` census** (12 == 12, delta 0; the substitution
+  would have made it 17). The strongest form is the full opcode-histogram delta:
+  `TA − R` is *only* `flat_store_dwordx2 +5`, `s_cmpk_gt_u32 +5`,
+  `s_lshl_b32 +5`, `s_mov_b32 +5`, `v_lshl_add_u64 +5`, `v_mov_b64_e32 +5`,
+  `s_cbranch_scc1 +5`, `s_nop +3` — and `flat_atomic_umax_x2` stays 8, proving
+  the coarse cells are still driven by the same eight atomics.
+- **Trap, and it cost time: the "zero scratch ops inside either MFMA span" rule
+  must use the SPAN definition, not "any scratch op after the first `v_mfma`."**
+  The naive form fires on the **reference arm itself**, because this kernel has
+  two MFMA spans (96 and 84 instructions) separated by ordinary spill-carrying
+  code. Use the established grouping from `tools/e34_42_gate1.sh` — `v_mfma`
+  indices grouped into runs with gaps < 400 disassembly lines — which is what
+  `exp_23_fig10_timeline/tools/e23_g4_spans.py` now does. A gate that fails on
+  the control is not a gate.
+- **Process: do not hand-edit a node harness another agent's campaign is
+  reading.** exp_23's host edit was generated, `git apply -p1 --check`-verified
+  and `py_compile`-verified against the live file, then **parked** as
+  `exp_23_fig10_timeline/e23_ab.patch` with base/post sha256 and a backup path,
+  because the mode-14 campaign relaunches processes per rotation and a mid-flight
+  edit would have made some of its rotations a different harness. The dump is
+  also opt-in on `K0_E23_DUMP=1`, so once applied it leaves every existing arm's
+  stdout byte-identical.

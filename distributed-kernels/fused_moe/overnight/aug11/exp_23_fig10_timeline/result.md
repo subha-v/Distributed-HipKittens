@@ -1,22 +1,57 @@
-# exp_23 result — instrument designed, tooling built and self-tested, NOT YET RUN
+# exp_23 result — Tier A built, parity gate GREEN, awaiting GPU lease
 
-**Verdict: GO at Tier A, conditional GO at Tier A+B, NO-GO at Tier A+B+C until
-the parity gate is green.** Zero GPU was used (another agent holds the lease).
-Everything in this folder is CPU work. `k0pf6gm_device_tile_mps.hip` and
-`moe_mps_adapter.cuh` were **read only**; the kernel change is delivered as
-`patch_spec.md`, which is a ~20-minute mechanical apply once those files free up.
+**Status: Tier A built, parity gate green, awaiting GPU lease.** The per-CTA
+phase ring compiled in and runtime-off is byte-identical to the published arm on
+SGPR 106 / VGPR 256 / AGPR 256 / scratch 128 B per lane / LDS 155,496 / MFMA 180
+/ `flat_atomic_pk_add_bf16` 282 / spills 217-17, with occupancy asserted at 1 and
+zero scratch ops inside either MFMA span. G7 is green in both halves: the source
+census (`ts_mark` 5, `ts_last` 0, `e23_mark` 0) and the ISA `s_memrealtime`
+census (12 == 12, delta 0). Numbers, the ring-on tuple and the cost attribution
+are in `build_log.md`; raw gate output in `gate_A_output.txt`. **GO for the three
+trace arms.**
+
+Still zero GPU: the mode-14 decision campaign holds the lease. Everything below
+this banner is the design as accepted; the sections on tiers B and C are
+unchanged and unbuilt.
 
 | deliverable | state |
 |---|---|
+| Tier A kernel patch (`.hip` + `moe_mps_adapter.cuh`, `SRC_REV 29`) | **APPLIED, uncommitted** in the working tree. Five `ts_last` → `ts_mark` swaps plus the additive adapter block. |
+| `build_log.md` | **DONE.** Both tuples (ring off / ring on), the occupancy assertion, G0–G7, and the ring-vs-`timestamps=1` cost attribution. |
+| `e23_ab.patch` | **DONE, `git apply -p1 --check` clean** against the live node harness, and the patched copy passes `py_compile`. **Not applied yet** — see below. |
 | `patch_spec.md` | **DONE.** Kernel + adapter + host edits, anchored on unique strings with working-tree line numbers, three-tier build ladder, parity gate definition, go/no-go. |
 | `tools/parse_events.py` → `rank0_events.json` | **DONE, self-tested.** Schema `exp23-events-1`. |
 | `tools/bin_timeline.py` → `timeline_bins.csv` | **DONE, self-tested.** Schema `exp23-bins-1`. |
 | `tools/bytes_model.json` | **DONE.** Schema `exp23-bytes-1`, per-entry confidence, `null` where a device counter is required. |
 | `tools/xcheck.py` | **DONE, self-tested.** Schema `exp23-xcheck-1`. |
 | `tools/selftest.py` | **DONE and PASSING** — 8 mutation classes, every verdict proven to flip. |
-| `tools/e23_gate_build.sh` | **DONE.** 4-TU CPU parity gate, G0–G7. Not executed: the TU inputs do not exist until the patch is applied. |
+| `tools/e23_gate_build.sh` | Superseded for Tier A by `tools/e23_gate_A.sh`, which was **RUN and is GREEN**. Keep this one for the tier B/C ladder. |
+| `tools/e23_gate_A.sh`, `e23_g4_spans.py`, `e23_isa_delta.sh` | **DONE and RUN.** Four TUs, G0–G7, MFMA-span check on the established definition, opcode-histogram delta. |
 | `tools/e23_smi_sample.sh` | **DONE.** 2 Hz counter sampler, rate justified by a measured 0.14–0.29 s/sample. |
 | data (`rank0_events.json`, `timeline_bins.csv`) | **NOT COLLECTED** — needs the patch and a GPU slot. |
+
+### Why the harness patch is not applied yet, and how to apply it
+
+`e23_ab.patch` edits `prefill_opt/host/e004pf_k0pf_ab.py` in the node harness,
+which is **the same file the running mode-14 decision campaign is reading**. That
+campaign launches fresh processes per rotation, so editing the live file mid-flight
+would have made some of its rotations a different harness — a second variable in
+someone else's arm. The patch is therefore generated, checked and parked, not
+applied. It is `git apply -p1 --check` clean against the live file
+(base sha256 `6aa0c8d2…`), and the patched copy passes `python3 -m py_compile`
+(post sha256 `587c3889…`).
+
+At lease handover, from `~/amd-master/auto-gpu-kernel/k0_fused_moe`:
+
+```bash
+cp prefill_opt/host/e004pf_k0pf_ab.py prefill_opt/host/e004pf_k0pf_ab.py.e23bak
+git apply -p1 --check <patch> && git apply -p1 <patch>
+python3 -m py_compile prefill_opt/host/e004pf_k0pf_ab.py
+```
+
+The dump is opt-in on `K0_E23_DUMP=1`, so even once applied the patch leaves every
+existing arm's stdout byte-identical and cannot perturb another campaign; the
+buffer growth is additive tail space in a slot that is already allocated.
 
 ---
 
