@@ -86,12 +86,29 @@ struct launch_config {
     bool packet_fast_path; // (N % 8) == 0: 16 B packet rows align everywhere
 };
 
+// Deliberately does NOT compare has_bias, and that is worth explaining because
+// the obvious reading of the table says it should.
+//
+// The evaluator's case parser is `try: val = int(val) except ValueError: pass`,
+// so `has_bias: False` survives as the *string* "False", which is truthy. Every
+// graded shape therefore arrives with has_bias == true, whatever the case file
+// says. Keying on it meant the tuned rows for the three shapes declared
+// has_bias=false (1, 4 and 6) could never match under the real evaluator and
+// silently fell through to generic_config{32,64,64,24}: shape 4 went 256 ->
+// 8192 tiles and shape 6 went 1024 -> 32768, i.e. 32x the tiles at a third of
+// the tile size. That is the whole of the unexplained 2.5-3.3x inflation those
+// two shapes showed under eval.py while reproducing fine in our own harness --
+// our harness passed has_bias honestly, so it never triggered the fallback.
+//
+// Ignoring the field is correct, not a workaround: BM/BN/BK and the reducer
+// split are pure geometry, and bias is applied from a runtime pointer in the
+// epilogue rather than by any compile-time branch (it is not a template
+// parameter of the kernel). So one row serves both cases exactly.
 [[nodiscard]] inline const shape_config* find_scored_config(
         const shape_key& key) {
     for (const auto& entry : scored_shapes) {
         if (entry.key.m == key.m && entry.key.n == key.n &&
-            entry.key.k_local == key.k_local &&
-            entry.key.has_bias == key.has_bias) {
+            entry.key.k_local == key.k_local) {
             return &entry.cfg;
         }
     }
