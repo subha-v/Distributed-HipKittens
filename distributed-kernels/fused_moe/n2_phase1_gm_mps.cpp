@@ -10,28 +10,36 @@
 // This copy exists so the MPS sibling kernel can (a) scale phase 1's four
 // sched_group_barrier hints by kGM — the donor's literals are hardcoded for
 // kGM==1 and steer only a third of the shipped kGM==3 instruction mix — and
-// (b) carry four empty sub-phase instrumentation hooks, WITHOUT touching the
-// frozen upstream. Deltas are marked "// MPS-DELTA (n)". Everything else,
-// including all MFMA/LDS/epilogue arithmetic, the pipeline depth, the barrier
-// placement and every scale, is byte-identical to the donor.
+// (b) carry four empty sub-phase instrumentation hooks and a parameterized task
+// loop, WITHOUT touching the frozen upstream. Deltas are marked
+// "// MPS-DELTA (n)". Everything else, including all MFMA/LDS/epilogue
+// arithmetic, the pipeline depth, the barrier placement and every scale, is
+// byte-identical to the donor.
 //
-// The eight MPS-DELTA sites, in file order (donor line numbers in brackets):
-//   (1) [:73]  N2GM_P1_SCHED_GSCALE default 0 (= donor literals) + static_assert.
+// The ten MPS-DELTA sites, in file order (donor line numbers in brackets):
+//   (1) [:73]  N2GM_P1_SCHED_GSCALE, a 4-BIT MASK, default 0 (= donor literals),
+//              + static_assert + the four N2GM_P1_N_* group-size macros.
 //   (2) [:92]  Four instrumentation hook macros, empty by default.
-//   (3) [:161] N2GM_P1_TASK_HEAD_HOOK     — top of the task loop.
-//   (4) [:317] N2GM_P1_KLOOP_ENTER_HOOK   — after lds_cta_barrier, before for(k).
-//   (5) [:331] K-loop half 0 sched hints, #if-gated on N2GM_P1_SCHED_GSCALE.
-//   (6) [:344] K-loop half 1 sched hints, #if-gated on N2GM_P1_SCHED_GSCALE.
-//   (7) [:351] N2GM_P1_KLOOP_EXIT_HOOK    — immediately after the K-loop closes.
-//   (8) [:473] N2GM_P1_EPILOGUE_DONE_HOOK — after the A2q/DQ2 stores, before the
+//   (3) [:92]  N2GM_P1_TASK_START / N2GM_P1_TASK_STRIDE, defaulting to the
+//              donor's blockIdx.x / kCTAs.
+//   (4) [:156] The task loop header, bounds taken from (3).
+//   (5) [:161] N2GM_P1_TASK_HEAD_HOOK     — top of the task loop.
+//   (6) [:317] N2GM_P1_KLOOP_ENTER_HOOK   — after lds_cta_barrier, before for(k).
+//   (7) [:331] K-loop half 0 sched hints, counts from (1)'s mask.
+//   (8) [:344] K-loop half 1 sched hints, counts from (1)'s mask.
+//   (9) [:351] N2GM_P1_KLOOP_EXIT_HOOK    — immediately after the K-loop closes.
+//  (10) [:473] N2GM_P1_EPILOGUE_DONE_HOOK — after the A2q/DQ2 stores, before the
 //              task-end __syncthreads().
 //
-// (3),(4),(7),(8) expand to nothing unless the includer defines them, and all
-// four sit OUTSIDE both MFMA spans. With N2GM_P1_SCHED_GSCALE unset (the
-// default) and no hook defined this file is textually equivalent to the donor:
-// the #else arm of (5)/(6) is the donor's four lines verbatim.
+// (5),(6),(9),(10) expand to nothing unless the includer defines them, and all
+// four sit OUTSIDE both MFMA spans. With N2GM_P1_SCHED_GSCALE at its default 0,
+// N2GM_P1_TASK_{START,STRIDE} at their defaults and no hook defined, this file
+// is semantically the donor: (1)'s #else arms hold the donor's four literals
+// verbatim, and (4) is the donor's loop with two no-op casts. That claim is
+// MEASURED, not asserted — the resulting .text hashes byte-identical to a build
+// of the donor itself (exp_26 build.md §5, §8).
 //
-// The kGM scaling in (5)/(6) is a PARAMETERIZATION, NOT A RETUNE. Per-half
+// The kGM scaling in (7)/(8) is a PARAMETERIZATION, NOT A RETUNE. Per-half
 // instruction census (exp_26 design.md §2), every expression evaluating to the
 // donor's existing literal at kGM==1:
 //   DS read  0x100  read_a: kGM * m(2) * 2 float4        = 4*kGM  -> 4  at kGM=1
@@ -119,16 +127,54 @@ static_assert(racc::height == 1 && racc::width == 1);
 #endif
 static_assert(N2_FORCE_VMCNT0 == 0 || N2_FORCE_VMCNT0 == 1);
 
-// MPS-DELTA (1): opt-in kGM scaling of the K-loop sched_group_barrier hints.
-// 0 (the default) emits the donor's literals verbatim, so the default build is
-// the donor schedule. 1 emits the per-half instruction census parameterized in
-// kGM; each expression equals the donor literal at kGM==1 (see the header
-// table and exp_26 design.md §2). Same #ifndef/static_assert idiom as
-// N2_FORCE_VMCNT0 above.
+// MPS-DELTA (1): opt-in kGM scaling of the K-loop sched_group_barrier hints,
+// as a 4-BIT MASK so each hint class is independently A/B-able from one source.
+//
+//   bit 0 (1)  DS read    0x100   donor 4    ->  4 * kGM   (12 at kGM=3)
+//   bit 1 (2)  VMEM read  0x020   donor 17   ->  16 + kGM  (19 at kGM=3)
+//   bit 2 (4)  MFMA       0x008   donor 16   ->  16 * kGM  (48 at kGM=3)
+//   bit 3 (8)  DS write   0x200   donor 1    ->  kGM       ( 3 at kGM=3)
+//
+// 0 (the default) emits the donor's four literals verbatim, so the default
+// build IS the donor schedule; 15 scales all four. Each scaled expression
+// equals its donor literal at kGM == 1 INDEPENDENTLY of the other three bits,
+// so all 16 masks are donor-identical at kGM == 1 and the acceptance property
+// of design.md §2.2 holds bit by bit, not just for the all-on case.
+//
+// Why a mask and not a bool: the first all-on build (exp_26 B2) bought the
+// schedule win but also migrated 96 scratch accesses into the
+// M7-epilogue/M8/M9 region -- mode 12's hot fabric path. The mask exists to
+// separate the two effects and find the cheapest subset that still moves the
+// drain. See build.md §7 for the measured per-subset table.
 #ifndef N2GM_P1_SCHED_GSCALE
 #define N2GM_P1_SCHED_GSCALE 0
 #endif
-static_assert(N2GM_P1_SCHED_GSCALE == 0 || N2GM_P1_SCHED_GSCALE == 1);
+static_assert(N2GM_P1_SCHED_GSCALE >= 0 && N2GM_P1_SCHED_GSCALE <= 15,
+              "N2GM_P1_SCHED_GSCALE is a 4-bit mask: DSR|VMEM|MFMA|DSW");
+
+// The four group sizes, resolved once at preprocessing time so each K-loop half
+// keeps the donor's four-line shape. Every #else arm below is the donor's
+// literal from n2_phase1_gm.cpp:331-334 / :344-347, verbatim.
+#if (N2GM_P1_SCHED_GSCALE & 1)
+#define N2GM_P1_N_DSREAD (4 * kGM)
+#else
+#define N2GM_P1_N_DSREAD 4
+#endif
+#if (N2GM_P1_SCHED_GSCALE & 2)
+#define N2GM_P1_N_VMEMRD (16 + kGM)
+#else
+#define N2GM_P1_N_VMEMRD 17
+#endif
+#if (N2GM_P1_SCHED_GSCALE & 4)
+#define N2GM_P1_N_MFMA (16 * kGM)
+#else
+#define N2GM_P1_N_MFMA 16
+#endif
+#if (N2GM_P1_SCHED_GSCALE & 8)
+#define N2GM_P1_N_DSWRITE (kGM)
+#else
+#define N2GM_P1_N_DSWRITE 1
+#endif
 
 __device__ __forceinline__ void n2_completion_observation_probe() {
 #if N2_FORCE_VMCNT0
@@ -165,6 +211,19 @@ __device__ __forceinline__ void n2_completion_observation_probe() {
 #endif
 #ifndef N2GM_P1_EPILOGUE_DONE_HOOK
 #define N2GM_P1_EPILOGUE_DONE_HOOK
+#endif
+// MPS-DELTA (3): task-loop start/stride, macro-parameterized exactly the way
+// phase 2 already is (n2_phase2_gm_mps.cpp:286-294). The defaults reproduce the
+// donor (physical bid, full grid stride), so an includer that overrides nothing
+// gets the donor loop. Added for exp_25's M6/M7 interleave and for the F1
+// measurement T6(128)/T6(256) -- M6's CTA scaling, which no experiment has ever
+// varied (m6_m7_structure.md §0, §7 item 2). Inert at the defaults: nothing in
+// this file reads them outside the loop header.
+#ifndef N2GM_P1_TASK_START
+#define N2GM_P1_TASK_START blockIdx.x
+#endif
+#ifndef N2GM_P1_TASK_STRIDE
+#define N2GM_P1_TASK_STRIDE kCTAs
 #endif
 N2_P1_QUAL void N2_P1_NAME(
     const std::uint8_t* __restrict__ A_bytes,   // input  [R, 7168] FP8
@@ -229,12 +288,19 @@ N2_P1_QUAL void N2_P1_NAME(
 
   const int j_w = wv >> 1;
 
-  for (int task = blockIdx.x; task < num_tasks; task += kCTAs) {
+  // MPS-DELTA (4): loop bounds come from MPS-DELTA (3)'s macros. At the
+  // defaults this is the donor's
+  //   for (int task = blockIdx.x; task < num_tasks; task += kCTAs)
+  // with two no-op casts -- phase 2's convention, present so an override that
+  // hands back a non-int (a descriptor field, a role-partition id) still
+  // compiles. Verified .text-byte-identical to the donor build; build.md §8.
+  for (int task = (int)(N2GM_P1_TASK_START); task < num_tasks;
+       task += (int)(N2GM_P1_TASK_STRIDE)) {
     // exp_59: a task is (tile T, chunk g). tile_b0[T] is the tile's first 32-block
     // (all sub-blocks share expert e); gcount = live 32-blocks in this tile
     // (< kGM only in an expert's ragged tail). kGM==1 reduces to the donor with
     // tile == 32-block, gcount == 1.
-    // MPS-DELTA (3): task-head hook. Nothing executes between the loop's `{`
+    // MPS-DELTA (5): task-head hook. Nothing executes between the loop's `{`
     // and here, so this is the statement top of the task loop.
     N2GM_P1_TASK_HEAD_HOOK
     const int tile = task / kNChunksP1;
@@ -393,7 +459,7 @@ N2_P1_QUAL void N2_P1_NAME(
     load_b(0, 0);
     store_a(0, 0);
     lds_cta_barrier();
-    // MPS-DELTA (4): K-loop entry hook — after the pipeline-prologue barrier,
+    // MPS-DELTA (6): K-loop entry hook — after the pipeline-prologue barrier,
     // before the first MFMA. Outside the K-loop.
     N2GM_P1_KLOOP_ENTER_HOOK
 
@@ -410,23 +476,16 @@ N2_P1_QUAL void N2_P1_NAME(
       load_b(kb1, 1);
       mfma_k(k, 0);
       store_a(1, 1);
-      // MPS-DELTA (5): the donor literals below are hardcoded for kGM==1. At
+      // MPS-DELTA (7): the donor's literals here are hardcoded for kGM==1. At
       // the shipped kGM==3 the real per-half mix is 12 DS-read / 19 VMEM-read /
       // 48 MFMA / 3 DS-write, so 4/17/16/1 leaves two thirds of the DS reads,
       // two thirds of the MFMA and two thirds of the DS writes outside every
-      // hinted group. GSCALE=1 substitutes the census parameterized in kGM;
-      // GSCALE=0 (default) is the donor's four lines verbatim.
-#if N2GM_P1_SCHED_GSCALE
-      __builtin_amdgcn_sched_group_barrier(0x100, 4 * kGM, 0);    // DS read
-      __builtin_amdgcn_sched_group_barrier(0x020, 16 + kGM, 0);   // VMEM read
-      __builtin_amdgcn_sched_group_barrier(0x008, 16 * kGM, 0);   // MFMA
-      __builtin_amdgcn_sched_group_barrier(0x200, kGM, 0);        // DS write
-#else
-      __builtin_amdgcn_sched_group_barrier(0x100, 4, 0);
-      __builtin_amdgcn_sched_group_barrier(0x020, 17, 0);
-      __builtin_amdgcn_sched_group_barrier(0x008, 16, 0);
-      __builtin_amdgcn_sched_group_barrier(0x200, 1, 0);
-#endif
+      // hinted group. The four counts now come from MPS-DELTA (1)'s mask; at
+      // mask 0 they expand to the donor's 4 / 17 / 16 / 1.
+      __builtin_amdgcn_sched_group_barrier(0x100, N2GM_P1_N_DSREAD, 0);   // DS read
+      __builtin_amdgcn_sched_group_barrier(0x020, N2GM_P1_N_VMEMRD, 0);   // VMEM read
+      __builtin_amdgcn_sched_group_barrier(0x008, N2GM_P1_N_MFMA, 0);     // MFMA
+      __builtin_amdgcn_sched_group_barrier(0x200, N2GM_P1_N_DSWRITE, 0);  // DS write
       n2_completion_observation_probe();
       lds_cta_barrier();
 
@@ -436,24 +495,18 @@ N2_P1_QUAL void N2_P1_NAME(
       load_b(kb2, 0);
       mfma_k(kb1, 1);
       store_a(0, 0);
-      // MPS-DELTA (6): half 1 — census verified identical to half 0 (one
+      // MPS-DELTA (8): half 1 — census verified identical to half 0 (one
       // read_a / load_a / load_b / mfma_k / store_a each, same arguments in
-      // shape, only the LDS and B buffer indices differ).
-#if N2GM_P1_SCHED_GSCALE
-      __builtin_amdgcn_sched_group_barrier(0x100, 4 * kGM, 0);    // DS read
-      __builtin_amdgcn_sched_group_barrier(0x020, 16 + kGM, 0);   // VMEM read
-      __builtin_amdgcn_sched_group_barrier(0x008, 16 * kGM, 0);   // MFMA
-      __builtin_amdgcn_sched_group_barrier(0x200, kGM, 0);        // DS write
-#else
-      __builtin_amdgcn_sched_group_barrier(0x100, 4, 0);
-      __builtin_amdgcn_sched_group_barrier(0x020, 17, 0);
-      __builtin_amdgcn_sched_group_barrier(0x008, 16, 0);
-      __builtin_amdgcn_sched_group_barrier(0x200, 1, 0);
-#endif
+      // shape, only the LDS and B buffer indices differ), so it takes the same
+      // four counts from MPS-DELTA (1)'s mask.
+      __builtin_amdgcn_sched_group_barrier(0x100, N2GM_P1_N_DSREAD, 0);   // DS read
+      __builtin_amdgcn_sched_group_barrier(0x020, N2GM_P1_N_VMEMRD, 0);   // VMEM read
+      __builtin_amdgcn_sched_group_barrier(0x008, N2GM_P1_N_MFMA, 0);     // MFMA
+      __builtin_amdgcn_sched_group_barrier(0x200, N2GM_P1_N_DSWRITE, 0);  // DS write
       n2_completion_observation_probe();
       lds_cta_barrier();
     }
-    // MPS-DELTA (7): K-loop exit hook — the last MFMA of the task has issued.
+    // MPS-DELTA (9): K-loop exit hook — the last MFMA of the task has issued.
     // Outside the K-loop.
     N2GM_P1_KLOOP_EXIT_HOOK
 
@@ -578,7 +631,7 @@ N2_P1_QUAL void N2_P1_NAME(
         }
       }
     }
-    // MPS-DELTA (8): epilogue-done hook — after the A2q/DQ2 stores, before the
+    // MPS-DELTA (10): epilogue-done hook — after the A2q/DQ2 stores, before the
     // task-end __syncthreads(). NOT a VMEM drain: the stores above are still in
     // flight here, exactly as in the donor.
     N2GM_P1_EPILOGUE_DONE_HOOK

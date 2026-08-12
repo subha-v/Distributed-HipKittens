@@ -237,3 +237,31 @@ Two observations for the ledger anyway:
   established it; this is the second instance and it now has a stronger gate
   (`.text` hash equality, not just "diff-verified at authoring time"). If a third
   body ever needs it, that gate should be the standard.
+
+---
+
+## Addendum — the gate became a 4-bit mask
+
+Everything above describes `N2GM_P1_SCHED_GSCALE` as a boolean. It is now a
+**4-bit mask** (bit 0 DS read, bit 1 VMEM read, bit 2 MFMA, bit 3 DS write), so
+each hint is separately A/B-able. The acceptance criterion of §2.2 is unchanged
+but now holds **per bit**: each scaled expression equals its donor literal at
+`kGM == 1` independently of the other three, so all 16 masks — not only 0 and 15
+— are donor-identical at `kGM == 1`.
+
+The reason for the change is in `build.md` §5–§6, and it inverts this document's
+working assumption that the four hints act as one knob. They do not:
+
+- **bit 2 alone** produces the entire `33/49/14 → 48/48/0` barrier realignment,
+  at a resource tuple byte-identical to the donor's;
+- **bit 0 alone** produces the `vmcnt(0)` relocation *and* all 96 migrated
+  scratch accesses, which turn out to be a spill-load plus a full VMEM drain in
+  front of 96 of the 282 remote bf16 atomics in M8/M9;
+- **bit 1 is an exact no-op** at `G=3` — the phase-1 VMEM hint was already right;
+- **bit 3** perturbs the code bytes and moves no metric.
+
+The recommended arm is therefore **mask 4**, not 15. Two further deltas were
+added since this document was written — `N2GM_P1_TASK_START` and
+`N2GM_P1_TASK_STRIDE`, defaulting to the donor's `blockIdx.x` / `kCTAs` — for
+exp_25's M6/M7 interleave and for the unmeasured `T6(128)/T6(256)` CTA-scaling
+point. They are inert at their defaults, verified at the `.text`-hash level.
