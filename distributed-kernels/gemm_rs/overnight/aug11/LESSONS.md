@@ -146,6 +146,69 @@ and 4 pay 6.5 and 18.3 µs. Whether that is recoverable depends on whether
 geometry or only at exp_05's; that is being checked before any GPU time is
 spent, because the kill rule forbids re-litigating a measured negative.
 
+## ADJUDICATED — `RELEASE_GROUP_FULL_ONLY=0` is narrowly RE-OPENABLE, on shape 5 only
+
+The kill rule forbids re-litigating a measured negative. This is not that, and
+the distinction is worth stating precisely because it is exactly the situation
+the rule exists to police.
+
+**What exp_05 actually measured.** Five arms — `rg1`(N=1), `rg2`(N=2
+unconditional), `rg4`(N=4 unconditional, i.e. FULL_ONLY=0), `rg4c`(N=4
+FULL_ONLY=1), `rg1b`(null) — over all six shapes, 3-4 paired runs
+(`experiments/exp_05_release_granularity/result.md:508-515`). So FULL_ONLY=0
+**was** measured. But the regression that closed it lives on **exactly one
+shape**:
+
+| shape | tiles/CTA then | rg1 | rg2 | rg4 (FULL_ONLY=0) | rg4c | null floor |
+|---|---|---|---|---|---|---|
+| 2 | **2** | 88.60 | 92.01 (+3.85%) | 91.78 (**+3.59%**) | 89.13 (+0.60%) | ±0.60% |
+| 4 | 1 | 199.78 | 201.14 | 200.96 | 200.60 | ±0.47% |
+| 5 | **2** | 625.91 | 631.67 (+0.92%) | 645.47 (+3.13%) | 651.47 (+4.09%) | **±3.64%** |
+
+**Why the negative no longer applies.** The shape-2 regression is
+**unreachable at the current table**: exp_14's B1 retile took row 2 to
+`64/128/64`, which moved it from 512 tiles to **256**, i.e. tiles_per_cta
+2 → 1 (`exp_14_tile_waves/result.md:142`). At 1 tile per CTA, FULL_ONLY=0 and
+FULL_ONLY=1 are the *same code path*, so the one shape that ever objected can no
+longer express an objection. That is new evidence, not a re-argument — **the
+fourth time a landed win has invalidated a settled constant.**
+
+**And exp_05 explicitly declined to conclude anything about shape 5**: "Shape 5
+is indeterminate by construction … `rg2` and `rg4` are behaviourally *identical*
+there … yet differ by 2.2%", "No claim is made about shape 5 in either
+direction", and §10: "**Shape 5** needs a better instrument before anything is
+concluded about it" (`result.md:520-527`, `:625`). Its ±3.64% floor swallowed
+the effect. exp_20 has now *sized* the pool that was invisible then: **65.4 µs**.
+
+**It was never a correctness objection.** E3's mandatory protocol-review returned
+"APPROVE WITH CONDITIONS" and its conditions C1-C8 hold for **any** `rgroup`
+value; §2.6's tail bugs concern zero-tile CTAs, structurally excluded by
+`emitted >= 1` (`gemm_rs_mi300x.cpp:358-359`) independently of FULL_ONLY. Both
+`rg2` and `rg4` passed the full ladder **and M9** (17/17 at `1e-2` and `2e-3`,
+M4 3/3, 600-epoch soak).
+
+**FULL_ONLY=0 at RG=4 dominates RG=2.** On shape 5 the two are bit-for-bit the
+same behaviour (2 tiles/CTA ⇒ rgroup=2 either way, measured +0.92%, inside the
+floor), but RG=2 *costs shape 6*: −2.90% versus rg4c's −6.11%. So the arm to run
+is FULL_ONLY=0 with RELEASE_GROUP=4 — shape 5 gets its 2-tile group while shape 6
+keeps its 4.
+
+**Verdict: ONE arm, judged on shape 5 alone.** Ceiling is about half of 65.4 µs
+(two releases become one) ≈ **32 µs ≈ 5% of shape 5**, worth ~0.8% of geomean.
+Queued as Phase 2 exp_26, behind the mainloop, which is 30× larger.
+
+**Preconditions that must be honoured, or the arm is unmeasurable:**
+- Shapes 3 and 4 are **irrecoverable** — at 1 tile/CTA their 6.5 and 18.3 µs of
+  release cost cannot be grouped by any setting. Do not promise them.
+- **Shape 5 was never in M9's `CASES`** (`harness/m9_stale_slot.py:69-81`), and
+  M9 is the gate for publication-ORDER changes and is **not part of
+  `gate_ladder.sh`**. Shape 5 must be added.
+- **M9's golden is stale**: `gemm_rs_mi300x_e3base` is the frozen pre-E3 build
+  and is no longer bit-identical after the retile. It needs re-golding at RG=1
+  from today's tree before it can adjudicate anything.
+- Shape 5 needs **its own null arm in both construction orders** — aug11's
+  re-measured floors are 2-2.6× worse than published.
+
 ## Measurement discipline carried into the figure work
 
 - **The harness bias is per-allocation AND partly allocation-ORDER, not

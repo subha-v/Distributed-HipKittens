@@ -121,6 +121,22 @@ captured there.
 
 Then **Phase 2**: the optimization loop resumes against the refreshed profile.
 
+## Phase 2 queue, ranked by the exp_20 profile (not by the charter's stale one)
+
+| # | target | pool it attacks | expected | risk |
+|---|---|---|---|---|
+| 1 | **GEMM mainloop non-MFMA time** | **992 µs** (shape 6), **305 µs** (shape 5) | the only pool big enough to close the rank-1 gap | high — rows 4/5/6 pinned at the 64 KB LDS cap, so `waves × k_iters` (16/112/464) is unreachable by retiling; needs single-buffered `BK` or an async pipeline |
+| 2 | `sync` — cross-rank waits/credits/publishes | 168.7 µs (shape 6), now 2nd-largest non-GEMM | untouched axis | medium |
+| 3 | **exp_26: `RELEASE_GROUP_FULL_ONLY=0`** | 65.4 µs on shape 5 | ~32 µs ≈ 5% of shape 5, ~0.8% geomean | low — one build flag; but needs M9 re-golding and shape 5 added to M9's `CASES` |
+| 4 | XGMI on shape 4 specifically | **86.2 µs = 42.4%** of shape 4 | shape-specific; the profile is not uniform | medium |
+
+Item 3's adjudication is in LESSONS: the negative that closed it lived on shape 2
+and became unreachable when exp_14 retiled row 2 from 512 tiles to 256, and
+exp_05 explicitly declined to conclude anything about shape 5. That is the
+**fourth** time a landed win has invalidated a settled constant — the standing
+lesson is to re-check every constant whose *geometry* moved, not just the ones
+whose code moved.
+
 ## What the kernel already demonstrates for the paper's central claim
 
 The claim is that overlap is decided by **scheduling decisions**, not by
