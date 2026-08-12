@@ -513,16 +513,24 @@ def main():
         print(f"  rung {lab:<5} isa {shas[lab][:16]} "
               f"config {RUNG_CONFIG[lab]}")
 
+    flags = [a for a in sys.argv[1:] if a.startswith("--")]
+    pos = [a for a in sys.argv[1:] if not a.startswith("--")]
+    # A smoke draw exercises the whole path -- module load, allocation, both
+    # tolerances, the rotation, the state checks -- without contributing a
+    # number. It must NOT write a draw file: a short, differently-configured
+    # run pooled with the real draws would corrupt every contrast.
+    smoke = "--smoke" in flags
+
     rt.enable_peer_access(WORLD)
-    which = (list(range(6)) if len(sys.argv) < 2 or sys.argv[1].startswith("-")
-             or sys.argv[1] == "all"
-             else [int(x) - 1 for x in sys.argv[1].split(",")])
-    passes = int(sys.argv[2]) if len(sys.argv) > 2 else 0
-    scale = float(sys.argv[3]) if len(sys.argv) > 3 else 1.0
+    which = (list(range(6)) if not pos or pos[0] == "all"
+             else [int(x) - 1 for x in pos[0].split(",")])
+    passes = int(pos[1]) if len(pos) > 1 else 0
+    scale = float(pos[2]) if len(pos) > 2 else 1.0
     n_arms = len(arm_specs())
 
     print(f"\nexp_23 waterfall: shapes={[i + 1 for i in which]} scale={scale} "
-          f"construction={'REVERSED' if REVERSE else 'forward'}")
+          f"construction={'REVERSED' if REVERSE else 'forward'}"
+          f"{'  [SMOKE -- no draw file written]' if smoke else ''}")
     results = {}
     for index in which:
         iters = max(50, int(round(ITERS[index] * scale)))
@@ -558,6 +566,12 @@ def main():
             g = (cm / arm["median_us"] - 1) * 100
             print(f"  NR={nr:<4} vs shipped NR {g:+7.2f}%   "
                   f"{'beyond floor' if abs(g) > floor else 'inside floor'}")
+
+    dead = [(idx, lab) for idx, res in results.items()
+            for lab, arm in res["arms"].items() if arm["dead"]]
+    if smoke:
+        print(f"\nSMOKE OK -- no draw file written. dead arms: {dead}")
+        return 1 if dead else 0
 
     stamp = time.strftime("%Y%m%d_%H%M%S")
     tagged = "rev" if REVERSE else "fwd"

@@ -302,8 +302,9 @@ def measure(mod, fx, geo, mode, overlay, ctas, depth, fanout_name, protocol,
 # Destination-side checksum for one mode-c configuration.
 # ---------------------------------------------------------------------------
 def checksum_mode_c(mod, fx, geo, ctas, depth, fanout_name, protocol, overlay, release_group,
-                    deadline_ticks):
+                    deadline_ticks, c_work=None):
     fanout = FANOUTS[fanout_name]
+    c_work = geo.c_work if c_work is None else c_work
     # Which windows land in slot s on rank d, exactly as sat_mode_c addresses them.
     plan = {}
     for d in range(WORLD):
@@ -311,10 +312,10 @@ def checksum_mode_c(mod, fx, geo, ctas, depth, fanout_name, protocol, overlay, r
             if s == d:
                 continue
             if fanout == 0:
-                count = geo.c_work if (s + 1) % WORLD == d else 0
+                count = c_work if (s + 1) % WORLD == d else 0
             else:
                 r0 = (d - s - 1) % WORLD
-                count = 0 if r0 > 6 else max(0, (geo.c_work - r0 + 6) // 7)
+                count = 0 if r0 > 6 else max(0, (c_work - r0 + 6) // 7)
             if count:
                 plan.setdefault(d, []).append((s, count))
 
@@ -328,8 +329,12 @@ def checksum_mode_c(mod, fx, geo, ctas, depth, fanout_name, protocol, overlay, r
     conc = overlay in ("concurrent", "reserve_control")
     control = overlay == "reserve_control"
     grid = mod.GRID_MAX if conc else ctas
-    cfgs = [fx.cfg(r, 2, conc, control, grid, ctas, depth, fanout, protocol,
-                   release_group, deadline_ticks) for r in range(WORLD)]
+    cfgs = []
+    for r in range(WORLD):
+        c = fx.cfg(r, 2, conc, control, grid, ctas, depth, fanout, protocol,
+                   release_group, deadline_ticks)
+        c["c_work"] = c_work
+        cfgs.append(c)
     one_rotation(mod, fx, cfgs)
 
     bad_total, fold = 0, 0
@@ -340,6 +345,59 @@ def checksum_mode_c(mod, fx, geo, ctas, depth, fanout_name, protocol, overlay, r
             bad_total += int(mism)
             fold ^= int(f)
     return bad_total == 0, bad_total, fold
+
+
+# ---------------------------------------------------------------------------
+# GPU pre-flight. Two properties of this module cannot be established by the
+# compiler and were flagged as unverifiable in the ISA pass:
+#   1. the 65,536 B DYNAMIC LDS request actually launching (hipcc reports static
+#      LDS as 0 and occupancy as if LDS were free, so only the runtime can say),
+#   2. the full-size fine-grained mode-c heap allocating on all eight ranks.
+# Both are exercised here at FULL geometry with tiny per-launch work counts, so a
+# failure costs seconds instead of appearing 40 minutes into the sweep. --quick
+# deliberately shrinks c_work and therefore does NOT test (2).
+# ---------------------------------------------------------------------------
+def probe(mod, fx, geo, args):
+    trials = [
+        ("a isolated",   0, False, False, mod.GRID_MAX),
+        ("b isolated",   1, False, False, 64),
+        ("c isolated",   2, False, False, 8),
+        ("b concurrent", 1, True,  False, 64),
+        ("c concurrent", 2, True,  False, 8),
+        ("b reserve_ctl", 1, True,  True,  64),
+        ("c reserve_ctl", 2, True,  True,  8),
+    ]
+    ok = True
+    deadline = int(0.02 * TICK_HZ)
+    for name, mode, conc, control, ctas in trials:
+        grid = mod.GRID_MAX if conc else ctas
+        cfgs = []
+        for r in range(WORLD):
+            c = fx.cfg(r, mode, conc, control, grid, ctas, 1, 0, 0,
+                       args.release_group, deadline)
+            c["a_work"], c["b_work"], c["c_work"] = 2 * mod.GRID_MAX, 2048, 2048
+            cfgs.append(c)
+        try:
+            wall, stamps, done = one_rotation(mod, fx, cfgs)
+        except Exception as exc:                                   # noqa: BLE001
+            print(f"  [probe] {name:<13} LAUNCH FAILED: {exc}", flush=True)
+            ok = False
+            continue
+        res_hi = ctas if conc else grid
+        spans = [role_span(stamps[r], 0, res_hi) for r in range(WORLD)]
+        units = [sum(done[r][0:res_hi]) for r in range(WORLD)]
+        # A control's resource CTAs idle-spin and bank no units, so only the span
+        # is evidence there; every other arm must have banked work on every rank.
+        good = all(s > 0 for s in spans) and (control or all(u > 0 for u in units))
+        print(f"  [probe] {name:<13} wall {wall*1e3:7.1f} ms  span {min(spans)/TICK_HZ*1e3:7.2f}-"
+              f"{max(spans)/TICK_HZ*1e3:.2f} ms  units {min(units)}..{max(units)}  "
+              f"{'PASS' if good else 'FAIL'}", flush=True)
+        ok = ok and good
+    passed, bad, fold = checksum_mode_c(mod, fx, geo, 8, 1, "single", 0, "isolated",
+                                        args.release_group, deadline, c_work=2048)
+    print(f"  [probe] checksum      {'PASS' if passed else 'FAIL'} "
+          f"(mismatches {bad}, fold 0x{fold:016x})", flush=True)
+    return ok and passed
 
 
 # ---------------------------------------------------------------------------
@@ -431,6 +489,10 @@ def main():
     ap.add_argument("--skip-smi", action="store_true")
     ap.add_argument("--quick", action="store_true",
                     help="smoke: 1 rotation, 3 CTA points per mode, depth {0,1}, single fanout")
+    ap.add_argument("--probe", action="store_true",
+                    help="pre-flight only: full-size allocation + one launch of all seven kernels "
+                         "+ one checksum, then exit. Tests the 64 KB dynamic-LDS launch and the "
+                         "fine-grained heap, which --quick does not.")
     args = ap.parse_args()
 
     mod = load_module()
@@ -458,6 +520,14 @@ def main():
     geo = Geometry(mod, args)
     print(f"[geom] {json.dumps(geo.summary())}", flush=True)
     fx = Fixture(mod, geo, payload_fine=not args.payload_coarse)
+
+    if args.probe:
+        print(f"[probe] full geometry, tiny launches, {'fine' if not args.payload_coarse else 'coarse'}"
+              "-grained heap", flush=True)
+        good = probe(mod, fx, geo, args)
+        fx.close()
+        print(f"[probe] {'ALL PASS' if good else 'FAILED'}", flush=True)
+        sys.exit(0 if good else 3)
 
     points = []
     t_start = time.time()

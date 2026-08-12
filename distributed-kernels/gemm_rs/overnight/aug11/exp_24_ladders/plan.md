@@ -123,14 +123,36 @@ wrong is a result.
    Their geometry is at the tile-table optimum and cannot move this run.
 3. **`ours / reference` graded geomean stays below 0.85** — the minimum bar,
    comfortably held at 0.788 last time (345.15 / 438.15).
-4. **`ours / rank1` is materially better pipelined than graded**, because the
+4. ~~**`ours / rank1` is materially better pipelined than graded**, because the
    per-call harness constant is a larger fraction of our smaller shapes and we
    pay a per-call host tax rank-1 does not (exp_12's residue). Concretely:
-   pipelined ratio at least 0.08 below graded.
+   pipelined ratio at least 0.08 below graded.~~
+
+   **SUPERSEDED 2026-08-12 04:45, before the full run, by the `LAD_QUICK`
+   validation on shape 2 — and re-registered with the opposite sign.** Measured
+   graded 1.0496 (best) / 1.0157 (median) against pipelined **1.2207 / 1.2155**:
+   pipelined is 0.17 *worse*, not 0.08 better. The original reasoning had the
+   arithmetic backwards. The ~90 µs harness constant is added **identically to
+   both arms**, so it is a larger fraction of a 160 µs graded call than of a 72 µs
+   pipelined one and therefore **compresses the ratio toward 1** — the graded
+   protocol flatters whichever arm is slower, which is us.
+
+   **Re-registered: the pipelined `ours/rank1` ratio is WORSE (higher) than the
+   graded one on every shape, by more on the small shapes than on shapes 5 and 6**
+   (the constant is a smaller fraction of a 1.5 ms call). The netted graded ratio
+   should land between the two. If that holds across six shapes, part of the
+   1.098× graded gap is protocol dilution rather than kernel parity, and the
+   kernel-to-kernel deficit is larger than the graded headline implies.
 5. **The `harness_floor` arm measures 57–99 µs** on every shape, roughly shape-
    independent — that is the prediction that makes the netting in §7 legitimate.
    A floor that scales with shape size falsifies the whole netting argument and
    must be reported as such.
+
+   **Confirmed on shape 2 by the `LAD_QUICK` run: 84.51 best / 90.38 median µs**,
+   inside the band and within 2% of the remembered ~92 µs; pipelined 5.60 / 6.14 µs
+   against the remembered ~5–7 µs host path. Shape-independence is still open — it
+   needs all six — and the floor's own rsd is **53.7%**, so the netted table is
+   materially noisier than the raw one and must be read as a direction.
 6. **`ours` vs `ours_null` differ by less than 4.3% per shape and less than 2%
    on the geomean.** exp_14 measured 4.28% between identical arms on shape 6.
    Any ratio movement inside the null spread is not a result.

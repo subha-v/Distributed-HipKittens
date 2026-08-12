@@ -39,6 +39,7 @@ rocm-smi 2>&1 | tail -14 || true
 
 ARGS=""
 case "$MODE" in
+  probe)  ARGS="--probe --skip-smi --out $EXP/saturation_probe.json" ;;
   quick)  ARGS="--quick --out $EXP/saturation_quick.json" ;;
   coarse) ARGS="--payload-coarse --out $EXP/saturation_coarse.json" ;;
   full)   ARGS="--out $EXP/saturation.json" ;;

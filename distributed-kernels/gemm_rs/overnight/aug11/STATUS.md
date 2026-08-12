@@ -50,6 +50,14 @@ Per-shape graded ratio vs rank-1 (ours/rank-1, lower is better):
 **0.850** / 1.072 / 1.102 / 1.120 / 1.286 / 1.208 — **shape 1 is now a win**;
 shapes 5 and 6 carry the remaining gap.
 
+> **Read the graded ratio with this caveat.** exp_24 measured the evaluator's
+> harness constant at **90.38 µs median**, added identically to both arms, which
+> compresses every graded ratio toward 1. On shape 2 the graded ratio is 1.0496
+> while the **pipelined ratio is 1.2207** — the graded protocol *flatters* us.
+> Graded stays the competition's ranking statistic, but **pipelined is the
+> honest kernel-to-kernel comparison**, and part of the 1.098× graded gap is
+> protocol dilution rather than kernel parity. Both are reported, never blended.
+
 Best-of-arm pipelined vector:
 `62.38 / 64.52 / 83.75 / 198.71 / 613.70 / 1616.63` µs.
 

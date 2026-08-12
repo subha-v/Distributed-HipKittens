@@ -234,10 +234,14 @@ def parse_popcorn(path, expect=6):
 
 # --------------------------------------------------- instrument A aggregation ---
 
-def load_ladder(root):
-    """Pool the eight ranks of every shape's ladder_mp.py output."""
+def load_ladder(root, subdir="ladder"):
+    """Pool the eight ranks of every shape's ladder_mp.py output.
+
+    `subdir` keeps a LAD_QUICK validation run (8 iterations, one shape) in
+    `raw/ladder_quick/` so it can never be picked up as part of a full ladder.
+    """
     per_shape_raw = {}
-    for path in sorted(glob.glob(os.path.join(root, "raw", "ladder",
+    for path in sorted(glob.glob(os.path.join(root, "raw", subdir,
                                               "lad_s*.rank*.json"))):
         base = os.path.basename(path)
         try:
@@ -271,13 +275,21 @@ def reduce_cell(samples):
 
 
 def build_protocols(per_shape_raw, strict, expect=6):
+    """`expect` is how many shapes must be present, NOT the row count.
+
+    `per_shape` always has six entries, positionally aligned to the canonical
+    graded shape order with `null` for anything absent, so a plot never has to
+    guess which row is which. `expect` is what strictness compares the count of
+    non-null rows against, which is how `LAD_QUICK` (one shape) stays strict
+    instead of falling back to --lenient.
+    """
     protocols = {}
     correctness = {}
     for proto in PROTOCOLS:
         arms = {}
         for arm in ALL_ARMS:
             rows, rank0_rows = [], []
-            for index in range(expect):
+            for index in range(len(SCORED)):
                 shaped = per_shape_raw.get(index)
                 if not shaped:
                     rows.append(None)
@@ -310,9 +322,10 @@ def build_protocols(per_shape_raw, strict, expect=6):
             if strict and len(present) != expect:
                 raise RuntimeError(
                     f"instrument A: arm {arm!r} protocol {proto!r} has "
-                    f"{len(present)} of {expect} shapes. Refusing to emit a "
-                    f"partial ladder; re-run the missing shapes or pass "
-                    f"--lenient and say so in result.md.")
+                    f"{len(present)} shapes, expected {expect}. Refusing to emit "
+                    f"a partial ladder; re-run the missing shapes, or pass "
+                    f"--expect-a N for a deliberately partial run, or --lenient "
+                    f"and say so in result.md.")
             arms[arm] = {
                 "per_shape": rows,
                 "geomean_us": geomean([r["best_us"] for r in present]),
@@ -490,6 +503,14 @@ def main():
     ap.add_argument("--out", default=None)
     ap.add_argument("--lenient", action="store_true",
                     help="record missing shapes instead of raising")
+    ap.add_argument("--expect-a", type=int, default=len(SCORED),
+                    help="how many shapes instrument A must have (LAD_QUICK "
+                         "runs one; the full ladder runs six)")
+    ap.add_argument("--ladder-dir", default="ladder",
+                    help="subdirectory of raw/ holding instrument A output")
+    ap.add_argument("--expect-b", type=int, default=0,
+                    help="how many evaluator rotations instrument B must have; "
+                         "0 accepts none (LAD_QUICK skips instrument B)")
     ap.add_argument("--fixture", nargs="*", default=None,
                     help="parse saved popcorn output and print it; no GPU")
     args = ap.parse_args()
@@ -498,15 +519,21 @@ def main():
         return print_fixture(args.fixture)
 
     strict = not args.lenient
-    per_shape_raw = load_ladder(args.root)
+    per_shape_raw = load_ladder(args.root, args.ladder_dir)
     if not per_shape_raw:
-        print(f"no instrument-A output under {args.root}/raw/ladder", file=sys.stderr)
+        print(f"no instrument-A output under {args.root}/raw/{args.ladder_dir}",
+              file=sys.stderr)
         if strict:
             return 1
-    protocols, correctness = build_protocols(per_shape_raw, strict)
+    protocols, correctness = build_protocols(per_shape_raw, strict,
+                                             expect=args.expect_a)
     netted = net_out_floor(protocols)
     ratios = build_ratios(protocols, netted)
     crosscheck = build_crosscheck(args.root, strict)
+    if strict and len(crosscheck["rotations"]) < args.expect_b:
+        raise RuntimeError(
+            f"instrument B has {len(crosscheck['rotations'])} rotations, "
+            f"expected at least {args.expect_b}")
 
     doc = {
         "experiment": "exp_24_ladders",
@@ -525,6 +552,9 @@ def main():
                             "tools/run_reference_arm.sh and "
                             "experiments/exp_10_rank1/r1_eval.sh, arm order rotated",
             "bias_forced_all_shapes": True,
+            "shapes_expected_instrument_a": args.expect_a,
+            "rotations_expected_instrument_b": args.expect_b,
+            "partial_run": args.expect_a != len(SCORED) or args.expect_b == 0,
         },
         "protocols": protocols,
         "graded_netted": netted,

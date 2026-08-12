@@ -465,6 +465,51 @@ Rules reasserted for the rest of the night:
   an explicit gate, because several experiments compile from that one file
   concurrently.
 
+## exp_24 quick run — THE GRADED PROTOCOL FLATTERS US, measured not assumed
+
+A pre-registered prediction was **falsified in sign**, and it changes how every
+ratio in this project should be read. The prediction was that the pipelined
+ratio to rank-1 would be at least 0.08 *better* than the graded one. Measured on
+shape 2: **graded 1.0496, pipelined 1.2207.** The graded ratio is the *flattering*
+one.
+
+The mechanism is arithmetic and was already half-known: the evaluator adds a
+constant ~90 µs to **both** arms, and a constant added to numerator and
+denominator alike compresses any ratio toward 1. HANDOFF said this constant
+"makes our true kernel-to-kernel ratio worse than the headline"; this is the
+first time it has been measured on a fresh instrument with the sign confirmed.
+
+**Consequence for the ratchet, and it is not comfortable: part of the 1.098×
+graded gap to rank-1 is protocol dilution rather than kernel parity.** The
+graded number remains the competition's ranking statistic and must keep being
+reported as such — but it is not the honest kernel-to-kernel comparison, and
+`pipelined` is. Report both, always, and never let the graded ratio alone stand
+in for how good the kernel is. If this holds across all six shapes, the true
+kernel gap is materially wider than 1.098× and the mainloop work is even more
+clearly the right target.
+
+**The harness constant is now measured, not remembered:** `harness_floor` =
+**90.38 µs median graded** (84.51 best), within 2% of the remembered ~92 µs, and
+**6.14 µs pipelined** — i.e. the pipelined protocol carries essentially no
+constant, which is exactly why it is the honest instrument. Caveat to carry: the
+floor arm's own **rsd is 53.7%**, so a netted-out table is much noisier than the
+raw one and can only be read as a direction, not a value.
+
+**Null floor, shape 2 only** (the tightest of the six, so do not generalize):
+graded 0.66% best / 0.20% median / **1.64% mean**; pipelined 1.12% / 1.58% /
+**1.87%**. The published 0.56% floor **holds for best and median and fails by
+~3× for the mean** — HANDOFF's "means are unusable on this node" reproduced
+independently on a new instrument. Shapes 1 and 6 are the decision-relevant rows
+and are not measured yet.
+
+**Two instrument bugs caught in review rather than by a hang**, both worth
+remembering because both would have produced silence rather than an error:
+duration-based warmup with *per-rank* deadlines deadlocks a collective arm
+(ranks decide to stop at different times), so rank 0 now broadcasts the stop
+decision; and the warm clock had to start after the first block, because
+`reference` and `rank1` spent the entire 400 ms warmup inside RCCL/JIT setup and
+then landed on the 20-call floor.
+
 ## Measurement discipline carried into the figure work
 
 - **The harness bias is per-allocation AND partly allocation-ORDER, not

@@ -45,8 +45,12 @@ PIPE_ITERS=${LAD_PIPE_ITERS:-20}
 ROTATIONS=${LAD_ROTATIONS:-2}
 PORT0=${LAD_PORT0:-13100}
 
+# A quick run's samples must never be reachable by a full ladder's aggregation.
+LADDIR=ladder
 if [ "$QUICK" = "1" ]; then
-  SHAPES=${LAD_SHAPES:-1}; ITERS=8; REPS=2; PIPE_ITERS=4; ROTATIONS=0
+  SHAPES=${LAD_SHAPES:-1}
+  ITERS=${LAD_ITERS:-8}; REPS=${LAD_REPS:-2}; PIPE_ITERS=${LAD_PIPE_ITERS:-4}
+  ROTATIONS=0; LADDIR=ladder_quick
 else
   # Rotated so no shape is systematically first; 5 and 6 lead because they are
   # the two rows that carry the graded gap and the ones worth having if the
@@ -54,7 +58,7 @@ else
   SHAPES=${LAD_SHAPES:-4,5,0,2,1,3}
 fi
 
-mkdir -p "$RAW/eval" "$RAW/ladder" "$D/logs"
+mkdir -p "$RAW/eval" "$RAW/$LADDIR" "$D/logs"
 
 say() { echo "[$(date -Is)] $*"; }
 hr()  { echo "----------------------------------------------------------------"; }
@@ -97,8 +101,18 @@ provenance() {
   {
     echo "host      : $(hostname)"
     echo "date      : $(date -Is)"
-    echo "git HEAD  : $(git -C /home/subvadla/dhk rev-parse HEAD 2>/dev/null)"
-    echo "git branch: $(git -C /home/subvadla/dhk rev-parse --abbrev-ref HEAD 2>/dev/null)"
+    # /home/subvadla/dhk is NOT a git worktree -- it is an scp-synced copy made by
+    # tools/push_scoped.ps1. An empty `git HEAD:` line here would read as a failed
+    # command rather than as an absent repo, so say which it is; the module
+    # sha256s below are the actual provenance for what was measured.
+    if git -C /home/subvadla/dhk rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+      echo "git HEAD  : $(git -C /home/subvadla/dhk rev-parse HEAD)"
+      echo "git branch: $(git -C /home/subvadla/dhk rev-parse --abbrev-ref HEAD)"
+    else
+      echo "git       : node copy is NOT a git worktree (scp-synced from the"
+      echo "            Windows worktree on branch GEMM-RS); provenance for what"
+      echo "            was measured is the module sha256 set below"
+    fi
     echo
     echo "--- module fingerprints (the config under test) ---"
     for f in gemm_rs_mi300x.so dhk_rt.so; do
@@ -178,7 +192,7 @@ EOF
 # rank-1 repairs (buffer-ops knob + compat sitecustomize) and the no-op sudo.
 instrument_a() {
   say "=== instrument A: same-run interleaved ladder, both protocols ==="
-  local out="$RAW/ladder"
+  local out="$RAW/$LADDIR"
   mkdir -p "$out"
   IFS=',' read -ra LIST <<< "$SHAPES"
   for s in "${LIST[@]}"; do
@@ -286,7 +300,15 @@ instrument_b() {
 # -------------------------------------------------------------------- parse ---
 parse() {
   say "=== aggregate -> ladders.json ==="
-  python3 "$D/ladders.py" --root "$D" --out "$D/ladders.json"
+  # Tell the aggregator how many shapes and rotations THIS run was supposed to
+  # produce, so a quick one-shape run stays strict instead of being waved through
+  # with --lenient. A silently partial ladder is the failure mode ladders.py
+  # exists to prevent.
+  local n_shapes; n_shapes=$(awk -F, '{print NF}' <<< "$SHAPES")
+  local out="$D/ladders.json"
+  [ "$QUICK" = "1" ] && out="$D/ladders_quick.json"
+  python3 "$D/ladders.py" --root "$D" --out "$out" --ladder-dir "$LADDIR" \
+    --expect-a "$n_shapes" --expect-b "$ROTATIONS"
 }
 
 # ---------------------------------------------------------------------- main ---

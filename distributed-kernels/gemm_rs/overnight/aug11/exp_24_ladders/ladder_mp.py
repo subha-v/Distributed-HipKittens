@@ -136,16 +136,40 @@ def make_floor_kernel(m, n, rank):
     return kernel
 
 
-def warm(kernel, data, warm_ms, min_calls):
-    """Duration-based warmup. Fixed-iteration warmup once cost a 60% error."""
-    deadline = time.perf_counter() + warm_ms / 1000.0
+def warm(kernel, data, warm_ms, min_calls, rank, block=5):
+    """Duration-based warmup, with the call count agreed across ranks.
+
+    Duration-based because idle sclk on this node is ~125 MHz against ~1900
+    pinned and a fixed-iteration warmup produced a 60% wrong number once.
+
+    But a per-rank deadline gives per-rank call COUNTS, and two of these arms are
+    collectives -- `reference` calls reduce_scatter_tensor and rank-1 calls its
+    own dist_barrier -- so unequal counts deadlock. Rank 0 therefore owns the
+    stop decision and broadcasts it, and every rank runs the same whole number of
+    fixed-size blocks. Duration-based sizing, identical collective counts.
+    """
+    stop = torch.zeros(1, dtype=torch.int32, device=f"cuda:{rank}")
     calls = 0
     out = None
-    while calls < min_calls or time.perf_counter() < deadline:
-        out = kernel(_clone_data(data))
-        calls += 1
-        if calls % 10 == 0:
-            torch.cuda.synchronize()
+    deadline = None
+    while True:
+        for _ in range(block):
+            out = kernel(_clone_data(data))
+            calls += 1
+        torch.cuda.synchronize()
+        # The clock starts AFTER the first block, so one-time setup cannot eat the
+        # warm window. In the LAD_QUICK validation `reference` and `rank1` spent
+        # the whole 400 ms on RCCL channel setup and Triton JIT respectively and
+        # landed at the 20-call minimum, while `ours` got 965 calls -- the window
+        # is meant to buy steady-state work at ramped clocks, not to time setup.
+        if deadline is None:
+            deadline = time.perf_counter() + warm_ms / 1000.0
+        if rank == 0:
+            done = calls >= min_calls and time.perf_counter() >= deadline
+            stop.fill_(1 if done else 0)
+        dist.broadcast(stop, 0)
+        if int(stop.item()):
+            break
     torch.cuda.synchronize()
     return out, calls
 
@@ -270,7 +294,7 @@ def _worker(rank, shape_index, iters, reps, port, burst, pipe_iters, arm_keys,
         # timed run.
         outs, warm_calls = {}, {}
         for key in arms:
-            outs[key], warm_calls[key] = warm(impls[key], data, warm_ms, 20)
+            outs[key], warm_calls[key] = warm(impls[key], data, warm_ms, 20, rank)
         torch.cuda.synchronize()
         dist.barrier()
         say(f"    warm calls: {warm_calls}")
