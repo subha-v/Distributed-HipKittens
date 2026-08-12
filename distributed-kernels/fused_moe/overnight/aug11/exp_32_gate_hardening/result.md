@@ -130,12 +130,26 @@ poison on did not move the arm.
 **Caveat worth carrying forward, and it is mine, not the patch's.** These stamps
 come from the final **soak** epoch, and P2 now re-poisons before every soak
 epoch, so a 56 MiB NaN fill (22 % of the 256 MB Infinity Cache) lands
-immediately before the stamped epoch. The M6 stamp reads 2,544.0 against a
-historical ~2,588 — about 2 sigma low on the sigma = 23 µs figure. I am not
-claiming the poison caused that; n = 1 here. What follows from it is a
-**procedural** rule: **poison-on M6 stamps are not comparable to pre-poison M6
-stamps**, so exp_26's ladder takes its own mask-0 control, measured with the
-poison on, as its baseline — which is what it does.
+immediately before the stamped epoch.
+
+**Updated with exp_26's data (n = 10 rather than n = 1).** exp_26 then measured
+this same code path — mask 0 is `.text`-identical to the donor include — over two
+independent batches: **M6 = 2,541.51 ± 4.77 µs, reproducing to 0.34 µs between
+batches.** So the 2,544.0 above was an ordinary sample (within 0.5 sigma), and
+two things follow:
+
+- **The M6 stamp's real sigma is 4.8 µs, not the planned 23 µs**, and its
+  batch-to-batch reproducibility is 0.34 µs. It is a far better instrument than
+  we assumed.
+- **The gap to the historical ~2,588 µs is therefore ~46 µs, or ~10 sigma — it is
+  not run noise.** I cannot attribute it: the poison's pre-epoch cache eviction
+  and a config difference (the historical figure predates `g=353`) are both live
+  candidates and this experiment does not separate them. Recorded as **open**.
+
+The procedural rule stands and is now load-bearing: **poison-on M6 stamps are not
+comparable to pre-poison M6 stamps.** Any experiment judged on this stamp must
+carry its own control measured under the same poison setting, which is what
+exp_26 did.
 
 ---
 
