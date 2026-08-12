@@ -1,0 +1,50 @@
+{
+  "schema_version": "exp38-text-parity-1",
+  "generated_utc": "2026-08-12T20:13:00Z",
+  "commit": "275d2c2ae2a0adae688c614c9697cd5785ed8810",
+  "reference": "f113d73f (rev 26) - the binary that measured the 6482.7 us ratchet",
+  "method": "CPU-only build in container subha_k1, four TUs from identical sources differing only in -D; unbundled with clang-offload-bundler --type=o --unbundle --targets=hipv4-amdgcn-amd-amdhsa--gfx950, then llvm-objcopy --dump-section=.text, then sha256",
+  "raw_log": "gate_text_parity.log",
+  "script": "../tools/e38_10_gate.sh",
+  "note_src_rev": "K0P6_MPS_SRC_REV moved 29 -> 30. It does not participate in codegen (the value is never read; only its presence in the JIT cache key matters), which is why the bump is compatible with .text identity.",
+  "arms": [
+    { "arm": "REF",  "build": "f113d73f (rev 26)",          "text_sha256": "642646fcd1de3daeb194cf94dd0d96000bb188298f2cd050da33dee833a541a7", "text_bytes": 179520, "sgpr_spill": 186, "vgpr_spill": 15, "scratch_ops": 19,  "identical_to_rev26": true },
+    { "arm": "DEF",  "build": "this tree, no -D at all",     "text_sha256": "642646fcd1de3daeb194cf94dd0d96000bb188298f2cd050da33dee833a541a7", "text_bytes": 179520, "sgpr_spill": 186, "vgpr_spill": 15, "scratch_ops": 19,  "identical_to_rev26": true },
+    { "arm": "M14",  "build": "-DK0P6_MPS_ENABLE_MODE14=1",  "text_sha256": "668f26081494c97dcb6a51f89e0bceab48702128a4e06c11130b1b16fdd8ce55", "text_bytes": 192448, "sgpr_spill": 217, "vgpr_spill": 17, "scratch_ops": 168, "identical_to_rev26": false },
+    { "arm": "RING", "build": "-DK0P6_MPS_E23_RING=1",       "text_sha256": "3f8645e57480b414dc4dbb3825932602c893d744ee31af562e5c70d590fb17e2", "text_bytes": 179648, "sgpr_spill": null, "vgpr_spill": null, "scratch_ops": null, "identical_to_rev26": false }
+  ],
+  "gate_verdict": "REF == DEF byte for byte. M14 and RING both differ from REF, which is the other half of the gate: a flag-on build that came out identical would mean the flag was not reaching the code and the arm would be a lie.",
+  "site_ablation": {
+    "method": "Each mode-14 #if was renamed to a per-site macro and built with exactly one site live, so the perturbation can be charged to specific edits rather than to 'mode 14' as a blob.",
+    "script": "../tools/e38_40_ablate.sh",
+    "reference_row": { "text_bytes": 179520, "sgpr_spill": 186, "vgpr_spill": 15, "scratch_ops": 19 },
+    "discriminating_column": "epilogue_collapses - whether the site independently collapses the M7 epilogue's atomic issue window. Code size is NOT the variable.",
+    "sites": [
+      { "site": "S1", "what": "mode_is_direct_accum third mode compare (cuh)",       "text_bytes": 179648, "sgpr_spill": 188, "vgpr_spill": 15, "scratch_ops": 19,  "epilogue_collapses": false },
+      { "site": "S2", "what": "skip_dead_part_zero admits mode 14 (cuh)",            "text_bytes": 179712, "sgpr_spill": 186, "vgpr_spill": 15, "scratch_ops": 19,  "epilogue_collapses": false },
+      { "site": "S3", "what": "config_is_valid + kRemoteAccumGLegalBits (cuh)",      "text_bytes": 179520, "sgpr_spill": 186, "vgpr_spill": 15, "scratch_ops": 19,  "epilogue_collapses": false },
+      { "site": "S4", "what": "k0p6_mps_task_done: if (m == 14) return;",            "text_bytes": 181632, "sgpr_spill": 186, "vgpr_spill": 17, "scratch_ops": 118, "epilogue_collapses": true },
+      { "site": "S5", "what": "k0p6_mps_task_drain third mode compare",              "text_bytes": 179520, "sgpr_spill": 186, "vgpr_spill": 15, "scratch_ops": 19,  "epilogue_collapses": false },
+      { "site": "S6", "what": "task_done_maybe_defer packed-word split",             "text_bytes": 179200, "sgpr_spill": 188, "vgpr_spill": 15, "scratch_ops": 19,  "epilogue_collapses": true },
+      { "site": "S7", "what": "kernel entry guard, row_ready tail index",            "text_bytes": 181376, "sgpr_spill": 209, "vgpr_spill": 15, "scratch_ops": 19,  "epilogue_collapses": true },
+      { "site": "S8", "what": "M7.5 rendezvous (cfg75/coarse75)",                    "text_bytes": 184000, "sgpr_spill": 186, "vgpr_spill": 17, "scratch_ops": 118, "epilogue_collapses": true },
+      { "site": "S9", "what": "M8 m8_coarse + Ready=true instantiation",             "text_bytes": 185088, "sgpr_spill": 190, "vgpr_spill": 15, "scratch_ops": 69,  "epilogue_collapses": false },
+      { "site": "ALL","what": "all nine (== -DK0P6_MPS_ENABLE_MODE14=1)",            "text_bytes": 192448, "sgpr_spill": 217, "vgpr_spill": 17, "scratch_ops": 168, "epilogue_collapses": true }
+    ],
+    "finding": "Four of the nine sites each independently collapse the M7 epilogue's injection window, and five do not touch it at all. S9 adds the single largest lump of new code (+5568 B of .text, +50 scratch ops) and is INERT on the epilogue, while S4 - one line, 'if (k0p6_m == 14ull) return;', on a branch that is unreachable at runtime in that build because config_is_valid still rejects mode 14 - is one of the two worst."
+  },
+  "culprit": {
+    "verdict": "the mode-14 code, NOT the exp_23 ring",
+    "evidence": [
+      "The +726.9 us was measured at pin 291dfa08 = rev 28. The ring is a rev-29 change and was not in that tree at all.",
+      "DEF has the ring code present in the file with K0P6_MPS_E23_RING 0, and DEF is byte-identical to REF, so K0P6_MPS_ENABLE_MODE14 is the necessary and sufficient guard.",
+      "With the ring compiled IN, the M7 epilogue's injection window is identical to rev 26 on every metric; its +128 B of .text is entirely outside the epilogue."
+    ],
+    "ring_disposition": "Demoted to default-off anyway, because it cannot meet .text identity by construction (it adds a store at every stamped boundary). It is not accused; it is held to the gate we now trust, and it was never GPU-timed, so it will be timed as its own arm."
+  },
+  "flags": [
+    { "flag": "K0P6_MPS_ENABLE_MODE14", "default": 0, "what": "compiles in all nine mode-14 sites. =1 reproduces exp_34's arms and carries the +727 us. Never publish a mode-12 number from a =1 binary." },
+    { "flag": "K0P6_MPS_E23_RING",      "default": 0, "what": "compiles in the exp_23 per-CTA phase ring. =1 reproduces exp_23's figure arms." },
+    { "flag": "K0P6_MPS_E23_FORCE_ON",  "default": 0, "what": "gate-only; folds the ring's runtime enable to compile-time true. Never in a shipped build." }
+  ]
+}

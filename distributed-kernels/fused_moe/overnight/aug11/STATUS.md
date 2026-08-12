@@ -6,11 +6,138 @@ tonight is **`LESSONS.md` in this folder** (aug10's remains at
 this folder — that is the morning read**; per-experiment detail is in
 `exp_N_*/result.md`.
 
-**Read the three OPEN sections below before quoting any number from this file.**
+**Read the two OPEN sections below before quoting any number from this file.**
 Every timing result in this document is a **T=4096** result — that is now known to
-be the only shape at which either megakernel is correct.
+be the only shape at which either megakernel is correct. **The branch is healthy
+again as of `275d2c2a`** (exp_38): the default build's `.text` is byte-identical to
+rev 26 and the ratchet reproduces to +0.09 %. The ratchet stays at **6,482.7 µs /
+0.8408×** — exp_38 *restored* it, it did not move it. The two remaining OPEN items
+are the **T=1024/2048 correctness defect** and the **`C ≤ 8` ratchet candidate**,
+which is now the top optimisation item.
 
-## OPEN REGRESSION — `291dfa08` costs the mode-12 ratchet **+726.9 µs** (exp_34)
+## RESOLVED — the `291dfa08` regression is FIXED at `275d2c2a` (exp_38)
+
+**`.text` sha256 byte-identity with rev 26, plus two independent GPU checks.** The
+fix is a **guard, not a revert**: mode 14 sits behind `K0P6_MPS_ENABLE_MODE14`
+(default **0**) and the exp_23 ring behind `K0P6_MPS_E23_RING` (default **0**), so
+**no work was lost, no patch file was needed, and both mechanisms are one `-D`
+away.**
+
+| arm | build | `.text` sha256 | size |
+|---|---|---|---|
+| **REF** | `f113d73f` (rev 26) | `642646fc…a541a7` | 179,520 B |
+| **DEF** | this tree, **no `-D` at all** | `642646fc…a541a7` | **179,520 B — identical** |
+| M14 | `-DK0P6_MPS_ENABLE_MODE14=1` | `668f2608…ce55` | 192,448 B |
+| RING | `-DK0P6_MPS_E23_RING=1` | `3f8645e5…17e2` | 179,648 B |
+
+**M14 and RING must differ, and do** — that is the other half of the gate: a
+flag-on build that came out identical would mean the flag never reached the code
+and the arm would be a lie. `K0P6_MPS_SRC_REV` is **30**; it does not participate
+in codegen (only in the JIT cache key), which is why the bump is compatible with
+`.text` identity.
+
+| flag | default | what it does |
+|---|---|---|
+| `K0P6_MPS_ENABLE_MODE14` | **0** | compiles in all nine mode-14 sites. `=1` reproduces exp_34's arms **and carries the +727 µs — never publish a mode-12 number from a `=1` binary** |
+| `K0P6_MPS_E23_RING` | **0** | compiles in the exp_23 per-CTA phase ring; `=1` reproduces exp_23's figure arms |
+| `K0P6_MPS_E23_FORCE_ON` | 0 | gate-only, folds the ring's runtime enable to compile-time true. Never in a shipped build |
+
+**GPU confirmation — stamps OFF, 6 campaigns, arms alternated `353, 65, 65, 353,
+353, 65`, all gates green** (`[MOK GATE] pass=True`, `[MARK] control_fails=True`,
+`pperr=0`, `[POISON SELFTEST] nonfinite=57344`, `survivors=0`, `[MPS SOAK]
+600/600`, `[MPS SPIN]` 0/0 on all six):
+
+| check | measured | reference | verdict |
+|---|---|---|---|
+| **1. the ratchet is back** | `g=353` median **6,488.7 µs = 0.8423×** (6,484.7 / 6,488.7 / 6,498.1; mean 6,490.5) | published 6,482.7 / 0.8408× | **+6.0 µs = +0.09 %** — reproduced. `production` held at 7,701–7,710 (σ 3.3 µs) |
+| **2. the injection bound is alive** | contrast `g=353` − `g=65` = **−618.7 µs** on means (−625.2 on medians), arm value sets **disjoint by 597.2 µs**; `g=65` median 7,113.9 = 0.9237× | **−613.5 µs at rev 26** (agrees to 5.2 µs) vs **−1.8 µs at the broken pin** | **the mechanism is restored, not just the wall clock.** A timing coincidence cannot move a contrast by **344×** |
+
+**Caveat to carry: n=3 per arm** — enough for a 618 µs contrast and a 0.09 %
+restoration check, **not enough to move a ratchet.**
+
+**The culprit was the mode-14 code, not the ring**, on three independent grounds:
+the +726.9 µs was measured at rev 28 *before the ring existed*; `DEF` contains the
+ring code with its flag at 0 and is byte-identical to REF; and with the ring
+compiled **in**, the M7 epilogue's injection window is identical to rev 26 on every
+metric (12 issue runs, mean 23.5, zero scratch ops). The ring is default-off
+anyway because it **cannot** meet `.text` identity by construction, and it was
+never GPU-timed — it will be timed as its own arm.
+
+### Site-level attribution — nine sites, each built alone
+
+Reference REF/DEF: 179,520 B, SGPR spill 186, VGPR spill 15, 19 scratch ops.
+
+| site | what it is | `.text` | SGPR sp | VGPR sp | scratch ops | epilogue? |
+|---|---|---|---|---|---|---|
+| S1 | `mode_is_direct_accum` third mode compare | 179,648 | 188 | 15 | 19 | — |
+| S2 | `skip_dead_part_zero` admits mode 14 | 179,712 | 186 | 15 | 19 | — |
+| S3 | `config_is_valid` + `kRemoteAccumGLegalBits` | 179,520 | 186 | 15 | 19 | — |
+| **S4** | **`k0p6_mps_task_done`: `if (m == 14) return;`** | 181,632 | 186 | **17** | **118** | **COLLAPSES** |
+| S5 | `k0p6_mps_task_drain` third mode compare | 179,520 | 186 | 15 | 19 | — |
+| **S6** | **`task_done_maybe_defer` packed-word split** | 179,200 | 188 | 15 | 19 | **COLLAPSES** |
+| **S7** | **kernel entry guard, `row_ready` tail index** | 181,376 | **209** | 15 | 19 | **COLLAPSES** |
+| **S8** | **M7.5 rendezvous (`cfg75`/`coarse75`)** | 184,000 | 186 | **17** | **118** | **COLLAPSES** |
+| S9 | M8 `m8_coarse` + `Ready=true` instantiation | 185,088 | 190 | 15 | 69 | — |
+| ALL | all nine | 192,448 | **217** | **17** | **168** | worst |
+
+**Four of the nine sites each independently collapse the M7 epilogue's injection
+window; five do not touch it at all.** S9 adds the largest lump of new code
+(+5,568 B, +50 scratch ops) and is **inert**, while **S4 — one line,
+`if (k0p6_m == 14ull) return;`, on a branch that is runtime-unreachable in that
+build because `config_is_valid` still rejects mode 14 — is one of the two worst.**
+**Code size is not the variable. Where the code sits relative to the M7 epilogue's
+live ranges is.**
+
+### Mechanism — the throttle was not deleted, it was made redundant
+
+The throttle is `s_waitcnt vmcnt(4)` in the M7 epilogue, and **a throttle only
+binds if the surrounding code would otherwise exceed its cap.** The deciding
+quantity is the *issue run length* — atomics issued between consecutive
+`vmcnt`-constraining waits.
+
+| arm | atomics | issue runs | max run | **mean run** | runs == 1 | `vmcnt(0)` in epilogue | scratch ops in epilogue |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| REF / DEF / RING | 282 | 12 | 59 | **23.5** | 3 | 21 | **0** |
+| M14 | 282 | 194 | 29 | **1.45** | **189** | **117** | **96** |
+
+Mode 14's presence pushes whole-function register allocation over a cliff; the
+compiler spills **inside the epilogue**; every spill reload drags an
+`s_waitcnt vmcnt(0)` — a **full drain** — with it: **+96 scratch ops and exactly
++96 `vmcnt(0)`, 21 → 117.** Those drains chop the atomic issue stream from **12
+runs averaging 23.5 atomics in flight to 194 runs averaging 1.45**, 189 of them a
+single atomic. The hardware never reaches 4 outstanding remote RMWs, so `vmcnt(4)`
+caps something that never exceeds 1. **The throttle was made redundant by a
+stronger involuntary throttle installed by the register allocator.**
+
+That explains the sign and the size, which "the throttle stopped working" alone
+does not: exp_24 measured that depth has an optimum near 4 and that the wrong
+direction is a **cliff**, so effective depth ~1.45 is well past it, plus 96 full
+pipeline drains of latency — hence **+726.9 µs**, and hence `g=353` ≡ `g=65` to
+1.8 µs, since both are dominated by the involuntary depth-1 throttle.
+
+**Two distinct routes reach the same end state**, which is why this is fragile
+rather than one bug: a **spill route** (S4, S8 — `vmcnt(0)` 21 → 117, +96 scratch
+ops) and a **restructure route** (S6, S7 — zero extra scratch, `vmcnt(0)`
+unchanged at 21, but the epilogue span widens enough to absorb 15 more throttle
+instantiations, 81 → 96, and mean run still collapses to ~2.8).
+
+### Why the tuple gate failed, precisely
+
+**It reports scratch SIZE, not scratch OP COUNT.** `ScratchSize` stayed pinned at
+**128 B/lane** across the regression while scratch operations went **19 → 168**,
+because the spilled values fit the allocation that already existed. "Zero scratch
+ops inside either MFMA span" also passed, because the spills landed in the **M7
+epilogue, which is not an MFMA span**. SGPR/VGPR **spill counts** did move
+(**186 → 217**, **15 → 17**) and would have caught this at CPU-gate time, hours
+earlier — add them, plus whole-kernel scratch op count, to the tuple.
+
+Data: `exp_38_ratchet_restore/text_parity.json` (`exp38-text-parity-1`, includes
+the nine-site ablation), `epilogue_window.json` (`exp38-epilogue-window-1`, the
+issue-run distributions and `vmcnt` histograms), `ratchet_confirm.json`
+(`exp38-ratchet-confirm-1`, the six campaigns), plus `raw/e38a.driver.log` and
+`raw/screen_e38a.csv`.
+
+### The original defect record (superseded by the fix above, retained verbatim)
 
 **The ratchet config does not reproduce at `HEAD`.** Measured in one session, same
 config, same `production` denominator, 5-rotation campaigns:
@@ -34,7 +161,9 @@ mode 14. So this is a codegen/allocation effect in the shared function — visib
 trace `SGPR 104 → 106`, `LDS +68 B` — and it needs a source owner. exp_34 was
 measuring, not editing.
 
-**Consequences, all live:**
+**Consequences as recorded at the time** (the third is now DONE; the first two
+still stand — the pin rule is permanent and the tuple-gate finding is now
+quantified in §RESOLVED):
 
 - Any mode-12 denominator taken at `291dfa08` or later is a broken-transport
   number. That includes Q1 waterfall rungs (d)/(e), which therefore cannot be
@@ -48,6 +177,56 @@ measuring, not editing.
 
 Full evidence, including the ISA census and the four-batch campaign set:
 `exp_34_mode14/result.md` §1.
+
+### Scope of the damage — narrow, and record it because it is reassuring
+
+**No figure data is invalidated.** Every campaign that feeds a paper figure ran on
+the *good* binary:
+
+| experiment | pin | rev | binary |
+|---|---|---:|---|
+| exp_33 attribution (Q3) | `ca5b683f` | 26 | **good** |
+| exp_35 waterfall (Q1 a–c) | `ca5b683f` | 26 | **good** |
+| exp_36 sensitivity (Q5) | `b5215081` | 26 | **good** |
+| exp_37 placement (Q2) | `b5215081` | 26 | **good** |
+| exp_34 mode-12 control | `291dfa08` | 28 | **broken** |
+| exp_34 mode-14 arms | `291dfa08` | 28 | **broken transport, see below** |
+
+The only mode-12 number ever taken on the broken pin is exp_34's own control, and
+it was taken *deliberately*, as the same-session control the brief required —
+which is the only reason the regression was found at all. **Every mode-12 number
+measured at or after `291dfa08` must be discarded.**
+
+**One caveat the reassurance does not cover.** Mode 14's own arms were also
+measured at `291dfa08`, and the injection bound is inert **for mode 14 too** there
+(`g=353` vs `g=65`: +7.2 µs stamps-off, −5.4 µs stamps-on). Mode 14's M7 (2,861.4)
+sits *between* the broken mode-12 M7 (3,492.1) and the working rev-26 M7
+(2,673.9) — it recovers 630.7 of the 818 µs the regression put into M7 and keeps a
++187.5 µs residual. So the falsification is sound **as measured against the true
+in-session ratchet**, but it is measured on a binary the regression touched, and
+whether mode 14 would still miss the 6,568 threshold on a repaired binary is
+**not established**. exp_34's own recommendation is to re-run rung (d) after the
+fix; treat the falsification as final for tonight and re-testable, not as a
+closed question about the mechanism.
+
+### The tip now carries a SECOND unproven "compiled in but off" instrument
+
+`d13acacf` (exp_23 Tier A, `K0P6_MPS_SRC_REV 29`) added a per-CTA phase ring to
+**the same shared function** whose codegen the mode-14 regression implicates, and
+it cleared **the same resource-tuple gate that mode 14 passed while costing
+726.9 µs**. Two consequences were recorded: **exp_23's ring is not yet validated
+against the timing invariant** and its parity gate is demoted accordingly (see
+§exp_23), and **any number taken after `d13acacf` carries two unproven
+perturbations rather than one**, so exp_38's byte-identity target had to be stated
+against a named revision, not against "HEAD".
+
+**Closed at `275d2c2a`.** The ring is now default-off behind `K0P6_MPS_E23_RING`
+and the default build is byte-identical to rev 26, so the tip carries **zero**
+compiled-in-but-off instruments. exp_38 also **exonerates the ring**: built with
+the ring compiled in, the M7 epilogue window matches rev 26 on every metric, and
+the +726.9 µs predates the ring's existence. The ring is still default-off because
+it cannot be `.text`-identical by construction (it adds a store at every stamped
+boundary) and it has never been GPU-timed — **it will be timed as its own arm.**
 
 ## Where we start
 
@@ -106,6 +285,102 @@ than from the placement experiment.
 
 The standing ratchet remains **`C=16 g=353 mode=12 flush_rows=16` = 6,482.7 µs =
 0.8408×** until a paired same-run campaign says otherwise.
+
+### The paired confirmation arrived (exp_37) — and the condition on it is the absolute, not the delta
+
+exp_37 ran the paired campaign this section asked for: **7 interleaved rounds,
+21 core campaigns, `C=16` as an in-round control.**
+
+| comparison | n pairs | Δ µs | 95 % CI | t (clustered) | sign test | rank-sum |
+|---|---:|---:|---|---:|---:|---:|
+| **C=8 − C=16** | 7 | **−27.2** | **[−32.3, −22.1]** | −13.03 | 0.016 | 0.00058 |
+| **C=4 − C=16** | 7 | **−34.2** | **[−39.5, −28.9]** | −15.86 | 0.016 | 0.00058 |
+| C=4 − C=8 | 7 | −7.0 | **[−15.5, +1.5]** | −2.02 | 0.45 | — |
+
+**All 7 rounds negative for both candidates, campaign value sets fully disjoint**
+(`max C=8` 6,477.0 < `min C=16` 6,492.6). **`C=4` vs `C=8` is a genuine tie** — the
+interval spans zero and 2 of 7 rounds have the opposite sign — so the honest
+statement is that **the winning region is `C ≤ 8`**, not that `C=4` is best.
+
+**Still NOT moved, and the blocker is a measurement-hygiene one, not a
+statistical one.** Every exp_37 arm carried `timestamps=1`, and the stamps-on
+`C=16` control reads **6,497.5 µs** against the published stamps-off **6,482.7**.
+So **the paired delta transfers and the absolute does not**: the candidate should
+be quoted as "−34.2 µs against whatever `C=16` measures under the same
+instrumentation" (≈ 6,448 µs if applied naively to 6,482.7) and **must be
+re-measured stamps-off before it is published as a headline number**. That
+stamps-off confirmation is the one outstanding condition.
+
+Note that exp_37's own author **recommends** the move, to `C=4` with `C=8` equally
+defensible, at medium-high confidence with the absolute-number reservation
+attached. The ratchet is held here anyway, for two reasons: the stamps-off
+confirmation is missing, and the branch tip could not reproduce *any* mode-12
+number. Both had to clear first.
+
+**One of the two has now cleared.** `275d2c2a` (exp_38) restores the branch, so the
+only remaining condition is a **stamps-off paired campaign at `C ∈ {4, 8}` vs
+`C=16`** at the healthy pin. With the branch healthy, this is the **top
+optimisation item in the tree** — it is a ~30 µs win already measured 7/7 paired
+rounds with fully disjoint value sets, and it needs a measurement, not a build.
+
+## exp_37 — placement adjudication: DATA LANDED (paper Q2 / Fig 5)
+
+**Does dedicating CTAs to communication ever win on AMD? No — not once, nowhere on
+the reachable axis, and the loss is monotone in pool size.** 27 campaigns,
+135 rotations, all gates green, `pperr = 0` everywhere, pin `b5215081` (rev 26 —
+the good binary). `placement.json`, schema `exp_37.placement.v1`.
+
+| arm | mode | C | n | p50 median µs | ratio | Δ vs C=16 | M6 | M7 | combine |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| **C=4** | 12 | 4 | **7** | **6,464.2** | 0.8393 | **−34.2** | 2,450.0 | 2,593.4 | 415.7 |
+| **C=8** | 12 | 8 | **7** | **6,472.0** | 0.8406 | **−27.2** | 2,449.5 | 2,674.6 | 323.6 |
+| C=12 | 12 | 12 | 2 | 6,490.4 | 0.8428 | −7.1 † | 2,450.9 | 2,731.0 | 268.3 |
+| **C=16** (ratchet control) | 12 | 16 | **7** | **6,498.0** | 0.8436 | — | 2,451.0 | 2,696.1 | 344.1 |
+| C=32 | 12 | 32 | 2 | 6,735.3 | 0.8746 | +237.8 † | 2,449.2 | 3,027.6 | 179.0 |
+| **C=64 dedicated pool** | **2** | 64 | 2 | **6,837.5** | 0.8881 | +340.0 † | 2,480.5 | 2,916.1 | 442.3 |
+| C=0 | 12 | 0 | — | `requires_mode_14` | | | | | |
+
+† batch B contained no `C=16` campaign, so those three deltas are **unpaired
+cross-batch** and quoted for the shape of the axis only. `C=0` in mode 12 is
+rejected by the validator and is **not faked with a large-C proxy** — exp_34's
+mode-14 `C=0` supplies that point.
+
+**M6 is flat, and far more tightly than the prior claim.** Paired −1.0 µs
+CI [−6.7, +4.8]; arm means span **1.8 µs = 0.07 %** across `C = 4…32`, against the
+previously recorded "flat within 1.5 %". Taking 12 CTAs off the GEMM changes the
+GEMM by nothing measurable — **one block per CU means there is no issue-slot
+contention for a pool to relieve, so the pool is a pure N/(N−C) capacity tax.** The
+only arm where M6 moves at all is the dedicated-pool design itself (mode 2 C=64,
+2,480.5, +30 µs).
+
+**A prior claim is corrected: "the whole difference lives in M7" is too strong.**
+M7 alone and combine alone move in **opposite directions**, and the M7/combine
+boundary shifts with `C` — at `C=4`, 102.6 µs leaves M7 and 71.6 µs reappears in
+combine, and at `C=8` each of the two spans zero on its own. Their **sum** is
+significant for both candidates and is the right size to explain the end-to-end
+delta (−41.9 [−47.9, −35.9] for C=8; −31.1 [−53.0, −9.1] for C=4, against −27.2
+and −34.2 end-to-end). **The defensible statement: the C effect is entirely inside
+the payload-carrying phases and not in the GEMM.**
+
+Method notes worth carrying: arms were **rotated inside each round** so drift
+cannot masquerade as a `C` effect (it did not need to — same-run `production`
+moved 0.30 % peak-to-peak over 1.5 h); every campaign's `K0_MPS_CFG` was verified
+**from the kernel side**, read back out of all 8 rank JSONs of all 5 rotations,
+which is the check that catches "a partial config LOOKS like a pass"; and the
+invalid unclustered statistics are **stored in the JSON under
+`INVALID_unclustered_rotation_t`** so the inflation is auditable rather than
+invisible (C=4 vs C=8 would have read t = −2.76 unclustered vs −2.02 clustered).
+
+**One gate deviation to record rather than round off:** 15 of 135 rotations (11 %)
+report `[MPS SPIN] success_max=1` instead of 0. `fail_max` is **0 in all 135**, so
+no poll ever exhausted, and the ones are spread across every arm and do not track
+the effect. Peer wait is still zero for practical purposes — but "0/0 everywhere",
+as earlier sections of this file say, is now **"0/0 in 120 of 135, and
+success_max ≤ 1 in the rest"**.
+
+Cross-session agreement: exp_37's `C=16` control lands at 6,497.5 µs (n=7) against
+exp_36's independent 6,498.1 (n=3) — **0.01 % apart** — and every exp_36 point is
+confirmed at higher n.
 
 ## exp_22 — saturation curves LANDED (paper Q4a / Fig 2)
 
@@ -225,7 +500,9 @@ with `production` as the same-run denominator.** Detail:
 6. **Open question worth the paper's attention:** the injection bound (−613.5 µs at
    rev 26) and the coarse signal (−573.3 µs with the bound inert) may be
    **substitutes, not complements** — both bound in-flight remote writes. Untestable
-   at this pin; needs the §OPEN REGRESSION fix, then a rung-(d) re-run.
+   at this pin; needs the regression fix, then a rung-(d) re-run. **The fix landed
+   (§RESOLVED, `275d2c2a`), so this is now buildable with
+   `-DK0P6_MPS_ENABLE_MODE14=1` and the re-run is unblocked.**
 
 **Ladder, all green:** `[MOK GATE] … pass=True` with `pass_all_ranks` on all 8
 ranks · `[MARK] control_fails=True` · **protocol negative control failed exactly as
@@ -275,7 +552,37 @@ at `C = 0` mode 14 is a homogeneous megakernel. Debit still to price in: 96 of
 282 `flat_atomic_pk_add_bf16` acquire a scratch op within 40 instructions ahead
 (exp_26 measured that exact migration at +2.81 µs, t = 0.61 — a null).
 
-## exp_23 — timeline instrument SPEC READY (paper Q4b / Fig 3), GO at Tier A
+## exp_23 — Tier A BUILT, parity gate green **on the tuple only**, and the gate is now DEMOTED
+
+**Committed at `d13acacf`, `K0P6_MPS_SRC_REV 29`.** The per-CTA phase ring compiled
+in and runtime-off is equal to the published arm on **all eight tuple columns** —
+`SGPR 106 / VGPR 256 / AGPR 256 / scratch 128 B / LDS 155,496 / occupancy
+**asserted** 1 / spills 217-17`, MFMA 180 with **zero scratch ops in each span**,
+`flat_atomic_pk_add_bf16` 282 — while `.text` **differs** (192,640 vs 192,448 B),
+which is how we know the instrument is genuinely present rather than compiled
+away. G7 green in both halves: source census `ts_mark` 5 / `ts_last` 0 /
+`e23_mark` 0, and ISA `s_memrealtime` **12 == 12**. A fourth attribution build
+localises the entire ring-on cost (+16 B scratch, +4 VGPR spills) to
+`timestamps=1` itself, **not** to the ring. The host patch `e23_ab.patch` is
+`git apply -p1 --check` clean and passes `py_compile`, and is **deliberately
+parked, not applied**, so it cannot become a second variable inside another
+agent's running arm.
+
+**The parity gate this cleared is now demoted, and exp_23 is the reason it has to
+be.** `291dfa08` passed every one of those same tuple fields and cost the mode-12
+arm **726.9 µs**. So a green tuple is no longer evidence that an off-path
+instrument is free. **exp_23's ring needs an end-to-end timing control against
+rev 26 — the ratchet config re-timed, or `.text` byte-identity — before any
+timeline built with it can be published.** The ring is currently on the branch tip
+stacked on top of the mode-14 code in the same shared function; see
+§RESOLVED → "a SECOND unproven instrument". **Since `275d2c2a` the ring is
+default-off behind `K0P6_MPS_E23_RING` and exp_38 exonerates it as the cause of the
++726.9 µs — but it still owes its own timing arm, because a knob whose off-state is
+not `.text`-identical is a second arm, not a knob.**
+
+*(The section below is the pre-build record, superseded on the build state and
+retained for the design reasoning and the two plan corrections, which still
+stand.)*
 
 CPU only; the kernel files were **read only**. `patch_spec.md` is a ~20-minute
 mechanical apply: **Tier A is five one-line `ts_last`→`ts_mark` swaps** at sites
@@ -308,12 +615,21 @@ real tuple is **155,496 / 106**.
 | **exp_22** saturation (Q4a) | **DONE** — `saturation.json`, 250/250 points |
 | **exp_36** sensitivity (Q5) | **DONE as far as the harness allows** — `sensitivity_grid.json`; T=4096 only, skew axis absent |
 | **exp_35** waterfall (Q1) | **PARTIAL, 3 plottable rungs of 6.** exp_34 measured (d) and (e) but at the regressed pin, so they are not commensurable with (a)–(c) and are held out of the figure pending a rung-(d)/(e) re-run; (f) never built |
-| **exp_34** mode 14 | **DONE — rung FALSIFIED.** 6,650.9 µs (n=4, stamps-off) vs the 6,568 threshold. Mechanism real (−573.3 µs vs the pin's mode 12) but +153.6 vs the true ratchet; drain deletion a null (+3.2); C sweep monotone, not flat. **Surfaced §OPEN REGRESSION.** `mode14_arms.json` feeds rungs (d)/(e) and Q2's C=0 point |
-| **exp_23** timeline (Q4b) | **SPEC READY** — patch spec + tooling done and self-tested; needs the ~20-min apply, the 4-TU CPU parity gate, then ~45–55 min GPU |
-| **exp_37** placement (Q2) | **CAMPAIGN RUNNING**, pinned at `b5215081`; also carries the C=8 paired confirmation |
-| C=8 ratchet candidate | **OPEN** — see the open-ratchet section; do not move the ratchet without a paired same-run result |
+| **exp_34** mode 14 | **DONE — rung FALSIFIED at the broken pin.** 6,650.9 µs (n=4, stamps-off) vs the 6,568 threshold. Mechanism real (−573.3 µs vs the pin's mode 12) but +153.6 vs the true ratchet; drain deletion a null (+3.2); C sweep monotone, not flat. **Surfaced the regression now closed in §RESOLVED**; exp_38 charged it to four of mode 14's nine sites. `mode14_arms.json` feeds rungs (d)/(e) and Q2's C=0 point, **all owing a re-run** |
+| **exp_23** timeline (Q4b) | **TIER A BUILT** at `d13acacf`, tuple parity green, **parity gate demoted** — owes an end-to-end timing control vs rev 26, the parked host patch, then ~45–55 min GPU. No timeline data collected |
+| **exp_37** placement (Q2) | **DONE — DATA LANDED.** `placement.json`; 27 campaigns / 135 rotations at `b5215081`. Dedication never wins, monotone in C, M6 flat to 0.07 % |
+| C ≤ 8 ratchet candidate | **OPEN — now the TOP optimisation item**, its build blocker cleared by exp_38. `C=4` −34.2 [−39.5, −28.9] and `C=8` −27.2 [−32.3, −22.1] vs `C=16`, 7/7 rounds, value sets disjoint — but all arms were stamps-on, so it **owes one stamps-off paired campaign** at the healthy pin before the ratchet moves |
+| **exp_38** regression fix | **DONE — GREEN first attempt (`275d2c2a`).** Default build `.text` byte-identical to rev 26 (`642646fc…a541a7`, 179,520 B); mode 14 and the exp_23 ring both guarded default-off; 6 stamps-off campaigns restore the ratchet to +0.09 % and revive the injection contrast to −618.7 µs. Nine-site ablation + mechanism published |
 | T=1024/2048 correctness | **OPEN DEFECT**, unowned — see the open-defect section |
+| mode-14 rung (d) re-run | **UNBLOCKED by exp_38, ~30 min GPU** — the only way to settle whether the injection bound and the coarse signal are complements or substitutes. Build with `-DK0P6_MPS_ENABLE_MODE14=1` and **never** publish a mode-12 number from that binary |
+| exp_23 ring timing arm | **OWED** — the ring cannot be `.text`-identical by construction, so `K0P6_MPS_E23_RING=1` is a second arm and needs its own campaign before any timeline number is published |
 | Q6 external ladders | **NOT STARTED** (stretch) |
+
+**Ratchet unchanged: `C=16 g=353 mode=12 flush_rows=16` = 6,482.7 µs = 0.8408×** —
+and, as of `275d2c2a`, **reproducible at the branch tip again** (6,488.7 µs,
++0.09 %). One candidate is queued behind it (`C ≤ 8`, worth ~−30 µs, owing a
+stamps-off absolute); the +727 µs regression is closed and bought back nothing new,
+only what already existed.
 
 ## THE FIGURE NIGHT LANDED (exp_33 + exp_35, pinned at `ca5b683f`)
 
@@ -407,7 +723,7 @@ confounded with the mechanism.
 > **(d) and (e) are parenthesised because they are NOT commensurable with (a)–(c).**
 > exp_34 measured them at `291dfa08`, where the mode-12 transport they ride on is
 > **+726.9 µs slower** than at rung (c)'s commit and the rung-(c) injection bound is
-> **inert** (see §OPEN REGRESSION). Against their own session's mode-12 control they
+> **inert** (see §RESOLVED). Against their own session's mode-12 control they
 > are −573.3 µs; against rung (c)'s working ratchet they are **+153.6 µs**. Plotting
 > the raw values next to (a)–(c) would show a rung going the wrong way for a reason
 > that has nothing to do with granularity. **The figure needs a rung-(d)/(e) re-run

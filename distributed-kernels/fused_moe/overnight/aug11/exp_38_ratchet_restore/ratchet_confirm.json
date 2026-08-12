@@ -1,0 +1,74 @@
+{
+  "schema_version": "exp38-ratchet-confirm-1",
+  "generated_utc": "2026-08-12T20:33:15Z",
+  "commit": "275d2c2ae2a0adae688c614c9697cd5785ed8810",
+  "src_rev": 30,
+  "node": "gbt350-odcdh2-c05-1",
+  "arms": "production,pf6gm_mega,mps_mega",
+  "iters": "w500t100p5",
+  "stamps": "off",
+  "caveats": [
+    "Stamps are OFF on every campaign here. timestamps=1 costs ~15 us end-to-end; a stamps-on C=16 control read 6497.5 us against the stamps-off 6482.7. Never compare across that boundary.",
+    "Arms were alternated across rounds (353, 65, 65, 353, 353, 65) so session drift cannot masquerade as the throttle effect.",
+    "The jit cache holds byte-different mps_mega builds whose latest/ symlink flips (differing only in __hip_cuid_ bytes). hsaco ids are recorded per campaign; the flip is cosmetic and does not track the effect.",
+    "Every campaign is a full 5-process 500-warmup/100-timed run with K0_MPS_SOAK_ITERS=600 untouched.",
+    "n=3 per arm. This is a restoration confirmation, not a ratchet move; the published ratchet value 6482.7 us / 0.8408x is unchanged."
+  ],
+  "gates": {
+    "gate_pass": "True on all 6",
+    "control_fails": "True on all 6",
+    "pperr": 0,
+    "soak": "600/600 on all 6",
+    "poison_selftest": "one_row_poisoned_fails=True nonfinite=57344",
+    "poison_survivors": 0,
+    "spin_ok_max": 0,
+    "spin_fail_max": 0
+  },
+  "campaigns": [
+    { "idx": 1, "utc": "2026-08-12T20:17:40Z", "cfg": "C=16,g=353,mode=12,flush_rows=16", "g": 353, "throttle": "on_depth4",  "prod_us": 7709.5, "pf6gm_us": 6903.8, "mps_us": 6484.7, "ratio_vs_prod": 0.8411, "hsaco": "4f64f7094381" },
+    { "idx": 2, "utc": "2026-08-12T20:20:48Z", "cfg": "C=16,g=65,mode=12,flush_rows=16",  "g": 65,  "throttle": "off",        "prod_us": 7708.9, "pf6gm_us": 6879.1, "mps_us": 7095.3, "ratio_vs_prod": 0.9204, "hsaco": "4f64f7094381" },
+    { "idx": 3, "utc": "2026-08-12T20:23:57Z", "cfg": "C=16,g=65,mode=12,flush_rows=16",  "g": 65,  "throttle": "off",        "prod_us": 7701.2, "pf6gm_us": 6933.3, "mps_us": 7113.9, "ratio_vs_prod": 0.9237, "hsaco": "9e98ff46606a" },
+    { "idx": 4, "utc": "2026-08-12T20:27:05Z", "cfg": "C=16,g=353,mode=12,flush_rows=16", "g": 353, "throttle": "on_depth4",  "prod_us": 7703.5, "pf6gm_us": 6893.1, "mps_us": 6488.7, "ratio_vs_prod": 0.8423, "hsaco": "4f64f7094381" },
+    { "idx": 5, "utc": "2026-08-12T20:30:08Z", "cfg": "C=16,g=353,mode=12,flush_rows=16", "g": 353, "throttle": "on_depth4",  "prod_us": 7707.5, "pf6gm_us": 6874.0, "mps_us": 6498.1, "ratio_vs_prod": 0.8431, "hsaco": "4f64f7094381" },
+    { "idx": 6, "utc": "2026-08-12T20:33:15Z", "cfg": "C=16,g=65,mode=12,flush_rows=16",  "g": 65,  "throttle": "off",        "prod_us": 7705.1, "pf6gm_us": 6895.7, "mps_us": 7118.4, "ratio_vs_prod": 0.9239, "hsaco": "4f64f7094381" }
+  ],
+  "summary": {
+    "throttle_on_depth4": {
+      "g": 353,
+      "n": 3,
+      "mps_us_values": [6484.7, 6488.7, 6498.1],
+      "mps_us_median": 6488.7,
+      "mps_us_mean": 6490.5,
+      "prod_us_median": 7707.5,
+      "pf6gm_us_median": 6893.1,
+      "ratio_vs_prod_median": 0.8423
+    },
+    "throttle_off": {
+      "g": 65,
+      "n": 3,
+      "mps_us_values": [7095.3, 7113.9, 7118.4],
+      "mps_us_median": 7113.9,
+      "mps_us_mean": 7109.2,
+      "prod_us_median": 7705.1,
+      "pf6gm_us_median": 6895.7,
+      "ratio_vs_prod_median": 0.9237
+    },
+    "contrast_us": {
+      "definition": "mps_us(g=353) - mps_us(g=65); negative means the injection bound helps",
+      "mean_delta_us": -618.7,
+      "median_delta_us": -625.2,
+      "ranges_disjoint_by_us": 597.2,
+      "reference_rev26_delta_us": -613.5,
+      "broken_pin_291dfa08_delta_us": -1.8,
+      "verdict": "injection bound REVIVED; the -618.7 us contrast matches rev 26's -613.5 us to 5.2 us and is 344x the broken pin's -1.8 us"
+    },
+    "restoration_check": {
+      "published_ratchet_us": 6482.7,
+      "published_ratchet_ratio": 0.8408,
+      "measured_median_us": 6488.7,
+      "delta_us": 6.0,
+      "delta_pct": 0.09,
+      "verdict": "RESTORED - reproduces the published ratchet to 0.09%"
+    }
+  }
+}

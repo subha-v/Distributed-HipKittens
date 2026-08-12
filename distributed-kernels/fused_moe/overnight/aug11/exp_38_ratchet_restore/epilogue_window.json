@@ -1,0 +1,60 @@
+{
+  "schema_version": "exp38-epilogue-window-1",
+  "generated_utc": "2026-08-12T20:13:00Z",
+  "commit": "275d2c2ae2a0adae688c614c9697cd5785ed8810",
+  "script": "../tools/e38_30_isa.py",
+  "what_this_measures": "The throttle is asm volatile(\"s_waitcnt vmcnt(4)\") in the M7 epilogue, capping outstanding remote flat_atomic_pk_add_bf16 at 4. A throttle only binds if the surrounding code would otherwise exceed its cap, so the quantity that decides whether it does anything is not its own instruction count but the number of atomics issued between consecutive vmcnt-constraining waits: the ISSUE RUN LENGTH.",
+  "key_metric": "mean_run - if it falls below the depth-4 cap, the tuned throttle is redundant and inert.",
+  "arms": [
+    {
+      "arm": "REF", "build": "f113d73f (rev 26)",
+      "atomics": 282, "epilogue_span_instrs": null,
+      "issue_runs": 12, "max_run": 59, "mean_run": 23.5, "runs_gt4": 9, "runs_eq1": 3,
+      "vmcnt_waits_in_epilogue": 345, "scratch_ops_in_epilogue": 0,
+      "vmcnt_hist": { "0": 21, "4": 81, "8": 81, "16": 81, "32": 81 },
+      "throttle_binds": true
+    },
+    {
+      "arm": "DEF", "build": "this tree, no -D at all",
+      "atomics": 282, "epilogue_span_instrs": null,
+      "issue_runs": 12, "max_run": 59, "mean_run": 23.5, "runs_gt4": 9, "runs_eq1": 3,
+      "vmcnt_waits_in_epilogue": 345, "scratch_ops_in_epilogue": 0,
+      "vmcnt_hist": { "0": 21, "4": 81, "8": 81, "16": 81, "32": 81 },
+      "throttle_binds": true
+    },
+    {
+      "arm": "RING", "build": "-DK0P6_MPS_E23_RING=1",
+      "atomics": 282, "epilogue_span_instrs": null,
+      "issue_runs": 12, "max_run": 59, "mean_run": 23.5, "runs_gt4": 9, "runs_eq1": 3,
+      "vmcnt_waits_in_epilogue": 345, "scratch_ops_in_epilogue": 0,
+      "vmcnt_hist": { "0": 21, "4": 81, "8": 81, "16": 81, "32": 81 },
+      "throttle_binds": true
+    },
+    {
+      "arm": "M14", "build": "-DK0P6_MPS_ENABLE_MODE14=1",
+      "atomics": 282, "epilogue_span_instrs": null,
+      "issue_runs": 194, "max_run": 29, "mean_run": 1.45, "runs_gt4": 5, "runs_eq1": 189,
+      "vmcnt_waits_in_epilogue": 501, "scratch_ops_in_epilogue": 96,
+      "vmcnt_hist": { "0": 117, "4": 96, "8": 96, "16": 96, "32": 96 },
+      "throttle_binds": false
+    }
+  ],
+  "routes": [
+    {
+      "route": "spill", "sites": ["S4", "S8"],
+      "vmcnt_hist": { "0": 117, "4": 81, "8": 81, "16": 81, "32": 81 },
+      "scratch_ops_added": 96,
+      "mechanism": "Register pressure pushes whole-function allocation over a cliff; the compiler spills inside the M7 epilogue. Every spill reload needs its value before use, so each drags an s_waitcnt vmcnt(0) - a FULL drain - into the epilogue: 96 new scratch ops and exactly +96 vmcnt(0) waits, 21 -> 117."
+    },
+    {
+      "route": "restructure", "sites": ["S6", "S7"],
+      "vmcnt_hist": { "0": 21, "4": 96, "8": 96, "16": 96, "32": 96 },
+      "scratch_ops_added": 0,
+      "mean_run_approx": 2.8,
+      "mechanism": "Zero extra scratch ops and vmcnt(0) unchanged at 21, but the epilogue span widens enough to absorb 15 more throttle instantiations (81 -> 96) and the mean run still collapses to ~2.8. Here the inlining/scheduling boundary moved, not the spill count."
+    }
+  ],
+  "mechanism": "Mode 14's presence pushes whole-function register allocation over a cliff, and the compiler pays for it by spilling inside the M7 epilogue. The full drains chop the atomic issue stream from 12 long runs averaging 23.5 atomics in flight into 194 runs averaging 1.45, with 189 of them a single atomic. The hardware never reaches 4 outstanding remote RMWs, so vmcnt(4) is asked to cap something that never exceeds 1. The throttle did not disappear and was not deleted: it was made redundant by a stronger, involuntary throttle that the register allocator installed.",
+  "explains": "exp_24 measured that throttle depth has an optimum near 4 and that going the wrong way is a cliff. Spilling drove the effective depth to ~1.45 - well past the cliff - and added 96 full pipeline drains of latency on top. Hence +726.9 us, and hence g=353 and g=65 converging to within 1.8 us: both are dominated by the involuntary depth-1 throttle, so switching the tuned one on or off no longer matters.",
+  "paper_relevance": "Positive evidence for the central claim, from the failure direction. The in-flight bound is not a property of the instruction you wrote; it is a property of the DISTANCE between that instruction and the operations it is meant to bound, and the compiler owns that distance. A vmcnt throttle is a NEGOTIATED mechanism, and register pressure anywhere in a megakernel can silently renegotiate it while leaving every static census and every field of the resource tuple intact. Any paper reporting a vmcnt-throttle result must report the issue-run distribution alongside it, or the result is not reproducible."
+}

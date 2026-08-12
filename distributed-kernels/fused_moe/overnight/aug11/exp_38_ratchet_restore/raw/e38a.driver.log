@@ -1,0 +1,50 @@
+[20:13:41Z] SCREEN e38a start -- 6 config(s), arms=production,pf6gm_mega,mps_mega, iters=w500t100p5
+host: gbt350-odcdh2-c05-1
+[20:13:41Z] node idle: no torchrun/mpirun, no non-gpuagent KFD process
+[20:13:41Z] SCREEN_SYNC=0 -- leaving the node checkout as-is
+node source : 275d2c2a exp_38 RATCHET RESTORED: mode 14 goes behind K0P6_MPS_ENABLE_MODE14 (default 0), default .text is BYTE-IDENTICAL to rev 26
+node HEAD   : 275d2c2ae2a0adae688c614c9697cd5785ed8810
+node branch : codex/distributed-hipkittens-scaffold
+SRC_REV     : 30
+mps hsaco @batch start: 2026-08-12 18:04:19|47abe3062174
+[20:13:41Z] === [1/6] C=16,g=353,mode=12,flush_rows=16
+[20:13:42Z] mps hsaco BEFORE: 2026-08-12 18:04:19|47abe3062174
+[20:17:40Z] mps hsaco AFTER : 2026-08-12 20:17:16|4f64f7094381  (rc=0)
+[20:17:40Z]   -> CHANGED: mps_mega was rebuilt for this run
+SCREEN 1,2026-08-12T20:17:40Z,"C=16,g=353,mode=12,flush_rows=16",OK,w500t100p5,275d2c2a,30,7709.5,6903.8,6484.7,0.8411,0.9393,0.8955,True,0.035156,0.008293,True,0,True,600/600,,,,,,,,0,0,valid_diagnostic,True,4f64f7094381,4f64f7094381,2026-08-12 18:04:19|47abe3062174,2026-08-12 20:17:16|4f64f7094381,0,1_C16g353mode12flush_rows16_20260812T201341Z,""
+[20:17:40Z] === [2/6] C=16,g=65,mode=12,flush_rows=16
+[20:17:40Z] mps hsaco BEFORE: 2026-08-12 20:17:16|4f64f7094381
+[20:20:48Z] mps hsaco AFTER : 2026-08-12 20:17:16|4f64f7094381  (rc=0)
+[20:20:48Z]   -> unchanged: this run reused the cached mps_mega build (expected when HEAD did not move)
+SCREEN 2,2026-08-12T20:20:48Z,"C=16,g=65,mode=12,flush_rows=16",OK,w500t100p5,275d2c2a,30,7708.9,6879.1,7095.3,0.9204,1.0314,0.8924,True,0.039062,0.008294,True,0,True,600/600,,,,,,,,0,0,valid_diagnostic,True,4f64f7094381,,2026-08-12 20:17:16|4f64f7094381,2026-08-12 20:17:16|4f64f7094381,0,2_C16g65mode12flush_rows16_20260812T201740Z,""
+[20:20:48Z] === [3/6] C=16,g=65,mode=12,flush_rows=16
+[20:20:49Z] mps hsaco BEFORE: 2026-08-12 20:17:16|4f64f7094381
+[20:23:57Z] mps hsaco AFTER : 2026-08-12 20:14:11|9e98ff46606a  (rc=0)
+[20:23:57Z]   -> CHANGED: mps_mega was rebuilt for this run
+SCREEN 3,2026-08-12T20:23:57Z,"C=16,g=65,mode=12,flush_rows=16",OK,w500t100p5,275d2c2a,30,7701.2,6933.3,7113.9,0.9237,1.0261,0.9003,True,0.035156,0.008294,True,0,True,600/600,,,,,,,,0,0,valid_diagnostic,True,9e98ff46606a,,2026-08-12 20:17:16|4f64f7094381,2026-08-12 20:14:11|9e98ff46606a,0,3_C16g65mode12flush_rows16_20260812T202048Z,""
+[20:23:57Z] === [4/6] C=16,g=353,mode=12,flush_rows=16
+[20:23:57Z] mps hsaco BEFORE: 2026-08-12 20:14:11|9e98ff46606a
+[20:27:05Z] mps hsaco AFTER : 2026-08-12 20:17:16|4f64f7094381  (rc=0)
+[20:27:05Z]   -> CHANGED: mps_mega was rebuilt for this run
+SCREEN 4,2026-08-12T20:27:05Z,"C=16,g=353,mode=12,flush_rows=16",OK,w500t100p5,275d2c2a,30,7703.5,6893.1,6488.7,0.8423,0.9413,0.8948,True,0.039062,0.008293,True,0,True,600/600,,,,,,,,0,0,valid_diagnostic,True,4f64f7094381,16ff2682f16b,2026-08-12 20:14:11|9e98ff46606a,2026-08-12 20:17:16|4f64f7094381,0,4_C16g353mode12flush_rows16_20260812T202357Z,""
+[20:27:05Z] === [5/6] C=16,g=353,mode=12,flush_rows=16
+[20:27:06Z] mps hsaco BEFORE: 2026-08-12 20:17:16|4f64f7094381
+[20:30:08Z] mps hsaco AFTER : 2026-08-12 20:17:16|4f64f7094381  (rc=0)
+[20:30:08Z]   -> unchanged: this run reused the cached mps_mega build (expected when HEAD did not move)
+SCREEN 5,2026-08-12T20:30:08Z,"C=16,g=353,mode=12,flush_rows=16",OK,w500t100p5,275d2c2a,30,7707.5,6874.0,6498.1,0.8431,0.9453,0.8918,True,0.039062,0.008294,True,0,True,600/600,,,,,,,,0,0,valid_diagnostic,True,4f64f7094381,,2026-08-12 20:17:16|4f64f7094381,2026-08-12 20:17:16|4f64f7094381,0,5_C16g353mode12flush_rows16_20260812T202705Z,""
+[20:30:08Z] === [6/6] C=16,g=65,mode=12,flush_rows=16
+[20:30:08Z] mps hsaco BEFORE: 2026-08-12 20:17:16|4f64f7094381
+[20:33:15Z] mps hsaco AFTER : 2026-08-12 20:17:16|4f64f7094381  (rc=0)
+[20:33:15Z]   -> unchanged: this run reused the cached mps_mega build (expected when HEAD did not move)
+SCREEN 6,2026-08-12T20:33:15Z,"C=16,g=65,mode=12,flush_rows=16",OK,w500t100p5,275d2c2a,30,7705.1,6895.7,7118.4,0.9239,1.0323,0.8949,True,0.039062,0.008293,True,0,True,600/600,,,,,,,,0,0,valid_diagnostic,True,4f64f7094381,,2026-08-12 20:17:16|4f64f7094381,2026-08-12 20:17:16|4f64f7094381,0,6_C16g65mode12flush_rows16_20260812T203008Z,""
+[20:33:15Z] === SCREEN e38a DONE ===
+mps hsaco @batch end: 2026-08-12 20:17:16|4f64f7094381
+
+===== /home/subvadla/overnight-scratch/screen_e38a.csv =====
+idx,utc,cfg,status,iters,head,src_rev,prod_us,pf6gm_us,mps_us,ratio_vs_prod,ratio_vs_pf6gm,pf6gm_vs_prod,gate_pass,gate_max_abs,gate_rel,control_fails,pperr,soak,soak_epochs,ts_planM6_us,ts_M7_us,ts_combine_us,ts_servicedrain_us,ts_m2_to_end_us,ts_planM3toM5_us,ts_M6_us,spin_ok_max,spin_fail_max,eager_status,eager_gate_ok,mps_hsaco,jit_log,hsaco_before,hsaco_after,rc,outdir,note
+1,2026-08-12T20:17:40Z,"C=16,g=353,mode=12,flush_rows=16",OK,w500t100p5,275d2c2a,30,7709.5,6903.8,6484.7,0.8411,0.9393,0.8955,True,0.035156,0.008293,True,0,True,600/600,,,,,,,,0,0,valid_diagnostic,True,4f64f7094381,4f64f7094381,2026-08-12 18:04:19|47abe3062174,2026-08-12 20:17:16|4f64f7094381,0,1_C16g353mode12flush_rows16_20260812T201341Z,""
+2,2026-08-12T20:20:48Z,"C=16,g=65,mode=12,flush_rows=16",OK,w500t100p5,275d2c2a,30,7708.9,6879.1,7095.3,0.9204,1.0314,0.8924,True,0.039062,0.008294,True,0,True,600/600,,,,,,,,0,0,valid_diagnostic,True,4f64f7094381,,2026-08-12 20:17:16|4f64f7094381,2026-08-12 20:17:16|4f64f7094381,0,2_C16g65mode12flush_rows16_20260812T201740Z,""
+3,2026-08-12T20:23:57Z,"C=16,g=65,mode=12,flush_rows=16",OK,w500t100p5,275d2c2a,30,7701.2,6933.3,7113.9,0.9237,1.0261,0.9003,True,0.035156,0.008294,True,0,True,600/600,,,,,,,,0,0,valid_diagnostic,True,9e98ff46606a,,2026-08-12 20:17:16|4f64f7094381,2026-08-12 20:14:11|9e98ff46606a,0,3_C16g65mode12flush_rows16_20260812T202048Z,""
+4,2026-08-12T20:27:05Z,"C=16,g=353,mode=12,flush_rows=16",OK,w500t100p5,275d2c2a,30,7703.5,6893.1,6488.7,0.8423,0.9413,0.8948,True,0.039062,0.008293,True,0,True,600/600,,,,,,,,0,0,valid_diagnostic,True,4f64f7094381,16ff2682f16b,2026-08-12 20:14:11|9e98ff46606a,2026-08-12 20:17:16|4f64f7094381,0,4_C16g353mode12flush_rows16_20260812T202357Z,""
+5,2026-08-12T20:30:08Z,"C=16,g=353,mode=12,flush_rows=16",OK,w500t100p5,275d2c2a,30,7707.5,6874.0,6498.1,0.8431,0.9453,0.8918,True,0.039062,0.008294,True,0,True,600/600,,,,,,,,0,0,valid_diagnostic,True,4f64f7094381,,2026-08-12 20:17:16|4f64f7094381,2026-08-12 20:17:16|4f64f7094381,0,5_C16g353mode12flush_rows16_20260812T202705Z,""
+6,2026-08-12T20:33:15Z,"C=16,g=65,mode=12,flush_rows=16",OK,w500t100p5,275d2c2a,30,7705.1,6895.7,7118.4,0.9239,1.0323,0.8949,True,0.039062,0.008293,True,0,True,600/600,,,,,,,,0,0,valid_diagnostic,True,4f64f7094381,,2026-08-12 20:17:16|4f64f7094381,2026-08-12 20:17:16|4f64f7094381,0,6_C16g65mode12flush_rows16_20260812T203008Z,""

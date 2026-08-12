@@ -1,0 +1,86 @@
+[12:48:32Z] SCREEN e37a start -- 12 config(s), arms=production,pf6gm_mega,mps_mega, iters=w500t100p5
+host: gbt350-odcdh2-c05-1
+[12:48:32Z] node idle: no torchrun/mpirun, no non-gpuagent KFD process
+[12:48:32Z] SCREEN_SYNC=0 -- leaving the node checkout as-is
+node source : b5215081 aug11 figure night: exp_33 attribution + exp_35 waterfall land; add LESSONS.md and PLOTS.md
+node HEAD   : b5215081b87cf6ba0619255cef87288e081903d3
+node branch : codex/distributed-hipkittens-scaffold
+SRC_REV     : 26
+mps hsaco @batch start: 2026-08-12 07:10:16|5635a2f2a370
+[12:48:32Z] === [1/12] C=16,g=353,mode=12,flush_rows=16,timestamps=1
+[12:48:33Z] mps hsaco BEFORE: 2026-08-12 07:10:16|5635a2f2a370
+[12:51:35Z] mps hsaco AFTER : 2026-08-12 07:10:16|5635a2f2a370  (rc=0)
+[12:51:35Z]   -> unchanged: this run reused the cached mps_mega build (expected when HEAD did not move)
+SCREEN 1,2026-08-12T12:51:35Z,"C=16,g=353,mode=12,flush_rows=16,timestamps=1",OK,w500t100p5,b5215081,26,7713.8,6911.3,6492.6,0.8417,0.9394,0.8960,True,0.035156,0.008294,True,0,True,600/600,2808.8,2717.3,362.2,2800.0,5888.4,369.1,2439.7,0,0,valid_diagnostic,True,5635a2f2a370,,2026-08-12 07:10:16|5635a2f2a370,2026-08-12 07:10:16|5635a2f2a370,0,1_C16g353mode12flush_rows16timestamps1_20260812T124832Z,""
+[12:51:35Z] === [2/12] C=8,g=353,mode=12,flush_rows=16,timestamps=1
+[12:51:35Z] mps hsaco BEFORE: 2026-08-12 07:10:16|5635a2f2a370
+[12:54:38Z] mps hsaco AFTER : 2026-08-12 07:10:16|5635a2f2a370  (rc=0)
+[12:54:38Z]   -> unchanged: this run reused the cached mps_mega build (expected when HEAD did not move)
+SCREEN 2,2026-08-12T12:54:38Z,"C=8,g=353,mode=12,flush_rows=16,timestamps=1",OK,w500t100p5,b5215081,26,7707.7,6884.5,6470.6,0.8395,0.9399,0.8932,True,0.035156,0.008294,True,0,True,600/600,2825.6,2629.2,351.3,2704.7,5806.0,375.0,2450.6,1,0,valid_diagnostic,True,5635a2f2a370,,2026-08-12 07:10:16|5635a2f2a370,2026-08-12 07:10:16|5635a2f2a370,0,2_C8g353mode12flush_rows16timestamps1_20260812T125135Z,""
+[12:54:38Z] === [3/12] C=4,g=353,mode=12,flush_rows=16,timestamps=1
+[12:54:38Z] mps hsaco BEFORE: 2026-08-12 07:10:16|5635a2f2a370
+[12:57:41Z] mps hsaco AFTER : 2026-08-12 07:11:19|be7b189d458d  (rc=0)
+[12:57:41Z]   -> CHANGED: mps_mega was rebuilt for this run
+SCREEN 3,2026-08-12T12:57:41Z,"C=4,g=353,mode=12,flush_rows=16,timestamps=1",OK,w500t100p5,b5215081,26,7710.1,6913.5,6455.4,0.8373,0.9337,0.8967,True,0.035156,0.008294,True,0,True,600/600,2832.8,2518.8,455.1,2766.7,5806.8,371.5,2461.3,0,0,valid_diagnostic,True,be7b189d458d,,2026-08-12 07:10:16|5635a2f2a370,2026-08-12 07:11:19|be7b189d458d,0,3_C4g353mode12flush_rows16timestamps1_20260812T125438Z,""
+[12:57:41Z] === [4/12] C=8,g=353,mode=12,flush_rows=16,timestamps=1
+[12:57:41Z] mps hsaco BEFORE: 2026-08-12 07:11:19|be7b189d458d
+[13:00:44Z] mps hsaco AFTER : 2026-08-12 07:10:16|5635a2f2a370  (rc=0)
+[13:00:44Z]   -> CHANGED: mps_mega was rebuilt for this run
+SCREEN 4,2026-08-12T13:00:44Z,"C=8,g=353,mode=12,flush_rows=16,timestamps=1",OK,w500t100p5,b5215081,26,7713.4,6893.7,6462.0,0.8378,0.9374,0.8937,True,0.031982,0.008293,True,0,True,600/600,2822.7,2637.9,411.5,2698.7,5872.2,374.2,2448.5,0,0,valid_diagnostic,True,5635a2f2a370,,2026-08-12 07:11:19|be7b189d458d,2026-08-12 07:10:16|5635a2f2a370,0,4_C8g353mode12flush_rows16timestamps1_20260812T125741Z,""
+[13:00:44Z] === [5/12] C=4,g=353,mode=12,flush_rows=16,timestamps=1
+[13:00:44Z] mps hsaco BEFORE: 2026-08-12 07:10:16|5635a2f2a370
+[13:03:47Z] mps hsaco AFTER : 2026-08-12 07:11:19|be7b189d458d  (rc=0)
+[13:03:47Z]   -> CHANGED: mps_mega was rebuilt for this run
+SCREEN 5,2026-08-12T13:03:47Z,"C=4,g=353,mode=12,flush_rows=16,timestamps=1",OK,w500t100p5,b5215081,26,7707.1,6918.3,6464.2,0.8387,0.9344,0.8976,True,0.035156,0.008294,True,0,True,600/600,2836.0,2692.7,308.0,2770.7,5836.7,373.8,2462.1,0,0,valid_diagnostic,True,be7b189d458d,,2026-08-12 07:10:16|5635a2f2a370,2026-08-12 07:11:19|be7b189d458d,0,5_C4g353mode12flush_rows16timestamps1_20260812T130044Z,""
+[13:03:47Z] === [6/12] C=16,g=353,mode=12,flush_rows=16,timestamps=1
+[13:03:47Z] mps hsaco BEFORE: 2026-08-12 07:11:19|be7b189d458d
+[13:06:50Z] mps hsaco AFTER : 2026-08-12 07:10:16|5635a2f2a370  (rc=0)
+[13:06:50Z]   -> CHANGED: mps_mega was rebuilt for this run
+SCREEN 6,2026-08-12T13:06:50Z,"C=16,g=353,mode=12,flush_rows=16,timestamps=1",OK,w500t100p5,b5215081,26,7704.0,6888.2,6494.4,0.8430,0.9428,0.8941,True,0.039062,0.008294,True,0,True,600/600,2813.4,2714.6,318.8,2823.7,5846.8,374.6,2438.8,1,0,valid_diagnostic,True,5635a2f2a370,,2026-08-12 07:11:19|be7b189d458d,2026-08-12 07:10:16|5635a2f2a370,0,6_C16g353mode12flush_rows16timestamps1_20260812T130347Z,""
+[13:06:50Z] === [7/12] C=4,g=353,mode=12,flush_rows=16,timestamps=1
+[13:06:51Z] mps hsaco BEFORE: 2026-08-12 07:10:16|5635a2f2a370
+[13:09:53Z] mps hsaco AFTER : 2026-08-12 07:10:16|5635a2f2a370  (rc=0)
+[13:09:53Z]   -> unchanged: this run reused the cached mps_mega build (expected when HEAD did not move)
+SCREEN 7,2026-08-12T13:09:53Z,"C=4,g=353,mode=12,flush_rows=16,timestamps=1",OK,w500t100p5,b5215081,26,7694.7,6903.6,6458.1,0.8393,0.9355,0.8972,True,0.039062,0.008294,True,0,True,600/600,2855.2,2551.6,454.3,2775.7,5861.1,375.7,2479.5,0,0,valid_diagnostic,True,5635a2f2a370,,2026-08-12 07:10:16|5635a2f2a370,2026-08-12 07:10:16|5635a2f2a370,0,7_C4g353mode12flush_rows16timestamps1_20260812T130650Z,""
+[13:09:53Z] === [8/12] C=16,g=353,mode=12,flush_rows=16,timestamps=1
+[13:09:54Z] mps hsaco BEFORE: 2026-08-12 07:10:16|5635a2f2a370
+[13:12:56Z] mps hsaco AFTER : 2026-08-12 07:11:19|be7b189d458d  (rc=0)
+[13:12:56Z]   -> CHANGED: mps_mega was rebuilt for this run
+SCREEN 8,2026-08-12T13:12:56Z,"C=16,g=353,mode=12,flush_rows=16,timestamps=1",OK,w500t100p5,b5215081,26,7702.4,6887.0,6498.0,0.8436,0.9435,0.8941,True,0.035156,0.008293,True,0,True,600/600,2815.0,2715.3,355.7,2815.4,5886.0,377.3,2437.7,0,0,valid_diagnostic,True,be7b189d458d,,2026-08-12 07:10:16|5635a2f2a370,2026-08-12 07:11:19|be7b189d458d,0,8_C16g353mode12flush_rows16timestamps1_20260812T130953Z,""
+[13:12:56Z] === [9/12] C=8,g=353,mode=12,flush_rows=16,timestamps=1
+[13:12:57Z] mps hsaco BEFORE: 2026-08-12 07:11:19|be7b189d458d
+[13:16:00Z] mps hsaco AFTER : 2026-08-12 07:10:16|5635a2f2a370  (rc=0)
+[13:16:00Z]   -> CHANGED: mps_mega was rebuilt for this run
+SCREEN 9,2026-08-12T13:16:00Z,"C=8,g=353,mode=12,flush_rows=16,timestamps=1",OK,w500t100p5,b5215081,26,7698.3,6894.1,6474.8,0.8411,0.9392,0.8955,True,0.039062,0.008294,True,0,True,600/600,2838.9,2693.9,299.9,2780.4,5832.8,379.2,2459.7,0,0,valid_diagnostic,True,5635a2f2a370,,2026-08-12 07:11:19|be7b189d458d,2026-08-12 07:10:16|5635a2f2a370,0,9_C8g353mode12flush_rows16timestamps1_20260812T131256Z,""
+[13:16:00Z] === [10/12] C=8,g=353,mode=12,flush_rows=16,timestamps=1
+[13:16:00Z] mps hsaco BEFORE: 2026-08-12 07:10:16|5635a2f2a370
+[13:19:03Z] mps hsaco AFTER : 2026-08-12 07:10:16|5635a2f2a370  (rc=0)
+[13:19:04Z]   -> unchanged: this run reused the cached mps_mega build (expected when HEAD did not move)
+SCREEN 10,2026-08-12T13:19:04Z,"C=8,g=353,mode=12,flush_rows=16,timestamps=1",OK,w500t100p5,b5215081,26,7700.1,6886.2,6472.4,0.8406,0.9399,0.8943,True,0.035156,0.008294,True,0,True,600/600,2804.6,2706.4,299.9,2797.5,5810.9,370.1,2434.5,0,0,valid_diagnostic,True,5635a2f2a370,,2026-08-12 07:10:16|5635a2f2a370,2026-08-12 07:10:16|5635a2f2a370,0,10_C8g353mode12flush_rows16timestamps1_20260812T131600Z,""
+[13:19:04Z] === [11/12] C=16,g=353,mode=12,flush_rows=16,timestamps=1
+[13:19:04Z] mps hsaco BEFORE: 2026-08-12 07:10:16|5635a2f2a370
+[13:22:07Z] mps hsaco AFTER : 2026-08-12 07:11:19|be7b189d458d  (rc=0)
+[13:22:07Z]   -> CHANGED: mps_mega was rebuilt for this run
+SCREEN 11,2026-08-12T13:22:07Z,"C=16,g=353,mode=12,flush_rows=16,timestamps=1",OK,w500t100p5,b5215081,26,7702.4,6911.4,6499.3,0.8438,0.9404,0.8973,True,0.035156,0.008293,True,0,True,600/600,2806.9,2642.9,349.4,2755.8,5799.2,370.4,2436.5,0,0,valid_diagnostic,True,be7b189d458d,,2026-08-12 07:10:16|5635a2f2a370,2026-08-12 07:11:19|be7b189d458d,0,11_C16g353mode12flush_rows16timestamps1_20260812T131904Z,""
+[13:22:07Z] === [12/12] C=4,g=353,mode=12,flush_rows=16,timestamps=1
+[13:22:08Z] mps hsaco BEFORE: 2026-08-12 07:11:19|be7b189d458d
+[13:25:11Z] mps hsaco AFTER : 2026-08-12 07:10:16|5635a2f2a370  (rc=0)
+[13:25:11Z]   -> CHANGED: mps_mega was rebuilt for this run
+SCREEN 12,2026-08-12T13:25:11Z,"C=4,g=353,mode=12,flush_rows=16,timestamps=1",OK,w500t100p5,b5215081,26,7694.1,6896.7,6457.6,0.8393,0.9363,0.8964,True,0.035156,0.008294,True,0,True,600/600,2826.6,2643.7,346.4,2775.3,5816.7,374.1,2452.5,0,0,valid_diagnostic,True,5635a2f2a370,,2026-08-12 07:11:19|be7b189d458d,2026-08-12 07:10:16|5635a2f2a370,0,12_C4g353mode12flush_rows16timestamps1_20260812T132207Z,""
+[13:25:11Z] === SCREEN e37a DONE ===
+mps hsaco @batch end: 2026-08-12 07:10:16|5635a2f2a370
+
+===== /home/subvadla/overnight-scratch/screen_e37a.csv =====
+idx,utc,cfg,status,iters,head,src_rev,prod_us,pf6gm_us,mps_us,ratio_vs_prod,ratio_vs_pf6gm,pf6gm_vs_prod,gate_pass,gate_max_abs,gate_rel,control_fails,pperr,soak,soak_epochs,ts_planM6_us,ts_M7_us,ts_combine_us,ts_servicedrain_us,ts_m2_to_end_us,ts_planM3toM5_us,ts_M6_us,spin_ok_max,spin_fail_max,eager_status,eager_gate_ok,mps_hsaco,jit_log,hsaco_before,hsaco_after,rc,outdir,note
+1,2026-08-12T12:51:35Z,"C=16,g=353,mode=12,flush_rows=16,timestamps=1",OK,w500t100p5,b5215081,26,7713.8,6911.3,6492.6,0.8417,0.9394,0.8960,True,0.035156,0.008294,True,0,True,600/600,2808.8,2717.3,362.2,2800.0,5888.4,369.1,2439.7,0,0,valid_diagnostic,True,5635a2f2a370,,2026-08-12 07:10:16|5635a2f2a370,2026-08-12 07:10:16|5635a2f2a370,0,1_C16g353mode12flush_rows16timestamps1_20260812T124832Z,""
+2,2026-08-12T12:54:38Z,"C=8,g=353,mode=12,flush_rows=16,timestamps=1",OK,w500t100p5,b5215081,26,7707.7,6884.5,6470.6,0.8395,0.9399,0.8932,True,0.035156,0.008294,True,0,True,600/600,2825.6,2629.2,351.3,2704.7,5806.0,375.0,2450.6,1,0,valid_diagnostic,True,5635a2f2a370,,2026-08-12 07:10:16|5635a2f2a370,2026-08-12 07:10:16|5635a2f2a370,0,2_C8g353mode12flush_rows16timestamps1_20260812T125135Z,""
+3,2026-08-12T12:57:41Z,"C=4,g=353,mode=12,flush_rows=16,timestamps=1",OK,w500t100p5,b5215081,26,7710.1,6913.5,6455.4,0.8373,0.9337,0.8967,True,0.035156,0.008294,True,0,True,600/600,2832.8,2518.8,455.1,2766.7,5806.8,371.5,2461.3,0,0,valid_diagnostic,True,be7b189d458d,,2026-08-12 07:10:16|5635a2f2a370,2026-08-12 07:11:19|be7b189d458d,0,3_C4g353mode12flush_rows16timestamps1_20260812T125438Z,""
+4,2026-08-12T13:00:44Z,"C=8,g=353,mode=12,flush_rows=16,timestamps=1",OK,w500t100p5,b5215081,26,7713.4,6893.7,6462.0,0.8378,0.9374,0.8937,True,0.031982,0.008293,True,0,True,600/600,2822.7,2637.9,411.5,2698.7,5872.2,374.2,2448.5,0,0,valid_diagnostic,True,5635a2f2a370,,2026-08-12 07:11:19|be7b189d458d,2026-08-12 07:10:16|5635a2f2a370,0,4_C8g353mode12flush_rows16timestamps1_20260812T125741Z,""
+5,2026-08-12T13:03:47Z,"C=4,g=353,mode=12,flush_rows=16,timestamps=1",OK,w500t100p5,b5215081,26,7707.1,6918.3,6464.2,0.8387,0.9344,0.8976,True,0.035156,0.008294,True,0,True,600/600,2836.0,2692.7,308.0,2770.7,5836.7,373.8,2462.1,0,0,valid_diagnostic,True,be7b189d458d,,2026-08-12 07:10:16|5635a2f2a370,2026-08-12 07:11:19|be7b189d458d,0,5_C4g353mode12flush_rows16timestamps1_20260812T130044Z,""
+6,2026-08-12T13:06:50Z,"C=16,g=353,mode=12,flush_rows=16,timestamps=1",OK,w500t100p5,b5215081,26,7704.0,6888.2,6494.4,0.8430,0.9428,0.8941,True,0.039062,0.008294,True,0,True,600/600,2813.4,2714.6,318.8,2823.7,5846.8,374.6,2438.8,1,0,valid_diagnostic,True,5635a2f2a370,,2026-08-12 07:11:19|be7b189d458d,2026-08-12 07:10:16|5635a2f2a370,0,6_C16g353mode12flush_rows16timestamps1_20260812T130347Z,""
+7,2026-08-12T13:09:53Z,"C=4,g=353,mode=12,flush_rows=16,timestamps=1",OK,w500t100p5,b5215081,26,7694.7,6903.6,6458.1,0.8393,0.9355,0.8972,True,0.039062,0.008294,True,0,True,600/600,2855.2,2551.6,454.3,2775.7,5861.1,375.7,2479.5,0,0,valid_diagnostic,True,5635a2f2a370,,2026-08-12 07:10:16|5635a2f2a370,2026-08-12 07:10:16|5635a2f2a370,0,7_C4g353mode12flush_rows16timestamps1_20260812T130650Z,""
+8,2026-08-12T13:12:56Z,"C=16,g=353,mode=12,flush_rows=16,timestamps=1",OK,w500t100p5,b5215081,26,7702.4,6887.0,6498.0,0.8436,0.9435,0.8941,True,0.035156,0.008293,True,0,True,600/600,2815.0,2715.3,355.7,2815.4,5886.0,377.3,2437.7,0,0,valid_diagnostic,True,be7b189d458d,,2026-08-12 07:10:16|5635a2f2a370,2026-08-12 07:11:19|be7b189d458d,0,8_C16g353mode12flush_rows16timestamps1_20260812T130953Z,""
+9,2026-08-12T13:16:00Z,"C=8,g=353,mode=12,flush_rows=16,timestamps=1",OK,w500t100p5,b5215081,26,7698.3,6894.1,6474.8,0.8411,0.9392,0.8955,True,0.039062,0.008294,True,0,True,600/600,2838.9,2693.9,299.9,2780.4,5832.8,379.2,2459.7,0,0,valid_diagnostic,True,5635a2f2a370,,2026-08-12 07:11:19|be7b189d458d,2026-08-12 07:10:16|5635a2f2a370,0,9_C8g353mode12flush_rows16timestamps1_20260812T131256Z,""
+10,2026-08-12T13:19:04Z,"C=8,g=353,mode=12,flush_rows=16,timestamps=1",OK,w500t100p5,b5215081,26,7700.1,6886.2,6472.4,0.8406,0.9399,0.8943,True,0.035156,0.008294,True,0,True,600/600,2804.6,2706.4,299.9,2797.5,5810.9,370.1,2434.5,0,0,valid_diagnostic,True,5635a2f2a370,,2026-08-12 07:10:16|5635a2f2a370,2026-08-12 07:10:16|5635a2f2a370,0,10_C8g353mode12flush_rows16timestamps1_20260812T131600Z,""
+11,2026-08-12T13:22:07Z,"C=16,g=353,mode=12,flush_rows=16,timestamps=1",OK,w500t100p5,b5215081,26,7702.4,6911.4,6499.3,0.8438,0.9404,0.8973,True,0.035156,0.008293,True,0,True,600/600,2806.9,2642.9,349.4,2755.8,5799.2,370.4,2436.5,0,0,valid_diagnostic,True,be7b189d458d,,2026-08-12 07:10:16|5635a2f2a370,2026-08-12 07:11:19|be7b189d458d,0,11_C16g353mode12flush_rows16timestamps1_20260812T131904Z,""
+12,2026-08-12T13:25:11Z,"C=4,g=353,mode=12,flush_rows=16,timestamps=1",OK,w500t100p5,b5215081,26,7694.1,6896.7,6457.6,0.8393,0.9363,0.8964,True,0.035156,0.008294,True,0,True,600/600,2826.6,2643.7,346.4,2775.3,5816.7,374.1,2452.5,0,0,valid_diagnostic,True,5635a2f2a370,,2026-08-12 07:11:19|be7b189d458d,2026-08-12 07:10:16|5635a2f2a370,0,12_C4g353mode12flush_rows16timestamps1_20260812T132207Z,""

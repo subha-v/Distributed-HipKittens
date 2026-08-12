@@ -1,0 +1,4160 @@
+{
+ "schema_version": "exp_37.placement.v1",
+ "generated_utc": "2026-08-12T14:24:44Z",
+ "commit": "b5215081b87cf6ba0619255cef87288e081903d3",
+ "experiment": "exp_37 placement adjudication (paper Fig 5 / Q2)",
+ "host": "gbt350-odcdh2-c05-1",
+ "harness": {
+  "campaign": "5 rotations, 500 warmup / 100 timed, K0_MPS_SOAK_ITERS=600",
+  "arms_per_run": "production, pf6gm_mega, mps_mega (same-run denominator)",
+  "T": 4096,
+  "stat_unit": "campaign (median of its 5 rotation p50s)",
+  "clustering": "inference clusters by CAMPAIGN; rank-level and rotation-level samples are NOT treated as independent"
+ },
+ "caveats": [
+  "All arms carry timestamps=1, so the stamp instrumentation is a constant across every arm; absolute microseconds are therefore not directly comparable to no-stamp numbers from other experiments, but every comparison inside this file is like-for-like.",
+  "Phase stamps are sampled from the final SOAK epoch of each rotation, not from a timed iteration; use them for phase SHAPE, not for a budget that sums to the end-to-end number.",
+  "C=0 in mode 12 is rejected by the validator; the true zero-dedication point is only reachable in mode 14, which had not landed at this pin.",
+  "Session drift is bounded by the same-run production denominator, which moved only 0.30% peak-to-peak across the whole session (27 campaigns, ~1.5 h).",
+  "The M7/combine BOUNDARY is not stable across C: M7 alone and combine alone move in opposite directions and each spans zero for at least one candidate, while their SUM is significant for both. Attribute the C effect to the payload-carrying pair (M7+combine), not to M7 alone.",
+  "The mori jit cache holds two byte-different builds of k0pf6gm_mps_mega.hsaco and the latest/ symlink flips between them run to run, uncorrelated with the arm. They differ in 40 of 188360 bytes, all of it the HIP compilation-unit id (__hip_cuid_...), so the flip is cosmetic and is not a confound. summary.json's kernel_hsaco_sha256 is an empty dict on this harness and cannot be used as build evidence.",
+  "C=12, C=32 and the mode-2 dedicated pool have n=2 campaigns each: they are figure points for the shape of the axis, and their replicates are tight (<=2.4 us apart), but they were not run to ratchet strength."
+ ],
+ "phase_attribution": {
+  "unit": "campaign mean over its 5 rotation stamps; paired by interleave round",
+  "question": "which phase pays for the C change?",
+  "comparisons": {
+   "mode12_C4_g353_fr16__vs__mode12_C16_g353_fr16": {
+    "M6": {
+     "n_pairs": 7,
+     "delta_us_mean": -1.0,
+     "delta_us_ci95": [
+      -6.7,
+      4.8
+     ],
+     "spans_zero": true,
+     "per_pair": [
+      6.0,
+      -5.3,
+      -0.9,
+      -10.8,
+      -2.8,
+      -0.1,
+      7.2
+     ]
+    },
+    "M7": {
+     "n_pairs": 7,
+     "delta_us_mean": -102.6,
+     "delta_us_ci95": [
+      -162.8,
+      -42.5
+     ],
+     "spans_zero": false,
+     "per_pair": [
+      -174.0,
+      -70.1,
+      -57.8,
+      -100.4,
+      -97.0,
+      -17.2,
+      -201.9
+     ]
+    },
+    "combine": {
+     "n_pairs": 7,
+     "delta_us_mean": 71.6,
+     "delta_us_ci95": [
+      25.0,
+      118.2
+     ],
+     "spans_zero": false,
+     "per_pair": [
+      119.4,
+      26.8,
+      48.0,
+      81.8,
+      44.6,
+      23.6,
+      156.8
+     ]
+    },
+    "M7_plus_combine": {
+     "n_pairs": 7,
+     "delta_us_mean": -31.1,
+     "delta_us_ci95": [
+      -53.0,
+      -9.1
+     ],
+     "spans_zero": false,
+     "per_pair": [
+      -54.6,
+      -43.3,
+      -9.8,
+      -18.7,
+      -52.4,
+      6.4,
+      -45.1
+     ]
+    },
+    "planM6": {
+     "n_pairs": 7,
+     "delta_us_mean": 1.0,
+     "delta_us_ci95": [
+      -5.9,
+      7.9
+     ],
+     "spans_zero": true,
+     "per_pair": [
+      9.0,
+      -3.4,
+      2.1,
+      -10.0,
+      -1.3,
+      -1.4,
+      11.8
+     ]
+    }
+   },
+   "mode12_C8_g353_fr16__vs__mode12_C16_g353_fr16": {
+    "M6": {
+     "n_pairs": 7,
+     "delta_us_mean": -1.5,
+     "delta_us_ci95": [
+      -9.4,
+      6.4
+     ],
+     "spans_zero": true,
+     "per_pair": [
+      12.7,
+      -9.7,
+      -8.7,
+      1.7,
+      -10.7,
+      1.3,
+      2.8
+     ]
+    },
+    "M7": {
+     "n_pairs": 7,
+     "delta_us_mean": -21.5,
+     "delta_us_ci95": [
+      -66.2,
+      23.3
+     ],
+     "spans_zero": true,
+     "per_pair": [
+      -86.8,
+      -44.2,
+      -43.8,
+      -30.1,
+      5.9,
+      67.6,
+      -18.8
+     ]
+    },
+    "combine": {
+     "n_pairs": 7,
+     "delta_us_mean": -20.5,
+     "delta_us_ci95": [
+      -62.7,
+      21.8
+     ],
+     "spans_zero": true,
+     "per_pair": [
+      40.2,
+      1.5,
+      5.3,
+      -6.1,
+      -50.5,
+      -100.7,
+      -33.1
+     ]
+    },
+    "M7_plus_combine": {
+     "n_pairs": 7,
+     "delta_us_mean": -41.9,
+     "delta_us_ci95": [
+      -47.9,
+      -35.9
+     ],
+     "spans_zero": false,
+     "per_pair": [
+      -46.5,
+      -42.7,
+      -38.5,
+      -36.3,
+      -44.6,
+      -33.0,
+      -51.9
+     ]
+    },
+    "planM6": {
+     "n_pairs": 7,
+     "delta_us_mean": -0.0,
+     "delta_us_ci95": [
+      -8.2,
+      8.1
+     ],
+     "spans_zero": true,
+     "per_pair": [
+      14.8,
+      -8.3,
+      -3.9,
+      5.0,
+      -11.0,
+      -0.7,
+      3.9
+     ]
+    }
+   },
+   "mode12_C4_g353_fr16__vs__mode12_C8_g353_fr16": {
+    "M6": {
+     "n_pairs": 7,
+     "delta_us_mean": 0.5,
+     "delta_us_ci95": [
+      -6.7,
+      7.8
+     ],
+     "spans_zero": true,
+     "per_pair": [
+      -6.7,
+      4.4,
+      7.8,
+      -12.5,
+      7.9,
+      -1.4,
+      4.4
+     ]
+    },
+    "M7": {
+     "n_pairs": 7,
+     "delta_us_mean": -81.2,
+     "delta_us_ci95": [
+      -132.7,
+      -29.7
+     ],
+     "spans_zero": false,
+     "per_pair": [
+      -87.2,
+      -25.8,
+      -14.0,
+      -70.3,
+      -103.0,
+      -84.8,
+      -183.1
+     ]
+    },
+    "combine": {
+     "n_pairs": 7,
+     "delta_us_mean": 92.0,
+     "delta_us_ci95": [
+      41.8,
+      142.3
+     ],
+     "spans_zero": false,
+     "per_pair": [
+      79.2,
+      25.3,
+      42.8,
+      87.9,
+      95.1,
+      124.2,
+      189.9
+     ]
+    },
+    "M7_plus_combine": {
+     "n_pairs": 7,
+     "delta_us_mean": 10.9,
+     "delta_us_ci95": [
+      -6.2,
+      27.9
+     ],
+     "spans_zero": true,
+     "per_pair": [
+      -8.0,
+      -0.6,
+      28.7,
+      17.6,
+      -7.9,
+      39.4,
+      6.8
+     ]
+    }
+   }
+  }
+ },
+ "arms": [
+  {
+   "arm_id": "mode2_C64_g1_fr16",
+   "mode": 2,
+   "C": 64,
+   "g": 1,
+   "flush_rows": 16,
+   "status": "measured",
+   "n_campaigns": 2,
+   "campaigns": [
+    6835.7,
+    6839.4
+   ],
+   "campaign_ids": [
+    "e37b#3",
+    "e37b#6"
+   ],
+   "interleave_rounds": [
+    "e37b#r1",
+    "e37b#r2"
+   ],
+   "p50_median": 6837.5,
+   "p50_mean": 6837.5,
+   "p50_min": 6835.7,
+   "p50_max": 6839.4,
+   "rotation_p50_us": [
+    [
+     6834.7,
+     6839.7,
+     6824.9,
+     6835.7,
+     6843.1
+    ],
+    [
+     6839.4,
+     6841.5,
+     6833.8,
+     6825.8,
+     6843.2
+    ]
+   ],
+   "production_p50_same_run": [
+    7699.8,
+    7699.0
+   ],
+   "production_p50_same_run_median": 7699.4,
+   "ratio_vs_production": 0.8881,
+   "ratio_vs_production_per_campaign": [
+    0.8878,
+    0.8883
+   ],
+   "delta_vs_ratchet_us": null,
+   "delta_vs_ratchet_note": "paired against the C=16 ratchet campaign from the SAME interleave round; the standing published ratchet number is 6482.7 us from a different session",
+   "paired_ci": null,
+   "phase_stamps": {
+    "plan": {
+     "per_campaign_final_epoch": [
+      425.48,
+      417.72
+     ],
+     "median_of_campaigns": 421.6
+    },
+    "M6": {
+     "per_campaign_final_epoch": [
+      2497.64,
+      2451.68
+     ],
+     "median_of_campaigns": 2474.7,
+     "n_rotation_samples": 10,
+     "rotation_mean": 2480.5,
+     "rotation_median": 2482.1,
+     "rotation_sd": 16.3,
+     "rotation_min": 2451.7,
+     "rotation_max": 2504.8
+    },
+    "M7": {
+     "per_campaign_final_epoch": [
+      2910.26,
+      2877.94
+     ],
+     "median_of_campaigns": 2894.1,
+     "n_rotation_samples": 10,
+     "rotation_mean": 2916.1,
+     "rotation_median": 2913.5,
+     "rotation_sd": 31.3,
+     "rotation_min": 2875.7,
+     "rotation_max": 2966.9
+    },
+    "combine": {
+     "per_campaign_final_epoch": [
+      393.02,
+      476.54
+     ],
+     "median_of_campaigns": 434.8,
+     "n_rotation_samples": 10,
+     "rotation_mean": 442.3,
+     "rotation_median": 435.7,
+     "rotation_sd": 39.8,
+     "rotation_min": 390.7,
+     "rotation_max": 512.6
+    },
+    "servicedrain": {
+     "per_campaign_final_epoch": [
+      3264.72,
+      3221.89
+     ],
+     "median_of_campaigns": 3243.3
+    },
+    "units": "us",
+    "note": "device stamps, 1 tick = 0.01 us, emitted once per rotation from the FINAL SOAK epoch. Phase SHAPE only: they do not sum to arm_p50_us."
+   },
+   "spin_success_max": 1,
+   "spin_fail_max": 0,
+   "gates_green": true,
+   "n_campaigns_gates_green": 2
+  },
+  {
+   "arm_id": "mode12_C4_g353_fr16",
+   "mode": 12,
+   "C": 4,
+   "g": 353,
+   "flush_rows": 16,
+   "status": "measured",
+   "n_campaigns": 7,
+   "campaigns": [
+    6455.4,
+    6464.2,
+    6458.1,
+    6457.6,
+    6469.6,
+    6470.3,
+    6468.2
+   ],
+   "campaign_ids": [
+    "e37a#3",
+    "e37a#5",
+    "e37a#7",
+    "e37a#12",
+    "e37c#1",
+    "e37c#6",
+    "e37c#8"
+   ],
+   "interleave_rounds": [
+    "e37a#r1",
+    "e37a#r2",
+    "e37a#r3",
+    "e37a#r4",
+    "e37c#r1",
+    "e37c#r2",
+    "e37c#r3"
+   ],
+   "p50_median": 6464.2,
+   "p50_mean": 6463.3,
+   "p50_min": 6455.4,
+   "p50_max": 6470.3,
+   "rotation_p50_us": [
+    [
+     6444.5,
+     6480.9,
+     6445.1,
+     6455.4,
+     6461.1
+    ],
+    [
+     6489.7,
+     6468.8,
+     6463.0,
+     6453.2,
+     6464.2
+    ],
+    [
+     6458.1,
+     6453.6,
+     6455.7,
+     6479.7,
+     6463.5
+    ],
+    [
+     6453.3,
+     6460.5,
+     6468.4,
+     6457.6,
+     6457.2
+    ],
+    [
+     6472.7,
+     6469.6,
+     6462.2,
+     6478.3,
+     6464.5
+    ],
+    [
+     6458.6,
+     6477.6,
+     6478.1,
+     6470.3,
+     6456.2
+    ],
+    [
+     6468.2,
+     6459.8,
+     6451.3,
+     6468.8,
+     6470.6
+    ]
+   ],
+   "production_p50_same_run": [
+    7710.1,
+    7707.1,
+    7694.7,
+    7694.1,
+    7690.8,
+    7702.9,
+    7704.7
+   ],
+   "production_p50_same_run_median": 7702.9,
+   "ratio_vs_production": 0.8393,
+   "ratio_vs_production_per_campaign": [
+    0.8373,
+    0.8387,
+    0.8393,
+    0.8393,
+    0.8412,
+    0.84,
+    0.8395
+   ],
+   "delta_vs_ratchet_us": -34.2,
+   "delta_vs_ratchet_note": "paired against the C=16 ratchet campaign from the SAME interleave round; the standing published ratchet number is 6482.7 us from a different session",
+   "paired_ci": {
+    "a": "mode12_C4_g353_fr16",
+    "b": "mode12_C16_g353_fr16",
+    "pairing": "same batch, same interleave round (campaign = cluster)",
+    "pairs": [
+     "e37a#r1",
+     "e37a#r2",
+     "e37a#r3",
+     "e37a#r4",
+     "e37c#r1",
+     "e37c#r2",
+     "e37c#r3"
+    ],
+    "per_pair_delta_us": [
+     -37.2,
+     -30.2,
+     -39.9,
+     -41.7,
+     -31.0,
+     -25.7,
+     -33.6
+    ],
+    "n_pairs": 7,
+    "delta_us_mean": -34.2,
+    "delta_us_sd": 5.71,
+    "delta_us_ci95": [
+     -39.48,
+     -28.92
+    ],
+    "t_clustered": -15.86,
+    "df": 6,
+    "sign_test_p_two_sided": 0.015625,
+    "ranksum_exact_p_two_sided": 0.0005827505827505828,
+    "campaign_values_disjoint": true,
+    "delta_ratio_mean": -0.00417,
+    "delta_ratio_ci95": [
+     -0.00496,
+     -0.00338
+    ],
+    "INVALID_unclustered_rotation_t": -13.52,
+    "INVALID_unclustered_note": "rotation-level Welch t on 5x more 'samples'; reported only to show the inflation the clustered test avoids"
+   },
+   "phase_stamps": {
+    "plan": {
+     "per_campaign_final_epoch": [
+      371.52,
+      373.84,
+      375.73,
+      374.12,
+      374.28,
+      374.73,
+      371.99
+     ],
+     "median_of_campaigns": 374.1
+    },
+    "M6": {
+     "per_campaign_final_epoch": [
+      2461.32,
+      2462.12,
+      2479.46,
+      2452.49,
+      2449.64,
+      2452.42,
+      2450.53
+     ],
+     "median_of_campaigns": 2452.5,
+     "n_rotation_samples": 35,
+     "rotation_mean": 2450.0,
+     "rotation_median": 2449.6,
+     "rotation_sd": 11.5,
+     "rotation_min": 2420.0,
+     "rotation_max": 2481.1
+    },
+    "M7": {
+     "per_campaign_final_epoch": [
+      2518.84,
+      2692.72,
+      2551.61,
+      2643.69,
+      2516.85,
+      2599.54,
+      2538.47
+     ],
+     "median_of_campaigns": 2551.6,
+     "n_rotation_samples": 35,
+     "rotation_mean": 2593.4,
+     "rotation_median": 2590.8,
+     "rotation_sd": 72.0,
+     "rotation_min": 2449.0,
+     "rotation_max": 2723.3
+    },
+    "combine": {
+     "per_campaign_final_epoch": [
+      455.12,
+      308.03,
+      454.34,
+      346.43,
+      471.77,
+      502.68,
+      504.62
+     ],
+     "median_of_campaigns": 455.1,
+     "n_rotation_samples": 35,
+     "rotation_mean": 415.7,
+     "rotation_median": 424.5,
+     "rotation_sd": 67.9,
+     "rotation_min": 274.8,
+     "rotation_max": 517.8
+    },
+    "servicedrain": {
+     "per_campaign_final_epoch": [
+      2766.68,
+      2770.67,
+      2775.71,
+      2775.35,
+      2748.89,
+      2780.94,
+      2723.52
+     ],
+     "median_of_campaigns": 2770.7
+    },
+    "units": "us",
+    "note": "device stamps, 1 tick = 0.01 us, emitted once per rotation from the FINAL SOAK epoch. Phase SHAPE only: they do not sum to arm_p50_us."
+   },
+   "spin_success_max": 1,
+   "spin_fail_max": 0,
+   "gates_green": true,
+   "n_campaigns_gates_green": 7
+  },
+  {
+   "arm_id": "mode12_C8_g353_fr16",
+   "mode": 12,
+   "C": 8,
+   "g": 353,
+   "flush_rows": 16,
+   "status": "measured",
+   "n_campaigns": 7,
+   "campaigns": [
+    6470.6,
+    6462.0,
+    6474.8,
+    6472.4,
+    6463.6,
+    6472.0,
+    6477.0
+   ],
+   "campaign_ids": [
+    "e37a#2",
+    "e37a#4",
+    "e37a#9",
+    "e37a#10",
+    "e37c#3",
+    "e37c#5",
+    "e37c#7"
+   ],
+   "interleave_rounds": [
+    "e37a#r1",
+    "e37a#r2",
+    "e37a#r3",
+    "e37a#r4",
+    "e37c#r1",
+    "e37c#r2",
+    "e37c#r3"
+   ],
+   "p50_median": 6472.0,
+   "p50_mean": 6470.3,
+   "p50_min": 6462.0,
+   "p50_max": 6477.0,
+   "rotation_p50_us": [
+    [
+     6477.4,
+     6457.2,
+     6474.8,
+     6460.8,
+     6470.6
+    ],
+    [
+     6461.8,
+     6462.0,
+     6448.3,
+     6465.6,
+     6473.8
+    ],
+    [
+     6467.3,
+     6489.4,
+     6474.8,
+     6481.4,
+     6460.1
+    ],
+    [
+     6464.9,
+     6483.6,
+     6484.2,
+     6472.4,
+     6468.8
+    ],
+    [
+     6461.2,
+     6465.2,
+     6458.9,
+     6474.9,
+     6463.6
+    ],
+    [
+     6473.7,
+     6465.1,
+     6470.5,
+     6472.0,
+     6475.5
+    ],
+    [
+     6481.3,
+     6471.7,
+     6476.4,
+     6477.0,
+     6477.3
+    ]
+   ],
+   "production_p50_same_run": [
+    7707.7,
+    7713.4,
+    7698.3,
+    7700.1,
+    7697.8,
+    7694.7,
+    7700.2
+   ],
+   "production_p50_same_run_median": 7700.1,
+   "ratio_vs_production": 0.8406,
+   "ratio_vs_production_per_campaign": [
+    0.8395,
+    0.8378,
+    0.8411,
+    0.8406,
+    0.8397,
+    0.8411,
+    0.8411
+   ],
+   "delta_vs_ratchet_us": -27.19,
+   "delta_vs_ratchet_note": "paired against the C=16 ratchet campaign from the SAME interleave round; the standing published ratchet number is 6482.7 us from a different session",
+   "paired_ci": {
+    "a": "mode12_C8_g353_fr16",
+    "b": "mode12_C16_g353_fr16",
+    "pairing": "same batch, same interleave round (campaign = cluster)",
+    "pairs": [
+     "e37a#r1",
+     "e37a#r2",
+     "e37a#r3",
+     "e37a#r4",
+     "e37c#r1",
+     "e37c#r2",
+     "e37c#r3"
+    ],
+    "per_pair_delta_us": [
+     -22.0,
+     -32.4,
+     -23.2,
+     -26.9,
+     -37.0,
+     -24.0,
+     -24.8
+    ],
+    "n_pairs": 7,
+    "delta_us_mean": -27.19,
+    "delta_us_sd": 5.52,
+    "delta_us_ci95": [
+     -32.29,
+     -22.08
+    ],
+    "t_clustered": -13.03,
+    "df": 6,
+    "sign_test_p_two_sided": 0.015625,
+    "ranksum_exact_p_two_sided": 0.0005827505827505828,
+    "campaign_values_disjoint": true,
+    "delta_ratio_mean": -0.00338,
+    "delta_ratio_ci95": [
+     -0.00449,
+     -0.00227
+    ],
+    "INVALID_unclustered_rotation_t": -11.88,
+    "INVALID_unclustered_note": "rotation-level Welch t on 5x more 'samples'; reported only to show the inflation the clustered test avoids"
+   },
+   "phase_stamps": {
+    "plan": {
+     "per_campaign_final_epoch": [
+      374.96,
+      374.24,
+      379.21,
+      370.05,
+      373.36,
+      377.28,
+      374.85
+     ],
+     "median_of_campaigns": 374.9
+    },
+    "M6": {
+     "per_campaign_final_epoch": [
+      2450.64,
+      2448.47,
+      2459.72,
+      2434.51,
+      2443.88,
+      2465.51,
+      2446.31
+     ],
+     "median_of_campaigns": 2448.5,
+     "n_rotation_samples": 35,
+     "rotation_mean": 2449.5,
+     "rotation_median": 2450.3,
+     "rotation_sd": 11.4,
+     "rotation_min": 2416.4,
+     "rotation_max": 2473.8
+    },
+    "M7": {
+     "per_campaign_final_epoch": [
+      2629.16,
+      2637.91,
+      2693.93,
+      2706.44,
+      2637.4,
+      2793.06,
+      2734.12
+     ],
+     "median_of_campaigns": 2693.9,
+     "n_rotation_samples": 35,
+     "rotation_mean": 2674.6,
+     "rotation_median": 2665.2,
+     "rotation_sd": 45.2,
+     "rotation_min": 2577.8,
+     "rotation_max": 2793.1
+    },
+    "combine": {
+     "per_campaign_final_epoch": [
+      351.26,
+      411.54,
+      299.95,
+      299.88,
+      346.68,
+      251.42,
+      265.0
+     ],
+     "median_of_campaigns": 299.9,
+     "n_rotation_samples": 35,
+     "rotation_mean": 323.6,
+     "rotation_median": 315.0,
+     "rotation_sd": 49.2,
+     "rotation_min": 239.3,
+     "rotation_max": 433.6
+    },
+    "servicedrain": {
+     "per_campaign_final_epoch": [
+      2704.71,
+      2698.69,
+      2780.36,
+      2797.5,
+      2693.23,
+      2913.76,
+      2817.24
+     ],
+     "median_of_campaigns": 2780.4
+    },
+    "units": "us",
+    "note": "device stamps, 1 tick = 0.01 us, emitted once per rotation from the FINAL SOAK epoch. Phase SHAPE only: they do not sum to arm_p50_us."
+   },
+   "spin_success_max": 1,
+   "spin_fail_max": 0,
+   "gates_green": true,
+   "n_campaigns_gates_green": 7
+  },
+  {
+   "arm_id": "mode12_C12_g353_fr16",
+   "mode": 12,
+   "C": 12,
+   "g": 353,
+   "flush_rows": 16,
+   "status": "measured",
+   "n_campaigns": 2,
+   "campaigns": [
+    6490.2,
+    6490.7
+   ],
+   "campaign_ids": [
+    "e37b#1",
+    "e37b#4"
+   ],
+   "interleave_rounds": [
+    "e37b#r1",
+    "e37b#r2"
+   ],
+   "p50_median": 6490.4,
+   "p50_mean": 6490.4,
+   "p50_min": 6490.2,
+   "p50_max": 6490.7,
+   "rotation_p50_us": [
+    [
+     6490.2,
+     6485.7,
+     6499.8,
+     6489.7,
+     6497.8
+    ],
+    [
+     6490.7,
+     6481.8,
+     6488.0,
+     6495.0,
+     6502.5
+    ]
+   ],
+   "production_p50_same_run": [
+    7705.5,
+    7695.6
+   ],
+   "production_p50_same_run_median": 7700.6,
+   "ratio_vs_production": 0.8428,
+   "ratio_vs_production_per_campaign": [
+    0.8423,
+    0.8434
+   ],
+   "delta_vs_ratchet_us": null,
+   "delta_vs_ratchet_note": "paired against the C=16 ratchet campaign from the SAME interleave round; the standing published ratchet number is 6482.7 us from a different session",
+   "paired_ci": null,
+   "phase_stamps": {
+    "plan": {
+     "per_campaign_final_epoch": [
+      377.18,
+      373.5
+     ],
+     "median_of_campaigns": 375.3
+    },
+    "M6": {
+     "per_campaign_final_epoch": [
+      2446.6,
+      2459.86
+     ],
+     "median_of_campaigns": 2453.2,
+     "n_rotation_samples": 10,
+     "rotation_mean": 2450.9,
+     "rotation_median": 2446.6,
+     "rotation_sd": 10.2,
+     "rotation_min": 2436.6,
+     "rotation_max": 2466.2
+    },
+    "M7": {
+     "per_campaign_final_epoch": [
+      2779.22,
+      2688.0
+     ],
+     "median_of_campaigns": 2733.6,
+     "n_rotation_samples": 10,
+     "rotation_mean": 2731.0,
+     "rotation_median": 2731.5,
+     "rotation_sd": 47.6,
+     "rotation_min": 2662.7,
+     "rotation_max": 2812.8
+    },
+    "combine": {
+     "per_campaign_final_epoch": [
+      261.37,
+      294.72
+     ],
+     "median_of_campaigns": 278.0,
+     "n_rotation_samples": 10,
+     "rotation_mean": 268.3,
+     "rotation_median": 264.3,
+     "rotation_sd": 35.5,
+     "rotation_min": 211.3,
+     "rotation_max": 337.1
+    },
+    "servicedrain": {
+     "per_campaign_final_epoch": [
+      2896.42,
+      2773.76
+     ],
+     "median_of_campaigns": 2835.1
+    },
+    "units": "us",
+    "note": "device stamps, 1 tick = 0.01 us, emitted once per rotation from the FINAL SOAK epoch. Phase SHAPE only: they do not sum to arm_p50_us."
+   },
+   "spin_success_max": 1,
+   "spin_fail_max": 0,
+   "gates_green": true,
+   "n_campaigns_gates_green": 2
+  },
+  {
+   "arm_id": "mode12_C16_g353_fr16",
+   "mode": 12,
+   "C": 16,
+   "g": 353,
+   "flush_rows": 16,
+   "status": "measured",
+   "n_campaigns": 7,
+   "campaigns": [
+    6492.6,
+    6494.4,
+    6498.0,
+    6499.3,
+    6500.7,
+    6496.0,
+    6501.8
+   ],
+   "campaign_ids": [
+    "e37a#1",
+    "e37a#6",
+    "e37a#8",
+    "e37a#11",
+    "e37c#2",
+    "e37c#4",
+    "e37c#9"
+   ],
+   "interleave_rounds": [
+    "e37a#r1",
+    "e37a#r2",
+    "e37a#r3",
+    "e37a#r4",
+    "e37c#r1",
+    "e37c#r2",
+    "e37c#r3"
+   ],
+   "p50_median": 6498.0,
+   "p50_mean": 6497.5,
+   "p50_min": 6492.6,
+   "p50_max": 6501.8,
+   "rotation_p50_us": [
+    [
+     6524.0,
+     6501.1,
+     6491.6,
+     6492.6,
+     6479.9
+    ],
+    [
+     6511.8,
+     6485.2,
+     6494.4,
+     6522.0,
+     6487.7
+    ],
+    [
+     6481.4,
+     6511.2,
+     6513.6,
+     6498.0,
+     6488.7
+    ],
+    [
+     6511.9,
+     6499.3,
+     6505.2,
+     6493.7,
+     6486.3
+    ],
+    [
+     6498.8,
+     6501.8,
+     6504.9,
+     6495.2,
+     6500.7
+    ],
+    [
+     6491.6,
+     6495.9,
+     6496.0,
+     6497.9,
+     6509.5
+    ],
+    [
+     6517.2,
+     6483.0,
+     6492.8,
+     6501.8,
+     6518.8
+    ]
+   ],
+   "production_p50_same_run": [
+    7713.8,
+    7704.0,
+    7702.4,
+    7702.4,
+    7700.7,
+    7704.2,
+    7694.5
+   ],
+   "production_p50_same_run_median": 7702.4,
+   "ratio_vs_production": 0.8436,
+   "ratio_vs_production_per_campaign": [
+    0.8417,
+    0.843,
+    0.8436,
+    0.8438,
+    0.8442,
+    0.8432,
+    0.845
+   ],
+   "delta_vs_ratchet_us": 0.0,
+   "delta_vs_ratchet_note": "paired against the C=16 ratchet campaign from the SAME interleave round; the standing published ratchet number is 6482.7 us from a different session",
+   "paired_ci": "control arm (paired denominator)",
+   "phase_stamps": {
+    "plan": {
+     "per_campaign_final_epoch": [
+      369.1,
+      374.64,
+      377.32,
+      370.38,
+      378.08,
+      378.84,
+      372.25
+     ],
+     "median_of_campaigns": 374.6
+    },
+    "M6": {
+     "per_campaign_final_epoch": [
+      2439.72,
+      2438.76,
+      2437.67,
+      2436.5,
+      2460.84,
+      2457.84,
+      2438.42
+     ],
+     "median_of_campaigns": 2438.8,
+     "n_rotation_samples": 35,
+     "rotation_mean": 2451.0,
+     "rotation_median": 2450.4,
+     "rotation_sd": 12.8,
+     "rotation_min": 2428.2,
+     "rotation_max": 2483.4
+    },
+    "M7": {
+     "per_campaign_final_epoch": [
+      2717.28,
+      2714.59,
+      2715.35,
+      2642.92,
+      2628.96,
+      2552.55,
+      2747.79
+     ],
+     "median_of_campaigns": 2714.6,
+     "n_rotation_samples": 35,
+     "rotation_mean": 2696.1,
+     "rotation_median": 2701.4,
+     "rotation_sd": 58.7,
+     "rotation_min": 2552.6,
+     "rotation_max": 2820.1
+    },
+    "combine": {
+     "per_campaign_final_epoch": [
+      362.25,
+      318.78,
+      355.68,
+      349.4,
+      390.6,
+      518.93,
+      306.66
+     ],
+     "median_of_campaigns": 355.7,
+     "n_rotation_samples": 35,
+     "rotation_mean": 344.1,
+     "rotation_median": 339.9,
+     "rotation_sd": 57.8,
+     "rotation_min": 247.0,
+     "rotation_max": 518.9
+    },
+    "servicedrain": {
+     "per_campaign_final_epoch": [
+      2799.98,
+      2823.73,
+      2815.45,
+      2755.8,
+      2720.22,
+      2672.7,
+      2865.05
+     ],
+     "median_of_campaigns": 2800.0
+    },
+    "units": "us",
+    "note": "device stamps, 1 tick = 0.01 us, emitted once per rotation from the FINAL SOAK epoch. Phase SHAPE only: they do not sum to arm_p50_us."
+   },
+   "spin_success_max": 1,
+   "spin_fail_max": 0,
+   "gates_green": true,
+   "n_campaigns_gates_green": 7
+  },
+  {
+   "arm_id": "mode12_C32_g353_fr16",
+   "mode": 12,
+   "C": 32,
+   "g": 353,
+   "flush_rows": 16,
+   "status": "measured",
+   "n_campaigns": 2,
+   "campaigns": [
+    6734.1,
+    6736.5
+   ],
+   "campaign_ids": [
+    "e37b#2",
+    "e37b#5"
+   ],
+   "interleave_rounds": [
+    "e37b#r1",
+    "e37b#r2"
+   ],
+   "p50_median": 6735.3,
+   "p50_mean": 6735.3,
+   "p50_min": 6734.1,
+   "p50_max": 6736.5,
+   "rotation_p50_us": [
+    [
+     6746.2,
+     6734.1,
+     6734.2,
+     6722.3,
+     6722.9
+    ],
+    [
+     6726.0,
+     6731.6,
+     6739.7,
+     6736.5,
+     6737.1
+    ]
+   ],
+   "production_p50_same_run": [
+    7693.8,
+    7708.7
+   ],
+   "production_p50_same_run_median": 7701.3,
+   "ratio_vs_production": 0.8746,
+   "ratio_vs_production_per_campaign": [
+    0.8753,
+    0.8739
+   ],
+   "delta_vs_ratchet_us": null,
+   "delta_vs_ratchet_note": "paired against the C=16 ratchet campaign from the SAME interleave round; the standing published ratchet number is 6482.7 us from a different session",
+   "paired_ci": null,
+   "phase_stamps": {
+    "plan": {
+     "per_campaign_final_epoch": [
+      372.95,
+      368.24
+     ],
+     "median_of_campaigns": 370.6
+    },
+    "M6": {
+     "per_campaign_final_epoch": [
+      2428.01,
+      2434.64
+     ],
+     "median_of_campaigns": 2431.3,
+     "n_rotation_samples": 10,
+     "rotation_mean": 2449.2,
+     "rotation_median": 2449.1,
+     "rotation_sd": 14.5,
+     "rotation_min": 2428.0,
+     "rotation_max": 2474.1
+    },
+    "M7": {
+     "per_campaign_final_epoch": [
+      3035.57,
+      2964.43
+     ],
+     "median_of_campaigns": 3000.0,
+     "n_rotation_samples": 10,
+     "rotation_mean": 3027.6,
+     "rotation_median": 3017.2,
+     "rotation_sd": 55.1,
+     "rotation_min": 2954.7,
+     "rotation_max": 3125.7
+    },
+    "combine": {
+     "per_campaign_final_epoch": [
+      178.21,
+      193.53
+     ],
+     "median_of_campaigns": 185.9,
+     "n_rotation_samples": 10,
+     "rotation_mean": 179.0,
+     "rotation_median": 185.9,
+     "rotation_sd": 31.4,
+     "rotation_min": 133.4,
+     "rotation_max": 226.6
+    },
+    "servicedrain": {
+     "per_campaign_final_epoch": [
+      3118.2,
+      3058.79
+     ],
+     "median_of_campaigns": 3088.5
+    },
+    "units": "us",
+    "note": "device stamps, 1 tick = 0.01 us, emitted once per rotation from the FINAL SOAK epoch. Phase SHAPE only: they do not sum to arm_p50_us."
+   },
+   "spin_success_max": 1,
+   "spin_fail_max": 0,
+   "gates_green": true,
+   "n_campaigns_gates_green": 2
+  },
+  {
+   "arm_id": "mode12_C0_g353_fr16",
+   "mode": 12,
+   "C": 0,
+   "g": 353,
+   "flush_rows": 16,
+   "status": "requires_mode_14",
+   "n_campaigns": 0,
+   "campaigns": [],
+   "p50_median": null,
+   "production_p50_same_run": [],
+   "ratio_vs_production": null,
+   "delta_vs_ratchet_us": null,
+   "paired_ci": null,
+   "phase_stamps": null,
+   "spin_success_max": null,
+   "spin_fail_max": null,
+   "gates_green": null,
+   "note": "C=0 is ILLEGAL in mode 12 -- the adapter validator rejects it (moe_mps_adapter.cuh:373/375). Not faked with a large-C proxy. The zero-dedication point needs mode 14."
+  },
+  {
+   "arm_id": "mode14_C0",
+   "mode": 14,
+   "C": 0,
+   "g": null,
+   "flush_rows": 16,
+   "status": "pending_exp_34",
+   "n_campaigns": 0,
+   "campaigns": [],
+   "p50_median": null,
+   "production_p50_same_run": [],
+   "ratio_vs_production": null,
+   "delta_vs_ratchet_us": null,
+   "paired_ci": null,
+   "phase_stamps": null,
+   "spin_success_max": null,
+   "spin_fail_max": null,
+   "gates_green": null,
+   "note": "mode 14 had not landed on the branch at this pin; not run on the profiler's own initiative."
+  },
+  {
+   "arm_id": "mode14_C8",
+   "mode": 14,
+   "C": 8,
+   "g": null,
+   "flush_rows": 16,
+   "status": "pending_exp_34",
+   "n_campaigns": 0,
+   "campaigns": [],
+   "p50_median": null,
+   "production_p50_same_run": [],
+   "ratio_vs_production": null,
+   "delta_vs_ratchet_us": null,
+   "paired_ci": null,
+   "phase_stamps": null,
+   "spin_success_max": null,
+   "spin_fail_max": null,
+   "gates_green": null,
+   "note": "mode 14 had not landed on the branch at this pin; not run on the profiler's own initiative."
+  },
+  {
+   "arm_id": "mode14_C16",
+   "mode": 14,
+   "C": 16,
+   "g": null,
+   "flush_rows": 16,
+   "status": "pending_exp_34",
+   "n_campaigns": 0,
+   "campaigns": [],
+   "p50_median": null,
+   "production_p50_same_run": [],
+   "ratio_vs_production": null,
+   "delta_vs_ratchet_us": null,
+   "paired_ci": null,
+   "phase_stamps": null,
+   "spin_success_max": null,
+   "spin_fail_max": null,
+   "gates_green": null,
+   "note": "mode 14 had not landed on the branch at this pin; not run on the profiler's own initiative."
+  }
+ ],
+ "pairwise_comparisons": {
+  "mode2_C64_g1_fr16__vs__mode12_C12_g353_fr16": {
+   "a": "mode2_C64_g1_fr16",
+   "b": "mode12_C12_g353_fr16",
+   "pairing": "same batch, same interleave round (campaign = cluster)",
+   "pairs": [
+    "e37b#r1",
+    "e37b#r2"
+   ],
+   "per_pair_delta_us": [
+    345.5,
+    348.7
+   ],
+   "n_pairs": 2,
+   "delta_us_mean": 347.11,
+   "delta_us_sd": 2.32,
+   "delta_us_ci95": [
+    326.31,
+    367.91
+   ],
+   "t_clustered": 212.04,
+   "df": 1,
+   "sign_test_p_two_sided": 0.5,
+   "ranksum_exact_p_two_sided": 0.3333333333333333,
+   "campaign_values_disjoint": true,
+   "delta_ratio_mean": 0.04521,
+   "delta_ratio_ci95": [
+    0.0416,
+    0.04882
+   ],
+   "INVALID_unclustered_rotation_t": 117.12,
+   "INVALID_unclustered_note": "rotation-level Welch t on 5x more 'samples'; reported only to show the inflation the clustered test avoids"
+  },
+  "mode2_C64_g1_fr16__vs__mode12_C32_g353_fr16": {
+   "a": "mode2_C64_g1_fr16",
+   "b": "mode12_C32_g353_fr16",
+   "pairing": "same batch, same interleave round (campaign = cluster)",
+   "pairs": [
+    "e37b#r1",
+    "e37b#r2"
+   ],
+   "per_pair_delta_us": [
+    101.6,
+    102.9
+   ],
+   "n_pairs": 2,
+   "delta_us_mean": 102.25,
+   "delta_us_sd": 0.92,
+   "delta_us_ci95": [
+    94.0,
+    110.51
+   ],
+   "t_clustered": 157.41,
+   "df": 1,
+   "sign_test_p_two_sided": 0.5,
+   "ranksum_exact_p_two_sided": 0.3333333333333333,
+   "campaign_values_disjoint": true,
+   "delta_ratio_mean": 0.01349,
+   "delta_ratio_ci95": [
+    0.00105,
+    0.02593
+   ],
+   "INVALID_unclustered_rotation_t": 32.39,
+   "INVALID_unclustered_note": "rotation-level Welch t on 5x more 'samples'; reported only to show the inflation the clustered test avoids"
+  },
+  "mode12_C4_g353_fr16__vs__mode12_C8_g353_fr16": {
+   "a": "mode12_C4_g353_fr16",
+   "b": "mode12_C8_g353_fr16",
+   "pairing": "same batch, same interleave round (campaign = cluster)",
+   "pairs": [
+    "e37a#r1",
+    "e37a#r2",
+    "e37a#r3",
+    "e37a#r4",
+    "e37c#r1",
+    "e37c#r2",
+    "e37c#r3"
+   ],
+   "per_pair_delta_us": [
+    -15.2,
+    2.2,
+    -16.7,
+    -14.8,
+    6.0,
+    -1.7,
+    -8.8
+   ],
+   "n_pairs": 7,
+   "delta_us_mean": -7.01,
+   "delta_us_sd": 9.19,
+   "delta_us_ci95": [
+    -15.52,
+    1.49
+   ],
+   "t_clustered": -2.02,
+   "df": 6,
+   "sign_test_p_two_sided": 0.453125,
+   "ranksum_exact_p_two_sided": 0.03787878787878788,
+   "campaign_values_disjoint": false,
+   "delta_ratio_mean": -0.00079,
+   "delta_ratio_ci95": [
+    -0.00213,
+    0.00055
+   ],
+   "INVALID_unclustered_rotation_t": -2.76,
+   "INVALID_unclustered_note": "rotation-level Welch t on 5x more 'samples'; reported only to show the inflation the clustered test avoids"
+  },
+  "mode12_C4_g353_fr16__vs__mode12_C16_g353_fr16": {
+   "a": "mode12_C4_g353_fr16",
+   "b": "mode12_C16_g353_fr16",
+   "pairing": "same batch, same interleave round (campaign = cluster)",
+   "pairs": [
+    "e37a#r1",
+    "e37a#r2",
+    "e37a#r3",
+    "e37a#r4",
+    "e37c#r1",
+    "e37c#r2",
+    "e37c#r3"
+   ],
+   "per_pair_delta_us": [
+    -37.2,
+    -30.2,
+    -39.9,
+    -41.7,
+    -31.0,
+    -25.7,
+    -33.6
+   ],
+   "n_pairs": 7,
+   "delta_us_mean": -34.2,
+   "delta_us_sd": 5.71,
+   "delta_us_ci95": [
+    -39.48,
+    -28.92
+   ],
+   "t_clustered": -15.86,
+   "df": 6,
+   "sign_test_p_two_sided": 0.015625,
+   "ranksum_exact_p_two_sided": 0.0005827505827505828,
+   "campaign_values_disjoint": true,
+   "delta_ratio_mean": -0.00417,
+   "delta_ratio_ci95": [
+    -0.00496,
+    -0.00338
+   ],
+   "INVALID_unclustered_rotation_t": -13.52,
+   "INVALID_unclustered_note": "rotation-level Welch t on 5x more 'samples'; reported only to show the inflation the clustered test avoids"
+  },
+  "mode12_C8_g353_fr16__vs__mode12_C16_g353_fr16": {
+   "a": "mode12_C8_g353_fr16",
+   "b": "mode12_C16_g353_fr16",
+   "pairing": "same batch, same interleave round (campaign = cluster)",
+   "pairs": [
+    "e37a#r1",
+    "e37a#r2",
+    "e37a#r3",
+    "e37a#r4",
+    "e37c#r1",
+    "e37c#r2",
+    "e37c#r3"
+   ],
+   "per_pair_delta_us": [
+    -22.0,
+    -32.4,
+    -23.2,
+    -26.9,
+    -37.0,
+    -24.0,
+    -24.8
+   ],
+   "n_pairs": 7,
+   "delta_us_mean": -27.19,
+   "delta_us_sd": 5.52,
+   "delta_us_ci95": [
+    -32.29,
+    -22.08
+   ],
+   "t_clustered": -13.03,
+   "df": 6,
+   "sign_test_p_two_sided": 0.015625,
+   "ranksum_exact_p_two_sided": 0.0005827505827505828,
+   "campaign_values_disjoint": true,
+   "delta_ratio_mean": -0.00338,
+   "delta_ratio_ci95": [
+    -0.00449,
+    -0.00227
+   ],
+   "INVALID_unclustered_rotation_t": -11.88,
+   "INVALID_unclustered_note": "rotation-level Welch t on 5x more 'samples'; reported only to show the inflation the clustered test avoids"
+  },
+  "mode12_C12_g353_fr16__vs__mode12_C32_g353_fr16": {
+   "a": "mode12_C12_g353_fr16",
+   "b": "mode12_C32_g353_fr16",
+   "pairing": "same batch, same interleave round (campaign = cluster)",
+   "pairs": [
+    "e37b#r1",
+    "e37b#r2"
+   ],
+   "per_pair_delta_us": [
+    -243.9,
+    -245.8
+   ],
+   "n_pairs": 2,
+   "delta_us_mean": -244.85,
+   "delta_us_sd": 1.4,
+   "delta_us_ci95": [
+    -257.4,
+    -232.31
+   ],
+   "t_clustered": -247.98,
+   "df": 1,
+   "sign_test_p_two_sided": 0.5,
+   "ranksum_exact_p_two_sided": 0.3333333333333333,
+   "campaign_values_disjoint": true,
+   "delta_ratio_mean": -0.03172,
+   "delta_ratio_ci95": [
+    -0.04776,
+    -0.01567
+   ],
+   "INVALID_unclustered_rotation_t": -76.13,
+   "INVALID_unclustered_note": "rotation-level Welch t on 5x more 'samples'; reported only to show the inflation the clustered test avoids"
+  }
+ },
+ "campaigns_raw": [
+  {
+   "tag": "e37a",
+   "idx": 1,
+   "outdir": "1_C16g353mode12flush_rows16timestamps1_20260812T124832Z",
+   "arm": "mode12_C16_g353_fr16",
+   "C": 16,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "timestamps": 1,
+   "soak_iters": [
+    600
+   ],
+   "n_rank_files": 40,
+   "cfg_consistent_across_all_ranks": true,
+   "status": "valid_diagnostic",
+   "run_count": 5,
+   "mps_p50": 6492.626667022705,
+   "prod_p50": 7713.762044906616,
+   "pf6gm_p50": 6911.267518997192,
+   "ratio": 0.8416939269354018,
+   "rotation_mps_p50": [
+    6523.963928222656,
+    6501.064777374268,
+    6491.606950759888,
+    6492.626667022705,
+    6479.888439178467
+   ],
+   "rotation_prod_p50": [
+    7703.956127166748,
+    7719.857454299927,
+    7719.619989395142,
+    7700.541019439697,
+    7713.762044906616
+   ],
+   "gates": {
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+    "mok_gate_pass": "True",
+    "control_fails": "True",
+    "pperr_max": 0,
+    "soak_pass": "True",
+    "soak_epochs": "600/600",
+    "poison_selftest_all_true": true,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_survivors_max": 0,
+    "poison_lines_n": 20,
+    "spin_success_max": 0,
+    "spin_fail_max": 0,
+    "spin_lines_n": 5
+   },
+   "stamps": {
+    "plan_M3toM5": 369.1,
+    "M6": 2439.72,
+    "planM6": 2808.82,
+    "M7": 2717.28,
+    "combine": 362.25,
+    "servicedrain": 2799.98,
+    "m2_to_end": 5888.35
+   },
+   "stamps_all_rotations": {
+    "M6": [
+     2428.2,
+     2438.14,
+     2439.72,
+     2440.96,
+     2462.37
+    ],
+    "M7": [
+     2648.02,
+     2677.95,
+     2717.28,
+     2722.39,
+     2820.08
+    ],
+    "combine": [
+     246.99,
+     291.29,
+     313.33,
+     362.25,
+     408.48
+    ],
+    "planM6": [
+     2803.37,
+     2806.02,
+     2808.82,
+     2817.12,
+     2833.0
+    ]
+   },
+   "gates_green": true,
+   "round": 1
+  },
+  {
+   "tag": "e37a",
+   "idx": 2,
+   "outdir": "2_C8g353mode12flush_rows16timestamps1_20260812T125135Z",
+   "arm": "mode12_C8_g353_fr16",
+   "C": 8,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "timestamps": 1,
+   "soak_iters": [
+    600
+   ],
+   "n_rank_files": 40,
+   "cfg_consistent_across_all_ranks": true,
+   "status": "valid_diagnostic",
+   "run_count": 5,
+   "mps_p50": 6470.609426498413,
+   "prod_p50": 7707.722425460815,
+   "pf6gm_p50": 6884.47380065918,
+   "ratio": 0.8394969446647607,
+   "rotation_mps_p50": [
+    6477.369070053101,
+    6457.228899002075,
+    6474.829435348511,
+    6460.789918899536,
+    6470.609426498413
+   ],
+   "rotation_prod_p50": [
+    7706.201791763306,
+    7695.202350616455,
+    7708.722352981567,
+    7709.762096405029,
+    7707.722425460815
+   ],
+   "gates": {
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+    "mok_gate_pass": "True",
+    "control_fails": "True",
+    "pperr_max": 0,
+    "soak_pass": "True",
+    "soak_epochs": "600/600",
+    "poison_selftest_all_true": true,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_survivors_max": 0,
+    "poison_lines_n": 20,
+    "spin_success_max": 1,
+    "spin_fail_max": 0,
+    "spin_lines_n": 5
+   },
+   "stamps": {
+    "plan_M3toM5": 374.96,
+    "M6": 2450.64,
+    "planM6": 2825.6,
+    "M7": 2629.16,
+    "combine": 351.26,
+    "servicedrain": 2704.71,
+    "m2_to_end": 5806.02
+   },
+   "stamps_all_rotations": {
+    "M6": [
+     2441.7,
+     2450.64,
+     2453.87,
+     2458.43,
+     2468.21
+    ],
+    "M7": [
+     2577.81,
+     2629.16,
+     2631.12,
+     2651.6,
+     2662.08
+    ],
+    "combine": [
+     318.01,
+     351.26,
+     359.07,
+     361.64,
+     433.56
+    ],
+    "planM6": [
+     2812.58,
+     2825.6,
+     2830.11,
+     2832.48,
+     2841.32
+    ]
+   },
+   "gates_green": true,
+   "round": 1
+  },
+  {
+   "tag": "e37a",
+   "idx": 3,
+   "outdir": "3_C4g353mode12flush_rows16timestamps1_20260812T125438Z",
+   "arm": "mode12_C4_g353_fr16",
+   "C": 4,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "timestamps": 1,
+   "soak_iters": [
+    600
+   ],
+   "n_rank_files": 40,
+   "cfg_consistent_across_all_ranks": true,
+   "status": "valid_diagnostic",
+   "run_count": 5,
+   "mps_p50": 6455.429315567017,
+   "prod_p50": 7710.0830078125,
+   "pf6gm_p50": 6913.455009460449,
+   "ratio": 0.8372710525977265,
+   "rotation_mps_p50": [
+    6444.529056549072,
+    6480.929374694824,
+    6445.129156112671,
+    6455.429315567017,
+    6461.090087890625
+   ],
+   "rotation_prod_p50": [
+    7704.1425704956055,
+    7710.0830078125,
+    7698.2831954956055,
+    7728.1036376953125,
+    7720.684051513672
+   ],
+   "gates": {
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+    "mok_gate_pass": "True",
+    "control_fails": "True",
+    "pperr_max": 0,
+    "soak_pass": "True",
+    "soak_epochs": "600/600",
+    "poison_selftest_all_true": true,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_survivors_max": 0,
+    "poison_lines_n": 20,
+    "spin_success_max": 0,
+    "spin_fail_max": 0,
+    "spin_lines_n": 5
+   },
+   "stamps": {
+    "plan_M3toM5": 371.52,
+    "M6": 2461.32,
+    "planM6": 2832.84,
+    "M7": 2518.84,
+    "combine": 455.12,
+    "servicedrain": 2766.68,
+    "m2_to_end": 5806.8
+   },
+   "stamps_all_rotations": {
+    "M6": [
+     2436.56,
+     2441.22,
+     2441.4,
+     2458.67,
+     2461.32
+    ],
+    "M7": [
+     2508.4,
+     2518.84,
+     2521.09,
+     2535.04,
+     2632.25
+    ],
+    "combine": [
+     360.04,
+     437.3,
+     455.12,
+     471.76,
+     495.3
+    ],
+    "planM6": [
+     2811.6,
+     2812.33,
+     2821.06,
+     2832.84,
+     2835.42
+    ]
+   },
+   "gates_green": true,
+   "round": 1
+  },
+  {
+   "tag": "e37a",
+   "idx": 4,
+   "outdir": "4_C8g353mode12flush_rows16timestamps1_20260812T125741Z",
+   "arm": "mode12_C8_g353_fr16",
+   "C": 8,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "timestamps": 1,
+   "soak_iters": [
+    600
+   ],
+   "n_rank_files": 40,
+   "cfg_consistent_across_all_ranks": true,
+   "status": "valid_diagnostic",
+   "run_count": 5,
+   "mps_p50": 6462.010145187378,
+   "prod_p50": 7713.403940200806,
+   "pf6gm_p50": 6893.73517036438,
+   "ratio": 0.8377637415705147,
+   "rotation_mps_p50": [
+    6461.770057678223,
+    6462.010145187378,
+    6448.269844055176,
+    6465.610027313232,
+    6473.829984664917
+   ],
+   "rotation_prod_p50": [
+    7712.682485580444,
+    7714.2839431762695,
+    7706.183910369873,
+    7713.403940200806,
+    7716.324090957642
+   ],
+   "gates": {
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.031982 relative=0.008293 pass=True",
+    "mok_gate_pass": "True",
+    "control_fails": "True",
+    "pperr_max": 0,
+    "soak_pass": "True",
+    "soak_epochs": "600/600",
+    "poison_selftest_all_true": true,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_survivors_max": 0,
+    "poison_lines_n": 20,
+    "spin_success_max": 0,
+    "spin_fail_max": 0,
+    "spin_lines_n": 5
+   },
+   "stamps": {
+    "plan_M3toM5": 374.24,
+    "M6": 2448.47,
+    "planM6": 2822.71,
+    "M7": 2637.91,
+    "combine": 411.54,
+    "servicedrain": 2698.69,
+    "m2_to_end": 5872.16
+   },
+   "stamps_all_rotations": {
+    "M6": [
+     2429.66,
+     2443.42,
+     2448.47,
+     2450.34,
+     2459.49
+    ],
+    "M7": [
+     2637.91,
+     2658.51,
+     2660.76,
+     2672.87,
+     2707.95
+    ],
+    "combine": [
+     274.25,
+     309.44,
+     312.17,
+     383.97,
+     411.54
+    ],
+    "planM6": [
+     2800.16,
+     2821.06,
+     2822.71,
+     2826.02,
+     2838.89
+    ]
+   },
+   "gates_green": true,
+   "round": 2
+  },
+  {
+   "tag": "e37a",
+   "idx": 5,
+   "outdir": "5_C4g353mode12flush_rows16timestamps1_20260812T130044Z",
+   "arm": "mode12_C4_g353_fr16",
+   "C": 4,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "timestamps": 1,
+   "soak_iters": [
+    600
+   ],
+   "n_rank_files": 40,
+   "cfg_consistent_across_all_ranks": true,
+   "status": "valid_diagnostic",
+   "run_count": 5,
+   "mps_p50": 6464.189529418945,
+   "prod_p50": 7707.10301399231,
+   "pf6gm_p50": 6918.2538986206055,
+   "ratio": 0.8387314296543273,
+   "rotation_mps_p50": [
+    6489.65048789978,
+    6468.8098430633545,
+    6463.049411773682,
+    6453.169584274292,
+    6464.189529418945
+   ],
+   "rotation_prod_p50": [
+    7706.563472747803,
+    7717.563152313232,
+    7707.10301399231,
+    7695.242404937744,
+    7723.242998123169
+   ],
+   "gates": {
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+    "mok_gate_pass": "True",
+    "control_fails": "True",
+    "pperr_max": 0,
+    "soak_pass": "True",
+    "soak_epochs": "600/600",
+    "poison_selftest_all_true": true,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_survivors_max": 0,
+    "poison_lines_n": 20,
+    "spin_success_max": 0,
+    "spin_fail_max": 0,
+    "spin_lines_n": 5
+   },
+   "stamps": {
+    "plan_M3toM5": 373.84,
+    "M6": 2462.12,
+    "planM6": 2835.96,
+    "M7": 2692.72,
+    "combine": 308.03,
+    "servicedrain": 2770.67,
+    "m2_to_end": 5836.71
+   },
+   "stamps_all_rotations": {
+    "M6": [
+     2440.68,
+     2447.86,
+     2450.04,
+     2452.49,
+     2462.12
+    ],
+    "M7": [
+     2590.63,
+     2598.23,
+     2634.54,
+     2692.66,
+     2692.72
+    ],
+    "combine": [
+     308.03,
+     309.06,
+     383.25,
+     392.93,
+     424.49
+    ],
+    "planM6": [
+     2812.68,
+     2824.92,
+     2828.67,
+     2831.1,
+     2835.96
+    ]
+   },
+   "gates_green": true,
+   "round": 2
+  },
+  {
+   "tag": "e37a",
+   "idx": 6,
+   "outdir": "6_C16g353mode12flush_rows16timestamps1_20260812T130347Z",
+   "arm": "mode12_C16_g353_fr16",
+   "C": 16,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "timestamps": 1,
+   "soak_iters": [
+    600
+   ],
+   "n_rank_files": 40,
+   "cfg_consistent_across_all_ranks": true,
+   "status": "valid_diagnostic",
+   "run_count": 5,
+   "mps_p50": 6494.429588317871,
+   "prod_p50": 7703.962564468384,
+   "pf6gm_p50": 6888.174057006836,
+   "ratio": 0.8429985911757897,
+   "rotation_mps_p50": [
+    6511.809587478638,
+    6485.168933868408,
+    6494.429588317871,
+    6521.97003364563,
+    6487.729549407959
+   ],
+   "rotation_prod_p50": [
+    7711.622714996338,
+    7708.662509918213,
+    7703.962564468384,
+    7690.422534942627,
+    7688.7030601501465
+   ],
+   "gates": {
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008294 pass=True",
+    "mok_gate_pass": "True",
+    "control_fails": "True",
+    "pperr_max": 0,
+    "soak_pass": "True",
+    "soak_epochs": "600/600",
+    "poison_selftest_all_true": true,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_survivors_max": 0,
+    "poison_lines_n": 20,
+    "spin_success_max": 1,
+    "spin_fail_max": 0,
+    "spin_lines_n": 5
+   },
+   "stamps": {
+    "plan_M3toM5": 374.64,
+    "M6": 2438.76,
+    "planM6": 2813.4,
+    "M7": 2714.59,
+    "combine": 318.78,
+    "servicedrain": 2823.73,
+    "m2_to_end": 5846.77
+   },
+   "stamps_all_rotations": {
+    "M6": [
+     2438.76,
+     2440.68,
+     2450.44,
+     2466.4,
+     2483.44
+    ],
+    "M7": [
+     2583.84,
+     2714.59,
+     2733.32,
+     2734.86,
+     2792.55
+    ],
+    "combine": [
+     283.04,
+     302.68,
+     318.78,
+     339.92,
+     439.24
+    ],
+    "planM6": [
+     2812.96,
+     2813.4,
+     2826.16,
+     2841.68,
+     2855.92
+    ]
+   },
+   "gates_green": true,
+   "round": 2
+  },
+  {
+   "tag": "e37a",
+   "idx": 7,
+   "outdir": "7_C4g353mode12flush_rows16timestamps1_20260812T130650Z",
+   "arm": "mode12_C4_g353_fr16",
+   "C": 4,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "timestamps": 1,
+   "soak_iters": [
+    600
+   ],
+   "n_rank_files": 40,
+   "cfg_consistent_across_all_ranks": true,
+   "status": "valid_diagnostic",
+   "run_count": 5,
+   "mps_p50": 6458.089828491211,
+   "prod_p50": 7694.722890853882,
+   "pf6gm_p50": 6903.574466705322,
+   "ratio": 0.8392881615226767,
+   "rotation_mps_p50": [
+    6458.089828491211,
+    6453.569412231445,
+    6455.749988555908,
+    6479.710102081299,
+    6463.53006362915
+   ],
+   "rotation_prod_p50": [
+    7691.762685775757,
+    7694.722890853882,
+    7694.602966308594,
+    7704.582691192627,
+    7706.0229778289795
+   ],
+   "gates": {
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008294 pass=True",
+    "mok_gate_pass": "True",
+    "control_fails": "True",
+    "pperr_max": 0,
+    "soak_pass": "True",
+    "soak_epochs": "600/600",
+    "poison_selftest_all_true": true,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_survivors_max": 0,
+    "poison_lines_n": 20,
+    "spin_success_max": 0,
+    "spin_fail_max": 0,
+    "spin_lines_n": 5
+   },
+   "stamps": {
+    "plan_M3toM5": 375.73,
+    "M6": 2479.46,
+    "planM6": 2855.19,
+    "M7": 2551.61,
+    "combine": 454.34,
+    "servicedrain": 2775.71,
+    "m2_to_end": 5861.14
+   },
+   "stamps_all_rotations": {
+    "M6": [
+     2433.03,
+     2446.4,
+     2447.13,
+     2457.68,
+     2479.46
+    ],
+    "M7": [
+     2551.61,
+     2590.8,
+     2699.04,
+     2704.56,
+     2723.35
+    ],
+    "combine": [
+     274.82,
+     280.28,
+     407.48,
+     435.61,
+     454.34
+    ],
+    "planM6": [
+     2816.04,
+     2817.46,
+     2822.24,
+     2832.08,
+     2855.19
+    ]
+   },
+   "gates_green": true,
+   "round": 3
+  },
+  {
+   "tag": "e37a",
+   "idx": 8,
+   "outdir": "8_C16g353mode12flush_rows16timestamps1_20260812T130953Z",
+   "arm": "mode12_C16_g353_fr16",
+   "C": 16,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "timestamps": 1,
+   "soak_iters": [
+    600
+   ],
+   "n_rank_files": 40,
+   "cfg_consistent_across_all_ranks": true,
+   "status": "valid_diagnostic",
+   "run_count": 5,
+   "mps_p50": 6497.990131378174,
+   "prod_p50": 7702.4431228637695,
+   "pf6gm_p50": 6887.033939361572,
+   "ratio": 0.8436271489093736,
+   "rotation_mps_p50": [
+    6481.409311294556,
+    6511.170148849487,
+    6513.569355010986,
+    6497.990131378174,
+    6488.729000091553
+   ],
+   "rotation_prod_p50": [
+    7702.4431228637695,
+    7702.262401580811,
+    7705.862522125244,
+    7701.662063598633,
+    7703.222036361694
+   ],
+   "gates": {
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008293 pass=True",
+    "mok_gate_pass": "True",
+    "control_fails": "True",
+    "pperr_max": 0,
+    "soak_pass": "True",
+    "soak_epochs": "600/600",
+    "poison_selftest_all_true": true,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_survivors_max": 0,
+    "poison_lines_n": 20,
+    "spin_success_max": 1,
+    "spin_fail_max": 0,
+    "spin_lines_n": 5
+   },
+   "stamps": {
+    "plan_M3toM5": 377.32,
+    "M6": 2437.67,
+    "planM6": 2814.99,
+    "M7": 2715.35,
+    "combine": 355.68,
+    "servicedrain": 2815.45,
+    "m2_to_end": 5886.02
+   },
+   "stamps_all_rotations": {
+    "M6": [
+     2437.67,
+     2449.12,
+     2459.34,
+     2460.77,
+     2461.16
+    ],
+    "M7": [
+     2604.31,
+     2713.42,
+     2715.35,
+     2738.3,
+     2786.92
+    ],
+    "combine": [
+     270.89,
+     275.89,
+     299.68,
+     355.68,
+     410.22
+    ],
+    "planM6": [
+     2814.99,
+     2818.76,
+     2828.5,
+     2828.94,
+     2841.27
+    ]
+   },
+   "gates_green": true,
+   "round": 3
+  },
+  {
+   "tag": "e37a",
+   "idx": 9,
+   "outdir": "9_C8g353mode12flush_rows16timestamps1_20260812T131256Z",
+   "arm": "mode12_C8_g353_fr16",
+   "C": 8,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "timestamps": 1,
+   "soak_iters": [
+    600
+   ],
+   "n_rank_files": 40,
+   "cfg_consistent_across_all_ranks": true,
+   "status": "valid_diagnostic",
+   "run_count": 5,
+   "mps_p50": 6474.8289585113525,
+   "prod_p50": 7698.342084884644,
+   "pf6gm_p50": 6894.052982330322,
+   "ratio": 0.8410679711446436,
+   "rotation_mps_p50": [
+    6467.289209365845,
+    6489.388465881348,
+    6474.8289585113525,
+    6481.3690185546875,
+    6460.129022598267
+   ],
+   "rotation_prod_p50": [
+    7688.159465789795,
+    7694.361448287964,
+    7699.382066726685,
+    7698.342084884644,
+    7720.963001251221
+   ],
+   "gates": {
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008294 pass=True",
+    "mok_gate_pass": "True",
+    "control_fails": "True",
+    "pperr_max": 0,
+    "soak_pass": "True",
+    "soak_epochs": "600/600",
+    "poison_selftest_all_true": true,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_survivors_max": 0,
+    "poison_lines_n": 20,
+    "spin_success_max": 0,
+    "spin_fail_max": 0,
+    "spin_lines_n": 5
+   },
+   "stamps": {
+    "plan_M3toM5": 379.21,
+    "M6": 2459.72,
+    "planM6": 2838.93,
+    "M7": 2693.93,
+    "combine": 299.95,
+    "servicedrain": 2780.36,
+    "m2_to_end": 5832.81
+   },
+   "stamps_all_rotations": {
+    "M6": [
+     2416.41,
+     2445.84,
+     2447.67,
+     2454.93,
+     2459.72
+    ],
+    "M7": [
+     2641.75,
+     2651.31,
+     2659.0,
+     2693.5,
+     2693.93
+    ],
+    "combine": [
+     292.0,
+     299.95,
+     313.37,
+     357.68,
+     375.72
+    ],
+    "planM6": [
+     2786.37,
+     2822.87,
+     2826.88,
+     2837.84,
+     2838.93
+    ]
+   },
+   "gates_green": true,
+   "round": 3
+  },
+  {
+   "tag": "e37a",
+   "idx": 10,
+   "outdir": "10_C8g353mode12flush_rows16timestamps1_20260812T131600Z",
+   "arm": "mode12_C8_g353_fr16",
+   "C": 8,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "timestamps": 1,
+   "soak_iters": [
+    600
+   ],
+   "n_rank_files": 40,
+   "cfg_consistent_across_all_ranks": true,
+   "status": "valid_diagnostic",
+   "run_count": 5,
+   "mps_p50": 6472.369909286499,
+   "prod_p50": 7700.142621994019,
+   "pf6gm_p50": 6886.194705963135,
+   "ratio": 0.8405519517001392,
+   "rotation_mps_p50": [
+    6464.929580688477,
+    6483.649492263794,
+    6484.211206436157,
+    6472.369909286499,
+    6468.829870223999
+   ],
+   "rotation_prod_p50": [
+    7700.142621994019,
+    7694.883108139038,
+    7700.203418731689,
+    7695.043087005615,
+    7711.724042892456
+   ],
+   "gates": {
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+    "mok_gate_pass": "True",
+    "control_fails": "True",
+    "pperr_max": 0,
+    "soak_pass": "True",
+    "soak_epochs": "600/600",
+    "poison_selftest_all_true": true,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_survivors_max": 0,
+    "poison_lines_n": 20,
+    "spin_success_max": 1,
+    "spin_fail_max": 0,
+    "spin_lines_n": 5
+   },
+   "stamps": {
+    "plan_M3toM5": 370.05,
+    "M6": 2434.51,
+    "planM6": 2804.56,
+    "M7": 2706.44,
+    "combine": 299.88,
+    "servicedrain": 2797.5,
+    "m2_to_end": 5810.88
+   },
+   "stamps_all_rotations": {
+    "M6": [
+     2434.51,
+     2449.74,
+     2452.24,
+     2459.11,
+     2473.76
+    ],
+    "M7": [
+     2582.23,
+     2647.28,
+     2665.18,
+     2690.09,
+     2706.44
+    ],
+    "combine": [
+     299.88,
+     317.0,
+     328.76,
+     341.12,
+     426.89
+    ],
+    "planM6": [
+     2804.56,
+     2826.41,
+     2828.8,
+     2834.74,
+     2847.76
+    ]
+   },
+   "gates_green": true,
+   "round": 4
+  },
+  {
+   "tag": "e37a",
+   "idx": 11,
+   "outdir": "11_C16g353mode12flush_rows16timestamps1_20260812T131904Z",
+   "arm": "mode12_C16_g353_fr16",
+   "C": 16,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "timestamps": 1,
+   "soak_iters": [
+    600
+   ],
+   "n_rank_files": 40,
+   "cfg_consistent_across_all_ranks": true,
+   "status": "valid_diagnostic",
+   "run_count": 5,
+   "mps_p50": 6499.251127243042,
+   "prod_p50": 7702.404022216797,
+   "pf6gm_p50": 6911.415100097656,
+   "ratio": 0.8437951460994018,
+   "rotation_mps_p50": [
+    6511.870622634888,
+    6499.251127243042,
+    6505.230665206909,
+    6493.710279464722,
+    6486.310005187988
+   ],
+   "rotation_prod_p50": [
+    7702.924013137817,
+    7692.803382873535,
+    7702.404022216797,
+    7699.203014373779,
+    7718.103647232056
+   ],
+   "gates": {
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008293 pass=True",
+    "mok_gate_pass": "True",
+    "control_fails": "True",
+    "pperr_max": 0,
+    "soak_pass": "True",
+    "soak_epochs": "600/600",
+    "poison_selftest_all_true": true,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_survivors_max": 0,
+    "poison_lines_n": 20,
+    "spin_success_max": 0,
+    "spin_fail_max": 0,
+    "spin_lines_n": 5
+   },
+   "stamps": {
+    "plan_M3toM5": 370.38,
+    "M6": 2436.5,
+    "planM6": 2806.88,
+    "M7": 2642.92,
+    "combine": 349.4,
+    "servicedrain": 2755.8,
+    "m2_to_end": 5799.2
+   },
+   "stamps_all_rotations": {
+    "M6": [
+     2436.5,
+     2439.84,
+     2450.8,
+     2465.61,
+     2468.07
+    ],
+    "M7": [
+     2642.92,
+     2666.28,
+     2673.0,
+     2714.12,
+     2745.58
+    ],
+    "combine": [
+     289.54,
+     319.5,
+     349.4,
+     377.23,
+     408.57
+    ],
+    "planM6": [
+     2806.88,
+     2811.84,
+     2819.6,
+     2833.78,
+     2845.39
+    ]
+   },
+   "gates_green": true,
+   "round": 4
+  },
+  {
+   "tag": "e37a",
+   "idx": 12,
+   "outdir": "12_C4g353mode12flush_rows16timestamps1_20260812T132207Z",
+   "arm": "mode12_C4_g353_fr16",
+   "C": 4,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "timestamps": 1,
+   "soak_iters": [
+    600
+   ],
+   "n_rank_files": 40,
+   "cfg_consistent_across_all_ranks": true,
+   "status": "valid_diagnostic",
+   "run_count": 5,
+   "mps_p50": 6457.550048828125,
+   "prod_p50": 7694.123029708862,
+   "pf6gm_p50": 6896.65412902832,
+   "ratio": 0.839283440607067,
+   "rotation_mps_p50": [
+    6453.309535980225,
+    6460.548877716064,
+    6468.448877334595,
+    6457.550048828125,
+    6457.209825515747
+   ],
+   "rotation_prod_p50": [
+    7706.202983856201,
+    7693.441867828369,
+    7707.182168960571,
+    7694.123029708862,
+    7692.803621292114
+   ],
+   "gates": {
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+    "mok_gate_pass": "True",
+    "control_fails": "True",
+    "pperr_max": 0,
+    "soak_pass": "True",
+    "soak_epochs": "600/600",
+    "poison_selftest_all_true": true,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_survivors_max": 0,
+    "poison_lines_n": 20,
+    "spin_success_max": 0,
+    "spin_fail_max": 0,
+    "spin_lines_n": 5
+   },
+   "stamps": {
+    "plan_M3toM5": 374.12,
+    "M6": 2452.49,
+    "planM6": 2826.61,
+    "M7": 2643.69,
+    "combine": 346.43,
+    "servicedrain": 2775.35,
+    "m2_to_end": 5816.73
+   },
+   "stamps_all_rotations": {
+    "M6": [
+     2420.0,
+     2441.68,
+     2445.81,
+     2446.71,
+     2452.49
+    ],
+    "M7": [
+     2480.36,
+     2560.44,
+     2619.59,
+     2635.72,
+     2643.69
+    ],
+    "combine": [
+     346.43,
+     424.2,
+     428.1,
+     441.39,
+     512.88
+    ],
+    "planM6": [
+     2795.87,
+     2812.52,
+     2814.97,
+     2817.53,
+     2826.61
+    ]
+   },
+   "gates_green": true,
+   "round": 4
+  },
+  {
+   "tag": "e37b",
+   "idx": 1,
+   "outdir": "1_C12g353mode12flush_rows16timestamps1_20260812T133406Z",
+   "arm": "mode12_C12_g353_fr16",
+   "C": 12,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "timestamps": 1,
+   "soak_iters": [
+    600
+   ],
+   "n_rank_files": 40,
+   "cfg_consistent_across_all_ranks": true,
+   "status": "valid_diagnostic",
+   "run_count": 5,
+   "mps_p50": 6490.185499191284,
+   "prod_p50": 7705.541133880615,
+   "pf6gm_p50": 6901.830434799194,
+   "ratio": 0.8422751090970737,
+   "rotation_mps_p50": [
+    6490.185499191284,
+    6485.746383666992,
+    6499.808073043823,
+    6489.748477935791,
+    6497.828960418701
+   ],
+   "rotation_prod_p50": [
+    7700.49786567688,
+    7708.7390422821045,
+    7707.880020141602,
+    7705.541133880615,
+    7698.061466217041
+   ],
+   "gates": {
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+    "mok_gate_pass": "True",
+    "control_fails": "True",
+    "pperr_max": 0,
+    "soak_pass": "True",
+    "soak_epochs": "600/600",
+    "poison_selftest_all_true": true,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_survivors_max": 0,
+    "poison_lines_n": 20,
+    "spin_success_max": 1,
+    "spin_fail_max": 0,
+    "spin_lines_n": 5
+   },
+   "stamps": {
+    "plan_M3toM5": 377.18,
+    "M6": 2446.6,
+    "planM6": 2823.78,
+    "M7": 2779.22,
+    "combine": 261.37,
+    "servicedrain": 2896.42,
+    "m2_to_end": 5864.37
+   },
+   "stamps_all_rotations": {
+    "M6": [
+     2436.56,
+     2441.04,
+     2446.6,
+     2446.7,
+     2455.36
+    ],
+    "M7": [
+     2717.01,
+     2746.02,
+     2763.81,
+     2779.22,
+     2812.78
+    ],
+    "combine": [
+     211.32,
+     241.57,
+     258.02,
+     261.37,
+     268.12
+    ],
+    "planM6": [
+     2810.55,
+     2821.16,
+     2823.4,
+     2823.78,
+     2831.06
+    ]
+   },
+   "gates_green": true,
+   "round": 1
+  },
+  {
+   "tag": "e37b",
+   "idx": 2,
+   "outdir": "2_C32g353mode12flush_rows16timestamps1_20260812T133710Z",
+   "arm": "mode12_C32_g353_fr16",
+   "C": 32,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "timestamps": 1,
+   "soak_iters": [
+    600
+   ],
+   "n_rank_files": 40,
+   "cfg_consistent_across_all_ranks": true,
+   "status": "valid_diagnostic",
+   "run_count": 5,
+   "mps_p50": 6734.0521812438965,
+   "prod_p50": 7693.822145462036,
+   "pf6gm_p50": 6892.313003540039,
+   "ratio": 0.8752544644167229,
+   "rotation_mps_p50": [
+    6746.212005615234,
+    6734.0521812438965,
+    6734.231948852539,
+    6722.311496734619,
+    6722.871780395508
+   ],
+   "rotation_prod_p50": [
+    7703.402042388916,
+    7693.822145462036,
+    7703.222036361694,
+    7685.28151512146,
+    7688.44199180603
+   ],
+   "gates": {
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.032471 relative=0.008294 pass=True",
+    "mok_gate_pass": "True",
+    "control_fails": "True",
+    "pperr_max": 0,
+    "soak_pass": "True",
+    "soak_epochs": "600/600",
+    "poison_selftest_all_true": true,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_survivors_max": 0,
+    "poison_lines_n": 20,
+    "spin_success_max": 1,
+    "spin_fail_max": 0,
+    "spin_lines_n": 5
+   },
+   "stamps": {
+    "plan_M3toM5": 372.95,
+    "M6": 2428.01,
+    "planM6": 2800.96,
+    "M7": 3035.57,
+    "combine": 178.21,
+    "servicedrain": 3118.2,
+    "m2_to_end": 6014.74
+   },
+   "stamps_all_rotations": {
+    "M6": [
+     2428.01,
+     2441.66,
+     2449.94,
+     2451.72,
+     2474.1
+    ],
+    "M7": [
+     2954.7,
+     3005.4,
+     3023.85,
+     3035.57,
+     3125.68
+    ],
+    "combine": [
+     146.66,
+     160.06,
+     178.21,
+     198.53,
+     226.6
+    ],
+    "planM6": [
+     2800.96,
+     2817.96,
+     2826.57,
+     2827.06,
+     2850.14
+    ]
+   },
+   "gates_green": true,
+   "round": 1
+  },
+  {
+   "tag": "e37b",
+   "idx": 3,
+   "outdir": "3_C64g1mode2flush_rows16timestamps1_20260812T134015Z",
+   "arm": "mode2_C64_g1_fr16",
+   "C": 64,
+   "g": 1,
+   "mode": 2,
+   "flush_rows": 16,
+   "timestamps": 1,
+   "soak_iters": [
+    600
+   ],
+   "n_rank_files": 40,
+   "cfg_consistent_across_all_ranks": true,
+   "status": "valid_diagnostic",
+   "run_count": 5,
+   "mps_p50": 6835.654497146606,
+   "prod_p50": 7699.822187423706,
+   "pf6gm_p50": 6942.275524139404,
+   "ratio": 0.8877678381081885,
+   "rotation_mps_p50": [
+    6834.713459014893,
+    6839.67399597168,
+    6824.873924255371,
+    6835.654497146606,
+    6843.0938720703125
+   ],
+   "rotation_prod_p50": [
+    7699.822187423706,
+    7694.762945175171,
+    7707.88311958313,
+    7707.683563232422,
+    7691.8840408325195
+   ],
+   "gates": {
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008293 pass=True",
+    "mok_gate_pass": "True",
+    "control_fails": "True",
+    "pperr_max": 0,
+    "soak_pass": "True",
+    "soak_epochs": "600/600",
+    "poison_selftest_all_true": true,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_survivors_max": 0,
+    "poison_lines_n": 20,
+    "spin_success_max": 1,
+    "spin_fail_max": 0,
+    "spin_lines_n": 5
+   },
+   "stamps": {
+    "plan_M3toM5": 425.48,
+    "M6": 2497.64,
+    "planM6": 2923.12,
+    "M7": 2910.26,
+    "combine": 393.02,
+    "servicedrain": 3264.72,
+    "m2_to_end": 6226.4
+   },
+   "stamps_all_rotations": {
+    "M6": [
+     2481.08,
+     2484.02,
+     2492.03,
+     2497.64,
+     2504.77
+    ],
+    "M7": [
+     2875.72,
+     2893.36,
+     2910.26,
+     2936.38,
+     2966.93
+    ],
+    "combine": [
+     390.67,
+     393.02,
+     415.8,
+     429.02,
+     512.59
+    ],
+    "planM6": [
+     2900.2,
+     2904.05,
+     2913.54,
+     2923.12,
+     2924.88
+    ]
+   },
+   "gates_green": true,
+   "round": 1
+  },
+  {
+   "tag": "e37b",
+   "idx": 4,
+   "outdir": "4_C12g353mode12flush_rows16timestamps1_20260812T134321Z",
+   "arm": "mode12_C12_g353_fr16",
+   "C": 12,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "timestamps": 1,
+   "soak_iters": [
+    600
+   ],
+   "n_rank_files": 40,
+   "cfg_consistent_across_all_ranks": true,
+   "status": "valid_diagnostic",
+   "run_count": 5,
+   "mps_p50": 6490.6511306762695,
+   "prod_p50": 7695.603370666504,
+   "pf6gm_p50": 6894.314765930176,
+   "ratio": 0.8434232922420123,
+   "rotation_mps_p50": [
+    6490.6511306762695,
+    6481.810569763184,
+    6487.990617752075,
+    6494.990587234497,
+    6502.490997314453
+   ],
+   "rotation_prod_p50": [
+    7692.864179611206,
+    7705.303907394409,
+    7695.603370666504,
+    7689.064025878906,
+    7708.643436431885
+   ],
+   "gates": {
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+    "mok_gate_pass": "True",
+    "control_fails": "True",
+    "pperr_max": 0,
+    "soak_pass": "True",
+    "soak_epochs": "600/600",
+    "poison_selftest_all_true": true,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_survivors_max": 0,
+    "poison_lines_n": 20,
+    "spin_success_max": 1,
+    "spin_fail_max": 0,
+    "spin_lines_n": 5
+   },
+   "stamps": {
+    "plan_M3toM5": 373.5,
+    "M6": 2459.86,
+    "planM6": 2833.36,
+    "M7": 2688.0,
+    "combine": 294.72,
+    "servicedrain": 2773.76,
+    "m2_to_end": 5816.08
+   },
+   "stamps_all_rotations": {
+    "M6": [
+     2445.58,
+     2445.76,
+     2459.86,
+     2465.37,
+     2466.23
+    ],
+    "M7": [
+     2662.69,
+     2683.64,
+     2688.0,
+     2704.41,
+     2752.36
+    ],
+    "combine": [
+     242.12,
+     267.25,
+     294.72,
+     301.34,
+     337.11
+    ],
+    "planM6": [
+     2817.28,
+     2822.52,
+     2833.36,
+     2843.72,
+     2845.09
+    ]
+   },
+   "gates_green": true,
+   "round": 2
+  },
+  {
+   "tag": "e37b",
+   "idx": 5,
+   "outdir": "5_C32g353mode12flush_rows16timestamps1_20260812T134625Z",
+   "arm": "mode12_C32_g353_fr16",
+   "C": 32,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "timestamps": 1,
+   "soak_iters": [
+    600
+   ],
+   "n_rank_files": 40,
+   "cfg_consistent_across_all_ranks": true,
+   "status": "valid_diagnostic",
+   "run_count": 5,
+   "mps_p50": 6736.49263381958,
+   "prod_p50": 7708.74285697937,
+   "pf6gm_p50": 6901.014804840088,
+   "ratio": 0.8738769419089482,
+   "rotation_mps_p50": [
+    6726.032972335815,
+    6731.632947921753,
+    6739.732503890991,
+    6736.49263381958,
+    6737.072467803955
+   ],
+   "rotation_prod_p50": [
+    7705.282926559448,
+    7717.363119125366,
+    7717.363119125366,
+    7704.242944717407,
+    7708.74285697937
+   ],
+   "gates": {
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008293 pass=True",
+    "mok_gate_pass": "True",
+    "control_fails": "True",
+    "pperr_max": 0,
+    "soak_pass": "True",
+    "soak_epochs": "600/600",
+    "poison_selftest_all_true": true,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_survivors_max": 0,
+    "poison_lines_n": 20,
+    "spin_success_max": 0,
+    "spin_fail_max": 0,
+    "spin_lines_n": 5
+   },
+   "stamps": {
+    "plan_M3toM5": 368.24,
+    "M6": 2434.64,
+    "planM6": 2802.88,
+    "M7": 2964.43,
+    "combine": 193.53,
+    "servicedrain": 3058.79,
+    "m2_to_end": 5960.84
+   },
+   "stamps_all_rotations": {
+    "M6": [
+     2434.64,
+     2437.53,
+     2448.17,
+     2458.28,
+     2467.45
+    ],
+    "M7": [
+     2964.43,
+     2989.84,
+     3010.6,
+     3081.21,
+     3084.4
+    ],
+    "combine": [
+     133.41,
+     144.08,
+     193.53,
+     201.07,
+     207.71
+    ],
+    "planM6": [
+     2802.88,
+     2810.12,
+     2820.73,
+     2830.55,
+     2844.69
+    ]
+   },
+   "gates_green": true,
+   "round": 2
+  },
+  {
+   "tag": "e37b",
+   "idx": 6,
+   "outdir": "6_C64g1mode2flush_rows16timestamps1_20260812T134930Z",
+   "arm": "mode2_C64_g1_fr16",
+   "C": 64,
+   "g": 1,
+   "mode": 2,
+   "flush_rows": 16,
+   "timestamps": 1,
+   "soak_iters": [
+    600
+   ],
+   "n_rank_files": 40,
+   "cfg_consistent_across_all_ranks": true,
+   "status": "valid_diagnostic",
+   "run_count": 5,
+   "mps_p50": 6839.394092559814,
+   "prod_p50": 7699.002981185913,
+   "pf6gm_p50": 6889.2951011657715,
+   "ratio": 0.8883480249680733,
+   "rotation_mps_p50": [
+    6839.394092559814,
+    6841.533899307251,
+    6833.754062652588,
+    6825.754165649414,
+    6843.235015869141
+   ],
+   "rotation_prod_p50": [
+    7693.762540817261,
+    7692.962646484375,
+    7703.402996063232,
+    7699.002981185913,
+    7699.742794036865
+   ],
+   "gates": {
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+    "mok_gate_pass": "True",
+    "control_fails": "True",
+    "pperr_max": 0,
+    "soak_pass": "True",
+    "soak_epochs": "600/600",
+    "poison_selftest_all_true": true,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_survivors_max": 0,
+    "poison_lines_n": 20,
+    "spin_success_max": 0,
+    "spin_fail_max": 0,
+    "spin_lines_n": 5
+   },
+   "stamps": {
+    "plan_M3toM5": 417.72,
+    "M6": 2451.68,
+    "planM6": 2869.4,
+    "M7": 2877.94,
+    "combine": 476.54,
+    "servicedrain": 3221.89,
+    "m2_to_end": 6223.88
+   },
+   "stamps_all_rotations": {
+    "M6": [
+     2451.68,
+     2458.96,
+     2472.59,
+     2479.52,
+     2483.06
+    ],
+    "M7": [
+     2877.94,
+     2893.51,
+     2916.76,
+     2943.12,
+     2947.12
+    ],
+    "combine": [
+     434.45,
+     436.89,
+     445.72,
+     476.54,
+     488.16
+    ],
+    "planM6": [
+     2869.4,
+     2876.48,
+     2891.64,
+     2898.94,
+     2910.4
+    ]
+   },
+   "gates_green": true,
+   "round": 2
+  },
+  {
+   "tag": "e37c",
+   "idx": 1,
+   "outdir": "1_C4g353mode12flush_rows16timestamps1_20260812T135321Z",
+   "arm": "mode12_C4_g353_fr16",
+   "C": 4,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "timestamps": 1,
+   "soak_iters": [
+    600
+   ],
+   "n_rank_files": 40,
+   "cfg_consistent_across_all_ranks": true,
+   "status": "valid_diagnostic",
+   "run_count": 5,
+   "mps_p50": 6469.6290493011475,
+   "prod_p50": 7690.821886062622,
+   "pf6gm_p50": 6896.653890609741,
+   "ratio": 0.8412142609914642,
+   "rotation_mps_p50": [
+    6472.708940505981,
+    6469.6290493011475,
+    6462.169170379639,
+    6478.349924087524,
+    6464.468955993652
+   ],
+   "rotation_prod_p50": [
+    7699.082136154175,
+    7690.821886062622,
+    7689.362049102783,
+    7686.722040176392,
+    7704.902648925781
+   ],
+   "gates": {
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008293 pass=True",
+    "mok_gate_pass": "True",
+    "control_fails": "True",
+    "pperr_max": 0,
+    "soak_pass": "True",
+    "soak_epochs": "600/600",
+    "poison_selftest_all_true": true,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_survivors_max": 0,
+    "poison_lines_n": 20,
+    "spin_success_max": 0,
+    "spin_fail_max": 0,
+    "spin_lines_n": 5
+   },
+   "stamps": {
+    "plan_M3toM5": 374.28,
+    "M6": 2449.64,
+    "planM6": 2823.92,
+    "M7": 2516.85,
+    "combine": 471.77,
+    "servicedrain": 2748.89,
+    "m2_to_end": 5812.54
+   },
+   "stamps_all_rotations": {
+    "M6": [
+     2443.39,
+     2444.26,
+     2448.16,
+     2449.64,
+     2457.83
+    ],
+    "M7": [
+     2513.74,
+     2516.85,
+     2539.1,
+     2617.73,
+     2674.62
+    ],
+    "combine": [
+     329.47,
+     349.51,
+     455.09,
+     471.77,
+     479.18
+    ],
+    "planM6": [
+     2814.91,
+     2821.44,
+     2822.21,
+     2823.92,
+     2839.99
+    ]
+   },
+   "gates_green": true,
+   "round": 1
+  },
+  {
+   "tag": "e37c",
+   "idx": 2,
+   "outdir": "2_C16g353mode12flush_rows16timestamps1_20260812T135624Z",
+   "arm": "mode12_C16_g353_fr16",
+   "C": 16,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "timestamps": 1,
+   "soak_iters": [
+    600
+   ],
+   "n_rank_files": 40,
+   "cfg_consistent_across_all_ranks": true,
+   "status": "valid_diagnostic",
+   "run_count": 5,
+   "mps_p50": 6500.650405883789,
+   "prod_p50": 7700.702905654907,
+   "pf6gm_p50": 6929.2542934417725,
+   "ratio": 0.8441632517870705,
+   "rotation_mps_p50": [
+    6498.767614364624,
+    6501.769781112671,
+    6504.909992218018,
+    6495.229482650757,
+    6500.650405883789
+   ],
+   "rotation_prod_p50": [
+    7683.738470077515,
+    7702.662944793701,
+    7700.822830200195,
+    7700.702905654907,
+    7696.463346481323
+   ],
+   "gates": {
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008294 pass=True",
+    "mok_gate_pass": "True",
+    "control_fails": "True",
+    "pperr_max": 0,
+    "soak_pass": "True",
+    "soak_epochs": "600/600",
+    "poison_selftest_all_true": true,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_survivors_max": 0,
+    "poison_lines_n": 20,
+    "spin_success_max": 0,
+    "spin_fail_max": 0,
+    "spin_lines_n": 5
+   },
+   "stamps": {
+    "plan_M3toM5": 378.08,
+    "M6": 2460.84,
+    "planM6": 2838.92,
+    "M7": 2628.96,
+    "combine": 390.6,
+    "servicedrain": 2720.22,
+    "m2_to_end": 5858.48
+   },
+   "stamps_all_rotations": {
+    "M6": [
+     2434.22,
+     2443.08,
+     2451.33,
+     2460.84,
+     2467.56
+    ],
+    "M7": [
+     2628.96,
+     2646.65,
+     2682.55,
+     2688.62,
+     2700.48
+    ],
+    "combine": [
+     346.69,
+     347.71,
+     379.4,
+     390.6,
+     397.63
+    ],
+    "planM6": [
+     2805.22,
+     2819.24,
+     2821.44,
+     2838.92,
+     2844.32
+    ]
+   },
+   "gates_green": true,
+   "round": 1
+  },
+  {
+   "tag": "e37c",
+   "idx": 3,
+   "outdir": "3_C8g353mode12flush_rows16timestamps1_20260812T135928Z",
+   "arm": "mode12_C8_g353_fr16",
+   "C": 8,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "timestamps": 1,
+   "soak_iters": [
+    600
+   ],
+   "n_rank_files": 40,
+   "cfg_consistent_across_all_ranks": true,
+   "status": "valid_diagnostic",
+   "run_count": 5,
+   "mps_p50": 6463.6290073394775,
+   "prod_p50": 7697.842597961426,
+   "pf6gm_p50": 6895.454406738281,
+   "ratio": 0.8396675984322156,
+   "rotation_mps_p50": [
+    6461.210012435913,
+    6465.1899337768555,
+    6458.889484405518,
+    6474.870920181274,
+    6463.6290073394775
+   ],
+   "rotation_prod_p50": [
+    7697.842597961426,
+    7705.46293258667,
+    7697.30281829834,
+    7698.122978210449,
+    7696.402549743652
+   ],
+   "gates": {
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008294 pass=True",
+    "mok_gate_pass": "True",
+    "control_fails": "True",
+    "pperr_max": 0,
+    "soak_pass": "True",
+    "soak_epochs": "600/600",
+    "poison_selftest_all_true": true,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_survivors_max": 0,
+    "poison_lines_n": 20,
+    "spin_success_max": 1,
+    "spin_fail_max": 0,
+    "spin_lines_n": 5
+   },
+   "stamps": {
+    "plan_M3toM5": 373.36,
+    "M6": 2443.88,
+    "planM6": 2817.24,
+    "M7": 2637.4,
+    "combine": 346.68,
+    "servicedrain": 2693.23,
+    "m2_to_end": 5801.32
+   },
+   "stamps_all_rotations": {
+    "M6": [
+     2428.11,
+     2434.23,
+     2443.88,
+     2445.89,
+     2451.64
+    ],
+    "M7": [
+     2627.05,
+     2637.4,
+     2699.3,
+     2702.6,
+     2710.63
+    ],
+    "combine": [
+     279.48,
+     285.68,
+     314.98,
+     346.68,
+     382.67
+    ],
+    "planM6": [
+     2801.12,
+     2809.92,
+     2817.24,
+     2817.85,
+     2827.96
+    ]
+   },
+   "gates_green": true,
+   "round": 1
+  },
+  {
+   "tag": "e37c",
+   "idx": 4,
+   "outdir": "4_C16g353mode12flush_rows16timestamps1_20260812T140231Z",
+   "arm": "mode12_C16_g353_fr16",
+   "C": 16,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "timestamps": 1,
+   "soak_iters": [
+    600
+   ],
+   "n_rank_files": 40,
+   "cfg_consistent_across_all_ranks": true,
+   "status": "valid_diagnostic",
+   "run_count": 5,
+   "mps_p50": 6496.010065078735,
+   "prod_p50": 7704.162836074829,
+   "pf6gm_p50": 6917.413949966431,
+   "ratio": 0.8431818230348267,
+   "rotation_mps_p50": [
+    6491.569995880127,
+    6495.949506759644,
+    6496.010065078735,
+    6497.850179672241,
+    6509.530067443848
+   ],
+   "rotation_prod_p50": [
+    7699.842929840088,
+    7709.321975708008,
+    7712.583065032959,
+    7695.083141326904,
+    7704.162836074829
+   ],
+   "gates": {
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008293 pass=True",
+    "mok_gate_pass": "True",
+    "control_fails": "True",
+    "pperr_max": 0,
+    "soak_pass": "True",
+    "soak_epochs": "600/600",
+    "poison_selftest_all_true": true,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_survivors_max": 0,
+    "poison_lines_n": 20,
+    "spin_success_max": 0,
+    "spin_fail_max": 0,
+    "spin_lines_n": 5
+   },
+   "stamps": {
+    "plan_M3toM5": 378.84,
+    "M6": 2457.84,
+    "planM6": 2836.68,
+    "M7": 2552.55,
+    "combine": 518.93,
+    "servicedrain": 2672.7,
+    "m2_to_end": 5908.16
+   },
+   "stamps_all_rotations": {
+    "M6": [
+     2439.67,
+     2454.02,
+     2456.34,
+     2457.84,
+     2461.94
+    ],
+    "M7": [
+     2552.55,
+     2610.04,
+     2656.34,
+     2681.4,
+     2742.61
+    ],
+    "combine": [
+     267.28,
+     314.08,
+     379.56,
+     428.57,
+     518.93
+    ],
+    "planM6": [
+     2813.27,
+     2826.84,
+     2833.54,
+     2834.8,
+     2836.68
+    ]
+   },
+   "gates_green": true,
+   "round": 2
+  },
+  {
+   "tag": "e37c",
+   "idx": 5,
+   "outdir": "5_C8g353mode12flush_rows16timestamps1_20260812T140535Z",
+   "arm": "mode12_C8_g353_fr16",
+   "C": 8,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "timestamps": 1,
+   "soak_iters": [
+    600
+   ],
+   "n_rank_files": 40,
+   "cfg_consistent_across_all_ranks": true,
+   "status": "valid_diagnostic",
+   "run_count": 5,
+   "mps_p50": 6472.009897232056,
+   "prod_p50": 7694.683074951172,
+   "pf6gm_p50": 6903.014898300171,
+   "ratio": 0.8411015546956916,
+   "rotation_mps_p50": [
+    6473.67000579834,
+    6465.109825134277,
+    6470.510721206665,
+    6472.009897232056,
+    6475.450038909912
+   ],
+   "rotation_prod_p50": [
+    7701.723098754883,
+    7701.523780822754,
+    7686.603546142578,
+    7694.683074951172,
+    7693.663597106934
+   ],
+   "gates": {
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008293 pass=True",
+    "mok_gate_pass": "True",
+    "control_fails": "True",
+    "pperr_max": 0,
+    "soak_pass": "True",
+    "soak_epochs": "600/600",
+    "poison_selftest_all_true": true,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_survivors_max": 0,
+    "poison_lines_n": 20,
+    "spin_success_max": 0,
+    "spin_fail_max": 0,
+    "spin_lines_n": 5
+   },
+   "stamps": {
+    "plan_M3toM5": 377.28,
+    "M6": 2465.51,
+    "planM6": 2842.79,
+    "M7": 2793.06,
+    "combine": 251.42,
+    "servicedrain": 2913.76,
+    "m2_to_end": 5887.27
+   },
+   "stamps_all_rotations": {
+    "M6": [
+     2444.69,
+     2452.78,
+     2453.38,
+     2459.92,
+     2465.51
+    ],
+    "M7": [
+     2652.11,
+     2689.48,
+     2697.8,
+     2748.62,
+     2793.06
+    ],
+    "combine": [
+     251.42,
+     258.8,
+     263.21,
+     279.75,
+     351.93
+    ],
+    "planM6": [
+     2809.81,
+     2825.86,
+     2826.22,
+     2836.82,
+     2842.79
+    ]
+   },
+   "gates_green": true,
+   "round": 2
+  },
+  {
+   "tag": "e37c",
+   "idx": 6,
+   "outdir": "6_C4g353mode12flush_rows16timestamps1_20260812T140839Z",
+   "arm": "mode12_C4_g353_fr16",
+   "C": 4,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "timestamps": 1,
+   "soak_iters": [
+    600
+   ],
+   "n_rank_files": 40,
+   "cfg_consistent_across_all_ranks": true,
+   "status": "valid_diagnostic",
+   "run_count": 5,
+   "mps_p50": 6470.27063369751,
+   "prod_p50": 7702.944040298462,
+   "pf6gm_p50": 6911.315202713013,
+   "ratio": 0.8399737295049607,
+   "rotation_mps_p50": [
+    6458.6498737335205,
+    6477.570056915283,
+    6478.090047836304,
+    6470.27063369751,
+    6456.210613250732
+   ],
+   "rotation_prod_p50": [
+    7700.862407684326,
+    7711.042881011963,
+    7702.944040298462,
+    7710.363864898682,
+    7699.244022369385
+   ],
+   "gates": {
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+    "mok_gate_pass": "True",
+    "control_fails": "True",
+    "pperr_max": 0,
+    "soak_pass": "True",
+    "soak_epochs": "600/600",
+    "poison_selftest_all_true": true,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_survivors_max": 0,
+    "poison_lines_n": 20,
+    "spin_success_max": 0,
+    "spin_fail_max": 0,
+    "spin_lines_n": 5
+   },
+   "stamps": {
+    "plan_M3toM5": 374.73,
+    "M6": 2452.42,
+    "planM6": 2827.15,
+    "M7": 2599.54,
+    "combine": 502.68,
+    "servicedrain": 2780.94,
+    "m2_to_end": 5929.37
+   },
+   "stamps_all_rotations": {
+    "M6": [
+     2442.24,
+     2452.42,
+     2456.4,
+     2458.9,
+     2459.15
+    ],
+    "M7": [
+     2589.9,
+     2599.54,
+     2606.52,
+     2670.74,
+     2690.34
+    ],
+    "combine": [
+     353.88,
+     359.26,
+     391.38,
+     419.1,
+     502.68
+    ],
+    "planM6": [
+     2816.98,
+     2827.15,
+     2828.33,
+     2832.01,
+     2833.44
+    ]
+   },
+   "gates_green": true,
+   "round": 2
+  },
+  {
+   "tag": "e37c",
+   "idx": 7,
+   "outdir": "7_C8g353mode12flush_rows16timestamps1_20260812T141143Z",
+   "arm": "mode12_C8_g353_fr16",
+   "C": 8,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "timestamps": 1,
+   "soak_iters": [
+    600
+   ],
+   "n_rank_files": 40,
+   "cfg_consistent_across_all_ranks": true,
+   "status": "valid_diagnostic",
+   "run_count": 5,
+   "mps_p50": 6476.990461349487,
+   "prod_p50": 7700.183391571045,
+   "pf6gm_p50": 6901.235580444336,
+   "ratio": 0.8411475586983399,
+   "rotation_mps_p50": [
+    6481.250524520874,
+    6471.69041633606,
+    6476.390838623047,
+    6476.990461349487,
+    6477.269887924194
+   ],
+   "rotation_prod_p50": [
+    7704.5838832855225,
+    7702.284097671509,
+    7696.464061737061,
+    7700.183391571045,
+    7699.4030475616455
+   ],
+   "gates": {
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008293 pass=True",
+    "mok_gate_pass": "True",
+    "control_fails": "True",
+    "pperr_max": 0,
+    "soak_pass": "True",
+    "soak_epochs": "600/600",
+    "poison_selftest_all_true": true,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_survivors_max": 0,
+    "poison_lines_n": 20,
+    "spin_success_max": 1,
+    "spin_fail_max": 0,
+    "spin_lines_n": 5
+   },
+   "stamps": {
+    "plan_M3toM5": 374.85,
+    "M6": 2446.31,
+    "planM6": 2821.16,
+    "M7": 2734.12,
+    "combine": 265.0,
+    "servicedrain": 2817.24,
+    "m2_to_end": 5820.28
+   },
+   "stamps_all_rotations": {
+    "M6": [
+     2446.31,
+     2448.32,
+     2449.92,
+     2452.69,
+     2457.12
+    ],
+    "M7": [
+     2647.89,
+     2684.76,
+     2710.08,
+     2734.12,
+     2756.38
+    ],
+    "combine": [
+     239.26,
+     265.0,
+     292.88,
+     303.28,
+     343.87
+    ],
+    "planM6": [
+     2821.16,
+     2821.24,
+     2826.36,
+     2826.36,
+     2826.84
+    ]
+   },
+   "gates_green": true,
+   "round": 3
+  },
+  {
+   "tag": "e37c",
+   "idx": 8,
+   "outdir": "8_C4g353mode12flush_rows16timestamps1_20260812T141446Z",
+   "arm": "mode12_C4_g353_fr16",
+   "C": 4,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "timestamps": 1,
+   "soak_iters": [
+    600
+   ],
+   "n_rank_files": 40,
+   "cfg_consistent_across_all_ranks": true,
+   "status": "valid_diagnostic",
+   "run_count": 5,
+   "mps_p50": 6468.18995475769,
+   "prod_p50": 7704.683065414429,
+   "pf6gm_p50": 6908.634185791016,
+   "ratio": 0.8395140851143851,
+   "rotation_mps_p50": [
+    6468.18995475769,
+    6459.769487380981,
+    6451.269865036011,
+    6468.789339065552,
+    6470.589399337769
+   ],
+   "rotation_prod_p50": [
+    7703.2036781311035,
+    7706.403017044067,
+    7716.662883758545,
+    7703.56297492981,
+    7704.683065414429
+   ],
+   "gates": {
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008293 pass=True",
+    "mok_gate_pass": "True",
+    "control_fails": "True",
+    "pperr_max": 0,
+    "soak_pass": "True",
+    "soak_epochs": "600/600",
+    "poison_selftest_all_true": true,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_survivors_max": 0,
+    "poison_lines_n": 20,
+    "spin_success_max": 1,
+    "spin_fail_max": 0,
+    "spin_lines_n": 5
+   },
+   "stamps": {
+    "plan_M3toM5": 371.99,
+    "M6": 2450.53,
+    "planM6": 2822.52,
+    "M7": 2538.47,
+    "combine": 504.62,
+    "servicedrain": 2723.52,
+    "m2_to_end": 5865.61
+   },
+   "stamps_all_rotations": {
+    "M6": [
+     2441.79,
+     2450.53,
+     2450.7,
+     2452.28,
+     2481.13
+    ],
+    "M7": [
+     2448.96,
+     2509.52,
+     2538.47,
+     2560.24,
+     2560.72
+    ],
+    "combine": [
+     413.12,
+     473.68,
+     484.44,
+     504.62,
+     517.84
+    ],
+    "planM6": [
+     2822.52,
+     2823.12,
+     2826.9,
+     2831.8,
+     2857.24
+    ]
+   },
+   "gates_green": true,
+   "round": 3
+  },
+  {
+   "tag": "e37c",
+   "idx": 9,
+   "outdir": "9_C16g353mode12flush_rows16timestamps1_20260812T141749Z",
+   "arm": "mode12_C16_g353_fr16",
+   "C": 16,
+   "g": 353,
+   "mode": 12,
+   "flush_rows": 16,
+   "timestamps": 1,
+   "soak_iters": [
+    600
+   ],
+   "n_rank_files": 40,
+   "cfg_consistent_across_all_ranks": true,
+   "status": "valid_diagnostic",
+   "run_count": 5,
+   "mps_p50": 6501.8110275268555,
+   "prod_p50": 7694.503545761108,
+   "pf6gm_p50": 6898.094415664673,
+   "ratio": 0.8449942207263904,
+   "rotation_mps_p50": [
+    6517.230987548828,
+    6483.030080795288,
+    6492.790699005127,
+    6501.8110275268555,
+    6518.79096031189
+   ],
+   "rotation_prod_p50": [
+    7700.722932815552,
+    7694.563627243042,
+    7691.223382949829,
+    7694.503545761108,
+    7692.984104156494
+   ],
+   "gates": {
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+    "mok_gate_pass": "True",
+    "control_fails": "True",
+    "pperr_max": 0,
+    "soak_pass": "True",
+    "soak_epochs": "600/600",
+    "poison_selftest_all_true": true,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_survivors_max": 0,
+    "poison_lines_n": 20,
+    "spin_success_max": 0,
+    "spin_fail_max": 0,
+    "spin_lines_n": 5
+   },
+   "stamps": {
+    "plan_M3toM5": 372.25,
+    "M6": 2438.42,
+    "planM6": 2810.67,
+    "M7": 2747.79,
+    "combine": 306.66,
+    "servicedrain": 2865.05,
+    "m2_to_end": 5865.12
+   },
+   "stamps_all_rotations": {
+    "M6": [
+     2438.42,
+     2440.6,
+     2444.39,
+     2448.76,
+     2468.23
+    ],
+    "M7": [
+     2692.98,
+     2701.39,
+     2727.35,
+     2747.79,
+     2757.81
+    ],
+    "combine": [
+     306.66,
+     315.52,
+     317.58,
+     326.12,
+     343.95
+    ],
+    "planM6": [
+     2810.67,
+     2811.92,
+     2817.63,
+     2818.35,
+     2843.83
+    ]
+   },
+   "gates_green": true,
+   "round": 3
+  }
+ ]
+}

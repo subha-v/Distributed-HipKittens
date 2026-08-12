@@ -231,6 +231,93 @@ says so and names it.
   an amd-smi bandwidth validation on this node is promising something the machine
   does not provide.
 
+- 2026-08-12 exp_34 `gate:` **The resource tuple is NOT a sufficient parity gate,
+  and this is the most expensive lesson of the night.** Commit `291dfa08` passed
+  **every** gated field — SGPR, VGPR, AGPR, scratch per lane, LDS, MFMA census,
+  `flat_atomic_pk_add_bf16` census, and zero-scratch-ops-inside-either-MFMA-span —
+  and still cost the mode-12 ratchet arm **+726.9 µs (11 % of its runtime)**:
+  rev 26 `f113d73f` 6,497.3 µs vs the pin 7,224.2 µs (n=5), same session, same
+  config, with `production` and `pf6gm_mega` unchanged to <5 µs. **From now on the
+  only parity evidence we trust is `.text` sha256 byte-identity, or a measured
+  end-to-end control on the ratchet config.** Every "compiled in but off"
+  instrument must clear that bar — which explicitly includes exp_23's phase ring,
+  whose tuple gate is green and whose timing invariant is unproven. Corollary for
+  process: **re-time the ratchet config on every commit that touches the shared
+  kernel**, not just re-gate it. The regression was found only because the brief
+  demanded a same-session mode-12 control; without that control it would have
+  silently poisoned every subsequent mode-12 denominator.
+- 2026-08-12 exp_34 `codegen:` **Adding an unused code path can silently disable a
+  `vmcnt`-based throttle while leaving its instruction counts unchanged.** The
+  exp_24 injection bound is worth **−613.5 µs at rev 26** and **−1.8 µs at the
+  pin** — inert — for mode 12, and **+7.2 µs** for mode 14, with **no mode-12
+  source line edited** (all mode-14 branches are gated on `m == 14`),
+  `n2_phase2_gm_mps.cpp` not in the diffstat, and the ISA census identical on
+  exactly the four throttle instantiations
+  (`BOUNDED={1:2, 4:96, 8:96, 16:96, 32:96}` in both revisions; the pin's extra
+  204 `vmcnt(0)` are mode 14's own code). The visible trace is `SGPR 104 → 106` and
+  `LDS +68 B`. **Scheduling-dependent mechanisms are fragile to codegen in shared
+  functions in a way that instruction censuses cannot see: the instructions are
+  present and do nothing.** Any commit touching a shared megakernel function must
+  **re-measure the throttle contrast (`g=353` vs `g=65`), not just the arm** —
+  that contrast is now the cheapest available detector for this failure class.
+  Precise mechanism: **still OPEN**, needs a source owner (exp_38).
+- 2026-08-12 exp_34 `gate:` **A rank-N-only failure is invisible in rank-0
+  stdout.** Mode 14's protocol negative control (`R < world-1` publish loop) set
+  `pperr = 33554432` (bit 25, `K0P6_MPS_ERR_M7DONE`) on **rank 7 only**, with
+  ranks 0–6 clean and 29,360,128 poisoned survivors on rank 7 — exactly the
+  pre-registered signature. But **rank-0 stdout shows `pperr=0` and a `nan` gate**,
+  which reads at a glance like the *wrong* failure; the control could only be
+  adjudicated in the **per-rank JSONs**. **Any gate that reads only rank 0 can
+  miss a real failure**, and any negative control whose expected signature is
+  rank-local must state which rank and be checked there.
+- 2026-08-12 exp_34 `gate:` **The naive "any scratch op after the first `v_mfma`"
+  MFMA-span rule fires on the reference arm itself.** The correct form is the span
+  *grouping* implemented in `tools/e34_42_gate1.sh`. A gate that fails on the known
+  good binary teaches nothing and costs a debugging cycle every time it runs:
+  **bad gates cost more than no gate.** Validate every new gate against the
+  reference arm before trusting it against a candidate.
+- 2026-08-12 exp_34 `provenance:` **`summary.json`'s `kernel_hsaco_sha256` is an
+  empty dict** and is useless as build evidence (already noted in exp_33; now
+  confirmed to matter). Worse, the jit cache holds **two byte-different `mps_mega`
+  builds whose `latest/` symlink flips randomly** — they differ in **40 of 188,360
+  bytes, all inside `__hip_cuid_`**, so the difference is cosmetic, but the flip
+  makes `latest/` an unreliable identity. **Resolve the real `.hsaco` with
+  `readlink -f` + `stat -L`; never trust `latest/`,** and take build identity from
+  the in-container per-rank record.
+- 2026-08-12 exp_34 + exp_37 **Dedicating CTAs to communication never won at any
+  pool size tested, in either mode — and mode 14's falsification is *stronger*
+  evidence for paper Q2 than the flatness that was predicted.** exp_37, 27
+  campaigns at rev 26: `C=4` 6,464.2 ≈ `C=8` 6,472.0 < `C=12` 6,490.4 < `C=16`
+  6,498.0 < `C=32` 6,735.3 < mode 2 `C=64` **6,837.5** — monotone over a 374 µs
+  span, with paired `C=8` −27.2 [−32.3, −22.1] and `C=4` −34.2 [−39.5, −28.9] in
+  **7 of 7 rounds**. exp_34 supplies the C=0 point that mode 12's validator makes
+  unreachable, and its C sweep is **monotone at 8.1–9.3 µs per reserved CTA** while
+  the pool **provably has no job at all** (bit 26 never set in 4,032 `pperr`
+  readings, `DRAIN=0`, `[MPS SPIN] 0/0`). **That is pure CTA-capacity loss with
+  contention excluded by construction** — so no placement policy can be rescued by
+  giving the pool less to do, which is a claim flatness could not have supported.
+  The mechanism is visible: **M6 does not move at all** (paired −1.0 µs
+  CI [−6.7, +4.8]; 1.8 µs = 0.07 % spread across `C = 4…32`), so the CTAs handed to
+  the pool are taken from work that had nothing to gain.
+- 2026-08-12 exp_34 **The drain deletion is a null (+3.2 µs), so the waterfall
+  collapses from six rungs back to five — and the selector was still worth
+  building.** Deleting ~2,840 `vmcnt(0)` + ~2,840 `__syncthreads()` per CTA buys
+  nothing measurable (+3.2 µs, inside the ±6 µs campaign spread, sign the wrong
+  way round). **Without `kCoarseKeepDrainBit` the entire −576.5 µs would have been
+  mis-attributed to signal granularity.** The general form: a confound selector
+  earns its cost even when — especially when — the confound turns out to be worth
+  zero, because that is the outcome you cannot otherwise distinguish from the
+  mechanism.
+- 2026-08-12 exp_34 `hypothesis (not a result):` **the injection bound and the
+  coarse signal may be substitutes rather than complements.** The bound is worth
+  **−613.5 µs** at rev 26; deleting the per-row protocol is worth **−573.3 µs**
+  measured while the bound was **inert**. Two numbers that close within 7 % of each
+  other, both plausibly bounding the *same* in-flight-remote-write resource. If
+  they are substitutes, the waterfall's rungs are not additive and mode 14's
+  falsification is explained without any appeal to overhead. **Untestable until
+  exp_38 lands**, then rung (d) must be re-run on a repaired binary. Recorded as
+  the most interesting open question the night produced.
+
 ## Reproductions, not new lessons (recorded so they are not re-litigated)
 
 - 2026-08-12 exp_33 + exp_35 **`[MPS SPIN]` is 0/0 — dispatch peer wait is ~0 at
@@ -388,3 +475,89 @@ says so and names it.
   Budget by that number, and interleave: the four batches tonight each visited
   every arm, so the session drift that could have masqueraded as the C-sweep effect
   (74.7 µs) is bounded by the within-arm spread (~6 µs).
+
+## exp_38 — the +727 µs regression FIXED (`275d2c2a`), and the parity gate replaced
+
+Supersedes nothing above; it **explains** the exp_34 entry "a commit whose diff
+cannot change mode 12 changed mode 12 by +726.9 µs" and closes it. Evidence:
+`exp_38_ratchet_restore/text_parity.json`, `epilogue_window.json`,
+`ratchet_confirm.json`.
+
+- 2026-08-12 exp_38 `method:` **A parity gate must be sensitive to the MECHANISM
+  the arm depends on, not merely to the resources the kernel occupies.** exp_34's
+  gate proved the kernel still fit in the same registers, the same LDS, the same
+  scratch allocation and the same MFMA census. **It never asked whether the
+  throttle still throttled.** The arm's entire claim rested on `s_waitcnt vmcnt(4)`
+  binding, and the one measurement that would have caught the regression at CPU
+  time — how many atomics are issued between consecutive `vmcnt`-constraining waits
+  — was in no gate. **Write the gate against the mechanism's invariant, then add
+  the resource smoke check; not the other way round.**
+- 2026-08-12 exp_38 `method:` **`.text` sha256 identity is the only parity gate we
+  trust for a change claimed inert**, and it is cheap: one CPU build and one `cmp`.
+  Corollary, now a rule: **a knob whose off-state is not `.text`-identical to the
+  ratchet is not a knob, it is a second arm, and it needs its own campaign.** That
+  is why exp_23's ring is default-off despite being exonerated — it adds a store at
+  every stamped boundary and can never be byte-identical. The gate has a **second
+  half that is equally load-bearing**: the flag-ON builds must **differ** (M14
+  192,448 B, RING 179,648 B vs REF/DEF 179,520 B). A flag-on build that came out
+  identical would mean the flag never reached the code and the arm would be a lie.
+  Note also that `K0P6_MPS_SRC_REV` bumps are compatible with `.text` identity —
+  the value is never read, it only keys the JIT cache.
+- 2026-08-12 exp_38 `method:` **Add scratch OP COUNT and SGPR/VGPR SPILL COUNTS to
+  the resource tuple, because `ScratchSize` is blind to spills that fit the
+  existing allocation.** `ScratchSize` stayed pinned at **128 B/lane** across an
+  11 % end-to-end regression while whole-kernel scratch operations went **19 →
+  168**; SGPR/VGPR spills moved **186 → 217** and **15 → 17** and *would* have
+  fired at CPU-gate time, hours earlier. "Zero scratch ops inside either MFMA span"
+  also passed, because the spills landed in the **M7 epilogue, which is not an MFMA
+  span** — a span-scoped check only protects the spans you named.
+- 2026-08-12 exp_38 **A `vmcnt`-based throttle is a NEGOTIATED mechanism, not an
+  instruction you own. Report the issue-run distribution alongside any throttle
+  result or the result is not reproducible.** A throttle only binds if the
+  surrounding code would otherwise exceed its cap, so the deciding quantity is the
+  distance between the wait and the operations it bounds — and the compiler owns
+  that distance. Measured: REF/DEF/RING 282 atomics in **12 runs, mean 23.5 in
+  flight**; with mode 14 compiled in, **194 runs, mean 1.45**, 189 of them a single
+  atomic, `vmcnt(0)` in the epilogue **21 → 117** alongside **+96 scratch ops**. The
+  hardware never reached 4 outstanding remote RMWs, so `vmcnt(4)` capped something
+  that never exceeded 1. **The throttle was not deleted — it was made redundant by
+  a stronger involuntary throttle installed by the register allocator**, which is
+  also why the sign and size come out right (exp_24 put the optimum near depth 4
+  with a cliff in the wrong direction; effective depth 1.45 is well past it, plus 96
+  full pipeline drains) and why `g=353` ≡ `g=65` to 1.8 µs at the broken pin.
+- 2026-08-12 exp_38 **"Unreachable code is free" is FALSE in a megakernel.** The
+  cleanest of the nine site ablations: **S4 is one line,
+  `if (k0p6_m == 14ull) return;`, on a branch that cannot execute in that build
+  because `config_is_valid` still rejects mode 14 — and it is one of the two worst
+  sites**, collapsing the epilogue window on its own (+99 scratch ops, `vmcnt(0)`
+  21 → 117). Meanwhile **S9 adds the largest lump of new code (+5,568 B `.text`,
+  +50 scratch ops) and is inert.** **Code size is not the variable; where the code
+  sits relative to the mechanism's live ranges is.** Four of nine sites collapse the
+  window, five do not touch it. And there are **two independent routes to the same
+  end state** — a spill route (S4, S8: `vmcnt(0)` 21 → 117) and a restructure route
+  (S6, S7: zero extra scratch, `vmcnt(0)` unchanged, but the epilogue span widens to
+  absorb 15 more throttle instantiations and mean run still collapses to ~2.8) — so
+  a single-cause hypothesis would have been wrong even after finding the spills.
+- 2026-08-12 exp_38 `method:` **Fix a regression with a GUARD, not a revert, when
+  the offending work is wanted later.** Mode 14 behind `K0P6_MPS_ENABLE_MODE14=0`
+  and the ring behind `K0P6_MPS_E23_RING=0`: default `.text` byte-identical to rev
+  26, **no work lost, no patch file needed, both mechanisms one `-D` away.** The
+  companion rule: **never publish a mode-12 number from a
+  `-DK0P6_MPS_ENABLE_MODE14=1` binary** — that build still carries the +727 µs by
+  design, so the pin *and the `-D` set* are part of a result's identity.
+- 2026-08-12 exp_38 `method:` **Confirm a fix on the MECHANISM, not only on the
+  wall clock.** Two checks were run: the ratchet reproduced at **6,488.7 vs 6,482.7
+  µs (+0.09 %)**, and the injection contrast came back to **−618.7 µs** against
+  **−613.5 at rev 26** and **−1.8 at the broken pin**. The first alone could be a
+  quiet session; the second cannot — a timing coincidence cannot move a contrast by
+  **344×**, and the two arms' value sets are disjoint by 597.2 µs. Carry the caveat
+  with it: **n=3 per arm is enough to verify a 618 µs contrast and a 0.09 %
+  restoration, and not enough to move a ratchet.**
+- 2026-08-12 exp_38 **Exoneration needs its own evidence, and three independent
+  lines are cheap.** The ring was the obvious co-suspect (same shared function,
+  same demoted gate). It was cleared by: the +726.9 µs predating the ring's
+  existence (rev 28 vs rev 29); the default build containing the ring code at flag 0
+  being byte-identical to rev 26; and a ring-compiled-IN build matching rev 26 on
+  every epilogue-window metric. **"Guarding X alone restores identity" is the
+  necessary-and-sufficient form of the claim** — reach for it instead of guarding
+  everything and declaring victory.

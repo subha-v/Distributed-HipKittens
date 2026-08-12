@@ -1,0 +1,7053 @@
+{
+ "campaigns": [
+  {
+   "arm_p50_median": {
+    "mps_mega": 6472.369909286499,
+    "pf6gm_mega": 6886.194705963135,
+    "production": 7700.142621994019
+   },
+   "arm_p50_stats": {
+    "mps_mega": {
+     "max": 6484.211206436157,
+     "median": 6472.369909286499,
+     "min": 6464.929580688477,
+     "values": [
+      6464.929580688477,
+      6483.649492263794,
+      6484.211206436157,
+      6472.369909286499,
+      6468.829870223999
+     ]
+    },
+    "pf6gm_mega": {
+     "max": 6948.934555053711,
+     "median": 6886.194705963135,
+     "min": 6872.553586959839,
+     "values": [
+      6926.434516906738,
+      6948.934555053711,
+      6886.194705963135,
+      6878.915071487427,
+      6872.553586959839
+     ]
+    },
+    "production": {
+     "max": 7711.724042892456,
+     "median": 7700.142621994019,
+     "min": 7694.883108139038,
+     "values": [
+      7700.142621994019,
+      7694.883108139038,
+      7700.203418731689,
+      7695.043087005615,
+      7711.724042892456
+     ]
+    }
+   },
+   "cfg_readback": {
+    "consistent": true,
+    "counts": [
+     40
+    ],
+    "distinct": [
+     {
+      "C": 8,
+      "flush_rows": 16,
+      "g": 353,
+      "mode": 12,
+      "pull_fallback": 0,
+      "timestamps": 1,
+      "word": 26039050504
+     }
+    ],
+    "mps_config": {
+     "C": 8,
+     "flush_rows": 16,
+     "g": 353,
+     "mode": 12,
+     "pull_fallback": 0,
+     "timestamps": 1,
+     "word": 26039050504
+    },
+    "n_rank_files": 40,
+    "soak_iters": [
+     600
+    ]
+   },
+   "gates": {
+    "control_fails": "True",
+    "log": "e37a_10_C8g353mode12flush_rows16timestamps1_20260812T131600Z.log",
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+    "mok_gate_pass": "True",
+    "poison_lines": [
+     "[POISON] eager arm=mps_mega survivors=0",
+     "[POISON] eager arm=pf6gm_mega survivors=0",
+     "[POISON] post_timing arm=mps_mega survivors=0",
+     "[POISON] post_timing arm=pf6gm_mega survivors=0"
+    ],
+    "poison_lines_n": 20,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_selftest_all_true": true,
+    "poison_selftest_lines": [
+     "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+     "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+    ],
+    "poison_survivors_max": 0,
+    "pperr_max": 0,
+    "soak_epochs": "600/600",
+    "soak_lines": [
+     "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True"
+    ],
+    "soak_pass": "True",
+    "spin_fail_max": 0,
+    "spin_lines_n": 5,
+    "spin_success_max": 1,
+    "ts_delta_all_M7_us": [
+     2582.23,
+     2647.28,
+     2665.18,
+     2690.09,
+     2706.44
+    ],
+    "ts_delta_all_combine_us": [
+     299.88,
+     317.0,
+     328.76,
+     341.12,
+     426.89
+    ],
+    "ts_delta_all_planM6_us": [
+     2804.56,
+     2826.41,
+     2828.8,
+     2834.74,
+     2847.76
+    ],
+    "ts_delta_n": 5,
+    "ts_delta_us": {
+     "M7": 2706.44,
+     "combine": 299.88,
+     "m2_to_end": 5810.88,
+     "planM6": 2804.56,
+     "servicedrain": 2797.5
+    },
+    "ts_split_all_M6_us": [
+     2434.51,
+     2449.74,
+     2452.24,
+     2459.11,
+     2473.76
+    ],
+    "ts_split_n": 5,
+    "ts_split_us": {
+     "M6": 2434.51,
+     "plan_M3toM5": 370.05
+    }
+   },
+   "idx": 10,
+   "kernel_hsaco_sha256": {},
+   "mps_cfg": [],
+   "outdir": "10_C8g353mode12flush_rows16timestamps1_20260812T131600Z",
+   "run_count": 5,
+   "runs": [
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6464.929580688477,
+      "pf6gm_mega": 6926.434516906738,
+      "production": 7700.142621994019
+     },
+     "arm_p95_us": {
+      "mps_mega": 6525.15811920166,
+      "pf6gm_mega": 7011.432933807373,
+      "production": 7785.881853103638
+     },
+     "directory": "run1",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6483.649492263794,
+      "pf6gm_mega": 6948.934555053711,
+      "production": 7694.883108139038
+     },
+     "arm_p95_us": {
+      "mps_mega": 6545.748782157898,
+      "pf6gm_mega": 7045.680212974548,
+      "production": 7783.125257492065
+     },
+     "directory": "run2",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "mps_mega",
+      "production",
+      "pf6gm_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6484.211206436157,
+      "pf6gm_mega": 6886.194705963135,
+      "production": 7700.203418731689
+     },
+     "arm_p95_us": {
+      "mps_mega": 6565.471172332764,
+      "pf6gm_mega": 6946.139764785767,
+      "production": 7764.385771751404
+     },
+     "directory": "run3",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6472.369909286499,
+      "pf6gm_mega": 6878.915071487427,
+      "production": 7695.043087005615
+     },
+     "arm_p95_us": {
+      "mps_mega": 6539.5150899887085,
+      "pf6gm_mega": 6953.291201591492,
+      "production": 7779.644203186035
+     },
+     "directory": "run4",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6468.829870223999,
+      "pf6gm_mega": 6872.553586959839,
+      "production": 7711.724042892456
+     },
+     "arm_p95_us": {
+      "mps_mega": 6532.745170593262,
+      "pf6gm_mega": 6950.4979610443115,
+      "production": 7786.224865913391
+     },
+     "directory": "run5",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    }
+   ],
+   "status": "valid_diagnostic",
+   "tag": "e37a"
+  },
+  {
+   "arm_p50_median": {
+    "mps_mega": 6499.251127243042,
+    "pf6gm_mega": 6911.415100097656,
+    "production": 7702.404022216797
+   },
+   "arm_p50_stats": {
+    "mps_mega": {
+     "max": 6511.870622634888,
+     "median": 6499.251127243042,
+     "min": 6486.310005187988,
+     "values": [
+      6511.870622634888,
+      6499.251127243042,
+      6505.230665206909,
+      6493.710279464722,
+      6486.310005187988
+     ]
+    },
+    "pf6gm_mega": {
+     "max": 6914.2351150512695,
+     "median": 6911.415100097656,
+     "min": 6890.035152435303,
+     "values": [
+      6914.2351150512695,
+      6890.035152435303,
+      6913.534879684448,
+      6911.415100097656,
+      6905.974388122559
+     ]
+    },
+    "production": {
+     "max": 7718.103647232056,
+     "median": 7702.404022216797,
+     "min": 7692.803382873535,
+     "values": [
+      7702.924013137817,
+      7692.803382873535,
+      7702.404022216797,
+      7699.203014373779,
+      7718.103647232056
+     ]
+    }
+   },
+   "cfg_readback": {
+    "consistent": true,
+    "counts": [
+     40
+    ],
+    "distinct": [
+     {
+      "C": 16,
+      "flush_rows": 16,
+      "g": 353,
+      "mode": 12,
+      "pull_fallback": 0,
+      "timestamps": 1,
+      "word": 26039050512
+     }
+    ],
+    "mps_config": {
+     "C": 16,
+     "flush_rows": 16,
+     "g": 353,
+     "mode": 12,
+     "pull_fallback": 0,
+     "timestamps": 1,
+     "word": 26039050512
+    },
+    "n_rank_files": 40,
+    "soak_iters": [
+     600
+    ]
+   },
+   "gates": {
+    "control_fails": "True",
+    "log": "e37a_11_C16g353mode12flush_rows16timestamps1_20260812T131904Z.log",
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008293 pass=True",
+    "mok_gate_pass": "True",
+    "poison_lines": [
+     "[POISON] eager arm=mps_mega survivors=0",
+     "[POISON] eager arm=pf6gm_mega survivors=0",
+     "[POISON] post_timing arm=mps_mega survivors=0",
+     "[POISON] post_timing arm=pf6gm_mega survivors=0"
+    ],
+    "poison_lines_n": 20,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_selftest_all_true": true,
+    "poison_selftest_lines": [
+     "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+     "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+    ],
+    "poison_survivors_max": 0,
+    "pperr_max": 0,
+    "soak_epochs": "600/600",
+    "soak_lines": [
+     "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True"
+    ],
+    "soak_pass": "True",
+    "spin_fail_max": 0,
+    "spin_lines_n": 5,
+    "spin_success_max": 0,
+    "ts_delta_all_M7_us": [
+     2642.92,
+     2666.28,
+     2673.0,
+     2714.12,
+     2745.58
+    ],
+    "ts_delta_all_combine_us": [
+     289.54,
+     319.5,
+     349.4,
+     377.23,
+     408.57
+    ],
+    "ts_delta_all_planM6_us": [
+     2806.88,
+     2811.84,
+     2819.6,
+     2833.78,
+     2845.39
+    ],
+    "ts_delta_n": 5,
+    "ts_delta_us": {
+     "M7": 2642.92,
+     "combine": 349.4,
+     "m2_to_end": 5799.2,
+     "planM6": 2806.88,
+     "servicedrain": 2755.8
+    },
+    "ts_split_all_M6_us": [
+     2436.5,
+     2439.84,
+     2450.8,
+     2465.61,
+     2468.07
+    ],
+    "ts_split_n": 5,
+    "ts_split_us": {
+     "M6": 2436.5,
+     "plan_M3toM5": 370.38
+    }
+   },
+   "idx": 11,
+   "kernel_hsaco_sha256": {},
+   "mps_cfg": [],
+   "outdir": "11_C16g353mode12flush_rows16timestamps1_20260812T131904Z",
+   "run_count": 5,
+   "runs": [
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6511.870622634888,
+      "pf6gm_mega": 6914.2351150512695,
+      "production": 7702.924013137817
+     },
+     "arm_p95_us": {
+      "mps_mega": 6559.0172290802,
+      "pf6gm_mega": 6977.455902099609,
+      "production": 7775.2631187438965
+     },
+     "directory": "run1",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6499.251127243042,
+      "pf6gm_mega": 6890.035152435303,
+      "production": 7692.803382873535
+     },
+     "arm_p95_us": {
+      "mps_mega": 6585.898852348328,
+      "pf6gm_mega": 6972.573947906494,
+      "production": 7767.7410364151
+     },
+     "directory": "run2",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "mps_mega",
+      "production",
+      "pf6gm_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6505.230665206909,
+      "pf6gm_mega": 6913.534879684448,
+      "production": 7702.404022216797
+     },
+     "arm_p95_us": {
+      "mps_mega": 6577.681803703308,
+      "pf6gm_mega": 7001.49827003479,
+      "production": 7781.698775291443
+     },
+     "directory": "run3",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6493.710279464722,
+      "pf6gm_mega": 6911.415100097656,
+      "production": 7699.203014373779
+     },
+     "arm_p95_us": {
+      "mps_mega": 6560.896897315979,
+      "pf6gm_mega": 7002.3539781570435,
+      "production": 7784.801197052002
+     },
+     "directory": "run4",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6486.310005187988,
+      "pf6gm_mega": 6905.974388122559,
+      "production": 7718.103647232056
+     },
+     "arm_p95_us": {
+      "mps_mega": 6563.466835021973,
+      "pf6gm_mega": 6994.15922164917,
+      "production": 7808.428120613098
+     },
+     "directory": "run5",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    }
+   ],
+   "status": "valid_diagnostic",
+   "tag": "e37a"
+  },
+  {
+   "arm_p50_median": {
+    "mps_mega": 6457.550048828125,
+    "pf6gm_mega": 6896.65412902832,
+    "production": 7694.123029708862
+   },
+   "arm_p50_stats": {
+    "mps_mega": {
+     "max": 6468.448877334595,
+     "median": 6457.550048828125,
+     "min": 6453.309535980225,
+     "values": [
+      6453.309535980225,
+      6460.548877716064,
+      6468.448877334595,
+      6457.550048828125,
+      6457.209825515747
+     ]
+    },
+    "pf6gm_mega": {
+     "max": 6945.51420211792,
+     "median": 6896.65412902832,
+     "min": 6878.354072570801,
+     "values": [
+      6928.9538860321045,
+      6945.51420211792,
+      6896.65412902832,
+      6878.354072570801,
+      6893.193960189819
+     ]
+    },
+    "production": {
+     "max": 7707.182168960571,
+     "median": 7694.123029708862,
+     "min": 7692.803621292114,
+     "values": [
+      7706.202983856201,
+      7693.441867828369,
+      7707.182168960571,
+      7694.123029708862,
+      7692.803621292114
+     ]
+    }
+   },
+   "cfg_readback": {
+    "consistent": true,
+    "counts": [
+     40
+    ],
+    "distinct": [
+     {
+      "C": 4,
+      "flush_rows": 16,
+      "g": 353,
+      "mode": 12,
+      "pull_fallback": 0,
+      "timestamps": 1,
+      "word": 26039050500
+     }
+    ],
+    "mps_config": {
+     "C": 4,
+     "flush_rows": 16,
+     "g": 353,
+     "mode": 12,
+     "pull_fallback": 0,
+     "timestamps": 1,
+     "word": 26039050500
+    },
+    "n_rank_files": 40,
+    "soak_iters": [
+     600
+    ]
+   },
+   "gates": {
+    "control_fails": "True",
+    "log": "e37a_12_C4g353mode12flush_rows16timestamps1_20260812T132207Z.log",
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+    "mok_gate_pass": "True",
+    "poison_lines": [
+     "[POISON] eager arm=mps_mega survivors=0",
+     "[POISON] eager arm=pf6gm_mega survivors=0",
+     "[POISON] post_timing arm=mps_mega survivors=0",
+     "[POISON] post_timing arm=pf6gm_mega survivors=0"
+    ],
+    "poison_lines_n": 20,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_selftest_all_true": true,
+    "poison_selftest_lines": [
+     "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+     "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+    ],
+    "poison_survivors_max": 0,
+    "pperr_max": 0,
+    "soak_epochs": "600/600",
+    "soak_lines": [
+     "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True"
+    ],
+    "soak_pass": "True",
+    "spin_fail_max": 0,
+    "spin_lines_n": 5,
+    "spin_success_max": 0,
+    "ts_delta_all_M7_us": [
+     2480.36,
+     2560.44,
+     2619.59,
+     2635.72,
+     2643.69
+    ],
+    "ts_delta_all_combine_us": [
+     346.43,
+     424.2,
+     428.1,
+     441.39,
+     512.88
+    ],
+    "ts_delta_all_planM6_us": [
+     2795.87,
+     2812.52,
+     2814.97,
+     2817.53,
+     2826.61
+    ],
+    "ts_delta_n": 5,
+    "ts_delta_us": {
+     "M7": 2643.69,
+     "combine": 346.43,
+     "m2_to_end": 5816.73,
+     "planM6": 2826.61,
+     "servicedrain": 2775.35
+    },
+    "ts_split_all_M6_us": [
+     2420.0,
+     2441.68,
+     2445.81,
+     2446.71,
+     2452.49
+    ],
+    "ts_split_n": 5,
+    "ts_split_us": {
+     "M6": 2452.49,
+     "plan_M3toM5": 374.12
+    }
+   },
+   "idx": 12,
+   "kernel_hsaco_sha256": {},
+   "mps_cfg": [],
+   "outdir": "12_C4g353mode12flush_rows16timestamps1_20260812T132207Z",
+   "run_count": 5,
+   "runs": [
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6453.309535980225,
+      "pf6gm_mega": 6928.9538860321045,
+      "production": 7706.202983856201
+     },
+     "arm_p95_us": {
+      "mps_mega": 6542.251968383789,
+      "pf6gm_mega": 7006.878781318665,
+      "production": 7781.9631814956665
+     },
+     "directory": "run1",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6460.548877716064,
+      "pf6gm_mega": 6945.51420211792,
+      "production": 7693.441867828369
+     },
+     "arm_p95_us": {
+      "mps_mega": 6548.631119728088,
+      "pf6gm_mega": 7033.971905708313,
+      "production": 7783.834886550903
+     },
+     "directory": "run2",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "mps_mega",
+      "production",
+      "pf6gm_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6468.448877334595,
+      "pf6gm_mega": 6896.65412902832,
+      "production": 7707.182168960571
+     },
+     "arm_p95_us": {
+      "mps_mega": 6553.600978851318,
+      "pf6gm_mega": 6964.3510818481445,
+      "production": 7763.565993309021
+     },
+     "directory": "run3",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6457.550048828125,
+      "pf6gm_mega": 6878.354072570801,
+      "production": 7694.123029708862
+     },
+     "arm_p95_us": {
+      "mps_mega": 6547.130990028381,
+      "pf6gm_mega": 6957.746982574463,
+      "production": 7775.271058082581
+     },
+     "directory": "run4",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6457.209825515747,
+      "pf6gm_mega": 6893.193960189819,
+      "production": 7692.803621292114
+     },
+     "arm_p95_us": {
+      "mps_mega": 6524.826169013977,
+      "pf6gm_mega": 6980.464839935303,
+      "production": 7762.821936607361
+     },
+     "directory": "run5",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    }
+   ],
+   "status": "valid_diagnostic",
+   "tag": "e37a"
+  },
+  {
+   "arm_p50_median": {
+    "mps_mega": 6492.626667022705,
+    "pf6gm_mega": 6911.267518997192,
+    "production": 7713.762044906616
+   },
+   "arm_p50_stats": {
+    "mps_mega": {
+     "max": 6523.963928222656,
+     "median": 6492.626667022705,
+     "min": 6479.888439178467,
+     "values": [
+      6523.963928222656,
+      6501.064777374268,
+      6491.606950759888,
+      6492.626667022705,
+      6479.888439178467
+     ]
+    },
+    "pf6gm_mega": {
+     "max": 6929.152488708496,
+     "median": 6911.267518997192,
+     "min": 6890.552520751953,
+     "values": [
+      6911.267518997192,
+      6914.248943328857,
+      6901.2110233306885,
+      6929.152488708496,
+      6890.552520751953
+     ]
+    },
+    "production": {
+     "max": 7719.857454299927,
+     "median": 7713.762044906616,
+     "min": 7700.541019439697,
+     "values": [
+      7703.956127166748,
+      7719.857454299927,
+      7719.619989395142,
+      7700.541019439697,
+      7713.762044906616
+     ]
+    }
+   },
+   "cfg_readback": {
+    "consistent": true,
+    "counts": [
+     40
+    ],
+    "distinct": [
+     {
+      "C": 16,
+      "flush_rows": 16,
+      "g": 353,
+      "mode": 12,
+      "pull_fallback": 0,
+      "timestamps": 1,
+      "word": 26039050512
+     }
+    ],
+    "mps_config": {
+     "C": 16,
+     "flush_rows": 16,
+     "g": 353,
+     "mode": 12,
+     "pull_fallback": 0,
+     "timestamps": 1,
+     "word": 26039050512
+    },
+    "n_rank_files": 40,
+    "soak_iters": [
+     600
+    ]
+   },
+   "gates": {
+    "control_fails": "True",
+    "log": "e37a_1_C16g353mode12flush_rows16timestamps1_20260812T124832Z.log",
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+    "mok_gate_pass": "True",
+    "poison_lines": [
+     "[POISON] eager arm=mps_mega survivors=0",
+     "[POISON] eager arm=pf6gm_mega survivors=0",
+     "[POISON] post_timing arm=mps_mega survivors=0",
+     "[POISON] post_timing arm=pf6gm_mega survivors=0"
+    ],
+    "poison_lines_n": 20,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_selftest_all_true": true,
+    "poison_selftest_lines": [
+     "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+     "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+    ],
+    "poison_survivors_max": 0,
+    "pperr_max": 0,
+    "soak_epochs": "600/600",
+    "soak_lines": [
+     "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True"
+    ],
+    "soak_pass": "True",
+    "spin_fail_max": 0,
+    "spin_lines_n": 5,
+    "spin_success_max": 0,
+    "ts_delta_all_M7_us": [
+     2648.02,
+     2677.95,
+     2717.28,
+     2722.39,
+     2820.08
+    ],
+    "ts_delta_all_combine_us": [
+     246.99,
+     291.29,
+     313.33,
+     362.25,
+     408.48
+    ],
+    "ts_delta_all_planM6_us": [
+     2803.37,
+     2806.02,
+     2808.82,
+     2817.12,
+     2833.0
+    ],
+    "ts_delta_n": 5,
+    "ts_delta_us": {
+     "M7": 2717.28,
+     "combine": 362.25,
+     "m2_to_end": 5888.35,
+     "planM6": 2808.82,
+     "servicedrain": 2799.98
+    },
+    "ts_split_all_M6_us": [
+     2428.2,
+     2438.14,
+     2439.72,
+     2440.96,
+     2462.37
+    ],
+    "ts_split_n": 5,
+    "ts_split_us": {
+     "M6": 2439.72,
+     "plan_M3toM5": 369.1
+    }
+   },
+   "idx": 1,
+   "kernel_hsaco_sha256": {},
+   "mps_cfg": [],
+   "outdir": "1_C16g353mode12flush_rows16timestamps1_20260812T124832Z",
+   "run_count": 5,
+   "runs": [
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6523.963928222656,
+      "pf6gm_mega": 6911.267518997192,
+      "production": 7703.956127166748
+     },
+     "arm_p95_us": {
+      "mps_mega": 6603.082990646362,
+      "pf6gm_mega": 6988.782811164856,
+      "production": 7774.354195594788
+     },
+     "directory": "run1",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6501.064777374268,
+      "pf6gm_mega": 6914.248943328857,
+      "production": 7719.857454299927
+     },
+     "arm_p95_us": {
+      "mps_mega": 6568.451809883118,
+      "pf6gm_mega": 6989.7459506988525,
+      "production": 7797.808146476746
+     },
+     "directory": "run2",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "mps_mega",
+      "production",
+      "pf6gm_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6491.606950759888,
+      "pf6gm_mega": 6901.2110233306885,
+      "production": 7719.619989395142
+     },
+     "arm_p95_us": {
+      "mps_mega": 6563.769006729126,
+      "pf6gm_mega": 6973.9612102508545,
+      "production": 7803.836035728455
+     },
+     "directory": "run3",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6492.626667022705,
+      "pf6gm_mega": 6929.152488708496,
+      "production": 7700.541019439697
+     },
+     "arm_p95_us": {
+      "mps_mega": 6580.755305290222,
+      "pf6gm_mega": 7006.229090690613,
+      "production": 7767.604064941406
+     },
+     "directory": "run4",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6479.888439178467,
+      "pf6gm_mega": 6890.552520751953,
+      "production": 7713.762044906616
+     },
+     "arm_p95_us": {
+      "mps_mega": 6551.8131494522095,
+      "pf6gm_mega": 6983.830142021179,
+      "production": 7796.832847595215
+     },
+     "directory": "run5",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    }
+   ],
+   "status": "valid_diagnostic",
+   "tag": "e37a"
+  },
+  {
+   "arm_p50_median": {
+    "mps_mega": 6470.609426498413,
+    "pf6gm_mega": 6884.47380065918,
+    "production": 7707.722425460815
+   },
+   "arm_p50_stats": {
+    "mps_mega": {
+     "max": 6477.369070053101,
+     "median": 6470.609426498413,
+     "min": 6457.228899002075,
+     "values": [
+      6477.369070053101,
+      6457.228899002075,
+      6474.829435348511,
+      6460.789918899536,
+      6470.609426498413
+     ]
+    },
+    "pf6gm_mega": {
+     "max": 6923.274040222168,
+     "median": 6884.47380065918,
+     "min": 6865.154027938843,
+     "values": [
+      6923.274040222168,
+      6917.4134731292725,
+      6875.893354415894,
+      6865.154027938843,
+      6884.47380065918
+     ]
+    },
+    "production": {
+     "max": 7709.762096405029,
+     "median": 7707.722425460815,
+     "min": 7695.202350616455,
+     "values": [
+      7706.201791763306,
+      7695.202350616455,
+      7708.722352981567,
+      7709.762096405029,
+      7707.722425460815
+     ]
+    }
+   },
+   "cfg_readback": {
+    "consistent": true,
+    "counts": [
+     40
+    ],
+    "distinct": [
+     {
+      "C": 8,
+      "flush_rows": 16,
+      "g": 353,
+      "mode": 12,
+      "pull_fallback": 0,
+      "timestamps": 1,
+      "word": 26039050504
+     }
+    ],
+    "mps_config": {
+     "C": 8,
+     "flush_rows": 16,
+     "g": 353,
+     "mode": 12,
+     "pull_fallback": 0,
+     "timestamps": 1,
+     "word": 26039050504
+    },
+    "n_rank_files": 40,
+    "soak_iters": [
+     600
+    ]
+   },
+   "gates": {
+    "control_fails": "True",
+    "log": "e37a_2_C8g353mode12flush_rows16timestamps1_20260812T125135Z.log",
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+    "mok_gate_pass": "True",
+    "poison_lines": [
+     "[POISON] eager arm=mps_mega survivors=0",
+     "[POISON] eager arm=pf6gm_mega survivors=0",
+     "[POISON] post_timing arm=mps_mega survivors=0",
+     "[POISON] post_timing arm=pf6gm_mega survivors=0"
+    ],
+    "poison_lines_n": 20,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_selftest_all_true": true,
+    "poison_selftest_lines": [
+     "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+     "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+    ],
+    "poison_survivors_max": 0,
+    "pperr_max": 0,
+    "soak_epochs": "600/600",
+    "soak_lines": [
+     "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True"
+    ],
+    "soak_pass": "True",
+    "spin_fail_max": 0,
+    "spin_lines_n": 5,
+    "spin_success_max": 1,
+    "ts_delta_all_M7_us": [
+     2577.81,
+     2629.16,
+     2631.12,
+     2651.6,
+     2662.08
+    ],
+    "ts_delta_all_combine_us": [
+     318.01,
+     351.26,
+     359.07,
+     361.64,
+     433.56
+    ],
+    "ts_delta_all_planM6_us": [
+     2812.58,
+     2825.6,
+     2830.11,
+     2832.48,
+     2841.32
+    ],
+    "ts_delta_n": 5,
+    "ts_delta_us": {
+     "M7": 2629.16,
+     "combine": 351.26,
+     "m2_to_end": 5806.02,
+     "planM6": 2825.6,
+     "servicedrain": 2704.71
+    },
+    "ts_split_all_M6_us": [
+     2441.7,
+     2450.64,
+     2453.87,
+     2458.43,
+     2468.21
+    ],
+    "ts_split_n": 5,
+    "ts_split_us": {
+     "M6": 2450.64,
+     "plan_M3toM5": 374.96
+    }
+   },
+   "idx": 2,
+   "kernel_hsaco_sha256": {},
+   "mps_cfg": [],
+   "outdir": "2_C8g353mode12flush_rows16timestamps1_20260812T125135Z",
+   "run_count": 5,
+   "runs": [
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6477.369070053101,
+      "pf6gm_mega": 6923.274040222168,
+      "production": 7706.201791763306
+     },
+     "arm_p95_us": {
+      "mps_mega": 6580.367136001587,
+      "pf6gm_mega": 7017.098832130432,
+      "production": 7779.816889762878
+     },
+     "directory": "run1",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6457.228899002075,
+      "pf6gm_mega": 6917.4134731292725,
+      "production": 7695.202350616455
+     },
+     "arm_p95_us": {
+      "mps_mega": 6513.441109657288,
+      "pf6gm_mega": 7000.563073158264,
+      "production": 7773.77507686615
+     },
+     "directory": "run2",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "mps_mega",
+      "production",
+      "pf6gm_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6474.829435348511,
+      "pf6gm_mega": 6875.893354415894,
+      "production": 7708.722352981567
+     },
+     "arm_p95_us": {
+      "mps_mega": 6546.668219566345,
+      "pf6gm_mega": 6955.217933654785,
+      "production": 7795.456838607788
+     },
+     "directory": "run3",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6460.789918899536,
+      "pf6gm_mega": 6865.154027938843,
+      "production": 7709.762096405029
+     },
+     "arm_p95_us": {
+      "mps_mega": 6548.405027389526,
+      "pf6gm_mega": 6931.536245346069,
+      "production": 7790.267992019653
+     },
+     "directory": "run4",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6470.609426498413,
+      "pf6gm_mega": 6884.47380065918,
+      "production": 7707.722425460815
+     },
+     "arm_p95_us": {
+      "mps_mega": 6531.262016296387,
+      "pf6gm_mega": 6959.013867378235,
+      "production": 7801.606202125549
+     },
+     "directory": "run5",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    }
+   ],
+   "status": "valid_diagnostic",
+   "tag": "e37a"
+  },
+  {
+   "arm_p50_median": {
+    "mps_mega": 6455.429315567017,
+    "pf6gm_mega": 6913.455009460449,
+    "production": 7710.0830078125
+   },
+   "arm_p50_stats": {
+    "mps_mega": {
+     "max": 6480.929374694824,
+     "median": 6455.429315567017,
+     "min": 6444.529056549072,
+     "values": [
+      6444.529056549072,
+      6480.929374694824,
+      6445.129156112671,
+      6455.429315567017,
+      6461.090087890625
+     ]
+    },
+    "pf6gm_mega": {
+     "max": 6931.595087051392,
+     "median": 6913.455009460449,
+     "min": 6895.6544399261475,
+     "values": [
+      6902.094125747681,
+      6916.294574737549,
+      6895.6544399261475,
+      6931.595087051392,
+      6913.455009460449
+     ]
+    },
+    "production": {
+     "max": 7728.1036376953125,
+     "median": 7710.0830078125,
+     "min": 7698.2831954956055,
+     "values": [
+      7704.1425704956055,
+      7710.0830078125,
+      7698.2831954956055,
+      7728.1036376953125,
+      7720.684051513672
+     ]
+    }
+   },
+   "cfg_readback": {
+    "consistent": true,
+    "counts": [
+     40
+    ],
+    "distinct": [
+     {
+      "C": 4,
+      "flush_rows": 16,
+      "g": 353,
+      "mode": 12,
+      "pull_fallback": 0,
+      "timestamps": 1,
+      "word": 26039050500
+     }
+    ],
+    "mps_config": {
+     "C": 4,
+     "flush_rows": 16,
+     "g": 353,
+     "mode": 12,
+     "pull_fallback": 0,
+     "timestamps": 1,
+     "word": 26039050500
+    },
+    "n_rank_files": 40,
+    "soak_iters": [
+     600
+    ]
+   },
+   "gates": {
+    "control_fails": "True",
+    "log": "e37a_3_C4g353mode12flush_rows16timestamps1_20260812T125438Z.log",
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+    "mok_gate_pass": "True",
+    "poison_lines": [
+     "[POISON] eager arm=mps_mega survivors=0",
+     "[POISON] eager arm=pf6gm_mega survivors=0",
+     "[POISON] post_timing arm=mps_mega survivors=0",
+     "[POISON] post_timing arm=pf6gm_mega survivors=0"
+    ],
+    "poison_lines_n": 20,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_selftest_all_true": true,
+    "poison_selftest_lines": [
+     "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+     "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+    ],
+    "poison_survivors_max": 0,
+    "pperr_max": 0,
+    "soak_epochs": "600/600",
+    "soak_lines": [
+     "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True"
+    ],
+    "soak_pass": "True",
+    "spin_fail_max": 0,
+    "spin_lines_n": 5,
+    "spin_success_max": 0,
+    "ts_delta_all_M7_us": [
+     2508.4,
+     2518.84,
+     2521.09,
+     2535.04,
+     2632.25
+    ],
+    "ts_delta_all_combine_us": [
+     360.04,
+     437.3,
+     455.12,
+     471.76,
+     495.3
+    ],
+    "ts_delta_all_planM6_us": [
+     2811.6,
+     2812.33,
+     2821.06,
+     2832.84,
+     2835.42
+    ],
+    "ts_delta_n": 5,
+    "ts_delta_us": {
+     "M7": 2518.84,
+     "combine": 455.12,
+     "m2_to_end": 5806.8,
+     "planM6": 2832.84,
+     "servicedrain": 2766.68
+    },
+    "ts_split_all_M6_us": [
+     2436.56,
+     2441.22,
+     2441.4,
+     2458.67,
+     2461.32
+    ],
+    "ts_split_n": 5,
+    "ts_split_us": {
+     "M6": 2461.32,
+     "plan_M3toM5": 371.52
+    }
+   },
+   "idx": 3,
+   "kernel_hsaco_sha256": {},
+   "mps_cfg": [],
+   "outdir": "3_C4g353mode12flush_rows16timestamps1_20260812T125438Z",
+   "run_count": 5,
+   "runs": [
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6444.529056549072,
+      "pf6gm_mega": 6902.094125747681,
+      "production": 7704.1425704956055
+     },
+     "arm_p95_us": {
+      "mps_mega": 6515.703868865967,
+      "pf6gm_mega": 6980.694794654846,
+      "production": 7783.326077461243
+     },
+     "directory": "run1",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6480.929374694824,
+      "pf6gm_mega": 6916.294574737549,
+      "production": 7710.0830078125
+     },
+     "arm_p95_us": {
+      "mps_mega": 6555.784893035889,
+      "pf6gm_mega": 6995.304870605469,
+      "production": 7793.531799316406
+     },
+     "directory": "run2",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "mps_mega",
+      "production",
+      "pf6gm_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6445.129156112671,
+      "pf6gm_mega": 6895.6544399261475,
+      "production": 7698.2831954956055
+     },
+     "arm_p95_us": {
+      "mps_mega": 6534.746837615967,
+      "pf6gm_mega": 6995.961165428162,
+      "production": 7784.97416973114
+     },
+     "directory": "run3",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6455.429315567017,
+      "pf6gm_mega": 6931.595087051392,
+      "production": 7728.1036376953125
+     },
+     "arm_p95_us": {
+      "mps_mega": 6542.871189117432,
+      "pf6gm_mega": 7007.6817989349365,
+      "production": 7794.749903678894
+     },
+     "directory": "run4",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6461.090087890625,
+      "pf6gm_mega": 6913.455009460449,
+      "production": 7720.684051513672
+     },
+     "arm_p95_us": {
+      "mps_mega": 6522.135972976685,
+      "pf6gm_mega": 7002.923917770386,
+      "production": 7788.925004005432
+     },
+     "directory": "run5",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    }
+   ],
+   "status": "valid_diagnostic",
+   "tag": "e37a"
+  },
+  {
+   "arm_p50_median": {
+    "mps_mega": 6462.010145187378,
+    "pf6gm_mega": 6893.73517036438,
+    "production": 7713.403940200806
+   },
+   "arm_p50_stats": {
+    "mps_mega": {
+     "max": 6473.829984664917,
+     "median": 6462.010145187378,
+     "min": 6448.269844055176,
+     "values": [
+      6461.770057678223,
+      6462.010145187378,
+      6448.269844055176,
+      6465.610027313232,
+      6473.829984664917
+     ]
+    },
+    "pf6gm_mega": {
+     "max": 6934.234857559204,
+     "median": 6893.73517036438,
+     "min": 6872.794389724731,
+     "values": [
+      6925.275087356567,
+      6934.234857559204,
+      6893.73517036438,
+      6883.095026016235,
+      6872.794389724731
+     ]
+    },
+    "production": {
+     "max": 7716.324090957642,
+     "median": 7713.403940200806,
+     "min": 7706.183910369873,
+     "values": [
+      7712.682485580444,
+      7714.2839431762695,
+      7706.183910369873,
+      7713.403940200806,
+      7716.324090957642
+     ]
+    }
+   },
+   "cfg_readback": {
+    "consistent": true,
+    "counts": [
+     40
+    ],
+    "distinct": [
+     {
+      "C": 8,
+      "flush_rows": 16,
+      "g": 353,
+      "mode": 12,
+      "pull_fallback": 0,
+      "timestamps": 1,
+      "word": 26039050504
+     }
+    ],
+    "mps_config": {
+     "C": 8,
+     "flush_rows": 16,
+     "g": 353,
+     "mode": 12,
+     "pull_fallback": 0,
+     "timestamps": 1,
+     "word": 26039050504
+    },
+    "n_rank_files": 40,
+    "soak_iters": [
+     600
+    ]
+   },
+   "gates": {
+    "control_fails": "True",
+    "log": "e37a_4_C8g353mode12flush_rows16timestamps1_20260812T125741Z.log",
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.031982 relative=0.008293 pass=True",
+    "mok_gate_pass": "True",
+    "poison_lines": [
+     "[POISON] eager arm=mps_mega survivors=0",
+     "[POISON] eager arm=pf6gm_mega survivors=0",
+     "[POISON] post_timing arm=mps_mega survivors=0",
+     "[POISON] post_timing arm=pf6gm_mega survivors=0"
+    ],
+    "poison_lines_n": 20,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_selftest_all_true": true,
+    "poison_selftest_lines": [
+     "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+     "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+    ],
+    "poison_survivors_max": 0,
+    "pperr_max": 0,
+    "soak_epochs": "600/600",
+    "soak_lines": [
+     "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True"
+    ],
+    "soak_pass": "True",
+    "spin_fail_max": 0,
+    "spin_lines_n": 5,
+    "spin_success_max": 0,
+    "ts_delta_all_M7_us": [
+     2637.91,
+     2658.51,
+     2660.76,
+     2672.87,
+     2707.95
+    ],
+    "ts_delta_all_combine_us": [
+     274.25,
+     309.44,
+     312.17,
+     383.97,
+     411.54
+    ],
+    "ts_delta_all_planM6_us": [
+     2800.16,
+     2821.06,
+     2822.71,
+     2826.02,
+     2838.89
+    ],
+    "ts_delta_n": 5,
+    "ts_delta_us": {
+     "M7": 2637.91,
+     "combine": 411.54,
+     "m2_to_end": 5872.16,
+     "planM6": 2822.71,
+     "servicedrain": 2698.69
+    },
+    "ts_split_all_M6_us": [
+     2429.66,
+     2443.42,
+     2448.47,
+     2450.34,
+     2459.49
+    ],
+    "ts_split_n": 5,
+    "ts_split_us": {
+     "M6": 2448.47,
+     "plan_M3toM5": 374.24
+    }
+   },
+   "idx": 4,
+   "kernel_hsaco_sha256": {},
+   "mps_cfg": [],
+   "outdir": "4_C8g353mode12flush_rows16timestamps1_20260812T125741Z",
+   "run_count": 5,
+   "runs": [
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6461.770057678223,
+      "pf6gm_mega": 6925.275087356567,
+      "production": 7712.682485580444
+     },
+     "arm_p95_us": {
+      "mps_mega": 6525.059032440186,
+      "pf6gm_mega": 7000.1041650772095,
+      "production": 7786.227130889893
+     },
+     "directory": "run1",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6462.010145187378,
+      "pf6gm_mega": 6934.234857559204,
+      "production": 7714.2839431762695
+     },
+     "arm_p95_us": {
+      "mps_mega": 6528.036785125732,
+      "pf6gm_mega": 7009.6487283706665,
+      "production": 7796.186947822571
+     },
+     "directory": "run2",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "mps_mega",
+      "production",
+      "pf6gm_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6448.269844055176,
+      "pf6gm_mega": 6893.73517036438,
+      "production": 7706.183910369873
+     },
+     "arm_p95_us": {
+      "mps_mega": 6516.668963432312,
+      "pf6gm_mega": 6953.954172134399,
+      "production": 7779.937863349915
+     },
+     "directory": "run3",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6465.610027313232,
+      "pf6gm_mega": 6883.095026016235,
+      "production": 7713.403940200806
+     },
+     "arm_p95_us": {
+      "mps_mega": 6533.801889419556,
+      "pf6gm_mega": 6964.564156532288,
+      "production": 7810.325026512146
+     },
+     "directory": "run4",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6473.829984664917,
+      "pf6gm_mega": 6872.794389724731,
+      "production": 7716.324090957642
+     },
+     "arm_p95_us": {
+      "mps_mega": 6532.136249542236,
+      "pf6gm_mega": 6957.288956642151,
+      "production": 7783.473873138428
+     },
+     "directory": "run5",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    }
+   ],
+   "status": "valid_diagnostic",
+   "tag": "e37a"
+  },
+  {
+   "arm_p50_median": {
+    "mps_mega": 6464.189529418945,
+    "pf6gm_mega": 6918.2538986206055,
+    "production": 7707.10301399231
+   },
+   "arm_p50_stats": {
+    "mps_mega": {
+     "max": 6489.65048789978,
+     "median": 6464.189529418945,
+     "min": 6453.169584274292,
+     "values": [
+      6489.65048789978,
+      6468.8098430633545,
+      6463.049411773682,
+      6453.169584274292,
+      6464.189529418945
+     ]
+    },
+    "pf6gm_mega": {
+     "max": 6923.714876174927,
+     "median": 6918.2538986206055,
+     "min": 6886.634111404419,
+     "values": [
+      6923.714876174927,
+      6896.974086761475,
+      6919.695138931274,
+      6886.634111404419,
+      6918.2538986206055
+     ]
+    },
+    "production": {
+     "max": 7723.242998123169,
+     "median": 7707.10301399231,
+     "min": 7695.242404937744,
+     "values": [
+      7706.563472747803,
+      7717.563152313232,
+      7707.10301399231,
+      7695.242404937744,
+      7723.242998123169
+     ]
+    }
+   },
+   "cfg_readback": {
+    "consistent": true,
+    "counts": [
+     40
+    ],
+    "distinct": [
+     {
+      "C": 4,
+      "flush_rows": 16,
+      "g": 353,
+      "mode": 12,
+      "pull_fallback": 0,
+      "timestamps": 1,
+      "word": 26039050500
+     }
+    ],
+    "mps_config": {
+     "C": 4,
+     "flush_rows": 16,
+     "g": 353,
+     "mode": 12,
+     "pull_fallback": 0,
+     "timestamps": 1,
+     "word": 26039050500
+    },
+    "n_rank_files": 40,
+    "soak_iters": [
+     600
+    ]
+   },
+   "gates": {
+    "control_fails": "True",
+    "log": "e37a_5_C4g353mode12flush_rows16timestamps1_20260812T130044Z.log",
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+    "mok_gate_pass": "True",
+    "poison_lines": [
+     "[POISON] eager arm=mps_mega survivors=0",
+     "[POISON] eager arm=pf6gm_mega survivors=0",
+     "[POISON] post_timing arm=mps_mega survivors=0",
+     "[POISON] post_timing arm=pf6gm_mega survivors=0"
+    ],
+    "poison_lines_n": 20,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_selftest_all_true": true,
+    "poison_selftest_lines": [
+     "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+     "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+    ],
+    "poison_survivors_max": 0,
+    "pperr_max": 0,
+    "soak_epochs": "600/600",
+    "soak_lines": [
+     "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True"
+    ],
+    "soak_pass": "True",
+    "spin_fail_max": 0,
+    "spin_lines_n": 5,
+    "spin_success_max": 0,
+    "ts_delta_all_M7_us": [
+     2590.63,
+     2598.23,
+     2634.54,
+     2692.66,
+     2692.72
+    ],
+    "ts_delta_all_combine_us": [
+     308.03,
+     309.06,
+     383.25,
+     392.93,
+     424.49
+    ],
+    "ts_delta_all_planM6_us": [
+     2812.68,
+     2824.92,
+     2828.67,
+     2831.1,
+     2835.96
+    ],
+    "ts_delta_n": 5,
+    "ts_delta_us": {
+     "M7": 2692.72,
+     "combine": 308.03,
+     "m2_to_end": 5836.71,
+     "planM6": 2835.96,
+     "servicedrain": 2770.67
+    },
+    "ts_split_all_M6_us": [
+     2440.68,
+     2447.86,
+     2450.04,
+     2452.49,
+     2462.12
+    ],
+    "ts_split_n": 5,
+    "ts_split_us": {
+     "M6": 2462.12,
+     "plan_M3toM5": 373.84
+    }
+   },
+   "idx": 5,
+   "kernel_hsaco_sha256": {},
+   "mps_cfg": [],
+   "outdir": "5_C4g353mode12flush_rows16timestamps1_20260812T130044Z",
+   "run_count": 5,
+   "runs": [
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6489.65048789978,
+      "pf6gm_mega": 6923.714876174927,
+      "production": 7706.563472747803
+     },
+     "arm_p95_us": {
+      "mps_mega": 6610.8089208602905,
+      "pf6gm_mega": 6998.377823829651,
+      "production": 7779.631948471069
+     },
+     "directory": "run1",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6468.8098430633545,
+      "pf6gm_mega": 6896.974086761475,
+      "production": 7717.563152313232
+     },
+     "arm_p95_us": {
+      "mps_mega": 6593.881058692932,
+      "pf6gm_mega": 6963.338923454285,
+      "production": 7805.876064300537
+     },
+     "directory": "run2",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "mps_mega",
+      "production",
+      "pf6gm_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6463.049411773682,
+      "pf6gm_mega": 6919.695138931274,
+      "production": 7707.10301399231
+     },
+     "arm_p95_us": {
+      "mps_mega": 6520.230197906494,
+      "pf6gm_mega": 7003.944873809814,
+      "production": 7795.714163780212
+     },
+     "directory": "run3",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6453.169584274292,
+      "pf6gm_mega": 6886.634111404419,
+      "production": 7695.242404937744
+     },
+     "arm_p95_us": {
+      "mps_mega": 6509.777903556824,
+      "pf6gm_mega": 6971.614909172058,
+      "production": 7778.2670974731445
+     },
+     "directory": "run4",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6464.189529418945,
+      "pf6gm_mega": 6918.2538986206055,
+      "production": 7723.242998123169
+     },
+     "arm_p95_us": {
+      "mps_mega": 6536.03823184967,
+      "pf6gm_mega": 7021.314430236816,
+      "production": 7810.83984375
+     },
+     "directory": "run5",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    }
+   ],
+   "status": "valid_diagnostic",
+   "tag": "e37a"
+  },
+  {
+   "arm_p50_median": {
+    "mps_mega": 6494.429588317871,
+    "pf6gm_mega": 6888.174057006836,
+    "production": 7703.962564468384
+   },
+   "arm_p50_stats": {
+    "mps_mega": {
+     "max": 6521.97003364563,
+     "median": 6494.429588317871,
+     "min": 6485.168933868408,
+     "values": [
+      6511.809587478638,
+      6485.168933868408,
+      6494.429588317871,
+      6521.97003364563,
+      6487.729549407959
+     ]
+    },
+    "pf6gm_mega": {
+     "max": 6939.493894577026,
+     "median": 6888.174057006836,
+     "min": 6877.153635025024,
+     "values": [
+      6939.493894577026,
+      6934.554100036621,
+      6884.133577346802,
+      6888.174057006836,
+      6877.153635025024
+     ]
+    },
+    "production": {
+     "max": 7711.622714996338,
+     "median": 7703.962564468384,
+     "min": 7688.7030601501465,
+     "values": [
+      7711.622714996338,
+      7708.662509918213,
+      7703.962564468384,
+      7690.422534942627,
+      7688.7030601501465
+     ]
+    }
+   },
+   "cfg_readback": {
+    "consistent": true,
+    "counts": [
+     40
+    ],
+    "distinct": [
+     {
+      "C": 16,
+      "flush_rows": 16,
+      "g": 353,
+      "mode": 12,
+      "pull_fallback": 0,
+      "timestamps": 1,
+      "word": 26039050512
+     }
+    ],
+    "mps_config": {
+     "C": 16,
+     "flush_rows": 16,
+     "g": 353,
+     "mode": 12,
+     "pull_fallback": 0,
+     "timestamps": 1,
+     "word": 26039050512
+    },
+    "n_rank_files": 40,
+    "soak_iters": [
+     600
+    ]
+   },
+   "gates": {
+    "control_fails": "True",
+    "log": "e37a_6_C16g353mode12flush_rows16timestamps1_20260812T130347Z.log",
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008294 pass=True",
+    "mok_gate_pass": "True",
+    "poison_lines": [
+     "[POISON] eager arm=mps_mega survivors=0",
+     "[POISON] eager arm=pf6gm_mega survivors=0",
+     "[POISON] post_timing arm=mps_mega survivors=0",
+     "[POISON] post_timing arm=pf6gm_mega survivors=0"
+    ],
+    "poison_lines_n": 20,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_selftest_all_true": true,
+    "poison_selftest_lines": [
+     "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+     "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+    ],
+    "poison_survivors_max": 0,
+    "pperr_max": 0,
+    "soak_epochs": "600/600",
+    "soak_lines": [
+     "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True"
+    ],
+    "soak_pass": "True",
+    "spin_fail_max": 0,
+    "spin_lines_n": 5,
+    "spin_success_max": 1,
+    "ts_delta_all_M7_us": [
+     2583.84,
+     2714.59,
+     2733.32,
+     2734.86,
+     2792.55
+    ],
+    "ts_delta_all_combine_us": [
+     283.04,
+     302.68,
+     318.78,
+     339.92,
+     439.24
+    ],
+    "ts_delta_all_planM6_us": [
+     2812.96,
+     2813.4,
+     2826.16,
+     2841.68,
+     2855.92
+    ],
+    "ts_delta_n": 5,
+    "ts_delta_us": {
+     "M7": 2714.59,
+     "combine": 318.78,
+     "m2_to_end": 5846.77,
+     "planM6": 2813.4,
+     "servicedrain": 2823.73
+    },
+    "ts_split_all_M6_us": [
+     2438.76,
+     2440.68,
+     2450.44,
+     2466.4,
+     2483.44
+    ],
+    "ts_split_n": 5,
+    "ts_split_us": {
+     "M6": 2438.76,
+     "plan_M3toM5": 374.64
+    }
+   },
+   "idx": 6,
+   "kernel_hsaco_sha256": {},
+   "mps_cfg": [],
+   "outdir": "6_C16g353mode12flush_rows16timestamps1_20260812T130347Z",
+   "run_count": 5,
+   "runs": [
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6511.809587478638,
+      "pf6gm_mega": 6939.493894577026,
+      "production": 7711.622714996338
+     },
+     "arm_p95_us": {
+      "mps_mega": 6588.92879486084,
+      "pf6gm_mega": 7013.478851318359,
+      "production": 7778.653812408447
+     },
+     "directory": "run1",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6485.168933868408,
+      "pf6gm_mega": 6934.554100036621,
+      "production": 7708.662509918213
+     },
+     "arm_p95_us": {
+      "mps_mega": 6555.872273445129,
+      "pf6gm_mega": 7022.260928153992,
+      "production": 7773.528861999512
+     },
+     "directory": "run2",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "mps_mega",
+      "production",
+      "pf6gm_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6494.429588317871,
+      "pf6gm_mega": 6884.133577346802,
+      "production": 7703.962564468384
+     },
+     "arm_p95_us": {
+      "mps_mega": 6579.75378036499,
+      "pf6gm_mega": 6943.5497760772705,
+      "production": 7779.900860786438
+     },
+     "directory": "run3",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6521.97003364563,
+      "pf6gm_mega": 6888.174057006836,
+      "production": 7690.422534942627
+     },
+     "arm_p95_us": {
+      "mps_mega": 6598.93810749054,
+      "pf6gm_mega": 6955.551910400391,
+      "production": 7795.590853691101
+     },
+     "directory": "run4",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6487.729549407959,
+      "pf6gm_mega": 6877.153635025024,
+      "production": 7688.7030601501465
+     },
+     "arm_p95_us": {
+      "mps_mega": 6564.187860488892,
+      "pf6gm_mega": 6948.4999895095825,
+      "production": 7756.804871559143
+     },
+     "directory": "run5",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    }
+   ],
+   "status": "valid_diagnostic",
+   "tag": "e37a"
+  },
+  {
+   "arm_p50_median": {
+    "mps_mega": 6458.089828491211,
+    "pf6gm_mega": 6903.574466705322,
+    "production": 7694.722890853882
+   },
+   "arm_p50_stats": {
+    "mps_mega": {
+     "max": 6479.710102081299,
+     "median": 6458.089828491211,
+     "min": 6453.569412231445,
+     "values": [
+      6458.089828491211,
+      6453.569412231445,
+      6455.749988555908,
+      6479.710102081299,
+      6463.53006362915
+     ]
+    },
+    "pf6gm_mega": {
+     "max": 6920.794486999512,
+     "median": 6903.574466705322,
+     "min": 6891.51406288147,
+     "values": [
+      6903.574466705322,
+      6891.51406288147,
+      6908.754348754883,
+      6894.613981246948,
+      6920.794486999512
+     ]
+    },
+    "production": {
+     "max": 7706.0229778289795,
+     "median": 7694.722890853882,
+     "min": 7691.762685775757,
+     "values": [
+      7691.762685775757,
+      7694.722890853882,
+      7694.602966308594,
+      7704.582691192627,
+      7706.0229778289795
+     ]
+    }
+   },
+   "cfg_readback": {
+    "consistent": true,
+    "counts": [
+     40
+    ],
+    "distinct": [
+     {
+      "C": 4,
+      "flush_rows": 16,
+      "g": 353,
+      "mode": 12,
+      "pull_fallback": 0,
+      "timestamps": 1,
+      "word": 26039050500
+     }
+    ],
+    "mps_config": {
+     "C": 4,
+     "flush_rows": 16,
+     "g": 353,
+     "mode": 12,
+     "pull_fallback": 0,
+     "timestamps": 1,
+     "word": 26039050500
+    },
+    "n_rank_files": 40,
+    "soak_iters": [
+     600
+    ]
+   },
+   "gates": {
+    "control_fails": "True",
+    "log": "e37a_7_C4g353mode12flush_rows16timestamps1_20260812T130650Z.log",
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008294 pass=True",
+    "mok_gate_pass": "True",
+    "poison_lines": [
+     "[POISON] eager arm=mps_mega survivors=0",
+     "[POISON] eager arm=pf6gm_mega survivors=0",
+     "[POISON] post_timing arm=mps_mega survivors=0",
+     "[POISON] post_timing arm=pf6gm_mega survivors=0"
+    ],
+    "poison_lines_n": 20,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_selftest_all_true": true,
+    "poison_selftest_lines": [
+     "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+     "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+    ],
+    "poison_survivors_max": 0,
+    "pperr_max": 0,
+    "soak_epochs": "600/600",
+    "soak_lines": [
+     "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True"
+    ],
+    "soak_pass": "True",
+    "spin_fail_max": 0,
+    "spin_lines_n": 5,
+    "spin_success_max": 0,
+    "ts_delta_all_M7_us": [
+     2551.61,
+     2590.8,
+     2699.04,
+     2704.56,
+     2723.35
+    ],
+    "ts_delta_all_combine_us": [
+     274.82,
+     280.28,
+     407.48,
+     435.61,
+     454.34
+    ],
+    "ts_delta_all_planM6_us": [
+     2816.04,
+     2817.46,
+     2822.24,
+     2832.08,
+     2855.19
+    ],
+    "ts_delta_n": 5,
+    "ts_delta_us": {
+     "M7": 2551.61,
+     "combine": 454.34,
+     "m2_to_end": 5861.14,
+     "planM6": 2855.19,
+     "servicedrain": 2775.71
+    },
+    "ts_split_all_M6_us": [
+     2433.03,
+     2446.4,
+     2447.13,
+     2457.68,
+     2479.46
+    ],
+    "ts_split_n": 5,
+    "ts_split_us": {
+     "M6": 2479.46,
+     "plan_M3toM5": 375.73
+    }
+   },
+   "idx": 7,
+   "kernel_hsaco_sha256": {},
+   "mps_cfg": [],
+   "outdir": "7_C4g353mode12flush_rows16timestamps1_20260812T130650Z",
+   "run_count": 5,
+   "runs": [
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6458.089828491211,
+      "pf6gm_mega": 6903.574466705322,
+      "production": 7691.762685775757
+     },
+     "arm_p95_us": {
+      "mps_mega": 6522.168135643005,
+      "pf6gm_mega": 6992.5631284713745,
+      "production": 7767.923879623413
+     },
+     "directory": "run1",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6453.569412231445,
+      "pf6gm_mega": 6891.51406288147,
+      "production": 7694.722890853882
+     },
+     "arm_p95_us": {
+      "mps_mega": 6529.299855232239,
+      "pf6gm_mega": 6980.282878875732,
+      "production": 7782.71005153656
+     },
+     "directory": "run2",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "mps_mega",
+      "production",
+      "pf6gm_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6455.749988555908,
+      "pf6gm_mega": 6908.754348754883,
+      "production": 7694.602966308594
+     },
+     "arm_p95_us": {
+      "mps_mega": 6534.77783203125,
+      "pf6gm_mega": 7022.176122665405,
+      "production": 7766.866207122803
+     },
+     "directory": "run3",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6479.710102081299,
+      "pf6gm_mega": 6894.613981246948,
+      "production": 7704.582691192627
+     },
+     "arm_p95_us": {
+      "mps_mega": 6569.712138175964,
+      "pf6gm_mega": 6967.395114898682,
+      "production": 7794.078087806702
+     },
+     "directory": "run4",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6463.53006362915,
+      "pf6gm_mega": 6920.794486999512,
+      "production": 7706.0229778289795
+     },
+     "arm_p95_us": {
+      "mps_mega": 6512.11621761322,
+      "pf6gm_mega": 6996.315860748291,
+      "production": 7789.0398025512695
+     },
+     "directory": "run5",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    }
+   ],
+   "status": "valid_diagnostic",
+   "tag": "e37a"
+  },
+  {
+   "arm_p50_median": {
+    "mps_mega": 6497.990131378174,
+    "pf6gm_mega": 6887.033939361572,
+    "production": 7702.4431228637695
+   },
+   "arm_p50_stats": {
+    "mps_mega": {
+     "max": 6513.569355010986,
+     "median": 6497.990131378174,
+     "min": 6481.409311294556,
+     "values": [
+      6481.409311294556,
+      6511.170148849487,
+      6513.569355010986,
+      6497.990131378174,
+      6488.729000091553
+     ]
+    },
+    "pf6gm_mega": {
+     "max": 6946.094512939453,
+     "median": 6887.033939361572,
+     "min": 6881.573915481567,
+     "values": [
+      6939.494609832764,
+      6946.094512939453,
+      6882.734060287476,
+      6887.033939361572,
+      6881.573915481567
+     ]
+    },
+    "production": {
+     "max": 7705.862522125244,
+     "median": 7702.4431228637695,
+     "min": 7701.662063598633,
+     "values": [
+      7702.4431228637695,
+      7702.262401580811,
+      7705.862522125244,
+      7701.662063598633,
+      7703.222036361694
+     ]
+    }
+   },
+   "cfg_readback": {
+    "consistent": true,
+    "counts": [
+     40
+    ],
+    "distinct": [
+     {
+      "C": 16,
+      "flush_rows": 16,
+      "g": 353,
+      "mode": 12,
+      "pull_fallback": 0,
+      "timestamps": 1,
+      "word": 26039050512
+     }
+    ],
+    "mps_config": {
+     "C": 16,
+     "flush_rows": 16,
+     "g": 353,
+     "mode": 12,
+     "pull_fallback": 0,
+     "timestamps": 1,
+     "word": 26039050512
+    },
+    "n_rank_files": 40,
+    "soak_iters": [
+     600
+    ]
+   },
+   "gates": {
+    "control_fails": "True",
+    "log": "e37a_8_C16g353mode12flush_rows16timestamps1_20260812T130953Z.log",
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008293 pass=True",
+    "mok_gate_pass": "True",
+    "poison_lines": [
+     "[POISON] eager arm=mps_mega survivors=0",
+     "[POISON] eager arm=pf6gm_mega survivors=0",
+     "[POISON] post_timing arm=mps_mega survivors=0",
+     "[POISON] post_timing arm=pf6gm_mega survivors=0"
+    ],
+    "poison_lines_n": 20,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_selftest_all_true": true,
+    "poison_selftest_lines": [
+     "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+     "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+    ],
+    "poison_survivors_max": 0,
+    "pperr_max": 0,
+    "soak_epochs": "600/600",
+    "soak_lines": [
+     "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True"
+    ],
+    "soak_pass": "True",
+    "spin_fail_max": 0,
+    "spin_lines_n": 5,
+    "spin_success_max": 1,
+    "ts_delta_all_M7_us": [
+     2604.31,
+     2713.42,
+     2715.35,
+     2738.3,
+     2786.92
+    ],
+    "ts_delta_all_combine_us": [
+     270.89,
+     275.89,
+     299.68,
+     355.68,
+     410.22
+    ],
+    "ts_delta_all_planM6_us": [
+     2814.99,
+     2818.76,
+     2828.5,
+     2828.94,
+     2841.27
+    ],
+    "ts_delta_n": 5,
+    "ts_delta_us": {
+     "M7": 2715.35,
+     "combine": 355.68,
+     "m2_to_end": 5886.02,
+     "planM6": 2814.99,
+     "servicedrain": 2815.45
+    },
+    "ts_split_all_M6_us": [
+     2437.67,
+     2449.12,
+     2459.34,
+     2460.77,
+     2461.16
+    ],
+    "ts_split_n": 5,
+    "ts_split_us": {
+     "M6": 2437.67,
+     "plan_M3toM5": 377.32
+    }
+   },
+   "idx": 8,
+   "kernel_hsaco_sha256": {},
+   "mps_cfg": [],
+   "outdir": "8_C16g353mode12flush_rows16timestamps1_20260812T130953Z",
+   "run_count": 5,
+   "runs": [
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6481.409311294556,
+      "pf6gm_mega": 6939.494609832764,
+      "production": 7702.4431228637695
+     },
+     "arm_p95_us": {
+      "mps_mega": 6555.020070075989,
+      "pf6gm_mega": 7012.8010511398315,
+      "production": 7778.918981552124
+     },
+     "directory": "run1",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6511.170148849487,
+      "pf6gm_mega": 6946.094512939453,
+      "production": 7702.262401580811
+     },
+     "arm_p95_us": {
+      "mps_mega": 6598.363018035889,
+      "pf6gm_mega": 7035.5309009552,
+      "production": 7796.495985984802
+     },
+     "directory": "run2",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "mps_mega",
+      "production",
+      "pf6gm_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6513.569355010986,
+      "pf6gm_mega": 6882.734060287476,
+      "production": 7705.862522125244
+     },
+     "arm_p95_us": {
+      "mps_mega": 6596.5688943862915,
+      "pf6gm_mega": 6973.227071762085,
+      "production": 7797.040057182312
+     },
+     "directory": "run3",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6497.990131378174,
+      "pf6gm_mega": 6887.033939361572,
+      "production": 7701.662063598633
+     },
+     "arm_p95_us": {
+      "mps_mega": 6556.958079338074,
+      "pf6gm_mega": 6972.367095947266,
+      "production": 7779.637145996094
+     },
+     "directory": "run4",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6488.729000091553,
+      "pf6gm_mega": 6881.573915481567,
+      "production": 7703.222036361694
+     },
+     "arm_p95_us": {
+      "mps_mega": 6554.848074913025,
+      "pf6gm_mega": 6942.041778564453,
+      "production": 7768.597197532654
+     },
+     "directory": "run5",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    }
+   ],
+   "status": "valid_diagnostic",
+   "tag": "e37a"
+  },
+  {
+   "arm_p50_median": {
+    "mps_mega": 6474.8289585113525,
+    "pf6gm_mega": 6894.052982330322,
+    "production": 7698.342084884644
+   },
+   "arm_p50_stats": {
+    "mps_mega": {
+     "max": 6489.388465881348,
+     "median": 6474.8289585113525,
+     "min": 6460.129022598267,
+     "values": [
+      6467.289209365845,
+      6489.388465881348,
+      6474.8289585113525,
+      6481.3690185546875,
+      6460.129022598267
+     ]
+    },
+    "pf6gm_mega": {
+     "max": 6904.63399887085,
+     "median": 6894.052982330322,
+     "min": 6880.113124847412,
+     "values": [
+      6904.63399887085,
+      6889.29295539856,
+      6880.113124847412,
+      6894.052982330322,
+      6899.393558502197
+     ]
+    },
+    "production": {
+     "max": 7720.963001251221,
+     "median": 7698.342084884644,
+     "min": 7688.159465789795,
+     "values": [
+      7688.159465789795,
+      7694.361448287964,
+      7699.382066726685,
+      7698.342084884644,
+      7720.963001251221
+     ]
+    }
+   },
+   "cfg_readback": {
+    "consistent": true,
+    "counts": [
+     40
+    ],
+    "distinct": [
+     {
+      "C": 8,
+      "flush_rows": 16,
+      "g": 353,
+      "mode": 12,
+      "pull_fallback": 0,
+      "timestamps": 1,
+      "word": 26039050504
+     }
+    ],
+    "mps_config": {
+     "C": 8,
+     "flush_rows": 16,
+     "g": 353,
+     "mode": 12,
+     "pull_fallback": 0,
+     "timestamps": 1,
+     "word": 26039050504
+    },
+    "n_rank_files": 40,
+    "soak_iters": [
+     600
+    ]
+   },
+   "gates": {
+    "control_fails": "True",
+    "log": "e37a_9_C8g353mode12flush_rows16timestamps1_20260812T131256Z.log",
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008294 pass=True",
+    "mok_gate_pass": "True",
+    "poison_lines": [
+     "[POISON] eager arm=mps_mega survivors=0",
+     "[POISON] eager arm=pf6gm_mega survivors=0",
+     "[POISON] post_timing arm=mps_mega survivors=0",
+     "[POISON] post_timing arm=pf6gm_mega survivors=0"
+    ],
+    "poison_lines_n": 20,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_selftest_all_true": true,
+    "poison_selftest_lines": [
+     "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+     "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+    ],
+    "poison_survivors_max": 0,
+    "pperr_max": 0,
+    "soak_epochs": "600/600",
+    "soak_lines": [
+     "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True"
+    ],
+    "soak_pass": "True",
+    "spin_fail_max": 0,
+    "spin_lines_n": 5,
+    "spin_success_max": 0,
+    "ts_delta_all_M7_us": [
+     2641.75,
+     2651.31,
+     2659.0,
+     2693.5,
+     2693.93
+    ],
+    "ts_delta_all_combine_us": [
+     292.0,
+     299.95,
+     313.37,
+     357.68,
+     375.72
+    ],
+    "ts_delta_all_planM6_us": [
+     2786.37,
+     2822.87,
+     2826.88,
+     2837.84,
+     2838.93
+    ],
+    "ts_delta_n": 5,
+    "ts_delta_us": {
+     "M7": 2693.93,
+     "combine": 299.95,
+     "m2_to_end": 5832.81,
+     "planM6": 2838.93,
+     "servicedrain": 2780.36
+    },
+    "ts_split_all_M6_us": [
+     2416.41,
+     2445.84,
+     2447.67,
+     2454.93,
+     2459.72
+    ],
+    "ts_split_n": 5,
+    "ts_split_us": {
+     "M6": 2459.72,
+     "plan_M3toM5": 379.21
+    }
+   },
+   "idx": 9,
+   "kernel_hsaco_sha256": {},
+   "mps_cfg": [],
+   "outdir": "9_C8g353mode12flush_rows16timestamps1_20260812T131256Z",
+   "run_count": 5,
+   "runs": [
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6467.289209365845,
+      "pf6gm_mega": 6904.63399887085,
+      "production": 7688.159465789795
+     },
+     "arm_p95_us": {
+      "mps_mega": 6550.784182548523,
+      "pf6gm_mega": 6979.671835899353,
+      "production": 7769.113087654114
+     },
+     "directory": "run1",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6489.388465881348,
+      "pf6gm_mega": 6889.29295539856,
+      "production": 7694.361448287964
+     },
+     "arm_p95_us": {
+      "mps_mega": 6551.959848403931,
+      "pf6gm_mega": 6962.058115005493,
+      "production": 7766.9639348983765
+     },
+     "directory": "run2",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "mps_mega",
+      "production",
+      "pf6gm_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6474.8289585113525,
+      "pf6gm_mega": 6880.113124847412,
+      "production": 7699.382066726685
+     },
+     "arm_p95_us": {
+      "mps_mega": 6542.231774330139,
+      "pf6gm_mega": 6957.564187049866,
+      "production": 7787.670803070068
+     },
+     "directory": "run3",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6481.3690185546875,
+      "pf6gm_mega": 6894.052982330322,
+      "production": 7698.342084884644
+     },
+     "arm_p95_us": {
+      "mps_mega": 6554.38015460968,
+      "pf6gm_mega": 6957.550072669983,
+      "production": 7785.580945014954
+     },
+     "directory": "run4",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6460.129022598267,
+      "pf6gm_mega": 6899.393558502197,
+      "production": 7720.963001251221
+     },
+     "arm_p95_us": {
+      "mps_mega": 6535.2680921554565,
+      "pf6gm_mega": 6991.519045829773,
+      "production": 7799.935936927795
+     },
+     "directory": "run5",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    }
+   ],
+   "status": "valid_diagnostic",
+   "tag": "e37a"
+  },
+  {
+   "arm_p50_median": {
+    "mps_mega": 6490.185499191284,
+    "pf6gm_mega": 6901.830434799194,
+    "production": 7705.541133880615
+   },
+   "arm_p50_stats": {
+    "mps_mega": {
+     "max": 6499.808073043823,
+     "median": 6490.185499191284,
+     "min": 6485.746383666992,
+     "values": [
+      6490.185499191284,
+      6485.746383666992,
+      6499.808073043823,
+      6489.748477935791,
+      6497.828960418701
+     ]
+    },
+    "pf6gm_mega": {
+     "max": 6963.232517242432,
+     "median": 6901.830434799194,
+     "min": 6886.252403259277,
+     "values": [
+      6886.72947883606,
+      6901.830434799194,
+      6963.232517242432,
+      6886.252403259277,
+      6907.793045043945
+     ]
+    },
+    "production": {
+     "max": 7708.7390422821045,
+     "median": 7705.541133880615,
+     "min": 7698.061466217041,
+     "values": [
+      7700.49786567688,
+      7708.7390422821045,
+      7707.880020141602,
+      7705.541133880615,
+      7698.061466217041
+     ]
+    }
+   },
+   "cfg_readback": {
+    "consistent": true,
+    "counts": [
+     40
+    ],
+    "distinct": [
+     {
+      "C": 12,
+      "flush_rows": 16,
+      "g": 353,
+      "mode": 12,
+      "pull_fallback": 0,
+      "timestamps": 1,
+      "word": 26039050508
+     }
+    ],
+    "mps_config": {
+     "C": 12,
+     "flush_rows": 16,
+     "g": 353,
+     "mode": 12,
+     "pull_fallback": 0,
+     "timestamps": 1,
+     "word": 26039050508
+    },
+    "n_rank_files": 40,
+    "soak_iters": [
+     600
+    ]
+   },
+   "gates": {
+    "control_fails": "True",
+    "log": "e37b_1_C12g353mode12flush_rows16timestamps1_20260812T133406Z.log",
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+    "mok_gate_pass": "True",
+    "poison_lines": [
+     "[POISON] eager arm=mps_mega survivors=0",
+     "[POISON] eager arm=pf6gm_mega survivors=0",
+     "[POISON] post_timing arm=mps_mega survivors=0",
+     "[POISON] post_timing arm=pf6gm_mega survivors=0"
+    ],
+    "poison_lines_n": 20,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_selftest_all_true": true,
+    "poison_selftest_lines": [
+     "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+     "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+    ],
+    "poison_survivors_max": 0,
+    "pperr_max": 0,
+    "soak_epochs": "600/600",
+    "soak_lines": [
+     "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True"
+    ],
+    "soak_pass": "True",
+    "spin_fail_max": 0,
+    "spin_lines_n": 5,
+    "spin_success_max": 1,
+    "ts_delta_all_M7_us": [
+     2717.01,
+     2746.02,
+     2763.81,
+     2779.22,
+     2812.78
+    ],
+    "ts_delta_all_combine_us": [
+     211.32,
+     241.57,
+     258.02,
+     261.37,
+     268.12
+    ],
+    "ts_delta_all_planM6_us": [
+     2810.55,
+     2821.16,
+     2823.4,
+     2823.78,
+     2831.06
+    ],
+    "ts_delta_n": 5,
+    "ts_delta_us": {
+     "M7": 2779.22,
+     "combine": 261.37,
+     "m2_to_end": 5864.37,
+     "planM6": 2823.78,
+     "servicedrain": 2896.42
+    },
+    "ts_split_all_M6_us": [
+     2436.56,
+     2441.04,
+     2446.6,
+     2446.7,
+     2455.36
+    ],
+    "ts_split_n": 5,
+    "ts_split_us": {
+     "M6": 2446.6,
+     "plan_M3toM5": 377.18
+    }
+   },
+   "idx": 1,
+   "kernel_hsaco_sha256": {},
+   "mps_cfg": [],
+   "outdir": "1_C12g353mode12flush_rows16timestamps1_20260812T133406Z",
+   "run_count": 5,
+   "runs": [
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6490.185499191284,
+      "pf6gm_mega": 6886.72947883606,
+      "production": 7700.49786567688
+     },
+     "arm_p95_us": {
+      "mps_mega": 6549.327182769775,
+      "pf6gm_mega": 6985.096979141235,
+      "production": 7767.342185974121
+     },
+     "directory": "run1",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6485.746383666992,
+      "pf6gm_mega": 6901.830434799194,
+      "production": 7708.7390422821045
+     },
+     "arm_p95_us": {
+      "mps_mega": 6543.195033073425,
+      "pf6gm_mega": 6961.8061780929565,
+      "production": 7789.102029800415
+     },
+     "directory": "run2",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "mps_mega",
+      "production",
+      "pf6gm_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6499.808073043823,
+      "pf6gm_mega": 6963.232517242432,
+      "production": 7707.880020141602
+     },
+     "arm_p95_us": {
+      "mps_mega": 6564.004039764404,
+      "pf6gm_mega": 7046.260905265808,
+      "production": 7791.5690660476685
+     },
+     "directory": "run3",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6489.748477935791,
+      "pf6gm_mega": 6886.252403259277,
+      "production": 7705.541133880615
+     },
+     "arm_p95_us": {
+      "mps_mega": 6551.2789487838745,
+      "pf6gm_mega": 6937.8928899765015,
+      "production": 7803.16379070282
+     },
+     "directory": "run4",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6497.828960418701,
+      "pf6gm_mega": 6907.793045043945,
+      "production": 7698.061466217041
+     },
+     "arm_p95_us": {
+      "mps_mega": 6566.037917137146,
+      "pf6gm_mega": 7020.357799530029,
+      "production": 7777.041792869568
+     },
+     "directory": "run5",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    }
+   ],
+   "status": "valid_diagnostic",
+   "tag": "e37b"
+  },
+  {
+   "arm_p50_median": {
+    "mps_mega": 6734.0521812438965,
+    "pf6gm_mega": 6892.313003540039,
+    "production": 7693.822145462036
+   },
+   "arm_p50_stats": {
+    "mps_mega": {
+     "max": 6746.212005615234,
+     "median": 6734.0521812438965,
+     "min": 6722.311496734619,
+     "values": [
+      6746.212005615234,
+      6734.0521812438965,
+      6734.231948852539,
+      6722.311496734619,
+      6722.871780395508
+     ]
+    },
+    "pf6gm_mega": {
+     "max": 6922.614097595215,
+     "median": 6892.313003540039,
+     "min": 6879.954099655151,
+     "values": [
+      6882.213115692139,
+      6922.614097595215,
+      6909.073352813721,
+      6892.313003540039,
+      6879.954099655151
+     ]
+    },
+    "production": {
+     "max": 7703.402042388916,
+     "median": 7693.822145462036,
+     "min": 7685.28151512146,
+     "values": [
+      7703.402042388916,
+      7693.822145462036,
+      7703.222036361694,
+      7685.28151512146,
+      7688.44199180603
+     ]
+    }
+   },
+   "cfg_readback": {
+    "consistent": true,
+    "counts": [
+     40
+    ],
+    "distinct": [
+     {
+      "C": 32,
+      "flush_rows": 16,
+      "g": 353,
+      "mode": 12,
+      "pull_fallback": 0,
+      "timestamps": 1,
+      "word": 26039050528
+     }
+    ],
+    "mps_config": {
+     "C": 32,
+     "flush_rows": 16,
+     "g": 353,
+     "mode": 12,
+     "pull_fallback": 0,
+     "timestamps": 1,
+     "word": 26039050528
+    },
+    "n_rank_files": 40,
+    "soak_iters": [
+     600
+    ]
+   },
+   "gates": {
+    "control_fails": "True",
+    "log": "e37b_2_C32g353mode12flush_rows16timestamps1_20260812T133710Z.log",
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.032471 relative=0.008294 pass=True",
+    "mok_gate_pass": "True",
+    "poison_lines": [
+     "[POISON] eager arm=mps_mega survivors=0",
+     "[POISON] eager arm=pf6gm_mega survivors=0",
+     "[POISON] post_timing arm=mps_mega survivors=0",
+     "[POISON] post_timing arm=pf6gm_mega survivors=0"
+    ],
+    "poison_lines_n": 20,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_selftest_all_true": true,
+    "poison_selftest_lines": [
+     "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+     "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+    ],
+    "poison_survivors_max": 0,
+    "pperr_max": 0,
+    "soak_epochs": "600/600",
+    "soak_lines": [
+     "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True"
+    ],
+    "soak_pass": "True",
+    "spin_fail_max": 0,
+    "spin_lines_n": 5,
+    "spin_success_max": 1,
+    "ts_delta_all_M7_us": [
+     2954.7,
+     3005.4,
+     3023.85,
+     3035.57,
+     3125.68
+    ],
+    "ts_delta_all_combine_us": [
+     146.66,
+     160.06,
+     178.21,
+     198.53,
+     226.6
+    ],
+    "ts_delta_all_planM6_us": [
+     2800.96,
+     2817.96,
+     2826.57,
+     2827.06,
+     2850.14
+    ],
+    "ts_delta_n": 5,
+    "ts_delta_us": {
+     "M7": 3035.57,
+     "combine": 178.21,
+     "m2_to_end": 6014.74,
+     "planM6": 2800.96,
+     "servicedrain": 3118.2
+    },
+    "ts_split_all_M6_us": [
+     2428.01,
+     2441.66,
+     2449.94,
+     2451.72,
+     2474.1
+    ],
+    "ts_split_n": 5,
+    "ts_split_us": {
+     "M6": 2428.01,
+     "plan_M3toM5": 372.95
+    }
+   },
+   "idx": 2,
+   "kernel_hsaco_sha256": {},
+   "mps_cfg": [],
+   "outdir": "2_C32g353mode12flush_rows16timestamps1_20260812T133710Z",
+   "run_count": 5,
+   "runs": [
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6746.212005615234,
+      "pf6gm_mega": 6882.213115692139,
+      "production": 7703.402042388916
+     },
+     "arm_p95_us": {
+      "mps_mega": 6830.919003486633,
+      "pf6gm_mega": 6969.303822517395,
+      "production": 7801.74708366394
+     },
+     "directory": "run1",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6734.0521812438965,
+      "pf6gm_mega": 6922.614097595215,
+      "production": 7693.822145462036
+     },
+     "arm_p95_us": {
+      "mps_mega": 6862.71185874939,
+      "pf6gm_mega": 7005.038022994995,
+      "production": 7779.260969161987
+     },
+     "directory": "run2",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "mps_mega",
+      "production",
+      "pf6gm_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6734.231948852539,
+      "pf6gm_mega": 6909.073352813721,
+      "production": 7703.222036361694
+     },
+     "arm_p95_us": {
+      "mps_mega": 6835.4572057724,
+      "pf6gm_mega": 6977.344751358032,
+      "production": 7775.125312805176
+     },
+     "directory": "run3",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6722.311496734619,
+      "pf6gm_mega": 6892.313003540039,
+      "production": 7685.28151512146
+     },
+     "arm_p95_us": {
+      "mps_mega": 6816.128897666931,
+      "pf6gm_mega": 6966.55695438385,
+      "production": 7755.924034118652
+     },
+     "directory": "run4",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6722.871780395508,
+      "pf6gm_mega": 6879.954099655151,
+      "production": 7688.44199180603
+     },
+     "arm_p95_us": {
+      "mps_mega": 6832.726955413818,
+      "pf6gm_mega": 6976.764130592346,
+      "production": 7754.044985771179
+     },
+     "directory": "run5",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    }
+   ],
+   "status": "valid_diagnostic",
+   "tag": "e37b"
+  },
+  {
+   "arm_p50_median": {
+    "mps_mega": 6835.654497146606,
+    "pf6gm_mega": 6942.275524139404,
+    "production": 7699.822187423706
+   },
+   "arm_p50_stats": {
+    "mps_mega": {
+     "max": 6843.0938720703125,
+     "median": 6835.654497146606,
+     "min": 6824.873924255371,
+     "values": [
+      6834.713459014893,
+      6839.67399597168,
+      6824.873924255371,
+      6835.654497146606,
+      6843.0938720703125
+     ]
+    },
+    "pf6gm_mega": {
+     "max": 6945.9547996521,
+     "median": 6942.275524139404,
+     "min": 6904.413938522339,
+     "values": [
+      6904.413938522339,
+      6912.395000457764,
+      6942.275524139404,
+      6945.9547996521,
+      6943.696022033691
+     ]
+    },
+    "production": {
+     "max": 7707.88311958313,
+     "median": 7699.822187423706,
+     "min": 7691.8840408325195,
+     "values": [
+      7699.822187423706,
+      7694.762945175171,
+      7707.88311958313,
+      7707.683563232422,
+      7691.8840408325195
+     ]
+    }
+   },
+   "cfg_readback": {
+    "consistent": true,
+    "counts": [
+     40
+    ],
+    "distinct": [
+     {
+      "C": 64,
+      "flush_rows": 16,
+      "g": 1,
+      "mode": 2,
+      "pull_fallback": 0,
+      "timestamps": 1,
+      "word": 8858501440
+     }
+    ],
+    "mps_config": {
+     "C": 64,
+     "flush_rows": 16,
+     "g": 1,
+     "mode": 2,
+     "pull_fallback": 0,
+     "timestamps": 1,
+     "word": 8858501440
+    },
+    "n_rank_files": 40,
+    "soak_iters": [
+     600
+    ]
+   },
+   "gates": {
+    "control_fails": "True",
+    "log": "e37b_3_C64g1mode2flush_rows16timestamps1_20260812T134015Z.log",
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008293 pass=True",
+    "mok_gate_pass": "True",
+    "poison_lines": [
+     "[POISON] eager arm=mps_mega survivors=0",
+     "[POISON] eager arm=pf6gm_mega survivors=0",
+     "[POISON] post_timing arm=mps_mega survivors=0",
+     "[POISON] post_timing arm=pf6gm_mega survivors=0"
+    ],
+    "poison_lines_n": 20,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_selftest_all_true": true,
+    "poison_selftest_lines": [
+     "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+     "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+    ],
+    "poison_survivors_max": 0,
+    "pperr_max": 0,
+    "soak_epochs": "600/600",
+    "soak_lines": [
+     "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True"
+    ],
+    "soak_pass": "True",
+    "spin_fail_max": 0,
+    "spin_lines_n": 5,
+    "spin_success_max": 1,
+    "ts_delta_all_M7_us": [
+     2875.72,
+     2893.36,
+     2910.26,
+     2936.38,
+     2966.93
+    ],
+    "ts_delta_all_combine_us": [
+     390.67,
+     393.02,
+     415.8,
+     429.02,
+     512.59
+    ],
+    "ts_delta_all_planM6_us": [
+     2900.2,
+     2904.05,
+     2913.54,
+     2923.12,
+     2924.88
+    ],
+    "ts_delta_n": 5,
+    "ts_delta_us": {
+     "M7": 2910.26,
+     "combine": 393.02,
+     "m2_to_end": 6226.4,
+     "planM6": 2923.12,
+     "servicedrain": 3264.72
+    },
+    "ts_split_all_M6_us": [
+     2481.08,
+     2484.02,
+     2492.03,
+     2497.64,
+     2504.77
+    ],
+    "ts_split_n": 5,
+    "ts_split_us": {
+     "M6": 2497.64,
+     "plan_M3toM5": 425.48
+    }
+   },
+   "idx": 3,
+   "kernel_hsaco_sha256": {},
+   "mps_cfg": [],
+   "outdir": "3_C64g1mode2flush_rows16timestamps1_20260812T134015Z",
+   "run_count": 5,
+   "runs": [
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6834.713459014893,
+      "pf6gm_mega": 6904.413938522339,
+      "production": 7699.822187423706
+     },
+     "arm_p95_us": {
+      "mps_mega": 6882.53390789032,
+      "pf6gm_mega": 6974.061036109924,
+      "production": 7777.417182922363
+     },
+     "directory": "run1",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6839.67399597168,
+      "pf6gm_mega": 6912.395000457764,
+      "production": 7694.762945175171
+     },
+     "arm_p95_us": {
+      "mps_mega": 6872.693777084351,
+      "pf6gm_mega": 6981.37571811676,
+      "production": 7782.515048980713
+     },
+     "directory": "run2",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "mps_mega",
+      "production",
+      "pf6gm_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6824.873924255371,
+      "pf6gm_mega": 6942.275524139404,
+      "production": 7707.88311958313
+     },
+     "arm_p95_us": {
+      "mps_mega": 6865.65306186676,
+      "pf6gm_mega": 7011.739826202393,
+      "production": 7796.742105484009
+     },
+     "directory": "run3",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6835.654497146606,
+      "pf6gm_mega": 6945.9547996521,
+      "production": 7707.683563232422
+     },
+     "arm_p95_us": {
+      "mps_mega": 6904.676914215088,
+      "pf6gm_mega": 7021.859073638916,
+      "production": 7785.651993751526
+     },
+     "directory": "run4",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6843.0938720703125,
+      "pf6gm_mega": 6943.696022033691,
+      "production": 7691.8840408325195
+     },
+     "arm_p95_us": {
+      "mps_mega": 6889.253211021423,
+      "pf6gm_mega": 7022.5897789001465,
+      "production": 7774.876189231873
+     },
+     "directory": "run5",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    }
+   ],
+   "status": "valid_diagnostic",
+   "tag": "e37b"
+  },
+  {
+   "arm_p50_median": {
+    "mps_mega": 6490.6511306762695,
+    "pf6gm_mega": 6894.314765930176,
+    "production": 7695.603370666504
+   },
+   "arm_p50_stats": {
+    "mps_mega": {
+     "max": 6502.490997314453,
+     "median": 6490.6511306762695,
+     "min": 6481.810569763184,
+     "values": [
+      6490.6511306762695,
+      6481.810569763184,
+      6487.990617752075,
+      6494.990587234497,
+      6502.490997314453
+     ]
+    },
+    "pf6gm_mega": {
+     "max": 6909.914970397949,
+     "median": 6894.314765930176,
+     "min": 6876.7149448394775,
+     "values": [
+      6876.7149448394775,
+      6878.035068511963,
+      6899.714946746826,
+      6894.314765930176,
+      6909.914970397949
+     ]
+    },
+    "production": {
+     "max": 7708.643436431885,
+     "median": 7695.603370666504,
+     "min": 7689.064025878906,
+     "values": [
+      7692.864179611206,
+      7705.303907394409,
+      7695.603370666504,
+      7689.064025878906,
+      7708.643436431885
+     ]
+    }
+   },
+   "cfg_readback": {
+    "consistent": true,
+    "counts": [
+     40
+    ],
+    "distinct": [
+     {
+      "C": 12,
+      "flush_rows": 16,
+      "g": 353,
+      "mode": 12,
+      "pull_fallback": 0,
+      "timestamps": 1,
+      "word": 26039050508
+     }
+    ],
+    "mps_config": {
+     "C": 12,
+     "flush_rows": 16,
+     "g": 353,
+     "mode": 12,
+     "pull_fallback": 0,
+     "timestamps": 1,
+     "word": 26039050508
+    },
+    "n_rank_files": 40,
+    "soak_iters": [
+     600
+    ]
+   },
+   "gates": {
+    "control_fails": "True",
+    "log": "e37b_4_C12g353mode12flush_rows16timestamps1_20260812T134321Z.log",
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+    "mok_gate_pass": "True",
+    "poison_lines": [
+     "[POISON] eager arm=mps_mega survivors=0",
+     "[POISON] eager arm=pf6gm_mega survivors=0",
+     "[POISON] post_timing arm=mps_mega survivors=0",
+     "[POISON] post_timing arm=pf6gm_mega survivors=0"
+    ],
+    "poison_lines_n": 20,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_selftest_all_true": true,
+    "poison_selftest_lines": [
+     "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+     "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+    ],
+    "poison_survivors_max": 0,
+    "pperr_max": 0,
+    "soak_epochs": "600/600",
+    "soak_lines": [
+     "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True"
+    ],
+    "soak_pass": "True",
+    "spin_fail_max": 0,
+    "spin_lines_n": 5,
+    "spin_success_max": 1,
+    "ts_delta_all_M7_us": [
+     2662.69,
+     2683.64,
+     2688.0,
+     2704.41,
+     2752.36
+    ],
+    "ts_delta_all_combine_us": [
+     242.12,
+     267.25,
+     294.72,
+     301.34,
+     337.11
+    ],
+    "ts_delta_all_planM6_us": [
+     2817.28,
+     2822.52,
+     2833.36,
+     2843.72,
+     2845.09
+    ],
+    "ts_delta_n": 5,
+    "ts_delta_us": {
+     "M7": 2688.0,
+     "combine": 294.72,
+     "m2_to_end": 5816.08,
+     "planM6": 2833.36,
+     "servicedrain": 2773.76
+    },
+    "ts_split_all_M6_us": [
+     2445.58,
+     2445.76,
+     2459.86,
+     2465.37,
+     2466.23
+    ],
+    "ts_split_n": 5,
+    "ts_split_us": {
+     "M6": 2459.86,
+     "plan_M3toM5": 373.5
+    }
+   },
+   "idx": 4,
+   "kernel_hsaco_sha256": {},
+   "mps_cfg": [],
+   "outdir": "4_C12g353mode12flush_rows16timestamps1_20260812T134321Z",
+   "run_count": 5,
+   "runs": [
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6490.6511306762695,
+      "pf6gm_mega": 6876.7149448394775,
+      "production": 7692.864179611206
+     },
+     "arm_p95_us": {
+      "mps_mega": 6545.584034919739,
+      "pf6gm_mega": 6946.550035476685,
+      "production": 7762.5181674957275
+     },
+     "directory": "run1",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6481.810569763184,
+      "pf6gm_mega": 6878.035068511963,
+      "production": 7705.303907394409
+     },
+     "arm_p95_us": {
+      "mps_mega": 6543.065047264099,
+      "pf6gm_mega": 6941.981887817383,
+      "production": 7781.535911560059
+     },
+     "directory": "run2",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "mps_mega",
+      "production",
+      "pf6gm_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6487.990617752075,
+      "pf6gm_mega": 6899.714946746826,
+      "production": 7695.603370666504
+     },
+     "arm_p95_us": {
+      "mps_mega": 6545.395112037659,
+      "pf6gm_mega": 6988.972187042236,
+      "production": 7776.814866065979
+     },
+     "directory": "run3",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6494.990587234497,
+      "pf6gm_mega": 6894.314765930176,
+      "production": 7689.064025878906
+     },
+     "arm_p95_us": {
+      "mps_mega": 6572.103023529053,
+      "pf6gm_mega": 6976.161861419678,
+      "production": 7786.085081100464
+     },
+     "directory": "run4",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6502.490997314453,
+      "pf6gm_mega": 6909.914970397949,
+      "production": 7708.643436431885
+     },
+     "arm_p95_us": {
+      "mps_mega": 6553.808879852295,
+      "pf6gm_mega": 6974.556112289429,
+      "production": 7795.082902908325
+     },
+     "directory": "run5",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    }
+   ],
+   "status": "valid_diagnostic",
+   "tag": "e37b"
+  },
+  {
+   "arm_p50_median": {
+    "mps_mega": 6736.49263381958,
+    "pf6gm_mega": 6901.014804840088,
+    "production": 7708.74285697937
+   },
+   "arm_p50_stats": {
+    "mps_mega": {
+     "max": 6739.732503890991,
+     "median": 6736.49263381958,
+     "min": 6726.032972335815,
+     "values": [
+      6726.032972335815,
+      6731.632947921753,
+      6739.732503890991,
+      6736.49263381958,
+      6737.072467803955
+     ]
+    },
+    "pf6gm_mega": {
+     "max": 6945.873975753784,
+     "median": 6901.014804840088,
+     "min": 6874.514102935791,
+     "values": [
+      6901.014804840088,
+      6904.614448547363,
+      6874.514102935791,
+      6891.293525695801,
+      6945.873975753784
+     ]
+    },
+    "production": {
+     "max": 7717.363119125366,
+     "median": 7708.74285697937,
+     "min": 7704.242944717407,
+     "values": [
+      7705.282926559448,
+      7717.363119125366,
+      7717.363119125366,
+      7704.242944717407,
+      7708.74285697937
+     ]
+    }
+   },
+   "cfg_readback": {
+    "consistent": true,
+    "counts": [
+     40
+    ],
+    "distinct": [
+     {
+      "C": 32,
+      "flush_rows": 16,
+      "g": 353,
+      "mode": 12,
+      "pull_fallback": 0,
+      "timestamps": 1,
+      "word": 26039050528
+     }
+    ],
+    "mps_config": {
+     "C": 32,
+     "flush_rows": 16,
+     "g": 353,
+     "mode": 12,
+     "pull_fallback": 0,
+     "timestamps": 1,
+     "word": 26039050528
+    },
+    "n_rank_files": 40,
+    "soak_iters": [
+     600
+    ]
+   },
+   "gates": {
+    "control_fails": "True",
+    "log": "e37b_5_C32g353mode12flush_rows16timestamps1_20260812T134625Z.log",
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008293 pass=True",
+    "mok_gate_pass": "True",
+    "poison_lines": [
+     "[POISON] eager arm=mps_mega survivors=0",
+     "[POISON] eager arm=pf6gm_mega survivors=0",
+     "[POISON] post_timing arm=mps_mega survivors=0",
+     "[POISON] post_timing arm=pf6gm_mega survivors=0"
+    ],
+    "poison_lines_n": 20,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_selftest_all_true": true,
+    "poison_selftest_lines": [
+     "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+     "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+    ],
+    "poison_survivors_max": 0,
+    "pperr_max": 0,
+    "soak_epochs": "600/600",
+    "soak_lines": [
+     "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True"
+    ],
+    "soak_pass": "True",
+    "spin_fail_max": 0,
+    "spin_lines_n": 5,
+    "spin_success_max": 0,
+    "ts_delta_all_M7_us": [
+     2964.43,
+     2989.84,
+     3010.6,
+     3081.21,
+     3084.4
+    ],
+    "ts_delta_all_combine_us": [
+     133.41,
+     144.08,
+     193.53,
+     201.07,
+     207.71
+    ],
+    "ts_delta_all_planM6_us": [
+     2802.88,
+     2810.12,
+     2820.73,
+     2830.55,
+     2844.69
+    ],
+    "ts_delta_n": 5,
+    "ts_delta_us": {
+     "M7": 2964.43,
+     "combine": 193.53,
+     "m2_to_end": 5960.84,
+     "planM6": 2802.88,
+     "servicedrain": 3058.79
+    },
+    "ts_split_all_M6_us": [
+     2434.64,
+     2437.53,
+     2448.17,
+     2458.28,
+     2467.45
+    ],
+    "ts_split_n": 5,
+    "ts_split_us": {
+     "M6": 2434.64,
+     "plan_M3toM5": 368.24
+    }
+   },
+   "idx": 5,
+   "kernel_hsaco_sha256": {},
+   "mps_cfg": [],
+   "outdir": "5_C32g353mode12flush_rows16timestamps1_20260812T134625Z",
+   "run_count": 5,
+   "runs": [
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6726.032972335815,
+      "pf6gm_mega": 6901.014804840088,
+      "production": 7705.282926559448
+     },
+     "arm_p95_us": {
+      "mps_mega": 6834.982085227966,
+      "pf6gm_mega": 6981.384086608887,
+      "production": 7783.288073539734
+     },
+     "directory": "run1",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6731.632947921753,
+      "pf6gm_mega": 6904.614448547363,
+      "production": 7717.363119125366
+     },
+     "arm_p95_us": {
+      "mps_mega": 6828.252077102661,
+      "pf6gm_mega": 6986.008024215698,
+      "production": 7791.988015174866
+     },
+     "directory": "run2",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "mps_mega",
+      "production",
+      "pf6gm_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6739.732503890991,
+      "pf6gm_mega": 6874.514102935791,
+      "production": 7717.363119125366
+     },
+     "arm_p95_us": {
+      "mps_mega": 6871.342921257019,
+      "pf6gm_mega": 6958.655214309692,
+      "production": 7793.2812213897705
+     },
+     "directory": "run3",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6736.49263381958,
+      "pf6gm_mega": 6891.293525695801,
+      "production": 7704.242944717407
+     },
+     "arm_p95_us": {
+      "mps_mega": 6843.333268165588,
+      "pf6gm_mega": 6961.424112319946,
+      "production": 7783.000993728638
+     },
+     "directory": "run4",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6737.072467803955,
+      "pf6gm_mega": 6945.873975753784,
+      "production": 7708.74285697937
+     },
+     "arm_p95_us": {
+      "mps_mega": 6840.486025810242,
+      "pf6gm_mega": 7033.474826812744,
+      "production": 7796.988844871521
+     },
+     "directory": "run5",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    }
+   ],
+   "status": "valid_diagnostic",
+   "tag": "e37b"
+  },
+  {
+   "arm_p50_median": {
+    "mps_mega": 6839.394092559814,
+    "pf6gm_mega": 6889.2951011657715,
+    "production": 7699.002981185913
+   },
+   "arm_p50_stats": {
+    "mps_mega": {
+     "max": 6843.235015869141,
+     "median": 6839.394092559814,
+     "min": 6825.754165649414,
+     "values": [
+      6839.394092559814,
+      6841.533899307251,
+      6833.754062652588,
+      6825.754165649414,
+      6843.235015869141
+     ]
+    },
+    "pf6gm_mega": {
+     "max": 6894.614934921265,
+     "median": 6889.2951011657715,
+     "min": 6874.59397315979,
+     "values": [
+      6885.854005813599,
+      6874.59397315979,
+      6894.614934921265,
+      6889.2951011657715,
+      6893.51487159729
+     ]
+    },
+    "production": {
+     "max": 7703.402996063232,
+     "median": 7699.002981185913,
+     "min": 7692.962646484375,
+     "values": [
+      7693.762540817261,
+      7692.962646484375,
+      7703.402996063232,
+      7699.002981185913,
+      7699.742794036865
+     ]
+    }
+   },
+   "cfg_readback": {
+    "consistent": true,
+    "counts": [
+     40
+    ],
+    "distinct": [
+     {
+      "C": 64,
+      "flush_rows": 16,
+      "g": 1,
+      "mode": 2,
+      "pull_fallback": 0,
+      "timestamps": 1,
+      "word": 8858501440
+     }
+    ],
+    "mps_config": {
+     "C": 64,
+     "flush_rows": 16,
+     "g": 1,
+     "mode": 2,
+     "pull_fallback": 0,
+     "timestamps": 1,
+     "word": 8858501440
+    },
+    "n_rank_files": 40,
+    "soak_iters": [
+     600
+    ]
+   },
+   "gates": {
+    "control_fails": "True",
+    "log": "e37b_6_C64g1mode2flush_rows16timestamps1_20260812T134930Z.log",
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+    "mok_gate_pass": "True",
+    "poison_lines": [
+     "[POISON] eager arm=mps_mega survivors=0",
+     "[POISON] eager arm=pf6gm_mega survivors=0",
+     "[POISON] post_timing arm=mps_mega survivors=0",
+     "[POISON] post_timing arm=pf6gm_mega survivors=0"
+    ],
+    "poison_lines_n": 20,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_selftest_all_true": true,
+    "poison_selftest_lines": [
+     "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+     "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+    ],
+    "poison_survivors_max": 0,
+    "pperr_max": 0,
+    "soak_epochs": "600/600",
+    "soak_lines": [
+     "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True"
+    ],
+    "soak_pass": "True",
+    "spin_fail_max": 0,
+    "spin_lines_n": 5,
+    "spin_success_max": 0,
+    "ts_delta_all_M7_us": [
+     2877.94,
+     2893.51,
+     2916.76,
+     2943.12,
+     2947.12
+    ],
+    "ts_delta_all_combine_us": [
+     434.45,
+     436.89,
+     445.72,
+     476.54,
+     488.16
+    ],
+    "ts_delta_all_planM6_us": [
+     2869.4,
+     2876.48,
+     2891.64,
+     2898.94,
+     2910.4
+    ],
+    "ts_delta_n": 5,
+    "ts_delta_us": {
+     "M7": 2877.94,
+     "combine": 476.54,
+     "m2_to_end": 6223.88,
+     "planM6": 2869.4,
+     "servicedrain": 3221.89
+    },
+    "ts_split_all_M6_us": [
+     2451.68,
+     2458.96,
+     2472.59,
+     2479.52,
+     2483.06
+    ],
+    "ts_split_n": 5,
+    "ts_split_us": {
+     "M6": 2451.68,
+     "plan_M3toM5": 417.72
+    }
+   },
+   "idx": 6,
+   "kernel_hsaco_sha256": {},
+   "mps_cfg": [],
+   "outdir": "6_C64g1mode2flush_rows16timestamps1_20260812T134930Z",
+   "run_count": 5,
+   "runs": [
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6839.394092559814,
+      "pf6gm_mega": 6885.854005813599,
+      "production": 7693.762540817261
+     },
+     "arm_p95_us": {
+      "mps_mega": 6885.57813167572,
+      "pf6gm_mega": 6971.673011779785,
+      "production": 7769.155120849609
+     },
+     "directory": "run1",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6841.533899307251,
+      "pf6gm_mega": 6874.59397315979,
+      "production": 7692.962646484375
+     },
+     "arm_p95_us": {
+      "mps_mega": 6882.248091697693,
+      "pf6gm_mega": 6939.102077484131,
+      "production": 7767.912149429321
+     },
+     "directory": "run2",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "mps_mega",
+      "production",
+      "pf6gm_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6833.754062652588,
+      "pf6gm_mega": 6894.614934921265,
+      "production": 7703.402996063232
+     },
+     "arm_p95_us": {
+      "mps_mega": 6882.287049293518,
+      "pf6gm_mega": 6952.903914451599,
+      "production": 7792.150926589966
+     },
+     "directory": "run3",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6825.754165649414,
+      "pf6gm_mega": 6889.2951011657715,
+      "production": 7699.002981185913
+     },
+     "arm_p95_us": {
+      "mps_mega": 6857.7948570251465,
+      "pf6gm_mega": 6963.501214981079,
+      "production": 7785.612797737122
+     },
+     "directory": "run4",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6843.235015869141,
+      "pf6gm_mega": 6893.51487159729,
+      "production": 7699.742794036865
+     },
+     "arm_p95_us": {
+      "mps_mega": 6876.304912567139,
+      "pf6gm_mega": 6969.0600872039795,
+      "production": 7786.359167098999
+     },
+     "directory": "run5",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    }
+   ],
+   "status": "valid_diagnostic",
+   "tag": "e37b"
+  },
+  {
+   "arm_p50_median": {
+    "mps_mega": 6469.6290493011475,
+    "pf6gm_mega": 6896.653890609741,
+    "production": 7690.821886062622
+   },
+   "arm_p50_stats": {
+    "mps_mega": {
+     "max": 6478.349924087524,
+     "median": 6469.6290493011475,
+     "min": 6462.169170379639,
+     "values": [
+      6472.708940505981,
+      6469.6290493011475,
+      6462.169170379639,
+      6478.349924087524,
+      6464.468955993652
+     ]
+    },
+    "pf6gm_mega": {
+     "max": 6908.5540771484375,
+     "median": 6896.653890609741,
+     "min": 6879.112958908081,
+     "values": [
+      6879.393577575684,
+      6879.112958908081,
+      6908.5540771484375,
+      6907.814025878906,
+      6896.653890609741
+     ]
+    },
+    "production": {
+     "max": 7704.902648925781,
+     "median": 7690.821886062622,
+     "min": 7686.722040176392,
+     "values": [
+      7699.082136154175,
+      7690.821886062622,
+      7689.362049102783,
+      7686.722040176392,
+      7704.902648925781
+     ]
+    }
+   },
+   "cfg_readback": {
+    "consistent": true,
+    "counts": [
+     40
+    ],
+    "distinct": [
+     {
+      "C": 4,
+      "flush_rows": 16,
+      "g": 353,
+      "mode": 12,
+      "pull_fallback": 0,
+      "timestamps": 1,
+      "word": 26039050500
+     }
+    ],
+    "mps_config": {
+     "C": 4,
+     "flush_rows": 16,
+     "g": 353,
+     "mode": 12,
+     "pull_fallback": 0,
+     "timestamps": 1,
+     "word": 26039050500
+    },
+    "n_rank_files": 40,
+    "soak_iters": [
+     600
+    ]
+   },
+   "gates": {
+    "control_fails": "True",
+    "log": "e37c_1_C4g353mode12flush_rows16timestamps1_20260812T135321Z.log",
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008293 pass=True",
+    "mok_gate_pass": "True",
+    "poison_lines": [
+     "[POISON] eager arm=mps_mega survivors=0",
+     "[POISON] eager arm=pf6gm_mega survivors=0",
+     "[POISON] post_timing arm=mps_mega survivors=0",
+     "[POISON] post_timing arm=pf6gm_mega survivors=0"
+    ],
+    "poison_lines_n": 20,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_selftest_all_true": true,
+    "poison_selftest_lines": [
+     "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+     "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+    ],
+    "poison_survivors_max": 0,
+    "pperr_max": 0,
+    "soak_epochs": "600/600",
+    "soak_lines": [
+     "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True"
+    ],
+    "soak_pass": "True",
+    "spin_fail_max": 0,
+    "spin_lines_n": 5,
+    "spin_success_max": 0,
+    "ts_delta_all_M7_us": [
+     2513.74,
+     2516.85,
+     2539.1,
+     2617.73,
+     2674.62
+    ],
+    "ts_delta_all_combine_us": [
+     329.47,
+     349.51,
+     455.09,
+     471.77,
+     479.18
+    ],
+    "ts_delta_all_planM6_us": [
+     2814.91,
+     2821.44,
+     2822.21,
+     2823.92,
+     2839.99
+    ],
+    "ts_delta_n": 5,
+    "ts_delta_us": {
+     "M7": 2516.85,
+     "combine": 471.77,
+     "m2_to_end": 5812.54,
+     "planM6": 2823.92,
+     "servicedrain": 2748.89
+    },
+    "ts_split_all_M6_us": [
+     2443.39,
+     2444.26,
+     2448.16,
+     2449.64,
+     2457.83
+    ],
+    "ts_split_n": 5,
+    "ts_split_us": {
+     "M6": 2449.64,
+     "plan_M3toM5": 374.28
+    }
+   },
+   "idx": 1,
+   "kernel_hsaco_sha256": {},
+   "mps_cfg": [],
+   "outdir": "1_C4g353mode12flush_rows16timestamps1_20260812T135321Z",
+   "run_count": 5,
+   "runs": [
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6472.708940505981,
+      "pf6gm_mega": 6879.393577575684,
+      "production": 7699.082136154175
+     },
+     "arm_p95_us": {
+      "mps_mega": 6567.546129226685,
+      "pf6gm_mega": 6969.255995750427,
+      "production": 7782.921051979065
+     },
+     "directory": "run1",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6469.6290493011475,
+      "pf6gm_mega": 6879.112958908081,
+      "production": 7690.821886062622
+     },
+     "arm_p95_us": {
+      "mps_mega": 6548.309230804443,
+      "pf6gm_mega": 6954.717826843262,
+      "production": 7762.195110321045
+     },
+     "directory": "run2",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "mps_mega",
+      "production",
+      "pf6gm_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6462.169170379639,
+      "pf6gm_mega": 6908.5540771484375,
+      "production": 7689.362049102783
+     },
+     "arm_p95_us": {
+      "mps_mega": 6522.3859786987305,
+      "pf6gm_mega": 6971.105003356934,
+      "production": 7786.022043228149
+     },
+     "directory": "run3",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6478.349924087524,
+      "pf6gm_mega": 6907.814025878906,
+      "production": 7686.722040176392
+     },
+     "arm_p95_us": {
+      "mps_mega": 6553.9820194244385,
+      "pf6gm_mega": 6974.347043037415,
+      "production": 7763.563132286072
+     },
+     "directory": "run4",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6464.468955993652,
+      "pf6gm_mega": 6896.653890609741,
+      "production": 7704.902648925781
+     },
+     "arm_p95_us": {
+      "mps_mega": 6554.853963851929,
+      "pf6gm_mega": 6957.441020011902,
+      "production": 7788.0489110946655
+     },
+     "directory": "run5",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    }
+   ],
+   "status": "valid_diagnostic",
+   "tag": "e37c"
+  },
+  {
+   "arm_p50_median": {
+    "mps_mega": 6500.650405883789,
+    "pf6gm_mega": 6929.2542934417725,
+    "production": 7700.702905654907
+   },
+   "arm_p50_stats": {
+    "mps_mega": {
+     "max": 6504.909992218018,
+     "median": 6500.650405883789,
+     "min": 6495.229482650757,
+     "values": [
+      6498.767614364624,
+      6501.769781112671,
+      6504.909992218018,
+      6495.229482650757,
+      6500.650405883789
+     ]
+    },
+    "pf6gm_mega": {
+     "max": 6944.291591644287,
+     "median": 6929.2542934417725,
+     "min": 6900.654077529907,
+     "values": [
+      6903.13196182251,
+      6900.654077529907,
+      6944.291591644287,
+      6933.774709701538,
+      6929.2542934417725
+     ]
+    },
+    "production": {
+     "max": 7702.662944793701,
+     "median": 7700.702905654907,
+     "min": 7683.738470077515,
+     "values": [
+      7683.738470077515,
+      7702.662944793701,
+      7700.822830200195,
+      7700.702905654907,
+      7696.463346481323
+     ]
+    }
+   },
+   "cfg_readback": {
+    "consistent": true,
+    "counts": [
+     40
+    ],
+    "distinct": [
+     {
+      "C": 16,
+      "flush_rows": 16,
+      "g": 353,
+      "mode": 12,
+      "pull_fallback": 0,
+      "timestamps": 1,
+      "word": 26039050512
+     }
+    ],
+    "mps_config": {
+     "C": 16,
+     "flush_rows": 16,
+     "g": 353,
+     "mode": 12,
+     "pull_fallback": 0,
+     "timestamps": 1,
+     "word": 26039050512
+    },
+    "n_rank_files": 40,
+    "soak_iters": [
+     600
+    ]
+   },
+   "gates": {
+    "control_fails": "True",
+    "log": "e37c_2_C16g353mode12flush_rows16timestamps1_20260812T135624Z.log",
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008294 pass=True",
+    "mok_gate_pass": "True",
+    "poison_lines": [
+     "[POISON] eager arm=mps_mega survivors=0",
+     "[POISON] eager arm=pf6gm_mega survivors=0",
+     "[POISON] post_timing arm=mps_mega survivors=0",
+     "[POISON] post_timing arm=pf6gm_mega survivors=0"
+    ],
+    "poison_lines_n": 20,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_selftest_all_true": true,
+    "poison_selftest_lines": [
+     "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+     "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+    ],
+    "poison_survivors_max": 0,
+    "pperr_max": 0,
+    "soak_epochs": "600/600",
+    "soak_lines": [
+     "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True"
+    ],
+    "soak_pass": "True",
+    "spin_fail_max": 0,
+    "spin_lines_n": 5,
+    "spin_success_max": 0,
+    "ts_delta_all_M7_us": [
+     2628.96,
+     2646.65,
+     2682.55,
+     2688.62,
+     2700.48
+    ],
+    "ts_delta_all_combine_us": [
+     346.69,
+     347.71,
+     379.4,
+     390.6,
+     397.63
+    ],
+    "ts_delta_all_planM6_us": [
+     2805.22,
+     2819.24,
+     2821.44,
+     2838.92,
+     2844.32
+    ],
+    "ts_delta_n": 5,
+    "ts_delta_us": {
+     "M7": 2628.96,
+     "combine": 390.6,
+     "m2_to_end": 5858.48,
+     "planM6": 2838.92,
+     "servicedrain": 2720.22
+    },
+    "ts_split_all_M6_us": [
+     2434.22,
+     2443.08,
+     2451.33,
+     2460.84,
+     2467.56
+    ],
+    "ts_split_n": 5,
+    "ts_split_us": {
+     "M6": 2460.84,
+     "plan_M3toM5": 378.08
+    }
+   },
+   "idx": 2,
+   "kernel_hsaco_sha256": {},
+   "mps_cfg": [],
+   "outdir": "2_C16g353mode12flush_rows16timestamps1_20260812T135624Z",
+   "run_count": 5,
+   "runs": [
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6498.767614364624,
+      "pf6gm_mega": 6903.13196182251,
+      "production": 7683.738470077515
+     },
+     "arm_p95_us": {
+      "mps_mega": 6591.282916069031,
+      "pf6gm_mega": 6974.538016319275,
+      "production": 7765.290832519531
+     },
+     "directory": "run1",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6501.769781112671,
+      "pf6gm_mega": 6900.654077529907,
+      "production": 7702.662944793701
+     },
+     "arm_p95_us": {
+      "mps_mega": 6586.061954498291,
+      "pf6gm_mega": 6990.162897109985,
+      "production": 7796.327185630798
+     },
+     "directory": "run2",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "mps_mega",
+      "production",
+      "pf6gm_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6504.909992218018,
+      "pf6gm_mega": 6944.291591644287,
+      "production": 7700.822830200195
+     },
+     "arm_p95_us": {
+      "mps_mega": 6583.724284172058,
+      "pf6gm_mega": 7016.140127182007,
+      "production": 7789.099836349487
+     },
+     "directory": "run3",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6495.229482650757,
+      "pf6gm_mega": 6933.774709701538,
+      "production": 7700.702905654907
+     },
+     "arm_p95_us": {
+      "mps_mega": 6582.255125045776,
+      "pf6gm_mega": 7006.1901569366455,
+      "production": 7775.341963768005
+     },
+     "directory": "run4",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6500.650405883789,
+      "pf6gm_mega": 6929.2542934417725,
+      "production": 7696.463346481323
+     },
+     "arm_p95_us": {
+      "mps_mega": 6592.251110076904,
+      "pf6gm_mega": 7017.744970321655,
+      "production": 7789.300155639648
+     },
+     "directory": "run5",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    }
+   ],
+   "status": "valid_diagnostic",
+   "tag": "e37c"
+  },
+  {
+   "arm_p50_median": {
+    "mps_mega": 6463.6290073394775,
+    "pf6gm_mega": 6895.454406738281,
+    "production": 7697.842597961426
+   },
+   "arm_p50_stats": {
+    "mps_mega": {
+     "max": 6474.870920181274,
+     "median": 6463.6290073394775,
+     "min": 6458.889484405518,
+     "values": [
+      6461.210012435913,
+      6465.1899337768555,
+      6458.889484405518,
+      6474.870920181274,
+      6463.6290073394775
+     ]
+    },
+    "pf6gm_mega": {
+     "max": 6917.754411697388,
+     "median": 6895.454406738281,
+     "min": 6883.754014968872,
+     "values": [
+      6895.454406738281,
+      6885.21409034729,
+      6917.754411697388,
+      6914.434909820557,
+      6883.754014968872
+     ]
+    },
+    "production": {
+     "max": 7705.46293258667,
+     "median": 7697.842597961426,
+     "min": 7696.402549743652,
+     "values": [
+      7697.842597961426,
+      7705.46293258667,
+      7697.30281829834,
+      7698.122978210449,
+      7696.402549743652
+     ]
+    }
+   },
+   "cfg_readback": {
+    "consistent": true,
+    "counts": [
+     40
+    ],
+    "distinct": [
+     {
+      "C": 8,
+      "flush_rows": 16,
+      "g": 353,
+      "mode": 12,
+      "pull_fallback": 0,
+      "timestamps": 1,
+      "word": 26039050504
+     }
+    ],
+    "mps_config": {
+     "C": 8,
+     "flush_rows": 16,
+     "g": 353,
+     "mode": 12,
+     "pull_fallback": 0,
+     "timestamps": 1,
+     "word": 26039050504
+    },
+    "n_rank_files": 40,
+    "soak_iters": [
+     600
+    ]
+   },
+   "gates": {
+    "control_fails": "True",
+    "log": "e37c_3_C8g353mode12flush_rows16timestamps1_20260812T135928Z.log",
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008294 pass=True",
+    "mok_gate_pass": "True",
+    "poison_lines": [
+     "[POISON] eager arm=mps_mega survivors=0",
+     "[POISON] eager arm=pf6gm_mega survivors=0",
+     "[POISON] post_timing arm=mps_mega survivors=0",
+     "[POISON] post_timing arm=pf6gm_mega survivors=0"
+    ],
+    "poison_lines_n": 20,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_selftest_all_true": true,
+    "poison_selftest_lines": [
+     "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+     "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+    ],
+    "poison_survivors_max": 0,
+    "pperr_max": 0,
+    "soak_epochs": "600/600",
+    "soak_lines": [
+     "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True"
+    ],
+    "soak_pass": "True",
+    "spin_fail_max": 0,
+    "spin_lines_n": 5,
+    "spin_success_max": 1,
+    "ts_delta_all_M7_us": [
+     2627.05,
+     2637.4,
+     2699.3,
+     2702.6,
+     2710.63
+    ],
+    "ts_delta_all_combine_us": [
+     279.48,
+     285.68,
+     314.98,
+     346.68,
+     382.67
+    ],
+    "ts_delta_all_planM6_us": [
+     2801.12,
+     2809.92,
+     2817.24,
+     2817.85,
+     2827.96
+    ],
+    "ts_delta_n": 5,
+    "ts_delta_us": {
+     "M7": 2637.4,
+     "combine": 346.68,
+     "m2_to_end": 5801.32,
+     "planM6": 2817.24,
+     "servicedrain": 2693.23
+    },
+    "ts_split_all_M6_us": [
+     2428.11,
+     2434.23,
+     2443.88,
+     2445.89,
+     2451.64
+    ],
+    "ts_split_n": 5,
+    "ts_split_us": {
+     "M6": 2443.88,
+     "plan_M3toM5": 373.36
+    }
+   },
+   "idx": 3,
+   "kernel_hsaco_sha256": {},
+   "mps_cfg": [],
+   "outdir": "3_C8g353mode12flush_rows16timestamps1_20260812T135928Z",
+   "run_count": 5,
+   "runs": [
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6461.210012435913,
+      "pf6gm_mega": 6895.454406738281,
+      "production": 7697.842597961426
+     },
+     "arm_p95_us": {
+      "mps_mega": 6552.501177787781,
+      "pf6gm_mega": 6967.056822776794,
+      "production": 7777.409934997559
+     },
+     "directory": "run1",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6465.1899337768555,
+      "pf6gm_mega": 6885.21409034729,
+      "production": 7705.46293258667
+     },
+     "arm_p95_us": {
+      "mps_mega": 6549.561882019043,
+      "pf6gm_mega": 6966.065788269043,
+      "production": 7792.822074890137
+     },
+     "directory": "run2",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "mps_mega",
+      "production",
+      "pf6gm_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6458.889484405518,
+      "pf6gm_mega": 6917.754411697388,
+      "production": 7697.30281829834
+     },
+     "arm_p95_us": {
+      "mps_mega": 6542.527985572815,
+      "pf6gm_mega": 6999.299907684326,
+      "production": 7785.749959945679
+     },
+     "directory": "run3",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6474.870920181274,
+      "pf6gm_mega": 6914.434909820557,
+      "production": 7698.122978210449
+     },
+     "arm_p95_us": {
+      "mps_mega": 6547.0311641693115,
+      "pf6gm_mega": 6991.083931922913,
+      "production": 7783.980107307434
+     },
+     "directory": "run4",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6463.6290073394775,
+      "pf6gm_mega": 6883.754014968872,
+      "production": 7696.402549743652
+     },
+     "arm_p95_us": {
+      "mps_mega": 6528.002023696899,
+      "pf6gm_mega": 6969.403147697449,
+      "production": 7792.665958404541
+     },
+     "directory": "run5",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    }
+   ],
+   "status": "valid_diagnostic",
+   "tag": "e37c"
+  },
+  {
+   "arm_p50_median": {
+    "mps_mega": 6496.010065078735,
+    "pf6gm_mega": 6917.413949966431,
+    "production": 7704.162836074829
+   },
+   "arm_p50_stats": {
+    "mps_mega": {
+     "max": 6509.530067443848,
+     "median": 6496.010065078735,
+     "min": 6491.569995880127,
+     "values": [
+      6491.569995880127,
+      6495.949506759644,
+      6496.010065078735,
+      6497.850179672241,
+      6509.530067443848
+     ]
+    },
+    "pf6gm_mega": {
+     "max": 6937.574863433838,
+     "median": 6917.413949966431,
+     "min": 6896.713972091675,
+     "values": [
+      6896.713972091675,
+      6917.413949966431,
+      6937.574863433838,
+      6916.37396812439,
+      6923.054933547974
+     ]
+    },
+    "production": {
+     "max": 7712.583065032959,
+     "median": 7704.162836074829,
+     "min": 7695.083141326904,
+     "values": [
+      7699.842929840088,
+      7709.321975708008,
+      7712.583065032959,
+      7695.083141326904,
+      7704.162836074829
+     ]
+    }
+   },
+   "cfg_readback": {
+    "consistent": true,
+    "counts": [
+     40
+    ],
+    "distinct": [
+     {
+      "C": 16,
+      "flush_rows": 16,
+      "g": 353,
+      "mode": 12,
+      "pull_fallback": 0,
+      "timestamps": 1,
+      "word": 26039050512
+     }
+    ],
+    "mps_config": {
+     "C": 16,
+     "flush_rows": 16,
+     "g": 353,
+     "mode": 12,
+     "pull_fallback": 0,
+     "timestamps": 1,
+     "word": 26039050512
+    },
+    "n_rank_files": 40,
+    "soak_iters": [
+     600
+    ]
+   },
+   "gates": {
+    "control_fails": "True",
+    "log": "e37c_4_C16g353mode12flush_rows16timestamps1_20260812T140231Z.log",
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008293 pass=True",
+    "mok_gate_pass": "True",
+    "poison_lines": [
+     "[POISON] eager arm=mps_mega survivors=0",
+     "[POISON] eager arm=pf6gm_mega survivors=0",
+     "[POISON] post_timing arm=mps_mega survivors=0",
+     "[POISON] post_timing arm=pf6gm_mega survivors=0"
+    ],
+    "poison_lines_n": 20,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_selftest_all_true": true,
+    "poison_selftest_lines": [
+     "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+     "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+    ],
+    "poison_survivors_max": 0,
+    "pperr_max": 0,
+    "soak_epochs": "600/600",
+    "soak_lines": [
+     "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True"
+    ],
+    "soak_pass": "True",
+    "spin_fail_max": 0,
+    "spin_lines_n": 5,
+    "spin_success_max": 0,
+    "ts_delta_all_M7_us": [
+     2552.55,
+     2610.04,
+     2656.34,
+     2681.4,
+     2742.61
+    ],
+    "ts_delta_all_combine_us": [
+     267.28,
+     314.08,
+     379.56,
+     428.57,
+     518.93
+    ],
+    "ts_delta_all_planM6_us": [
+     2813.27,
+     2826.84,
+     2833.54,
+     2834.8,
+     2836.68
+    ],
+    "ts_delta_n": 5,
+    "ts_delta_us": {
+     "M7": 2552.55,
+     "combine": 518.93,
+     "m2_to_end": 5908.16,
+     "planM6": 2836.68,
+     "servicedrain": 2672.7
+    },
+    "ts_split_all_M6_us": [
+     2439.67,
+     2454.02,
+     2456.34,
+     2457.84,
+     2461.94
+    ],
+    "ts_split_n": 5,
+    "ts_split_us": {
+     "M6": 2457.84,
+     "plan_M3toM5": 378.84
+    }
+   },
+   "idx": 4,
+   "kernel_hsaco_sha256": {},
+   "mps_cfg": [],
+   "outdir": "4_C16g353mode12flush_rows16timestamps1_20260812T140231Z",
+   "run_count": 5,
+   "runs": [
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6491.569995880127,
+      "pf6gm_mega": 6896.713972091675,
+      "production": 7699.842929840088
+     },
+     "arm_p95_us": {
+      "mps_mega": 6553.46782207489,
+      "pf6gm_mega": 6990.1331424713135,
+      "production": 7776.227903366089
+     },
+     "directory": "run1",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6495.949506759644,
+      "pf6gm_mega": 6917.413949966431,
+      "production": 7709.321975708008
+     },
+     "arm_p95_us": {
+      "mps_mega": 6569.195914268494,
+      "pf6gm_mega": 7027.5357484817505,
+      "production": 7775.270915031433
+     },
+     "directory": "run2",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "mps_mega",
+      "production",
+      "pf6gm_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6496.010065078735,
+      "pf6gm_mega": 6937.574863433838,
+      "production": 7712.583065032959
+     },
+     "arm_p95_us": {
+      "mps_mega": 6571.503162384033,
+      "pf6gm_mega": 7029.847931861877,
+      "production": 7801.433897018433
+     },
+     "directory": "run3",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6497.850179672241,
+      "pf6gm_mega": 6916.37396812439,
+      "production": 7695.083141326904
+     },
+     "arm_p95_us": {
+      "mps_mega": 6574.148178100586,
+      "pf6gm_mega": 6998.157119750977,
+      "production": 7773.871064186096
+     },
+     "directory": "run4",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6509.530067443848,
+      "pf6gm_mega": 6923.054933547974,
+      "production": 7704.162836074829
+     },
+     "arm_p95_us": {
+      "mps_mega": 6584.719014167786,
+      "pf6gm_mega": 6998.58512878418,
+      "production": 7784.659028053284
+     },
+     "directory": "run5",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    }
+   ],
+   "status": "valid_diagnostic",
+   "tag": "e37c"
+  },
+  {
+   "arm_p50_median": {
+    "mps_mega": 6472.009897232056,
+    "pf6gm_mega": 6903.014898300171,
+    "production": 7694.683074951172
+   },
+   "arm_p50_stats": {
+    "mps_mega": {
+     "max": 6475.450038909912,
+     "median": 6472.009897232056,
+     "min": 6465.109825134277,
+     "values": [
+      6473.67000579834,
+      6465.109825134277,
+      6470.510721206665,
+      6472.009897232056,
+      6475.450038909912
+     ]
+    },
+    "pf6gm_mega": {
+     "max": 6922.475099563599,
+     "median": 6903.014898300171,
+     "min": 6874.59397315979,
+     "values": [
+      6892.593860626221,
+      6874.59397315979,
+      6919.275522232056,
+      6922.475099563599,
+      6903.014898300171
+     ]
+    },
+    "production": {
+     "max": 7701.723098754883,
+     "median": 7694.683074951172,
+     "min": 7686.603546142578,
+     "values": [
+      7701.723098754883,
+      7701.523780822754,
+      7686.603546142578,
+      7694.683074951172,
+      7693.663597106934
+     ]
+    }
+   },
+   "cfg_readback": {
+    "consistent": true,
+    "counts": [
+     40
+    ],
+    "distinct": [
+     {
+      "C": 8,
+      "flush_rows": 16,
+      "g": 353,
+      "mode": 12,
+      "pull_fallback": 0,
+      "timestamps": 1,
+      "word": 26039050504
+     }
+    ],
+    "mps_config": {
+     "C": 8,
+     "flush_rows": 16,
+     "g": 353,
+     "mode": 12,
+     "pull_fallback": 0,
+     "timestamps": 1,
+     "word": 26039050504
+    },
+    "n_rank_files": 40,
+    "soak_iters": [
+     600
+    ]
+   },
+   "gates": {
+    "control_fails": "True",
+    "log": "e37c_5_C8g353mode12flush_rows16timestamps1_20260812T140535Z.log",
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008293 pass=True",
+    "mok_gate_pass": "True",
+    "poison_lines": [
+     "[POISON] eager arm=mps_mega survivors=0",
+     "[POISON] eager arm=pf6gm_mega survivors=0",
+     "[POISON] post_timing arm=mps_mega survivors=0",
+     "[POISON] post_timing arm=pf6gm_mega survivors=0"
+    ],
+    "poison_lines_n": 20,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_selftest_all_true": true,
+    "poison_selftest_lines": [
+     "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+     "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+    ],
+    "poison_survivors_max": 0,
+    "pperr_max": 0,
+    "soak_epochs": "600/600",
+    "soak_lines": [
+     "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True"
+    ],
+    "soak_pass": "True",
+    "spin_fail_max": 0,
+    "spin_lines_n": 5,
+    "spin_success_max": 0,
+    "ts_delta_all_M7_us": [
+     2652.11,
+     2689.48,
+     2697.8,
+     2748.62,
+     2793.06
+    ],
+    "ts_delta_all_combine_us": [
+     251.42,
+     258.8,
+     263.21,
+     279.75,
+     351.93
+    ],
+    "ts_delta_all_planM6_us": [
+     2809.81,
+     2825.86,
+     2826.22,
+     2836.82,
+     2842.79
+    ],
+    "ts_delta_n": 5,
+    "ts_delta_us": {
+     "M7": 2793.06,
+     "combine": 251.42,
+     "m2_to_end": 5887.27,
+     "planM6": 2842.79,
+     "servicedrain": 2913.76
+    },
+    "ts_split_all_M6_us": [
+     2444.69,
+     2452.78,
+     2453.38,
+     2459.92,
+     2465.51
+    ],
+    "ts_split_n": 5,
+    "ts_split_us": {
+     "M6": 2465.51,
+     "plan_M3toM5": 377.28
+    }
+   },
+   "idx": 5,
+   "kernel_hsaco_sha256": {},
+   "mps_cfg": [],
+   "outdir": "5_C8g353mode12flush_rows16timestamps1_20260812T140535Z",
+   "run_count": 5,
+   "runs": [
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6473.67000579834,
+      "pf6gm_mega": 6892.593860626221,
+      "production": 7701.723098754883
+     },
+     "arm_p95_us": {
+      "mps_mega": 6542.884802818298,
+      "pf6gm_mega": 6972.730851173401,
+      "production": 7791.6619300842285
+     },
+     "directory": "run1",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6465.109825134277,
+      "pf6gm_mega": 6874.59397315979,
+      "production": 7701.523780822754
+     },
+     "arm_p95_us": {
+      "mps_mega": 6546.262884140015,
+      "pf6gm_mega": 6956.499147415161,
+      "production": 7785.957050323486
+     },
+     "directory": "run2",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "mps_mega",
+      "production",
+      "pf6gm_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6470.510721206665,
+      "pf6gm_mega": 6919.275522232056,
+      "production": 7686.603546142578
+     },
+     "arm_p95_us": {
+      "mps_mega": 6539.7549867630005,
+      "pf6gm_mega": 6997.23219871521,
+      "production": 7770.849132537842
+     },
+     "directory": "run3",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6472.009897232056,
+      "pf6gm_mega": 6922.475099563599,
+      "production": 7694.683074951172
+     },
+     "arm_p95_us": {
+      "mps_mega": 6527.4012088775635,
+      "pf6gm_mega": 7002.426052093506,
+      "production": 7770.27599811554
+     },
+     "directory": "run4",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6475.450038909912,
+      "pf6gm_mega": 6903.014898300171,
+      "production": 7693.663597106934
+     },
+     "arm_p95_us": {
+      "mps_mega": 6538.054990768433,
+      "pf6gm_mega": 6971.4991092681885,
+      "production": 7782.411885261536
+     },
+     "directory": "run5",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    }
+   ],
+   "status": "valid_diagnostic",
+   "tag": "e37c"
+  },
+  {
+   "arm_p50_median": {
+    "mps_mega": 6470.27063369751,
+    "pf6gm_mega": 6911.315202713013,
+    "production": 7702.944040298462
+   },
+   "arm_p50_stats": {
+    "mps_mega": {
+     "max": 6478.090047836304,
+     "median": 6470.27063369751,
+     "min": 6456.210613250732,
+     "values": [
+      6458.6498737335205,
+      6477.570056915283,
+      6478.090047836304,
+      6470.27063369751,
+      6456.210613250732
+     ]
+    },
+    "pf6gm_mega": {
+     "max": 6939.336061477661,
+     "median": 6911.315202713013,
+     "min": 6882.813930511475,
+     "values": [
+      6914.034843444824,
+      6911.315202713013,
+      6887.77494430542,
+      6882.813930511475,
+      6939.336061477661
+     ]
+    },
+    "production": {
+     "max": 7711.042881011963,
+     "median": 7702.944040298462,
+     "min": 7699.244022369385,
+     "values": [
+      7700.862407684326,
+      7711.042881011963,
+      7702.944040298462,
+      7710.363864898682,
+      7699.244022369385
+     ]
+    }
+   },
+   "cfg_readback": {
+    "consistent": true,
+    "counts": [
+     40
+    ],
+    "distinct": [
+     {
+      "C": 4,
+      "flush_rows": 16,
+      "g": 353,
+      "mode": 12,
+      "pull_fallback": 0,
+      "timestamps": 1,
+      "word": 26039050500
+     }
+    ],
+    "mps_config": {
+     "C": 4,
+     "flush_rows": 16,
+     "g": 353,
+     "mode": 12,
+     "pull_fallback": 0,
+     "timestamps": 1,
+     "word": 26039050500
+    },
+    "n_rank_files": 40,
+    "soak_iters": [
+     600
+    ]
+   },
+   "gates": {
+    "control_fails": "True",
+    "log": "e37c_6_C4g353mode12flush_rows16timestamps1_20260812T140839Z.log",
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+    "mok_gate_pass": "True",
+    "poison_lines": [
+     "[POISON] eager arm=mps_mega survivors=0",
+     "[POISON] eager arm=pf6gm_mega survivors=0",
+     "[POISON] post_timing arm=mps_mega survivors=0",
+     "[POISON] post_timing arm=pf6gm_mega survivors=0"
+    ],
+    "poison_lines_n": 20,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_selftest_all_true": true,
+    "poison_selftest_lines": [
+     "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+     "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+    ],
+    "poison_survivors_max": 0,
+    "pperr_max": 0,
+    "soak_epochs": "600/600",
+    "soak_lines": [
+     "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True"
+    ],
+    "soak_pass": "True",
+    "spin_fail_max": 0,
+    "spin_lines_n": 5,
+    "spin_success_max": 0,
+    "ts_delta_all_M7_us": [
+     2589.9,
+     2599.54,
+     2606.52,
+     2670.74,
+     2690.34
+    ],
+    "ts_delta_all_combine_us": [
+     353.88,
+     359.26,
+     391.38,
+     419.1,
+     502.68
+    ],
+    "ts_delta_all_planM6_us": [
+     2816.98,
+     2827.15,
+     2828.33,
+     2832.01,
+     2833.44
+    ],
+    "ts_delta_n": 5,
+    "ts_delta_us": {
+     "M7": 2599.54,
+     "combine": 502.68,
+     "m2_to_end": 5929.37,
+     "planM6": 2827.15,
+     "servicedrain": 2780.94
+    },
+    "ts_split_all_M6_us": [
+     2442.24,
+     2452.42,
+     2456.4,
+     2458.9,
+     2459.15
+    ],
+    "ts_split_n": 5,
+    "ts_split_us": {
+     "M6": 2452.42,
+     "plan_M3toM5": 374.73
+    }
+   },
+   "idx": 6,
+   "kernel_hsaco_sha256": {},
+   "mps_cfg": [],
+   "outdir": "6_C4g353mode12flush_rows16timestamps1_20260812T140839Z",
+   "run_count": 5,
+   "runs": [
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6458.6498737335205,
+      "pf6gm_mega": 6914.034843444824,
+      "production": 7700.862407684326
+     },
+     "arm_p95_us": {
+      "mps_mega": 6545.637011528015,
+      "pf6gm_mega": 7021.572208404541,
+      "production": 7767.981839179993
+     },
+     "directory": "run1",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6477.570056915283,
+      "pf6gm_mega": 6911.315202713013,
+      "production": 7711.042881011963
+     },
+     "arm_p95_us": {
+      "mps_mega": 6564.917182922363,
+      "pf6gm_mega": 6999.568796157837,
+      "production": 7816.916942596436
+     },
+     "directory": "run2",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "mps_mega",
+      "production",
+      "pf6gm_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6478.090047836304,
+      "pf6gm_mega": 6887.77494430542,
+      "production": 7702.944040298462
+     },
+     "arm_p95_us": {
+      "mps_mega": 6541.92111492157,
+      "pf6gm_mega": 6954.0579080581665,
+      "production": 7784.879112243652
+     },
+     "directory": "run3",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6470.27063369751,
+      "pf6gm_mega": 6882.813930511475,
+      "production": 7710.363864898682
+     },
+     "arm_p95_us": {
+      "mps_mega": 6558.737087249756,
+      "pf6gm_mega": 6952.740979194641,
+      "production": 7790.399146080017
+     },
+     "directory": "run4",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6456.210613250732,
+      "pf6gm_mega": 6939.336061477661,
+      "production": 7699.244022369385
+     },
+     "arm_p95_us": {
+      "mps_mega": 6521.443200111389,
+      "pf6gm_mega": 7004.382824897766,
+      "production": 7776.012802124023
+     },
+     "directory": "run5",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    }
+   ],
+   "status": "valid_diagnostic",
+   "tag": "e37c"
+  },
+  {
+   "arm_p50_median": {
+    "mps_mega": 6476.990461349487,
+    "pf6gm_mega": 6901.235580444336,
+    "production": 7700.183391571045
+   },
+   "arm_p50_stats": {
+    "mps_mega": {
+     "max": 6481.250524520874,
+     "median": 6476.990461349487,
+     "min": 6471.69041633606,
+     "values": [
+      6481.250524520874,
+      6471.69041633606,
+      6476.390838623047,
+      6476.990461349487,
+      6477.269887924194
+     ]
+    },
+    "pf6gm_mega": {
+     "max": 6919.395208358765,
+     "median": 6901.235580444336,
+     "min": 6873.255014419556,
+     "values": [
+      6883.7549686431885,
+      6873.255014419556,
+      6901.235580444336,
+      6902.635097503662,
+      6919.395208358765
+     ]
+    },
+    "production": {
+     "max": 7704.5838832855225,
+     "median": 7700.183391571045,
+     "min": 7696.464061737061,
+     "values": [
+      7704.5838832855225,
+      7702.284097671509,
+      7696.464061737061,
+      7700.183391571045,
+      7699.4030475616455
+     ]
+    }
+   },
+   "cfg_readback": {
+    "consistent": true,
+    "counts": [
+     40
+    ],
+    "distinct": [
+     {
+      "C": 8,
+      "flush_rows": 16,
+      "g": 353,
+      "mode": 12,
+      "pull_fallback": 0,
+      "timestamps": 1,
+      "word": 26039050504
+     }
+    ],
+    "mps_config": {
+     "C": 8,
+     "flush_rows": 16,
+     "g": 353,
+     "mode": 12,
+     "pull_fallback": 0,
+     "timestamps": 1,
+     "word": 26039050504
+    },
+    "n_rank_files": 40,
+    "soak_iters": [
+     600
+    ]
+   },
+   "gates": {
+    "control_fails": "True",
+    "log": "e37c_7_C8g353mode12flush_rows16timestamps1_20260812T141143Z.log",
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008293 pass=True",
+    "mok_gate_pass": "True",
+    "poison_lines": [
+     "[POISON] eager arm=mps_mega survivors=0",
+     "[POISON] eager arm=pf6gm_mega survivors=0",
+     "[POISON] post_timing arm=mps_mega survivors=0",
+     "[POISON] post_timing arm=pf6gm_mega survivors=0"
+    ],
+    "poison_lines_n": 20,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_selftest_all_true": true,
+    "poison_selftest_lines": [
+     "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+     "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+    ],
+    "poison_survivors_max": 0,
+    "pperr_max": 0,
+    "soak_epochs": "600/600",
+    "soak_lines": [
+     "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True"
+    ],
+    "soak_pass": "True",
+    "spin_fail_max": 0,
+    "spin_lines_n": 5,
+    "spin_success_max": 1,
+    "ts_delta_all_M7_us": [
+     2647.89,
+     2684.76,
+     2710.08,
+     2734.12,
+     2756.38
+    ],
+    "ts_delta_all_combine_us": [
+     239.26,
+     265.0,
+     292.88,
+     303.28,
+     343.87
+    ],
+    "ts_delta_all_planM6_us": [
+     2821.16,
+     2821.24,
+     2826.36,
+     2826.36,
+     2826.84
+    ],
+    "ts_delta_n": 5,
+    "ts_delta_us": {
+     "M7": 2734.12,
+     "combine": 265.0,
+     "m2_to_end": 5820.28,
+     "planM6": 2821.16,
+     "servicedrain": 2817.24
+    },
+    "ts_split_all_M6_us": [
+     2446.31,
+     2448.32,
+     2449.92,
+     2452.69,
+     2457.12
+    ],
+    "ts_split_n": 5,
+    "ts_split_us": {
+     "M6": 2446.31,
+     "plan_M3toM5": 374.85
+    }
+   },
+   "idx": 7,
+   "kernel_hsaco_sha256": {},
+   "mps_cfg": [],
+   "outdir": "7_C8g353mode12flush_rows16timestamps1_20260812T141143Z",
+   "run_count": 5,
+   "runs": [
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6481.250524520874,
+      "pf6gm_mega": 6883.7549686431885,
+      "production": 7704.5838832855225
+     },
+     "arm_p95_us": {
+      "mps_mega": 6557.659006118774,
+      "pf6gm_mega": 6955.672168731689,
+      "production": 7797.323179244995
+     },
+     "directory": "run1",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6471.69041633606,
+      "pf6gm_mega": 6873.255014419556,
+      "production": 7702.284097671509
+     },
+     "arm_p95_us": {
+      "mps_mega": 6539.321088790894,
+      "pf6gm_mega": 6927.148127555847,
+      "production": 7788.552784919739
+     },
+     "directory": "run2",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "mps_mega",
+      "production",
+      "pf6gm_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6476.390838623047,
+      "pf6gm_mega": 6901.235580444336,
+      "production": 7696.464061737061
+     },
+     "arm_p95_us": {
+      "mps_mega": 6531.743001937866,
+      "pf6gm_mega": 6969.708156585693,
+      "production": 7764.812970161438
+     },
+     "directory": "run3",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6476.990461349487,
+      "pf6gm_mega": 6902.635097503662,
+      "production": 7700.183391571045
+     },
+     "arm_p95_us": {
+      "mps_mega": 6555.456900596619,
+      "pf6gm_mega": 6977.408146858215,
+      "production": 7780.712890625
+     },
+     "directory": "run4",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6477.269887924194,
+      "pf6gm_mega": 6919.395208358765,
+      "production": 7699.4030475616455
+     },
+     "arm_p95_us": {
+      "mps_mega": 6556.597924232483,
+      "pf6gm_mega": 6982.866835594177,
+      "production": 7783.116054534912
+     },
+     "directory": "run5",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    }
+   ],
+   "status": "valid_diagnostic",
+   "tag": "e37c"
+  },
+  {
+   "arm_p50_median": {
+    "mps_mega": 6468.18995475769,
+    "pf6gm_mega": 6908.634185791016,
+    "production": 7704.683065414429
+   },
+   "arm_p50_stats": {
+    "mps_mega": {
+     "max": 6470.589399337769,
+     "median": 6468.18995475769,
+     "min": 6451.269865036011,
+     "values": [
+      6468.18995475769,
+      6459.769487380981,
+      6451.269865036011,
+      6468.789339065552,
+      6470.589399337769
+     ]
+    },
+    "pf6gm_mega": {
+     "max": 6928.595066070557,
+     "median": 6908.634185791016,
+     "min": 6871.374130249023,
+     "values": [
+      6912.074327468872,
+      6902.095079421997,
+      6871.374130249023,
+      6908.634185791016,
+      6928.595066070557
+     ]
+    },
+    "production": {
+     "max": 7716.662883758545,
+     "median": 7704.683065414429,
+     "min": 7703.2036781311035,
+     "values": [
+      7703.2036781311035,
+      7706.403017044067,
+      7716.662883758545,
+      7703.56297492981,
+      7704.683065414429
+     ]
+    }
+   },
+   "cfg_readback": {
+    "consistent": true,
+    "counts": [
+     40
+    ],
+    "distinct": [
+     {
+      "C": 4,
+      "flush_rows": 16,
+      "g": 353,
+      "mode": 12,
+      "pull_fallback": 0,
+      "timestamps": 1,
+      "word": 26039050500
+     }
+    ],
+    "mps_config": {
+     "C": 4,
+     "flush_rows": 16,
+     "g": 353,
+     "mode": 12,
+     "pull_fallback": 0,
+     "timestamps": 1,
+     "word": 26039050500
+    },
+    "n_rank_files": 40,
+    "soak_iters": [
+     600
+    ]
+   },
+   "gates": {
+    "control_fails": "True",
+    "log": "e37c_8_C4g353mode12flush_rows16timestamps1_20260812T141446Z.log",
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.039062 relative=0.008293 pass=True",
+    "mok_gate_pass": "True",
+    "poison_lines": [
+     "[POISON] eager arm=mps_mega survivors=0",
+     "[POISON] eager arm=pf6gm_mega survivors=0",
+     "[POISON] post_timing arm=mps_mega survivors=0",
+     "[POISON] post_timing arm=pf6gm_mega survivors=0"
+    ],
+    "poison_lines_n": 20,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_selftest_all_true": true,
+    "poison_selftest_lines": [
+     "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+     "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+    ],
+    "poison_survivors_max": 0,
+    "pperr_max": 0,
+    "soak_epochs": "600/600",
+    "soak_lines": [
+     "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True"
+    ],
+    "soak_pass": "True",
+    "spin_fail_max": 0,
+    "spin_lines_n": 5,
+    "spin_success_max": 1,
+    "ts_delta_all_M7_us": [
+     2448.96,
+     2509.52,
+     2538.47,
+     2560.24,
+     2560.72
+    ],
+    "ts_delta_all_combine_us": [
+     413.12,
+     473.68,
+     484.44,
+     504.62,
+     517.84
+    ],
+    "ts_delta_all_planM6_us": [
+     2822.52,
+     2823.12,
+     2826.9,
+     2831.8,
+     2857.24
+    ],
+    "ts_delta_n": 5,
+    "ts_delta_us": {
+     "M7": 2538.47,
+     "combine": 504.62,
+     "m2_to_end": 5865.61,
+     "planM6": 2822.52,
+     "servicedrain": 2723.52
+    },
+    "ts_split_all_M6_us": [
+     2441.79,
+     2450.53,
+     2450.7,
+     2452.28,
+     2481.13
+    ],
+    "ts_split_n": 5,
+    "ts_split_us": {
+     "M6": 2450.53,
+     "plan_M3toM5": 371.99
+    }
+   },
+   "idx": 8,
+   "kernel_hsaco_sha256": {},
+   "mps_cfg": [],
+   "outdir": "8_C4g353mode12flush_rows16timestamps1_20260812T141446Z",
+   "run_count": 5,
+   "runs": [
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6468.18995475769,
+      "pf6gm_mega": 6912.074327468872,
+      "production": 7703.2036781311035
+     },
+     "arm_p95_us": {
+      "mps_mega": 6535.628819465637,
+      "pf6gm_mega": 6992.189002037048,
+      "production": 7801.576113700867
+     },
+     "directory": "run1",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6459.769487380981,
+      "pf6gm_mega": 6902.095079421997,
+      "production": 7706.403017044067
+     },
+     "arm_p95_us": {
+      "mps_mega": 6523.816227912903,
+      "pf6gm_mega": 6986.667203903198,
+      "production": 7781.53190612793
+     },
+     "directory": "run2",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "mps_mega",
+      "production",
+      "pf6gm_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6451.269865036011,
+      "pf6gm_mega": 6871.374130249023,
+      "production": 7716.662883758545
+     },
+     "arm_p95_us": {
+      "mps_mega": 6525.876951217651,
+      "pf6gm_mega": 6939.593005180359,
+      "production": 7808.820986747742
+     },
+     "directory": "run3",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6468.789339065552,
+      "pf6gm_mega": 6908.634185791016,
+      "production": 7703.56297492981
+     },
+     "arm_p95_us": {
+      "mps_mega": 6548.861217498779,
+      "pf6gm_mega": 7010.490942001343,
+      "production": 7775.10986328125
+     },
+     "directory": "run4",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6470.589399337769,
+      "pf6gm_mega": 6928.595066070557,
+      "production": 7704.683065414429
+     },
+     "arm_p95_us": {
+      "mps_mega": 6570.111083984375,
+      "pf6gm_mega": 6995.6178188323975,
+      "production": 7781.955909729004
+     },
+     "directory": "run5",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    }
+   ],
+   "status": "valid_diagnostic",
+   "tag": "e37c"
+  },
+  {
+   "arm_p50_median": {
+    "mps_mega": 6501.8110275268555,
+    "pf6gm_mega": 6898.094415664673,
+    "production": 7694.503545761108
+   },
+   "arm_p50_stats": {
+    "mps_mega": {
+     "max": 6518.79096031189,
+     "median": 6501.8110275268555,
+     "min": 6483.030080795288,
+     "values": [
+      6517.230987548828,
+      6483.030080795288,
+      6492.790699005127,
+      6501.8110275268555,
+      6518.79096031189
+     ]
+    },
+    "pf6gm_mega": {
+     "max": 6915.915012359619,
+     "median": 6898.094415664673,
+     "min": 6872.273921966553,
+     "values": [
+      6880.393981933594,
+      6872.273921966553,
+      6898.094415664673,
+      6905.375003814697,
+      6915.915012359619
+     ]
+    },
+    "production": {
+     "max": 7700.722932815552,
+     "median": 7694.503545761108,
+     "min": 7691.223382949829,
+     "values": [
+      7700.722932815552,
+      7694.563627243042,
+      7691.223382949829,
+      7694.503545761108,
+      7692.984104156494
+     ]
+    }
+   },
+   "cfg_readback": {
+    "consistent": true,
+    "counts": [
+     40
+    ],
+    "distinct": [
+     {
+      "C": 16,
+      "flush_rows": 16,
+      "g": 353,
+      "mode": 12,
+      "pull_fallback": 0,
+      "timestamps": 1,
+      "word": 26039050512
+     }
+    ],
+    "mps_config": {
+     "C": 16,
+     "flush_rows": 16,
+     "g": 353,
+     "mode": 12,
+     "pull_fallback": 0,
+     "timestamps": 1,
+     "word": 26039050512
+    },
+    "n_rank_files": 40,
+    "soak_iters": [
+     600
+    ]
+   },
+   "gates": {
+    "control_fails": "True",
+    "log": "e37c_9_C16g353mode12flush_rows16timestamps1_20260812T141749Z.log",
+    "mok_gate": "[MOK GATE] mps_mega max_abs=0.035156 relative=0.008294 pass=True",
+    "mok_gate_pass": "True",
+    "poison_lines": [
+     "[POISON] eager arm=mps_mega survivors=0",
+     "[POISON] eager arm=pf6gm_mega survivors=0",
+     "[POISON] post_timing arm=mps_mega survivors=0",
+     "[POISON] post_timing arm=pf6gm_mega survivors=0"
+    ],
+    "poison_lines_n": 20,
+    "poison_nonfinite": [
+     57344
+    ],
+    "poison_selftest_all_true": true,
+    "poison_selftest_lines": [
+     "[POISON SELFTEST] arm=mps_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan",
+     "[POISON SELFTEST] arm=pf6gm_mega one_row_poisoned_fails=True nonfinite=57344 relative=nan"
+    ],
+    "poison_survivors_max": 0,
+    "pperr_max": 0,
+    "soak_epochs": "600/600",
+    "soak_lines": [
+     "[MPS SOAK] completed=600/600 pperr=0 poison=0 poison_epoch=-1 pass=True"
+    ],
+    "soak_pass": "True",
+    "spin_fail_max": 0,
+    "spin_lines_n": 5,
+    "spin_success_max": 0,
+    "ts_delta_all_M7_us": [
+     2692.98,
+     2701.39,
+     2727.35,
+     2747.79,
+     2757.81
+    ],
+    "ts_delta_all_combine_us": [
+     306.66,
+     315.52,
+     317.58,
+     326.12,
+     343.95
+    ],
+    "ts_delta_all_planM6_us": [
+     2810.67,
+     2811.92,
+     2817.63,
+     2818.35,
+     2843.83
+    ],
+    "ts_delta_n": 5,
+    "ts_delta_us": {
+     "M7": 2747.79,
+     "combine": 306.66,
+     "m2_to_end": 5865.12,
+     "planM6": 2810.67,
+     "servicedrain": 2865.05
+    },
+    "ts_split_all_M6_us": [
+     2438.42,
+     2440.6,
+     2444.39,
+     2448.76,
+     2468.23
+    ],
+    "ts_split_n": 5,
+    "ts_split_us": {
+     "M6": 2438.42,
+     "plan_M3toM5": 372.25
+    }
+   },
+   "idx": 9,
+   "kernel_hsaco_sha256": {},
+   "mps_cfg": [],
+   "outdir": "9_C16g353mode12flush_rows16timestamps1_20260812T141749Z",
+   "run_count": 5,
+   "runs": [
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6517.230987548828,
+      "pf6gm_mega": 6880.393981933594,
+      "production": 7700.722932815552
+     },
+     "arm_p95_us": {
+      "mps_mega": 6609.899115562439,
+      "pf6gm_mega": 6967.068862915039,
+      "production": 7781.292939186096
+     },
+     "directory": "run1",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6483.030080795288,
+      "pf6gm_mega": 6872.273921966553,
+      "production": 7694.563627243042
+     },
+     "arm_p95_us": {
+      "mps_mega": 6565.158224105835,
+      "pf6gm_mega": 6930.720829963684,
+      "production": 7783.120059967041
+     },
+     "directory": "run2",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "mps_mega",
+      "production",
+      "pf6gm_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6492.790699005127,
+      "pf6gm_mega": 6898.094415664673,
+      "production": 7691.223382949829
+     },
+     "arm_p95_us": {
+      "mps_mega": 6556.932997703552,
+      "pf6gm_mega": 6967.488884925842,
+      "production": 7770.798182487488
+     },
+     "directory": "run3",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "production",
+      "pf6gm_mega",
+      "mps_mega"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6501.8110275268555,
+      "pf6gm_mega": 6905.375003814697,
+      "production": 7694.503545761108
+     },
+     "arm_p95_us": {
+      "mps_mega": 6567.803120613098,
+      "pf6gm_mega": 6965.913796424866,
+      "production": 7777.840137481689
+     },
+     "directory": "run4",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    },
+    {
+     "arm_order": [
+      "pf6gm_mega",
+      "mps_mega",
+      "production"
+     ],
+     "arm_p50_us": {
+      "mps_mega": 6518.79096031189,
+      "pf6gm_mega": 6915.915012359619,
+      "production": 7692.984104156494
+     },
+     "arm_p95_us": {
+      "mps_mega": 6594.417119026184,
+      "pf6gm_mega": 6979.249739646912,
+      "production": 7765.138149261475
+     },
+     "directory": "run5",
+     "mps_cfg": null,
+     "timed_iters": 100,
+     "warmup_iters": 500
+    }
+   ],
+   "status": "valid_diagnostic",
+   "tag": "e37c"
+  }
+ ],
+ "host": "gbt350-odcdh2-c05-1",
+ "n_campaigns": 27
+}
