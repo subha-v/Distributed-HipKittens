@@ -300,8 +300,22 @@ N2_P2_QUAL void N2_P2_NAME(
   const int rowh = lane >> 5;   // 0 or 1: which of the atomic's two rows
   const int dcol = lane & 31;   // which dword (= 2 adjacent output columns)
 
+  // MPS-DELTA (4) — deferred event publication for remote-accumulate modes.
+  // The epilogue's REMOTE atomics get a whole task of fabric-ACK slack: task
+  // t-1's (b,nc) events publish at the TOP of task t (where the drain's
+  // vmcnt(0) finds them already acknowledged) instead of stalling the
+  // epilogue's critical path per task on a remote ACK. pend state is written
+  // uniformly by all threads (the hook visits per sub-block), so the
+  // __syncthreads() in the flush is convergent.
+#ifdef N2GM_TASK_DONE_HOOK
+  k0p6_defer m7_pend{-1, 0, 0};
+#endif
+
   for (int task = (int)(N2GM_TASK_START); task < num_tasks;
        task += (int)(N2GM_TASK_STRIDE)) {
+#ifdef N2GM_TASK_LOOP_HEAD_HOOK
+    N2GM_TASK_LOOP_HEAD_HOOK
+#endif
     const int tile = task / kNChunksP2;
     const int nc = task - tile * kNChunksP2;   // output n-chunk 0..15
     const int b0 = n2gm_tile_b0(tile);         // first 32-block of the tile
@@ -535,6 +549,9 @@ N2_P2_QUAL void N2_P2_NAME(
     }
 #endif
   }
+#ifdef N2GM_TASK_LOOP_TAIL_HOOK
+  N2GM_TASK_LOOP_TAIL_HOOK
+#endif
 }
 
 }  // namespace production_fused_moe::n2

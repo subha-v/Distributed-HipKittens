@@ -101,7 +101,7 @@
 // .cuh-only change, then confirm a new hsaco mtime under
 // ~/.cache/k0-mok-synthetic-prefill/mori/jit/gfx950_mlx5/*/ before believing
 // any number. The value is never read; only its presence in the hash matters.
-#define K0P6_MPS_SRC_REV 20
+#define K0P6_MPS_SRC_REV 21
 
 // exp_56 (Option C): per-source SEGMENTED receive layout + chunk-counted release.
 //  * Row index = source*MAXTOK + fetch_add(dest_counter[source] on dest, 1)  (waitless).
@@ -329,6 +329,59 @@ __device__ __forceinline__ void k0p6_mps_task_done(int b, int nc, int tid,
   }
 }
 
+// ---- MPS-DELTA (4): deferred event publication (remote-accumulate modes) ----
+// The epilogue's remote atomics get one task of fabric-ACK slack instead of a
+// per-task vmcnt(0) stall on the critical path. Task t-1's (b,nc) events are
+// published at the head of task t, where the drain finds them ACKed. The pend
+// state is three scalars written uniformly by every thread (the hook visits
+// per sub-block), keeping the flush's __syncthreads convergent.
+struct k0p6_defer {
+  int b0;
+  int gcount;
+  int nc;
+};
+
+__device__ __forceinline__ void k0p6_mps_task_drain(const long long* k0p6_desc) {
+  // Direct-accumulate modes defer the drain to the next task's head; every
+  // other mode drains per task end exactly as the donor+MPS stack always has.
+  const unsigned long long m =
+      ((unsigned long long)k0p6_dread(k0p6_desc, K0P6_D_MPS_CFG) >> 16 &
+       0xFFull);
+  if (m != 12ull && m != 13ull) {
+    asm volatile("s_waitcnt vmcnt(0)" ::: "memory");
+  }
+}
+
+__device__ __forceinline__ void k0p6_mps_task_flush_defer(
+    int tid, const long long* k0p6_desc, k0p6_defer& p) {
+  if (p.b0 < 0) return;
+  asm volatile("s_waitcnt vmcnt(0)" ::: "memory");
+  __syncthreads();
+  for (int sb = 0; sb < p.gcount; ++sb) {
+    k0p6_mps_task_done(p.b0 + sb, p.nc, tid, k0p6_desc);
+  }
+  p.b0 = -1;
+}
+
+__device__ __forceinline__ void k0p6_mps_task_done_maybe_defer(
+    int b, int nc, int tid, const long long* k0p6_desc, k0p6_defer& p) {
+  const unsigned long long m =
+      ((unsigned long long)k0p6_dread(k0p6_desc, K0P6_D_MPS_CFG) >> 16 &
+       0xFFull);
+  if (m == 12ull || m == 13ull) {
+    // Buffer the task identity UNIFORMLY (no tid guard): the flush at the
+    // next task head reads it on every thread before publishing from tid0.
+    if (p.b0 < 0) {
+      p.b0 = b;
+      p.gcount = 0;
+      p.nc = nc;
+    }
+    p.gcount = (b - p.b0) + 1;
+    return;
+  }
+  k0p6_mps_task_done(b, nc, tid, k0p6_desc);
+}
+
 // ---- N2 phase bodies, exp_59 G-stacked variants (n2_phase{1,2}_gm.cpp) --------------------
 // The _gm bodies add tile_desc/num_tiles kernargs and the per-live-sub-block hooks. The
 // hooks fire per LIVE sub-block b=b0+sb (a2_done/part_done indexed by absolute 32-block),
@@ -352,8 +405,11 @@ __device__ __forceinline__ void k0p6_mps_task_done(int b, int nc, int tid,
 #define N2_HOOK_CTX_ARG , const long long* __restrict__ k0p6_desc
 #define N2GM_TASK_WAIT_HOOK \
   if (!k0p6_a2_wait(b, tid, k0p6_desc)) return;
-#define N2GM_TASK_DONE_HOOK k0p6_mps_task_done(b, nc, tid, k0p6_desc);
-#define N2GM_TASK_DONE_DRAIN_HOOK asm volatile("s_waitcnt vmcnt(0)" ::: "memory");
+#define N2GM_TASK_DONE_HOOK \
+  k0p6_mps_task_done_maybe_defer(b, nc, tid, k0p6_desc, m7_pend);
+#define N2GM_TASK_DONE_DRAIN_HOOK k0p6_mps_task_drain(k0p6_desc);
+#define N2GM_TASK_LOOP_HEAD_HOOK k0p6_mps_task_flush_defer(tid, k0p6_desc, m7_pend);
+#define N2GM_TASK_LOOP_TAIL_HOOK k0p6_mps_task_flush_defer(tid, k0p6_desc, m7_pend);
 // Modes 0-2 keep the donor-identical start (blockIdx.x, a free hardware
 // uniform) because their compute set is the dense prefix [0, nct-C). Mode 3's
 // compute set is the XCD residue classes [C/32, 8), so it needs the dense
@@ -363,6 +419,8 @@ __device__ __forceinline__ void k0p6_mps_task_done(int b, int nc, int tid,
 #define N2GM_TASK_START k0p6_mps_task_start(k0p6_desc)
 #define N2GM_TASK_STRIDE k0p6_mps_stride(k0p6_desc, (int)gridDim.x)
 #include "n2_phase2_gm_mps.cpp"
+#undef N2GM_TASK_LOOP_TAIL_HOOK
+#undef N2GM_TASK_LOOP_HEAD_HOOK
 #undef N2GM_TASK_STRIDE
 #undef N2GM_TASK_START
 #undef N2GM_TASK_DONE_DRAIN_HOOK
