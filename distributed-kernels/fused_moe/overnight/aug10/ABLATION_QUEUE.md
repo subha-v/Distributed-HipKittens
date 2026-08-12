@@ -170,6 +170,10 @@ taking a number.**
    atomics). exp_09's old objection is WITHDRAWN per STATUS.md (32 live lanes
    of an event address 32 different rows, so exp_07's essential line-spread is
    preserved). Cheap; high-confidence.
+   **MEASURED (mode 13, 2026-08-12): NEUTRAL-TO-NEGATIVE.** Pushed deletion
+   saved ~85-150 µs; counter consolidation cost ~150-240 µs (exp_07's
+   footprint rule re-confirmed at a second point). Row-level flags live in
+   mode 12's sibling but the counter side stays spread.
 2. **X2. Direct-to-out accumulation (mode-16-scale).** Elimination to the
    limit: no slots, no M8, no readiness protocol, no service pool — weighted
    contributions go straight into the owner's `out[tau]`; per-epoch

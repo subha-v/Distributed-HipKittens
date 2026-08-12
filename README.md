@@ -50,14 +50,35 @@ Latest additions to the device primitive layer and the fused-MoE port
   compute CTAs flow into service/reduction queues.
 - `k0pf6gm_device_tile_mps.hip` (+ `moe_mps_adapter.cuh`,
   `n2_phase2_gm_mps.cpp`, host ABI slots 56–62) — a COMET/MoK-style additive
-  sibling of the fused-MoE parity port. Mode 0 measures the pure reserved-CTA
-  capacity tax, mode 1 the owner-slot push transport without overlap, mode 2
-  the full stream: per-`(b, nc)` tile events off the GEMM wave, service-wave
-  row bookkeeping, 16-byte controlled slice pushes into owner-resident slots,
-  batched owner-only readiness, and a dynamic-ticket combine. `C × g` is a
-  descriptor-selected runtime sweep in one binary. Host/static validated only;
-  see `distributed-kernels/fused_moe/DESIGN_MPS.md` for the design record and
-  the required GPU gates.
+  sibling of the fused-MoE parity port, and currently the fastest measured
+  fused-MoE megakernel in this repository. On world-8 MI350X (gfx950) with
+  the MoK synthetic-prefill campaign (two independent 5-rotation campaigns):
+  **6,683–6,686 µs = 0.866× `production`, 0.968× the homogeneous megakernel
+  `pf6gm_mega`** (exp_21 mode 12, `C=16 g=33 mode=12 flush_rows=16`; all gate
+  ladders green incl. 600-epoch soaks). The winning mechanisms on top of the
+  MoS stream base:
+  - **mode 2 stream** (the prior ratchet): per-`(b, nc)` tile events off the
+    GEMM wave, service-wave row bookkeeping, 16-byte slice pushes into
+    owner-resident slots, batched owner-only readiness, dynamic-ticket
+    combine — 6,866 µs (0.888× production).
+  - **mode 12 (exp_21, current best)** — *direct remote bf16 accumulation*:
+    the M7 epilogue accumulates each output tile into the owner's slot with
+    remote packed-bf16 atomics over xGMI, deleting the local `part` stage and
+    the pool's payload copy (936 MB → 312 MB inside the M7 window); the pool
+    shrinks to readiness bookkeeping (`C` 64 → 16) and the owner
+    consume-and-zero restores the slot invariant. The epilogue's outstanding
+    remote RMWs are capped at 8 per thread (`vmcnt(8)`) — the measured cure
+    for the fabric stream's rate-shaped interference with the co-resident
+    GEMM. Also modes 9/13 (fence-scope diagnostic + consolidated counters),
+    the exp_20 diagnostics modes 4–8 (pacing / traffic attributions /
+    payload-free stream / poll backoff) and a g-bit dual-write detector that
+    certified zero lost remote updates over 600 epochs. Evidence:
+    `distributed-kernels/fused_moe/overnight/experiments/exp_21_direct_accumulate/result.md`
+    and `overnight/experiments/exp_20_interference/result.md`.
+- `include/cdna4/ops/group/distributed/packet.cuh` — new
+  `accumulate_peer_bf162` accumulating peer transport (remote packed-bf16
+  atomic, the exp_18/21-enabling primitive), next to the existing
+  plain/multi-region/streaming packet transports.
 - `distributed-kernels/fused_moe/BENCHMARKING.md` — the measurement half of that
   handoff, so "paired timing" resolves to a runnable procedure on the 8× MI350X
   (`gfx950`) node. Pins the MoK synthetic-prefill campaign in `amd-master`

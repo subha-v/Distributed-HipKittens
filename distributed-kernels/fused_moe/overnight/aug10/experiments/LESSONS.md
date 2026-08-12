@@ -909,3 +909,49 @@
   LDS parity gate is currently broken.** Ratchet re-confirmed on the exp_20 tree
   at **6,942 us / 0.888x production**, 37/37 runs green on gates, negative
   control and 600-epoch soak.
+
+- 2026-08-12 exp_21 **NEW RATCHET: mode 12 (direct remote bf16 accumulate,
+  throttled epilogue) beats the mode-2 ratchet by ~2.3 points and pf6gm by
+  ~2.6 points, in two independent 5-rotation campaigns reproducing to
+  0.04%.** dec21a: production 7,715.6 / pf6gm 6,911.4 / mode-12 **6,685.5**
+  (mps/prod 0.8665, mps/pf6gm 0.9673). dec21b: 7,720.0 / 6,902.4 / **6,683.1**
+  (0.8657 / 0.9682). Operating point: `C=16 g=33 (physical-1 + throttle
+  0x20) mode=12 flush_rows=16`. All 10 rotations: `[MOK GATE]` green,
+  `control_fails=True`, 600/600 soak `pperr=0`. Detector run (g=49, dual-write)
+  over 600 epochs: ZERO lost-update flags — remote pk-bf16 atomics are exact
+  on the mori HIP-VMM Uncached heap (blocker 1b closed). Kernel: M7 epilogue
+  accumulates directly into the owner's slot (936 MB -> 312 MB in the M7
+  window); pool carries only readiness; owner consume-and-zero restores the
+  invariant; outstanding remote RMWs capped at 8/thread.
+- 2026-08-12 exp_21 **the epilogue's remote-RMW stream is RATE-shaped, not
+  latency-shaped.** Unthrottled it inflates M7 by +313 us (mode 12 vs mode 2,
+  matched protocol). Moving the per-task vmcnt(0) drain one task later
+  (defer): NULL (+34). Capping outstanding RMWs at 8 per thread
+  (`s_waitcnt vmcnt(8)` per row): **~500 us of M7 recovered**. This is exp_20
+  §2b's read-pacing mechanism from the writer side, and it complements E1's
+  null: pacing pays exactly when the paced engine is not the only phase in
+  flight.
+- 2026-08-12 **fabric ubench: coalesced 4-B remote atomics = 52.8 GB/s ==
+  16-B stores (54.9) per link, at any writer count 64-256; per-task drain
+  free; scattered atomics collapse 13x; target-busy immune.** The fabric is
+  byte-limited for the epilogue's coalesced half-wave pattern, not op-limited.
+- 2026-08-12 **the pool protocol's interference is C-invariant in total
+  volume** (mode 13 interference 1,328 us @ C=16 vs 1,323 us @ C=64 — the
+  ~590-860 us event/atomic/flag traffic is a fixed per-epoch tax; pool size
+  only moves the capacity side of the trade).
+- 2026-08-12 **consolidation is neutral-to-negative, exp_07's rule at a
+  second point** (mode 13 per-row counters: pushed deletion saved ~85-150,
+  the 16-to-1 footprint consolidation cost ~150-240). Also: **the flush's
+  ~2,400 system releases are ~free** (mode 9: M7 +22 us inside band) — the
+  exp_20 §4 prime suspect is killed against the same ratchet soundness
+  (untrusted-diagnostic caveat: exp_06-style scope swap, gates passed anyway).
+- 2026-08-12 `ops:` **a crashed JIT build leaves a root-owned
+  `.k0pf6gm_mps_mega.hsaco.lock` in ~/.cache/.../mori/jit/ that hangs EVERY
+  later run 25 min to timeout.** Delete with
+  `docker exec subha_k1 find /home/subvadla/.cache/k0-mok-synthetic-prefill/mori/jit/ -name '*.lock' -delete`
+  (root-owned; can't be removed from subvadla's shell). Screen drivers now
+  self-clean at launch.
+- 2026-08-12 `primitives:` peer.cuh needs a per-body peer-table tabulation
+  form (`peer_tab<8>::build(desc)`); packet transports want a
+  `max_outstanding` depth knob — throttling is the mechanism the winners
+  ship, and nothing in the API expresses it.

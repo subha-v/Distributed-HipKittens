@@ -5,6 +5,44 @@ Full detail in `experiments/LESSONS.md` (append-only) and the per-experiment
 
 ## The headline
 
+**exp_21's mode 12 (direct remote bf16 accumulate, throttled epilogue) is the
+new ratchet: 0.888 → 0.866 vs `production`, and the first sizeable lead over
+the homogeneous megakernel (0.9935 → 0.968).** Two independent 5-rotation
+campaigns, all gates green, reproducing to 0.04%.
+
+| campaign | `production` | `pf6gm_mega` (homogeneous) | **`mps_mega` mode 12, C=16 g=33** |
+|---|---:|---:|---:|
+| `dec21a` | 7,715.6 | 6,911.4 | **6,685.5** (0.8665 / 0.9673) |
+| `dec21b` | 7,720.0 | 6,902.4 | **6,683.1** (0.8657 / 0.9682) |
+
+`(ratios are mps/production, mps/pf6gm.)` The mechanism: the M7 epilogue
+accumulates into the owner's slot directly (936 MB → 312 MB in the M7 window;
+no `part`, no pool copy) and the epilogue's outstanding remote RMWs are capped
+at 8 per thread — the pool carries readiness bookkeeping only, and the owner
+consume-and-zero restores the slot invariant. Superseded headline (dec07-era,
+mode 2 C=64): 6,866.1 / 0.888.
+
+## What exp_21 established, in measurements not opinions
+
+- **A11/M11 works on CDNA4 and is now the shipping combine path** — after
+  exp_20 demoted it for M7 (payload is free there) it was re-aimed at the
+  combine, its epilogue-rate risk retired by the g-bit-0x20 throttle, which
+  alone recovered ~500 µs of M7. Fabric ubench: coalesced remote bf16
+  atomics run the per-link byte rate of 16-B stores; per-task drain is free;
+  the fabric merges same-line RMWs (13× collapse when scattered).
+- **The interference is protocol-shaped and C-invariant** (~590-860 µs fixed
+  volume; exp_20 + mode-13's C-independent interference across C=16/64). The
+  remaining big lever is cutting that protocol count/footprint (event widening,
+  not consolidating — consolidation measured neutral-to-negative twice now).
+- **Suspects killed with measurements:** flush system releases (mode 9:
+  +22 µs' noise), drain-ACK exposure (defer: +34 µs), the epilogue's rate
+  shape (throttle: −500 µs).
+- **Blocker 1b shut:** the dual-write detector ran 600 epochs with zero lost
+  updates — remote packed-bf16 atomics are empirically exact on the mori
+  HIP-VMM Uncached heap.
+
+## The old headline (kept for provenance)
+
 **The CTA-specialized megakernel now BEATS the homogeneous one, and the margin
 over `production` widened for the first time: 0.894 → 0.888.**
 
