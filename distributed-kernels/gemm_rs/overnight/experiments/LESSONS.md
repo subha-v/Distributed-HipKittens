@@ -364,6 +364,65 @@
     where the fused helper drained after every two. **Two exposed global round
     trips per k-iteration became one covered one.**
 
+- **RANK-1 RUNS, AND WE ARE 1.238× BEHIND IT — down from 1.784× after the
+  `has_bias` fix.** Same-run interleaved, 192 pooled samples per arm per shape,
+  all 12 arm-shape pairs correct at **both** `1e-2` and `2e-3`, with
+  `bias_forced` and `bias_present` true on all 48 per-rank JSONs.
+
+  | # | shape | ours best/med | rank-1 best/med | ratio (best) |
+  |---|---|---|---|---|
+  | 1 | 64×7168×18432 | 181.19 / 191.64 | 179.17 / 183.59 | **1.011 tie** |
+  | 2 | 512×4096×12288 | 186.69 / 200.43 | 135.80 / 140.36 | 1.375 |
+  | 3 | 2048×2880×2880 | 194.31 / 218.46 | 157.61 / 162.76 | 1.233 |
+  | 4 | 4096×4096×4096 | 312.94 / 324.73 | 265.69 / 282.21 | 1.178 |
+  | 5 | 8192×4096×14336 | 762.76 / 795.68 | 576.60 / 601.75 | 1.323 |
+  | 6 | 8192×8192×29568 | 1970.98 / 2006.21 | 1460.07 / 1483.59 | 1.350 |
+  | | **geomean** | **381.69** | **308.25** | **1.238** |
+
+  Shapes 4 and 6 came in exactly where the fix predicted (312.94 against ~325;
+  1970.98 against ~1970-2000, a 3.28× improvement from 6469.97), which is what
+  confirms the fix was live in the measured binary. rank-1 reproduced its
+  pre-fix numbers to within ±2% on all six shapes, which is what licenses the
+  before/after comparison at all.
+  Shape 1 was subject to the same bug but did not move: at m=64 it is
+  latency-bound at ~181 µs, so tile geometry is not what sets its time.
+
+- **THE REMAINING GAP IS A ~100 µs PER-CALL FIXED COST, not the mainloop and
+  not the egress.** Subtracting our own pipelined device time from our graded
+  best, per shape: **103 / 98 / 103 / 110 / 111 / 152 µs**. Nearly constant, and
+  on shape 1 it is **57% of the entire runtime**. That is also why the gap
+  became *uniform* (1.18-1.38×) after the shape-table fix instead of staying
+  concentrated in two shapes — a constant additive cost divided into six very
+  different totals produces exactly that signature.
+  Arithmetic for the payoff: halving it would give roughly
+  `130 / 137 / 143 / 258 / 707 / 1895`, a geomean near **309 µs against
+  rank-1's 308.25** — i.e. **parity from this one axis alone**, without
+  touching the GEMM or the fabric.
+  Candidate mechanisms, untested: launching and draining a **304-CTA persistent
+  grid** that must be fully co-resident before the protocol can make progress;
+  the initial epoch RMW plus the first credit wait; and the fact that the
+  graded protocol has **no pipelining**, so a cost our own harness amortizes
+  over 50 iterations is paid in full on every graded call. Note this is
+  structurally a consequence of the persistent-megakernel/CTA-split design, so
+  it belongs to the same research question as E4/E7 rather than being separate
+  from it.
+
+- **METHODOLOGY: means are unusable on this node, even with same-run
+  interleaving.** Shape 3's mean (327.77) sat far above its median (218.46),
+  with outliers synchronized across all 8 ranks at identical sample indices.
+  Re-running that shape alone made our tail vanish (mean 221, sd 23%) and the
+  same tail appeared on **rank-1's** arm instead (sd 67%, worst 775.87 µs). It
+  is per-pool environmental jitter that attaches to an arbitrary arm.
+  **Report best and median; treat any mean-based ratio as suspect.** (This also
+  supersedes the earlier worry that our arm has a tail the reference does not —
+  the tail is not ours, it is the pool's.)
+
+- **TRAP: `push.ps1` resets every source mtime to push time**, so
+  "is the `.so` newer than the source?" is **not** a usable freshness check
+  after a push — the earlier guidance to use it is wrong in that case. Verify a
+  fix is live by its *behaviour* instead (here: querying the resolver directly,
+  and checking the measured shapes landed where the fix predicted).
+
 - **E1(c) is a FLAT AXIS — closed. Ships at 0.9969×, which is inside the noise
   floor and should not be quoted as a win.** Alternating paired A/B with both
   states rebuilt in the same session: candidate 230.09 µs vs base 230.80 µs,
