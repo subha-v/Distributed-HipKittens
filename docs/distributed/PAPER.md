@@ -1,204 +1,313 @@
-# Paper skeleton — Scheduling, Not Placement: Communication/Computation Overlap in Multi-GPU Megakernels on AMD GPUs
+# Paper skeleton — Distributed megakernels on AMD GPUs
 
-Working thesis, section plan, evidence map, and the reproduction matrix.
-Every evidence citation below names a measured artifact already in this repo
-(`aug10/`/`aug11/` experiment ledgers, GEMM-RS branch `overnight/RESULTS.md`)
-or a planned experiment with its folder. Nothing in the skeleton relies on an
-unmeasured claim without saying so.
+Structured the way COMET (arXiv 2502.19811) structures its argument:
+a measured problem, an analysis of one concrete object, the obstacles that
+analysis exposes, and one design per obstacle. No framework is announced up
+front; every named idea first appears inside a worked example. Each section
+below carries (a) the prose argument it must make and (b) the measured
+artifact that backs it.
 
 ---
 
-## 0. Thesis (one paragraph)
+## 1. Introduction
 
-In a multi-GPU megakernel, communication performance is decided by four
-schedule knobs — **binding** (which instruction stream carries the bytes),
-**rate** (how many remote operations are in flight), **order** (which tasks
-run when, and toward which peer), and **granularity** (how coarse the
-readiness protocol is) — and *not* by **placement** (which CTAs are assigned
-to communication). On AMD CDNA GPUs this is not a preference but a
-consequence of measurable hardware facts, and the four knobs exist *only*
-inside a persistent single-launch megakernel: a multi-kernel system cannot
-set an injection depth on a GEMM epilogue, reorder producer tiles to shape a
-consumer's readiness curve, or bind transport into an epilogue's atomic
-stream, because those decisions die at every kernel boundary. We demonstrate
-this with two production-derived kernels on two CDNA architectures, a
-primitive library that makes the knobs programmable, and a pre-registered
-adjudication that closes the placement axis on symmetric single-node
-workloads.
+**Opening problem, with a measurement (our Figure 1).** Distributed MoE and
+GEMM+ReduceScatter layers spend a large fraction of their time on
+inter-GPU communication: on our 8×MI350X node the dispatch and combine
+phases of a production MoE layer account for roughly a third of layer time,
+and on 8×MI300X the reduce-scatter epilogue of a GEMM is 32% of the largest
+graded shape. The standard remedy is to overlap this communication with
+computation. Existing systems do this in one of two ways: by pipelining
+separate kernels on streams — too coarse, and the scheduling decisions die
+at every kernel boundary — or, following COMET and Mixture-of-Kittens, by
+**dedicating a group of thread blocks (or SMs) to communication** inside a
+fused kernel, so that data moves while other blocks compute.
 
-## 1. Contributions
+**The claim.** We built both layers as single-launch megakernels on AMD
+GPUs, implemented the dedicated-block design faithfully, and measured it at
+its best configuration. It works — our specialized MoE megakernel beat both
+the production baseline and our own homogeneous megakernel. But when we
+attributed *why* it worked, none of the benefit came from where the design
+says it should: the dedicated blocks were not buying overlap. The wins came
+from decisions about **when** things happen — the order producer tiles
+execute, how many remote operations are in flight at once, how coarse the
+completion signals are — and once those decisions were made well, the
+dedicated communication blocks had nothing left to do and the kernel
+degenerated, measurably faster, into a homogeneous one.
 
-1. **A schedule-knob framework** (binding / rate / order / granularity vs
-   placement) for device-initiated communication inside megakernels, with a
-   measured law for each knob on CDNA3 and CDNA4.
-2. **The adjudication**: CTA-level communication specialization — the axis
-   COMET, MoK, and Triton-distributed center — is dominated on single-node
-   symmetric workloads, shown by direct A/B (same kernel, transport moved
-   between designs), by arithmetic (work conservation + fabric ceiling), and
-   by degeneration (once transport is bound and readiness coarsened, the
-   specialized pool has no remaining job).
-3. **Two new mechanisms with measured cliffs**: epilogue injection-rate
-   control (throttle depth, ~500 µs, catastrophic above depth 8) and
-   destination-aware task ordering (xGMI link concurrency, −27.9% on the
-   largest GEMM-RS shape with zero bytes moved differently).
-4. **Distributed HipKittens**: a two-layer header library — ordering/
-   addressing *mechanisms* (PGL, packets, directional release/acquire,
-   bounded polls, credits) plus reusable *schedule policies* (landing slots,
-   rate-controlled egress, task-order maps, release batching) — validated by
-   both operators with ISA/resource-parity gates.
-5. **A measurement-integrity methodology** for distributed-kernel benchmarks
-   (staleness-blind gate failure modes, NaN poisoning, phase stamps vs
-   end-to-end resolution, counter-validated attribution).
+**Why AMD makes this visible.** Two hardware facts, both absent on the
+NVIDIA machines where the dedicated-block design was developed, drive the
+result: (i) at megakernel register/LDS budgets a CDNA GPU runs exactly one
+block per compute unit, so a communication block never shares an execution
+unit with a compute block — there is no issue-slot contention for
+specialization to remove, only a capacity tax of exactly N/(N−C); and
+(ii) the xGMI fabric is byte-limited, not operation-limited, for the
+coalesced access patterns a GEMM epilogue naturally produces — so the
+compute blocks can carry the communication payload themselves at
+essentially zero cost.
 
-## 2. Why this is the optimal overlap strategy on AMD — the argument chain
+**Contributions list** (each one is a section):
+1. A measurement study of the dedicated-block design on CDNA3/CDNA4, with
+   the attribution that overturns its premise (§3).
+2. An analysis of the cross-GPU producer-consumer edge in these layers that
+   explains the measurements and yields three design principles (§4).
+3. Two megakernels built on those principles — a fused MoE layer on gfx950
+   and a GEMM-ReduceScatter on gfx942 — which converge on the same protocol
+   and together beat production baselines, with the remaining gap
+   attributable to single-GPU GEMM quality, not communication (§5, §6).
+4. Distributed HipKittens: the device-side primitives these kernels
+   required, stated as contracts, with compiler/ISA evidence for why each
+   is shaped the way it is (§5).
+5. A benchmark methodology for distributed kernels in which correctness
+   gates can actually fail: negative controls, input poisoning against
+   staleness-blind gates, and counter-validated attribution (§6).
 
-This section is the paper's spine. Five hardware/measurement facts, each
-closing one alternative:
+## 2. Background
 
-| # | fact | evidence | what it eliminates |
-|---|---|---|---|
-| F-A | **Occupancy theorem.** At megakernel register/LDS budgets, CDNA runs exactly one block per CU. A communication CTA is never co-resident with an MFMA CTA, so specialization cannot create intra-CU overlap, and reserving C CTAs costs exactly `N/(N−C)` on the CTA-limited phase. | CDNA4 ISA §3.6.4; aug10 A7 strike; measured tax curve (exp_03) | warp/wave specialization (HipKittens: 80% of peak on MI355X) AND free-lunch CTA pools |
-| F-B | **The fabric is byte-limited with free MLP in epilogues.** Coalesced 4 B pk-bf16 remote atomics sustain the same per-link rate as 16 B stores (52.8 vs 54.9 GB/s); target-side MFMA streaming does not slow inbound traffic; the epilogue's existing instruction stream already carries 16–32 independent ops/thread. | exp_21 ubench | payload-moving comm pools: bytes ride compute CTAs at zero capacity cost (binding) |
-| F-C | **Interference is protocol, not payload.** Deleting the service pool's entire copy moves the concurrent GEMM +5.7 µs while 831 µs of interference remains; the floor decomposes ~70% op count / ~30% ordering scope. | exp_20, exp_05/06/07 | "hide the bytes" designs; motivates granularity + keeping control ops off MFMA paths |
-| F-D | **Work conservation + fabric ceiling.** A static role split reassigns conserved work (best balanced M6/M7 split: −173 µs *loss*), and its one real term — fewer fabric injectors — is capped at +211 µs because aligned epilogue bursts already drive xGMI at 78% of ceiling; the same rate effect is available per-CTA via depth capping at zero capacity cost. | exp_25 rev2 | compute/compute splits; placement-as-rate-control |
-| F-E | **Readiness curves are set by task order, not by protocol granularity.** With top-k=8 routing, `P(token reducible by t) = (t/S)^8`: the median token unblocks with 8.3% of the producer phase remaining, so fine-grained readiness (~926k atomics/rank/epoch) buys an overlap that never occurs; an nc-major task order lifts unblockable fraction from ~17% to ~85%. | exp_29/exp_30 | fine-grained signalling (and with it, the pool's last job); promotes order |
+2.1 **The two layers.** MoE dispatch→expert-GEMM→combine; GEMM+RS. Both
+end in the same shape: tiles produced on every rank must be delivered to an
+owner rank and reduced there. (One paragraph each, with the tile/token flow
+figure in COMET Figure-2 style: two GPUs, a token routed to experts, the
+output tile that must come home.)
 
-Corollary (the design rule the paper argues is optimal on AMD): *bind the
-data plane into producer epilogues; cap its injection depth; order tasks for
-link concurrency and consumer readiness; make the control plane as coarse as
-the readiness curve allows; specialize CTAs only for work that must exist
-and cannot ride an existing stream (owner-side reduction).* Both kernels
-independently converged on exactly this shape.
+2.2 **The AMD substrate.** 8 GPUs, fully connected, 7 xGMI links per GPU at
+76.8 GB/s per direction each — the *link*, not the aggregate, is the unit a
+kernel can saturate or leave idle. One block per CU at our budgets (ISA
+§3.6.4 arithmetic shown). Directional cache operations: a producer's
+release is an L2 writeback (`buffer_wbl2`), a consumer's acquire is an
+invalidate (`buffer_inv`); a bidirectional `__threadfence_system` pays for
+both. No dynamic register reallocation, no TMA, no mbarrier — the table of
+NVIDIA mechanisms with no CDNA equivalent goes here, because it scopes
+which prior designs can even transfer.
 
-## 3. Section plan
+## 3. The measurement study: where dedicated communication blocks spend their advantage
 
-1. **Introduction** — the placement consensus (COMET's thread-block
-   specialization, MoK's comm SMs, Triton-distributed's SM carve) and the
-   claim that it answers the wrong question on AMD. One figure: the
-   knob taxonomy with each knob's best measured win attached.
-2. **Background: what CDNA actually gives you** — occupancy theorem, 8
-   fully-connected xGMI links (76.8 GB/s/dir each; the *link*, not the
-   aggregate, is the schedulable unit), directional cache ops
-   (`buffer_wbl2 sc1` vs `buffer_inv sc1`), no setmaxnreg/TMA/mbarrier.
-   The "struck — no CDNA equivalent" list from aug10 CLAUDE.md becomes a
-   table here.
-3. **The framework** — the two-plane decomposition (data vs control) and the
-   four knobs; the conditional theorem for when placement can pay
-   (exposed peer-wait > 0 AND work that cannot ride existing streams).
-4. **Distributed HipKittens** — mechanism layer (existing headers) +
-   schedule layer (landing_slots, rate-controlled egress with deferred
-   publication, task-order maps, release batcher, group arrive-release);
-   the ISA-parity promotion gates; the named-peer-bases compiler evidence.
-5. **The two kernels** — the common protocol table (produce → self-ship →
-   batched release → epoch flag → owner-local reduce → credit/retire);
-   MoE megakernel on gfx950, GEMM-RS on gfx942; what differs (values vs
-   adds; flags vs epoch words) and what doesn't.
-6. **The adjudication of placement** — mode 2 vs mode 12 A/B; exp_30
-   degeneration; exp_25 arithmetic; NR flatness; leaderboard replication
-   (three competitors built-and-abandoned; the per-tile-CAS design placed
-   5th at +23%; rank-1 has no comm pool).
-7. **Evaluation** — figures below.
-8. **Sensitivity: does the answer change with batch, seqlen, imbalance?** —
-   the sweep matrix in §5 of the reproduction plan; states the pre-registered
-   predictions and reports where the knob ranking shifts and whether
-   placement ever re-enters.
-9. **Methodology: benchmarks that cannot lie** — staleness-shaped bugs under
-   fixed inputs post the *best* number; NaN poisoning; negative controls
-   that must fail; phase stamps (σ ≈ 1%) vs end-to-end screens (σ ≈ 6.6%);
-   counter validation via the emit_local collapse test; clock pinning.
-10. **Related work** — COMET, MoK, Triton-distributed, Fleet, SC24 vertical
-    fusion, FLUX/TileLink, NanoFlow (intra-device analog), DeepEP;
-    the competition-analysis dataset as evidence.
-11. **Limitations** — single node; symmetric routing for headline numbers;
-    MoE forward-only; gap to GEMM-RS rank-1 is GEMM quality, reported not
-    hidden; placement axis closed *here*, with the `spin_dbg` one-line test
-    for when it reopens.
+This section is the paper's motivation and follows COMET §2.2's shape:
+state the intuitive design, then show with measurements exactly where it
+breaks.
 
-## 4. Figure plan
+3.1 **The design under test.** Reserve C of 256 CTAs as a service pool;
+compute CTAs publish tile-completion events; the pool moves each finished
+tile's bytes to its owner and posts per-row readiness flags; drained
+compute CTAs join the pool (elastic fall-through). This is the COMET/MoK
+prescription realized on AMD, tuned across C ∈ {2…128}, three pool
+placements, and four transfer granularities. At its best point it is real:
+0.888× production, ahead of our homogeneous megakernel at 0.894×.
 
-| fig | content | source |
-|---|---|---|
-| 1 | knob taxonomy + best measured win per knob (both kernels) | ledgers |
-| 2 | **NanoFlow-v1-Fig-7 analog**: MFMA TFLOPS / HBM GB/s / xGMI GB/s vs CTA count, isolated AND concurrent (the interference gap NanoFlow's method can't see) | exp_22 |
-| 3 | **NanoFlow-v2-Fig-10 analog**: per-layer resource timeline (CTAs-in-MFMA %, HBM, xGMI) × three arms (RCCL-eager, homogeneous, mode-12 ratchet) | exp_23 |
-| 4 | the knob waterfall: homogeneous → +binding → +rate → +granularity → +order, µs per step, both kernels side by side | ablation ladder (§5.1) |
-| 5 | placement adjudication: mode2-best vs mode12-best; C sweep at mode 14 (flat/degenerate); NR sweep (flat) | campaigns |
-| 6 | link-concurrency: per-link xGMI occupancy before/after WGM reorder; readiness curve (t/S)^8 vs nc-major staircase | exp_08 counters; exp_30 model + stamps |
-| 7 | sensitivity heatmap: best config vs (M, skew std) | §5.4 sweeps |
-| 8 | ladders: MoE vs production + Megatron/RCCL-eager; GEMM-RS vs reference GEMM+RCCL + rank-1 same-run | campaigns |
-| 9 | throttle-depth cliff; release-group curve | exp_24, E3 |
+3.2 **Finding 1: the pool's cost is not capacity, and not bytes —
+it is coordination.** With CTA count held fixed, turning the pool's
+traffic on inflates the concurrent GEMM by 2.8× the capacity tax. Deleting
+the pool's entire payload copy moves that GEMM by +5.7 µs, while 831 µs of
+inflation remains. The inflation tracks the number of atomic
+counter/fence operations, not payload bytes: coarsening transfers
+*increases* it because the completion-probe loop scales with the group
+size. (exp_20, exp_03, exp_05–07. This is the paper's pivotal measurement
+and gets its own figure.)
 
-## 5. Reproduction matrix (the experiments to run, in order)
+3.3 **Finding 2: the fine-grained readiness the pool maintains enables an
+overlap that never occurs.** A combine consumer can start on a token only
+when the last of its top-8 experts' tiles completes; with tiles executing
+in the natural order this is `P(ready by t) = (t/S)^8` — the median token
+unblocks with 8% of the producer phase remaining. Measured: nothing ever
+consumed a row before the producer phase was ≥93.9% complete. The ~926,000
+per-row atomics per rank per epoch that make early consumption *possible*
+purchase an event with probability ≈ 0. (exp_29, exp_30.)
 
-### 5.1 The knob waterfall (the paper's money table) — ~2 node-days
-One campaign per rung, both operators, full gate ladder each:
-MoE: `pf6gm_mega` → mode 12 (binding) → +throttle depth 4 (rate) →
-mode 14 barrier+8 flags (granularity; **build needed**, NaN poison
-prerequisite) → +nc-major order (**build needed**).
-GEMM-RS: pre-WGM baseline → +WGM order → +RELEASE_GROUP=4 → NR sweep
-(placement-flat exhibit). Each rung is a single-variable change already
-defined in the ledgers.
+3.4 **Finding 3: the same benefits are available without the pool.** The
+one thing the pool measurably did — limit how fast remote traffic is
+injected — is available to every compute CTA directly by capping its
+in-flight remote operations (worth ~500 µs, with a cliff), and the bytes
+themselves can ride the producer's epilogue (next section). When we moved
+the payload into the epilogue and the readiness to one arrival per source,
+the optimal pool size fell from 64 to 16 and then to zero jobs: the
+fastest kernel we have is again homogeneous. Independent replication: in
+the GPU MODE amd-gemm-rs/all2all leaderboards, three separate top-10
+authors built block-level specialization and shipped something else, and
+the winning GEMM-RS kernel uses no communication blocks at all.
 
-### 5.2 exp_22 — saturation curves (Fig 2) — 1–2 days build, minutes GPU
-As specified in `overnight/aug11/exp_22_fig7_saturation/`. Deliverables:
-the xGMI knee (topology-correct pool size), concurrent/isolated gap
-(interference as a curve), MFMA linearity (capacity law).
+## 4. Analysis: the cross-GPU producer-consumer edge
 
-### 5.3 exp_23 — utilization timelines (Fig 3) — 1–2 days
-As specified in `overnight/aug11/exp_23_fig10_timeline/`. B0 arm from a
-torch-profiler trace; megakernel arms from the per-CTA phase event ring.
+This is the analog of COMET's shared-tensor analysis — one concrete object,
+walked through, from which the designs are *derived* rather than asserted.
 
-### 5.4 Sensitivity sweeps (Simran's question; Fig 7) — ~2 node-days
-- **M (batch×seqlen per rank)**: T ∈ {512, 1024, 2048, 4096} in the MoK
-  harness; vLLM chunked-prefill sweep {1024, 2048, 4096} on real prompts for
-  the serving version. Pre-registered: small M shifts value toward
-  granularity + fusion (fixed protocol cost dominates); large M toward
-  rate + order (fabric bytes scale); binding free everywhere; placement
-  never enters on symmetric traffic.
-- **Imbalance**: `skewed_hot` routing family, std ∈ {0, 0.01, 0.032, 0.05}
-  (0.032 = COMET's production skew). Read `[MPS SPIN]` per point.
-  Pre-registered: skew (a) turns on real peer-wait — the one regime where
-  elastic placement could re-enter (test C ∈ {0, 8, 16} at high skew);
-  (b) de-coalesces epilogue atomics — the ubench's 13× op-rate collapse
-  risk makes rate/order *more* valuable, not less; (c) makes
-  dependency-ordered task scheduling a load-balancer.
-- **Decode-shaped small-M** (T ≤ 256): fusion/launch-overhead regime;
-  megakernel vs production gap should widen while all knob deltas shrink.
+4.1 **The object.** Every cross-GPU dependency in these layers is one
+edge: a producer CTA on rank r finishes a tile; the tile's bytes must reach
+a landing buffer on owner rank o; the owner's consumer must learn it can
+read them. So an edge = **payload movement** + **a completion signal**
+(release fence, flag store, poll, acquire). Everything in §3 is a statement
+about who executes these two halves and how often.
 
-### 5.5 Placement adjudication reruns (Fig 5) — ~1 node-day
-Paired mode2-best (C=64 g=1) vs mode12-best (C=16) vs mode 14 (C sweep
-{0,8,16} — prediction: flat); F1 (`T6(128)/T6(256)`, ~30 min, macros already
-live); one skew point with pools re-enabled.
+4.2 **Worked example (the paper's Figure 4).** Follow one expert-GEMM
+output tile in the dedicated-block design: epilogue writes it locally →
+event enqueued → pool CTA claims the event, re-reads the tile, writes it to
+rank o, bumps per-row arrival counters (an acq-rel RMW per slice), posts a
+per-row flag → owner polls the flag, acquires, reduces. Count the
+operations: the payload crosses the fabric once, but the edge executes
+~30 coordination operations across three CTAs, and every one of the pool's
+fences and RMWs lands in the L2s the GEMM is streaming through. Now the
+same tile in our final design: the epilogue's existing atomic-add
+instructions are pointed at rank o's landing slot (same instruction count
+as writing locally — the fabric is byte-limited, measured at 52.8 GB/s for
+coalesced 4 B atomics vs 54.9 GB/s for 16 B stores); when all of rank r's
+tiles are done, rank r posts *one* arrival signal per destination; the
+owner waits for 8 arrivals and reduces. The edge's coordination cost fell
+from ~30 operations on three CTAs to amortized ~10⁻⁴ operations, and no
+third CTA exists.
 
-### 5.6 External ladders (Fig 8) — ~1 node-day + harness work
-MoE: add a Megatron-ROCm/PyTorch+RCCL eager arm (the COMET-comparable
-denominator). GEMM-RS: reference GEMM+RCCL and frozen rank-1 already run
-same-node (`exp_10`); refresh at final ratchet.
+4.3 **Three principles, each answering one finding.**
+- *Answering Finding 3 (bytes):* **the producer's epilogue is the right
+  transport** — it already has the data in registers, already issues wide
+  memory operations with deep pipelining, and on a byte-limited fabric the
+  redirected instructions cost nothing extra. The one new requirement is a
+  bound on in-flight remote operations, because unthrottled bursts expose
+  fabric acknowledgment latency (the measured cliff: depth 4–8 optimal,
+  16 catastrophic).
+- *Answering Finding 2 (signals):* **signals should be sized to the
+  readiness curve, not to the data layout.** If consumers cannot act before
+  the producer phase is ~94% done, per-row signals are pure interference;
+  one arrival per (source, destination) pair carries the same information.
+  Conversely, if earlier consumption is wanted, the lever is not finer
+  signals — it is *producer task order*: executing tiles
+  consumer-major turns the readiness curve from (t/S)^8 into a staircase
+  that unblocks 15/16 of the combine early.
+- *Answering Finding 1 (the third CTA):* **no CTA should exist whose job is
+  an edge's coordination.** Specialized CTAs remain only where the work
+  functionally must run on the owner (the reduction) — and there, sizing is
+  uncritical (a uniform 32 reducer CTAs is within noise of per-shape optima
+  on all six GEMM-RS shapes).
 
-### 5.7 Current-bottleneck attribution (text + one stacked bar) — free
-Phase stamps at final ratchet + the exp_08-style counter pass. Today's
-answer (2026-08-11 ratchet 6,568 µs): **M6+M7 GEMM mainloops are 78% of the
-kernel** (M6 ~2,588 µs with its K-loop ~84% stall; M7 ~2,660 µs of which
-~976 µs is the fabric surcharge already at 78% of wire ceiling). After the
-schedule knobs, communication is near its wire limit and the frontier moves
-back inside the GEMMs (exp_26/27/28 line). GEMM-RS mirror: GEMM mainloop
-46%, then the per-call host tax; the residual gap to rank-1 is GEMM quality.
-This is itself a thesis exhibit: correctly scheduled, the distributed parts
-stop being the bottleneck.
+4.4 **Task order is also the link scheduler.** A second, independent
+consequence of producer-carried payload: which peer each concurrent CTA is
+writing to is now set by the tile traversal order. The inherited order on
+GEMM-RS kept 2.02 of 8 links busy; changing one index expression (the tile
+swizzle) — moving zero bytes differently — raised link concurrency and cut
+the largest shape 27.9%. The readiness reorder of 4.3 and this link
+reorder are the same lever pointed at two resources, and both are only
+expressible inside a persistent kernel.
 
-## 6. Pre-registered falsifiers (kept, deliberately)
+## 5. Design and implementation
 
-- Any interleave/split arm beating the schedule-only arm by more than the
-  +211 µs fabric-ceiling bound is a defect signature, not a result.
-- If high-skew points show large `[MPS SPIN]` *and* a re-enabled elastic
-  pool beats the scheduled homogeneous kernel there, the placement axis
-  reopens for skewed workloads and §8 reports it as such.
-- If mode 14 does not reach its 5,990–6,440 µs band, the granularity claim
-  weakens to the exp_30 measurement alone.
+5.1 **The common protocol** both kernels converged on (one figure, one
+table): produce → epilogue-carried delivery into per-source landing slots
+on the owner (values for GEMM-RS, atomic accumulation for MoE) → one
+release fence amortized over a group of tiles → per-source arrival signal →
+owner-local reduction → slot reuse handshake (credit per tile, or
+consume-and-zero under an epoch retirement gate).
 
-## 7. Claim boundaries (for every abstract sentence)
+5.2 **The primitives** (Triton-distributed §-style: each primitive stated
+as the thing a kernel author cannot otherwise express, with its contract):
+peer address projection that survives suballocation (`pgl.on(rank)`);
+directional release/acquire split from publication so one fence covers many
+signals; bounded polls whose timeout is a result the operator must handle;
+replay-lifetime credits for address reuse; and — new from this work —
+the throttled remote-accumulate emitter (in-flight depth as a first-class,
+cliff-bearing parameter; deferred publication so the drain lands where
+acknowledgments are already home) and named task-order maps
+(destination-rotating, consumer-major). Compiler evidence accompanies the
+shapes: named peer bases vs 80 B/lane of scratch; the caller-owned wait
+result vs a changed CFG; the LDS peer table vs a 96-site spill.
 
-Measured: single node (8×MI350X gfx950 MoE prefill; 8×MI300X gfx942
-GEMM-RS graded shapes), forward-only, symmetric routing except where the
-skew sweep says otherwise. Unmeasured and not claimed: multi-node, training
-backward, NVIDIA transfer, decode serving end-to-end.
+5.3 **The two kernels.** MoE megakernel, gfx950: nine phases, one launch
+per layer; where each principle lands (mode-12 epilogue accumulate,
+depth-4 throttle, barrier + 8 arrivals, nc-major order). GEMM-RS, gfx942:
+producer GEMM + reducer pool; WGM link-order, grouped release, uniform
+reducer count. Both under the same validation ladder: ISA/resource parity
+gates, world-8 correctness, negative controls, 600-epoch soaks, graph-mode
+replay.
+
+## 6. Evaluation
+
+Questions, COMET-style, one subsection each:
+
+- **Q1. How much does each decision contribute?** The waterfall: homogeneous
+  → +epilogue-carried payload → +injection bound → +arrival-sized signals →
+  +task reorder; both kernels. (The paper's money figure.)
+- **Q2. Do dedicated communication blocks ever win?** Paired best-vs-best
+  (pool design at C=64 vs final design), the pool-size sweep at the final
+  design (flat→degenerate), the reducer-count sweep, and the leaderboard
+  replication.
+- **Q3. Where does the time go now?** Phase attribution at the final
+  configuration: the two GEMM mainloops are 78% of the MoE kernel; the
+  epilogue's fabric surcharge sits at 78% of the wire ceiling (≤211 µs
+  theoretical headroom); communication is no longer the bottleneck — the
+  frontier moves back into single-GPU GEMM quality, and the residual GEMM-RS
+  gap to the leaderboard rank-1 is GEMM quality, reported as such.
+- **Q4. Resource-level proof of overlap** (NanoFlow-style): saturation
+  curves vs CTA count for MFMA/HBM/xGMI, isolated *and* concurrent — the
+  gap between those two curve families is Finding 1 as a figure (exp_22);
+  and per-layer utilization timelines for RCCL-eager vs homogeneous vs
+  final (exp_23).
+- **Q5. Sensitivity: batch size, sequence length, imbalance.** M ∈
+  {512…4096} × routing skew std ∈ {0…0.05}; vLLM chunked-prefill on real
+  prompts for the serving shape. Pre-registered: small M shifts value
+  toward signal coarsening and fusion; large M toward injection bounds and
+  link order; skew is the one regime where a waiting-work pool could
+  re-enter (spin instrumentation decides), and it simultaneously
+  de-coalesces epilogue traffic, making the injection bound *more*
+  valuable. Reported either way.
+- **Q6. External ladders.** MoE vs tuned production (AITER+MoRI) *and* vs
+  PyTorch+RCCL eager — the literature's usual denominator — so fusion,
+  scheduling, and protocol are attributed separately; GEMM-RS vs reference
+  GEMM+RCCL and vs the frozen rank-1 submission, same node, same run.
+
+## 7. Methodology: benchmarks that can fail
+
+Fixed-input campaigns are blind to staleness: a kernel that reads last
+epoch's bit-identical buffer posts the best number in the sweep. NaN
+poisoning between iterations; negative controls that must fail
+(dropped publication, dropped credit, rerouted slot — and the discovery
+that one control was invisible until inputs changed); phase stamps
+(σ ≈ 1%) vs end-to-end screens (σ ≈ 6.6%); hardware-counter validation by
+collapse test (the emit-local arm must zero the fabric counter, and does,
+to 0.1%). Clock pinning. This section exists because two of these traps
+each cost a night of wrong conclusions.
+
+## 8. Related work
+
+COMET (block specialization + shared-tensor rescheduling — we adopt its
+rescheduling insight and adjudicate its specialization on AMD); MoK
+(megakernel, comm SMs, pull/push chosen per direction); Triton-distributed
+(compiler primitives; SM-carved copy kernels; AMD backend is a reduced
+subset — no notify lowering, gfx942-only); AMD SC24 vertical fusion
+(epilogue-carried payload precedent, 12%); Fleet (per-XCD aggregation);
+NanoFlow (intra-device analog of the same claim: resources, not roles);
+FLUX, TileLink, DeepEP; the GPU MODE leaderboard dataset as an evidence
+corpus.
+
+## 9. Limitations and scope
+
+Single node; symmetric routing except the skew sweep; forward-only MoE;
+two architectures but one vendor. The dedicated-block design is adjudicated
+*for workloads whose peer-wait is near zero and whose payload can ride an
+existing instruction stream* — the sensitivity sweep marks the boundary,
+and multi-node/skewed regimes beyond it are explicitly open.
+
+---
+
+## Appendix A — evidence map (claim → artifact)
+
+| claim | artifact |
+|---|---|
+| pool interference is coordination, not bytes | aug10 exp_20, exp_03, exp_05–07 |
+| readiness curve (t/S)^8; nothing consumes early | aug11 exp_29, exp_30 |
+| capacity tax N/(N−C); one block per CU | aug10 A7 strike + exp_03 tax curve |
+| fabric byte-limited; atomics = stores per byte | aug10 exp_21 ubench |
+| throttle cliff (4–8 good, 16 catastrophic) | aug11 exp_24 |
+| dead 448 MiB plan stores | aug11 exp_24 |
+| link concurrency 2.02/8 → WGM fix −27.9% | GEMM-RS exp_08 |
+| grouped release −4% | GEMM-RS E3 |
+| reducer count flat at uniform 32 | GEMM-RS RESULTS.md |
+| pool degeneration at final design | aug11 exp_30 (mode 14, build pending) |
+| M6/M7 split loses by work conservation | aug11 exp_25 rev2 |
+| leaderboard replication | docs/distributed/competition-analysis |
+| staleness-blind gates + poison fix | aug11 exp_32 |
+
+## Appendix B — reproduction matrix
+
+1. Waterfall campaigns (Q1): mode-14 and nc-major builds pending; ~2
+   node-days. 2. exp_22 saturation curves (Q4). 3. exp_23 timelines (Q4).
+4. Sensitivity sweeps (Q5): MoK harness T sweep × `skewed_hot` std sweep ×
+   vLLM chunk sweep; ~2 node-days. 5. Placement reruns (Q2): paired
+   best-vs-best + C sweep + F1; ~1 node-day. 6. External ladders (Q6):
+   Megatron/RCCL-eager arm to build; GEMM-RS ladders exist, refresh at
+   final ratchet.
