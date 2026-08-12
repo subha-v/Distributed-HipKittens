@@ -13,6 +13,43 @@ Live document. Updated as each experiment lands. The append-only ledger is
 
 Target: **0.80× ≈ 6,172 µs**, i.e. **−513 µs** from the ratchet.
 
+## RATCHET MOVED (exp_24, `9530382a`)
+
+**`C=16, g=353, mode=12, flush_rows=16` = 6,568.0 ± 4.6 µs = 0.8522× production**
+(0.9487× `pf6gm_mega`), across **three independent 5-rotation campaigns** with
+the full gate ladder green in all 15 rotations. `g=353` composes Mechanism A
+(dead `part` zero deleted) with throttle depth 4.
+
+**−117.5 µs and +1.43 points of margin** on exp_21's 6,685.5 / 0.8665.
+Remaining to 0.80×: **−396 µs.**
+
+Resource gate *improved*: SGPR/VGPR/AGPR/LDS unchanged, **scratch 144 → 128
+B/lane**, MFMA census 180, `flat_atomic_pk_add_bf16` 282, zero scratch ops
+inside either MFMA span.
+
+Two corrections to what was believed earlier tonight:
+- **Mechanism A's 448 MiB was fully exposed on the M3→M4 critical path**, not
+  absorbed by the LLC. The pre-registered null (that CTA 0's serial `tile_desc`
+  build dominates the plan phase) is **refuted**. And the LLC-eviction story is
+  dead exactly as pre-registered: M6 moved −14.7 ± 11.3 µs (t = 1.3), because
+  W13 (939 MB) and W2 (469 MB) each exceed the 256 MB Infinity Cache anyway.
+- **Throttle depth 4 beats 8** by −50.9 µs at campaign resolution — invisible on
+  the M7 stamp (−83 ± 63 µs) but ~9σ across campaigns. Above 8 the axis is a
+  cliff: 16 and 32 return M7 to the *unthrottled* cost (+462 / +370 µs). Depth 2
+  is unmeasured and the `g` `0x300` selector has no room left.
+
+Two further exp_24 findings worth carrying:
+- **The remote-atomic epilogue is not instruction-issue bound.** Folding
+  `slot_off` into the peer table removes 3 instructions from each of ~350 M
+  remote atomic ops per rank per epoch and measured a **campaign-resolution
+  null**. It survives only as a register-pressure *enabler* — which is what
+  paid for Mechanism B's spill fix.
+- **The `g` field silently overflowed into `mode` for any `g > 0xFF` and still
+  validated.** `g = 0x121` set `mode |= 1` and decoded back as `g = 0x21`. Now
+  masked with `g`'s high byte at packed bits [34:42), verified bit-identical
+  over all 3,584 combinations. **Seventh mechanism selector packed into a
+  reinterpreted config field, and the first to draw blood.**
+
 Screens (1 process / 1 warmup / 1 timed, ~60–90 s) reproduce the ratchet at
 6,703–6,728 µs and read ~1.2 points optimistic against the campaign. Measured
 tonight over six repeats of the identical config: `ratio_vs_prod` σ = **0.52 %**,
