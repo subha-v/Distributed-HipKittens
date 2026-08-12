@@ -25,7 +25,7 @@ evidence — it is not one check at the end.
 | `run_campaign.sh` | `9aa04633…` -> `401accb9…` -> `99039433…` (after the self-test `-e` forward) |
 | validation | `ast.parse` OK on the patched Python, `bash -n` OK on the patched shell |
 | backups | `~/harness-backups/e32/20260812T053118Z/` (both files, pre-patch) |
-| harness note | appended to `MPS_OVERNIGHT_HARNESS_NOTE.md` (now 193 lines, sha `9c755db8…`) |
+| harness note | appended to `MPS_OVERNIGHT_HARNESS_NOTE.md` (now 193 lines, sha `9c755db8…`). **The exact text appended is committed at `overnight/aug11/tools/t13_note.md`** and covers both this experiment and exp_26's four harness edits |
 
 Two things were added at apply time that the prepared patch did not carry:
 

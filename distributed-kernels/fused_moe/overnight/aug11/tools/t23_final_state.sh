@@ -28,8 +28,9 @@ grep -n 'K0_MOK_POISON' "$K0/benchmarks/mok_synthetic_prefill/run_campaign.sh"
 echo "== batch inventory =="
 for t in e26_m0a e26_m4 e26_m1 e26_m1b e26_m5 e26_m0b e26_m4b e26_m5b e32regate; do
   f="$HOME/overnight-scratch/screen_${t}.csv"
+  # the cfg field is quoted and contains commas, so blank quoted fields first
   [ -f "$f" ] && printf '%-12s %d data rows, statuses: %s\n' "$t" "$(( $(wc -l < "$f") - 1 ))" \
-    "$(awk -F, 'NR>1{print $4}' "$f" | sort -u | tr '\n' ' ')"
+    "$(sed 's/"[^"]*"/Q/g' "$f" | awk -F, 'NR>1{print $4}' | sort -u | tr '\n' ' ')"
 done
 echo "== done =="
 exit 0
