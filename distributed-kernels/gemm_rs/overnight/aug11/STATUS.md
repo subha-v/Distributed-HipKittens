@@ -17,17 +17,37 @@ shapes 5 and 6 carry the remaining gap.
 Best-of-arm pipelined vector:
 `62.38 / 64.52 / 83.75 / 198.71 / 613.70 / 1616.63` µs.
 
-## IMPORTANT: two experiment numberings exist in this tree
-
-The aug11 charter says "existing numbering ends at exp_12 — start at exp_13",
-but the session that ran between the root charter and this one already used
-`experiments/exp_13_cta_split/` and `experiments/exp_14_tile_waves/`.
+## Numbering (resolved by the charter update at 29179f8e)
 
 - `overnight/experiments/exp_NN_*` — the optimization sessions (exp_01…exp_14).
-- `overnight/aug11/exp_NN_*` — **tonight's paper-figure queue** (exp_13…exp_18).
+- `overnight/aug11/exp_NN_*` — **tonight's paper-figure queue, exp_20…exp_25.**
 
-No file collides, but **exp_13 and exp_14 mean different things in the two
-directories.** Always qualify with the parent folder.
+The collision I flagged (both trees had used exp_13/exp_14) is resolved: the
+figure queue was renumbered to exp_20+.
+
+## Corrections to the charter's Phase 2 premises
+
+Phase 2 lists the next optimization targets. **Two of its premises were
+overtaken by tonight's work and should not be re-run as written:**
+
+1. **"E1(a) AGPR accumulators should also clear the Gate-M2 spills on the
+   256/256/32 rows."** Both halves are now false. AGPR accumulators are
+   *impossible* here: `__launch_bounds__(512,1)` caps the wave at 256 **unified**
+   registers, so enabling AGPRs re-partitions the same file rather than adding
+   registers — and the ISA showed the spills were never in the k-loop anyway.
+   Separately, **M2 now reports 7/7 instantiations with zero AGPRs, zero
+   scratch and ZERO VGPR spills**, so there are no spills left to clear.
+2. **"The per-call host tax is most of the remaining graded-protocol gap."**
+   Measured and closed: of ~103 µs of non-device cost, **~92 µs is harness
+   machinery every submission pays** (the evaluator's own `synchronize +
+   barrier` is 57-79 µs with an *empty* timed region). Our own share is ~11 µs,
+   within ~6 µs of the floor for issuing any HIP kernel from Python.
+
+What is genuinely open for Phase 2: the mainloop's **non-MFMA** time. Shape 6
+spends ~4700 cycles per k-iteration against ~2050 of MFMA, and rows 4/5/6 are
+pinned at the 64 KB LDS cap so their `waves × k_iters` (16 / 112 / 464) cannot
+be reduced by retiling. That is ~640 µs of non-MFMA mainloop on shape 6 —
+on exactly the two shapes that carry the whole remaining graded gap.
 
 ## The aug11 charter's stated baseline is two experiments stale
 
@@ -45,12 +65,14 @@ Since then two more landed:
 
 | # | experiment | paper figure | status |
 |---|---|---|---|
-| exp_13 | bottleneck attribution refresh | Q3 | **running** |
-| exp_14 | saturation vs CTA count (NanoFlow Fig 7 analog) | Fig 2 / Q4 | queued |
-| exp_15 | per-layer resource timeline (NanoFlow v2 Fig 10 analog) | Fig 3 / Q4 | queued |
-| exp_16 | knob waterfall — **the money figure** | Fig 4 / Q1 | queued |
-| exp_17 | external ladders refresh | Q6 | queued |
-| exp_18 | per-shape sensitivity readout | Q5 | queued |
+| exp_20 | bottleneck attribution refresh | Q3 | **running** |
+| exp_21 | saturation vs CTA count (NanoFlow Fig 7 analog) | Fig 2 / Q4 | queued |
+| exp_22 | per-layer resource timeline (NanoFlow v2 Fig 10 analog) | Fig 3 / Q4 | queued |
+| exp_23 | knob waterfall — **the money figure** | Fig 4 / Q1 | queued |
+| exp_24 | external ladders refresh | Q6 | queued |
+| exp_25 | per-shape sensitivity readout | Q5 | queued |
+
+Then **Phase 2**: the optimization loop resumes against the refreshed profile.
 
 ## What the kernel already demonstrates for the paper's central claim
 

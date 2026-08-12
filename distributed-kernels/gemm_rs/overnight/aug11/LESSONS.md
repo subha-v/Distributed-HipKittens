@@ -15,10 +15,33 @@ teaches.
   **Current: pipelined ~207 µs (means), graded gap to rank-1 1.098×, and shape
   1 is now a win at 0.850×.** Every figure must be generated at this config.
 
-- **Two experiment numberings now coexist.** `overnight/experiments/exp_13` and
-  `exp_14` are the CTA-split and tile-wave optimizations; `overnight/aug11/
-  exp_13`…`exp_18` are tonight's figure queue. No files collide, but the
-  numbers are ambiguous unqualified — always name the parent directory.
+- **Numbering resolved.** The charter update (`29179f8e`) renumbered the figure
+  queue to **exp_20…exp_25** under `overnight/aug11/`, leaving
+  `overnight/experiments/exp_01…exp_14` to the optimization sessions. The
+  collision is gone.
+
+- **Two of the charter's Phase 2 premises are already overtaken and must not be
+  re-run as written.**
+  1. *"E1(a) AGPR accumulators should also clear the Gate-M2 spills on the
+     256/256/32 rows."* Both halves are false now. AGPR accumulators are
+     **impossible** on this kernel: `__launch_bounds__(512,1)` caps the wave at
+     256 **unified** registers, so enabling AGPRs re-partitions the same file
+     rather than adding registers, and LLVM disables the AGPR file entirely
+     under that condition. The ISA also showed the spills were never inside the
+     k-loop. And the spills are **gone anyway** — M2 now reports **7/7
+     instantiations with zero AGPRs, zero scratch and zero VGPR spills** after
+     the P3 half-BK split and the tile re-sweep.
+  2. *"The per-call host tax is most of the remaining graded-protocol gap."*
+     Measured and closed: of ~103 µs of non-device cost per call, **~92 µs is
+     harness machinery every submission pays** — the evaluator's own
+     `synchronize + barrier` costs 57-79 µs measured with an **empty** timed
+     region — and our own share is ~11 µs, within ~6 µs of the floor for
+     issuing any HIP kernel from Python at all.
+  What *is* open: the mainloop's **non-MFMA** time. Shape 6 spends ~4700 cycles
+  per k-iteration against ~2050 of MFMA, and rows 4/5/6 are pinned at the 64 KB
+  LDS cap so their `waves × k_iters` (16 / 112 / 464) cannot be cut by
+  retiling — ~640 µs of non-MFMA mainloop on shape 6, on exactly the two shapes
+  carrying the whole remaining graded gap.
 
 - **Three measurements already in hand directly support the paper's central
   claim** ("overlap is decided by scheduling decisions, not by dedicating CTAs

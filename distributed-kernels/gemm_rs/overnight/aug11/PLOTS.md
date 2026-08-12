@@ -3,14 +3,18 @@
 paper figure → data file → experiment → status. Every number that reaches a
 figure must live in a `.json`/`.csv` here, never only in prose.
 
+Numbering per the charter update: the figure queue is **exp_20…exp_25** under
+`overnight/aug11/`, distinct from the optimization sessions' `exp_01…exp_14`
+under `overnight/experiments/`.
+
 | paper fig | question | data file | experiment | status |
 |---|---|---|---|---|
-| — | Q3 bottleneck attribution | `aug11/exp_13_attribution/ablation.json` | exp_13 | **running** |
-| Fig 2 | Q4 saturation vs CTA count | `aug11/exp_14_saturation/saturation.json` | exp_14 | queued |
-| Fig 3 | Q4 per-layer resource timeline | `aug11/exp_15_timeline/events.json`, `timeline_bins.csv` | exp_15 | queued |
-| Fig 4 | Q1 knob waterfall (**money figure**) | `aug11/exp_16_waterfall/waterfall.json` | exp_16 | queued |
-| — | Q6 external ladders | `aug11/exp_17_ladders/ladders.json` | exp_17 | queued |
-| — | Q5 per-shape sensitivity | `aug11/exp_18_sensitivity/knob_by_shape.json` | exp_18 | queued |
+| — | Q3 bottleneck attribution | `aug11/exp_20_attribution/ablation.json`, `counters.json` | exp_20 | **running** |
+| Fig 2 | Q4 saturation vs CTA count | `aug11/exp_21_saturation/saturation.json` | exp_21 | queued |
+| Fig 3 | Q4 per-layer resource timeline | `aug11/exp_22_timeline/events.json`, `timeline_bins.csv` | exp_22 | queued |
+| Fig 4 | Q1 knob waterfall (**money figure**) | `aug11/exp_23_waterfall/waterfall.json` | exp_23 | queued |
+| — | Q6 external ladders | `aug11/exp_24_ladders/ladders.json` | exp_24 | queued |
+| — | Q5 per-shape sensitivity | `aug11/exp_25_sensitivity/knob_by_shape.json` | exp_25 | queued |
 
 ## Data already in hand that figures can draw on
 
