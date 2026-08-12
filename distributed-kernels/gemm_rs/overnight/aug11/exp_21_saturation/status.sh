@@ -10,7 +10,8 @@ bash "$ON/tools/gpu_lease.sh" status
 
 echo
 echo "########## processes ##########"
-ps -eo pid,etimes,cmd 2>/dev/null | grep -E 'exp_21_saturation/(campaign|run_sweep)|run_saturation' \
+ps -eo pid,etimes,cmd 2>/dev/null \
+  | grep -E 'campaign_run_|exp_21_saturation/(campaign|run_sweep)|run_saturation' \
   | grep -v grep || echo "  (none alive)"
 
 echo

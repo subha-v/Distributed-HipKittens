@@ -112,7 +112,7 @@ Since then two more landed:
 | exp_20 | bottleneck attribution refresh | Q3 | **DONE** — freshness gate passed (+0.96%) |
 | exp_21 | saturation vs CTA count (NanoFlow Fig 7 analog) | Fig 2 / Q4 | **building** (greenfield ubench) |
 | exp_22 | per-layer resource timeline (NanoFlow v2 Fig 10 analog) | Fig 3 / Q4 | **instrumented + parity gate PASSED** (flag-off byte-identical, 7/7); arms (a)+(b) on GPU |
-| exp_23 | knob waterfall — **the money figure** | Fig 4 / Q1 | **LANDED** — a→b **1.084×**, a→c **1.115×**, null within **0.2%** of c; structural prediction held; NR flatness falsified in a useful way |
+| exp_23 | knob waterfall — **the money figure** | Fig 4 / Q1 | **LANDED** — all 6 shapes, 4 draws, 192/192 arms correct at both tolerances; a→c **1.113×** (1.082× order × 1.028× granularity); structural prediction held |
 | exp_24 | external ladders refresh | Q6 | queued |
 | exp_25 | per-shape sensitivity readout | Q5 | queued (derives from exp_20 + exp_23) |
 
@@ -122,6 +122,25 @@ facts (76.8/537.6 GB/s ceilings, 256-CU grids, gfx950 occupancy claims,
 `s_memrealtime` tick rate) that must be **re-measured on gfx942** rather than
 quoted. `docs/distributed/PAPER.md` was found and its Q1-Q6 definitions are
 captured there.
+
+## THE STATISTICS RULE CHANGED TONIGHT — apply it to every delta
+
+exp_23 found that **one null twin is not enough on this node, and cross-order
+consistency does not rescue you.** Two *identically configured* arms on shape 6
+separated by **+3.74 / +4.44 / +4.10 / +2.53%** — positive in all four draws and
+in **both** construction orders, which the disjointness rule certifies as
+"RESOLVED faster". It is a false positive between two binaries that compute the
+same thing the same way, and its size reproduces the published 4.28% shape-6
+floor.
+
+**Required from now on:** score every delta against the **union of all
+identically-configured pairs** in the same run, not a single null twin. Keep
+order reversal — it is necessary but **not sufficient**.
+
+**Floors measured tonight (widened null set): 2.82 / 2.09 / 1.74 / 0.85 / 4.97 /
+4.44 %.** Shape 5's is more than double its published 2.17% and shape 4's is
+*better* than its published 2.41% — the published table is **not uniformly
+conservative**, so floors must be measured in the run that produces the ratios.
 
 ## Node state — read before believing any timing taken after 05:15
 

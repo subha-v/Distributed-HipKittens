@@ -510,57 +510,120 @@ decision; and the warm clock had to start after the first block, because
 `reference` and `rank1` spent the entire 400 ms warmup inside RCCL/JIT setup and
 then landed on the 20-call floor.
 
+## CRITICAL METHOD FINDING — one null twin is NOT enough, and cross-order consistency does not save you
+
+This supersedes the null-arm discipline used everywhere in this project so far,
+and it must be applied to every delta any experiment certifies from now on.
+
+`resolve_shape_with_split` overrides **only** the CTA split. So wherever a swept
+NR point equals the shipped NR for a shape, that arm is a **second
+identically-configured twin** of the shipped arm — same code, same config, same
+operands, different allocation. exp_23 accidentally had two such twins on shape 6
+and **they disagreed**:
+
+| identical pair | shape-6 contrast |
+|---|---|
+| `c` vs `null` | 1.10% |
+| `c` vs `nr48` | **+3.74 / +4.44 / +4.10 / +2.53 %** |
+
+The second pair was **positive in all four draws and in both construction
+orders**, which the full-range disjointness rule certifies as "RESOLVED faster".
+It is a **false positive** between two binaries that compute the same thing the
+same way — and its magnitude reproduces HANDOFF's published 4.28% shape-6 floor
+almost exactly.
+
+Two consequences, both sharper than the existing guidance:
+
+1. **A single null twin under-measures the floor.** The floor is a property of the
+   *pair*, not of the configuration, so one pair samples it once. The remedy is
+   to score against the **union of all identically-configured pairs** available in
+   the run — exp_23 re-scored that way, and both resolved rungs survived
+   (shape 6 b→c at [10.98, 12.98] against a null range of [−0.73, 4.44]).
+2. **Cross-order consistency does NOT rule the artefact out.** The existing
+   lesson was that reversing arm construction order flips the sign of the
+   allocation bias, so agreement across orders was treated as evidence. Here a
+   spurious effect was consistent in *both* orders across four draws. Reversal
+   remains necessary; it is not sufficient.
+
+**Null floors measured tonight with the widened null set:
+2.82 / 2.09 / 1.74 / 0.85 / 4.97 / 4.44 %** for shapes 1-6. Note shape 5's 4.97%
+is nearly double its published 2.17%, and shape 4's 0.85% is *better* than its
+published 2.41% — the published table is not uniformly conservative, so floors
+must be measured in the run that produces the ratios, never quoted.
+
 ## exp_23 VERDICT — the waterfall, and the structural prediction HELD
 
-4 draws, 2 forward and 2 reversed construction order, on validated rungs
-(`fingerprints.json` records A1/A1b/A2/A3/A4 all passing, with
-`c.isa == null.isa` differing on 5 lines, `cuid-only = True`). Geomeans over the
-shapes present, µs:
+4 draws, 2 forward and 2 reversed construction order, **all six shapes**, 8 arms,
+complete 8-pass rotation, on validated rungs (`fingerprints.json` records
+A1/A1b/A2/A3/A4 all passing, `c.isa == null.isa` cuid-only). **All 192 arm
+instantiations passed `1e-2` AND `2e-3`** with clean error bits and epoch/signal
+state; zero dead arms. Lease acquired and released from an EXIT trap, no
+preemption.
 
-| arm | geo best | geo median | speedup vs rung a (best) |
-|---|---|---|---|
-| a — pre-WGM order + per-tile release | 223.65 | 227.62 | 1.000 |
-| b — + WGM destination-spreading order | 206.29 | 210.28 | **1.084** |
-| c — + grouped release (shipped) | 200.60 | 204.52 | **1.115** |
-| null (= c, different allocation) | 200.18 | 204.50 | 1.117 |
+Best / median µs:
 
-The null arm landing at 200.18 against c's 200.60 — **0.2% apart** — is what makes
-the two rung deltas believable: the instrument's own reproducibility is far
-tighter than the effects it is reporting.
+| rung | s1 | s2 | s3 | s4 | s5 | s6 | geomean |
+|---|---|---|---|---|---|---|---|
+| a | 61.3/63.5 | 64.3/65.8 | 83.3/85.0 | 197.7/199.0 | 743.9/751.8 | 2595.0/2616.3 | **223.65 / 227.62** |
+| b | 62.1/64.0 | 64.6/66.0 | 85.0/85.7 | 197.9/198.9 | 634.1/652.5 | 1801.8/1840.8 | **206.29 / 210.28** |
+| c | 60.4/62.7 | 64.8/66.0 | 83.6/84.5 | 198.0/199.1 | 624.9/642.5 | 1609.8/1635.7 | **200.60 / 204.52** |
+| null | 60.0/61.8 | 64.6/65.3 | 83.9/84.5 | 197.5/198.8 | 625.6/657.9 | 1601.6/1640.9 | **200.18 / 204.50** |
 
-**The pre-registered structural prediction held**: "every contrast the mechanism
-predicts inert is unresolved against tonight's null floor." Shape 1 is the clean
-demonstration — `ab_rung_active = false`, `bc_rung_active = false`, and the
-measured `b vs a` contrast is −0.98% best / −0.60% median against a null range of
-±1.0%, i.e. unresolved, exactly as required. Shape 1's null floor varied
-0.26-2.82% **across four draws of an identical binary**, which is the
-per-allocation bias reproduced yet again and the reason single-draw deltas on this
-node are worthless.
+**Cumulative a→c = 1.113×**, decomposing into **1.082× from task order** and
+**1.028× from signal granularity**. Rung c and its twin agree to **0.01%** on the
+geomean.
 
-### The NR sweep FALSIFIED the flatness prediction — and the real shape is better
+**The structural prediction HELD — no blocker.** All eight contrasts the mechanism
+predicts inert on shapes 1-4 came back unresolved. The closest call is b→c on
+shape 3 at +1.41%, rank-separated on medians but inside that shape's 1.74% floor,
+i.e. correctly unresolved.
 
-Predicted flat. Measured, geomean best: `NR=8` 281.92, `NR=16` 230.64,
-`NR=32` 205.28, `NR=48` 198.81. On shape 1 alone the spread is brutal:
-**128.55 / 86.71 / 66.82 / 61.67 µs** for NR 8/16/32/48, against 60.41 at its
-shipped `NR=56`. That is **2.1× slower at NR=8**, and still improving at 56.
+**Per-rung, where the mechanism is active** (median gain, per-draw range, exact
+rank-sum; the p floor at 4 draws is 1/C(8,4) = 0.0143):
 
-So the honest statement is not "placement is flat" but something sharper and
-more useful to the paper: **the reducer pool has a floor it must clear, and above
-that floor it is flat.** Too few reducers is catastrophic; past ~32-48 the curve
-flattens. That is fully consistent with the project's existing finding that the
-split buys *rounds*, not CTAs — below the floor you are adding reduce rounds,
-and `ceil(tiles/count)` is a step function. It is also consistent with the
-already-measured negative that *adding* communication CTAs (`NR=16` from 32) cost
-+3.6%. The Q2 claim survives in its correct form: **enlarging the communication
-pool beyond what the reduction needs buys nothing**; shrinking it is not a
-"placement" question at all, it is a capacity question.
+- **a→b**: shape 5 **+15.11%** [12.57, 19.07] p=0.0143 **resolved**; shape 6
+  **+42.11%** [40.48, 44.79] p=0.0143 **resolved**. Shape 6's +42.11% gain is
+  **−29.6% in time, against exp_08's independently measured −27.9%** — a clean
+  replication of the WGM result by a different instrument.
+- **b→c**: shape 6 **+12.22%** [10.98, 12.98] p=0.0143 **resolved**.
 
-**A caveat that must appear on the figure or it will mislead**: the sweep is
-*uniform* NR over {8,16,32,48} while the **shipped table is per-shape
-`56/32/32/32/32/48`**. So no single swept point is the shipped config, and
-comparing a uniform point to rung (c) mixes two variables. In particular shape 1
-ships 56 — above every swept point — so shape 1's curve is monotone over the
-whole swept range by construction. Mark which points are shipped, per shape.
+**The b→c rung came in at 12.22%, three times the ~4% I pre-registered, and the
+pre-registration was wrong for a specific reason worth keeping**: the ~4% figure
+came from exp_05's **graded** protocol measured on the **aug10 task order**. This
+measurement is **pipelined, on top of WGM**. Coarsening the signal is worth more
+once the order change has already removed the egress serialization that was
+hiding it — the two knobs **compose superadditively**, which is itself a result
+for the paper's Q1: the waterfall's rungs are not independent contributions, and
+their order matters.
+
+### Rung (d): the NR "flat" prediction is FALSIFIED — with a sharper replacement
+
+Geomeans relative to rung c: **NR=8 1.392× slower, NR=16 1.141×, NR=32 1.023×,
+NR=48 0.992×.** NR=16 is resolved slower on 5 of 6 shapes and NR=8 on all 6, by
+14-51%.
+
+The curve is **flat on the 32-56 plateau** — every shape sits inside its own floor
+from its shipped NR up to 48 — and falls off a cliff below 32. So the correct
+claim is not "placement is flat everywhere" but: **the reducer count has a floor
+it must clear, and above that floor it is flat.**
+
+**And the reason matters more than the curve.** The reducers are not a
+communication pool at all — they are the **owner-side reduce**, which must run on
+the owner. Below ~32 you are starving a computation, not under-provisioning
+communication; above it you buy nothing. So Q2 still answers **no**, for a sharper
+reason than "placement doesn't matter": there was never a communication pool to
+size.
+
+**Shipped-point marking, which the figure needs or it misleads**: shipped NR is
+per-shape `56/32/32/32/32/48`, so the NR=32 column **is** the shipped config for
+shapes 2-5 and NR=48 **is** shipped for shape 6. The ladder did not regress at
+its own best.
+
+**Correction to two earlier statements of mine in this file.** I wrote that shape
+1 was "still improving at 56" — it is not: 61.67 at NR=48 against 60.41 at NR=56
+is a 2.1% difference inside shape 1's 2.82% floor, i.e. flat. And I quoted the
+NR geomeans from a partial-shape run; the all-six-shape figures are the ones
+above.
 
 ## PROCESS — an unleased GPU job stalled the figure queue, and the lease was wrong too
 
