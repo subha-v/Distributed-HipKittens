@@ -235,7 +235,8 @@ N2_P2_QUAL void N2_P2_NAME(
   {
     const unsigned long long m7cfg =
         (unsigned long long)k0p6_dread(k0p6_desc, K0P6_D_MPS_CFG);
-    if (((m7cfg >> 16) & 0xFFull) == 12ull) {
+    if (hk_moe::mps::mode_is_direct_accum(
+            hk_moe::mps::decode_config(m7cfg))) {
       const auto* m7sym = k0p6_symmetric(k0p6_desc);
       const unsigned long long m7_slots =
           (unsigned long long)k0p6_dread(k0p6_desc, K0P6_D_MPS_SLOTS);
@@ -255,7 +256,8 @@ N2_P2_QUAL void N2_P2_NAME(
           + (unsigned long long)m7_cur * (unsigned long long)m7_mtok *
                 ((unsigned long long)kHidden * 2ull);
       m7_peer_tab = m7tab;
-      m7_dual = ((m7cfg >> 8) & 0x10ull) != 0ull;
+      m7_dual = hk_moe::mps::detect_dual(
+          hk_moe::mps::decode_config(m7cfg));
       // The first epilogue reads the table at the END of task 0; the task
       // loop's own LDS-fill __syncthreads() orders the fill before it, so no
       // extra barrier is spent here.

@@ -4,31 +4,51 @@
 review (`exp_18_direct_accumulate/protocol_review.md`), which carries the full
 ordering/zeroing/numerics analysis; this file is the execution plan.
 
-## Hypothesis
+## Hypothesis (REVISED after exp_20: protocol, not payload)
 
-The M7 inflation under CTA specialization (+1,249 µs = ~434 capacity + ~815
-interference) is dominated by the **payload protocol itself**, not the role
-split: M7's epilogue writes `part` (312 MB), the pool reads `part` (312 MB),
-the pool writes peer `slots` (312 MB) — three touches of every byte inside the
-M7 window. If the epilogue accumulates **directly into the owner's slot** with
-the remote packed-bf16 atomic exp_18 proved real over xGMI, all three collapse
-into one remote write pass: **~936 MB → ~312 MB in the M7 window, and the
-service pool's payload role disappears** (it keeps readiness bookkeeping only,
-so `C` can fall from 64 to ~8–16, refunding most of the capacity tax too).
+exp_20 measured the pool's entire 896 B payload copy at **+5.7 µs of M7** —
+the ~815 µs interference is the readiness **protocol** (arrival atomics
+~bounded at 300–350 µs, plus the flush's ~2,400 system releases as named
+prime suspect), not bytes. exp_17's "fewer bytes" lever is retracted;
+**exp_21's hypothesis is re-based to the two survivors**:
+
+1. **The combine win.** The payload copy costs **480 µs of combine** (exp_20
+   mode 7 vs mode 2+pull_fallback). Mode 12/13's direct remote accumulate
+   deletes it, and deletes the 312 MB `part` write + 312 MB pool read from the
+   M7 window as a side effect (free per exp_20) — while keeping the
+   **protocol fencescape byte-identical to the ratchet** (agent enqueue,
+   agent event acquire, acq_rel counters, system flush): zero added fences,
+   so it should not import new interference. The epilogue's remote-RMW
+   stream is the new variable to bound (ubench + the falsifier).
+2. **The protocol-weight win (mode 13 = X1).** Per-row target counters
+   (`nc_arr[r]`, target `16·row_rem[r]`) delete the `pushed` counter and all
+   per-chunk machinery — **~40% of the stream protocol's agent RMWs**, sound
+   here because the service reads no payload (exp_20 §2a) so no per-chunk
+   acquire edge is needed; the single cell's release-sequence chains all 16
+   producers into the flagging wave.
+
+Mode 9 (flush-fence scope swap, exp_06-style diagnostic) ships in the same
+build to attribute the ~2,400-µs-class prime suspect exp_20 named.
 
 ## Falsifiers / success criteria (pre-registered, from the review)
 
-- **F1 (fabric-atomic rate).** If mode 12 lands ABOVE mode 2's 6,866.1 µs at
-  its best C, the payload was not the limiter: the remote atomic *op rate*
-  (not bytes) is the wall, and A11 closes on this hardware with the rate
-  measured. Anything above ~6,700 µs means the same at weaker strength.
-- **F2 (mori heap grain).** If the dual-write detector (cfg bit 34) or the
-  soak shows lost updates on the mori HIP-VMM `HeapType::Uncached` heap,
-  blocker 1b is LIVE and mode 12 cannot ship; that is a hardware finding worth
-  publishing (documented UB biting in practice).
-- **Success:** mode 12 at best C < mode 2's 6,866.1 through the full gate
-  ladder, reproduced by a second independent 5-rotation campaign (the sub-5%
-  rule).
+- **F1 (fabric-atomic rate).** If mode 12/13 lands ABOVE mode 2's 6,866.1 µs at
+  its best C, the epilogue's bursty remote-RMW stream is importing the unthrottled
+  fabric-write regime exp_20 §2b priced at up to ~600 µs, and A11 closes on this
+  hardware with the rate measured. The ubench's `atomic-PEER`/`atomdr-PEER` arms
+  are built to read exactly this before a campaign does.
+- **F2 (mori heap grain).** If the dual-write detector (g bit 4) or the soak
+  shows lost updates on the mori HIP-VMM `HeapType::Uncached` heap, blocker 1b
+  is LIVE and modes 12/13 cannot ship; that is itself a hardware finding
+  (documented UB biting in practice).
+- **F3 (fence-parity).** If mode 12's M7 stamp differs from mode 2's by more
+  than the ±40 µs band **excluding** its own epilogue delta, the fencescape
+  ceases to be identical — investigate before believing (prevents
+  mis-attributing a new fence to the epilogue).
+- **Success:** mode 12 AND/OR 13 at best C < mode 2's 6,866.1 through the full
+  gate ladder, reproduced by a second independent 5-rotation campaign
+  (sub-5% rule). Mode 13 out-performing mode 12 establishes X1 (protocol-weight
+  reduction) as the direction for M4-style aggregation.
 
 ## Pre-build microbenchmark (informs F1 reading, not the design)
 
@@ -47,28 +67,31 @@ remote RMWs** — if atomic throughput tracks stores, F1's risk is low.
 
 ## Build (single-variable vs mode 2 wherever possible)
 
-1. `packet.cuh`: add `accumulate_peer_bf162` (additive primitive; existing
-   callers bit-identical). Document the grain/scope precondition.
-2. `moe_mps_adapter.cuh`: `mode_is_stream += {7}`; `mode_is_remote_accum`;
-   validation (mode 12 ⇒ g==1, pull_fallback==0, C>0); cfg bit 34 = `detect`
-   (dual write); `enqueue_tile_release<Scope>`; `service_env.mode`;
-   `run_service` mode-7 body (no payload: arrivals → chunks-done → flags).
-3. `n2_phase2_gm_mps.cpp` (`#ifdef N2GM_M7_REMOTE_ACCUM`): LDS peer-base
-   table + heap-relative slot offset, built once per body from desc words that
-   exist only in the MPS inclusion; PHASE-2 addressing branches on it.
-   Standalone inclusion sees `nullptr` and is bit-identical.
-4. `k0pf6gm_device_tile_mps.hip`: SRC_REV 17; entry guard (mode 12 ⇒ MAXTOK
-   power of two); `k0p6_mps_task_done` enqueues at system scope for mode 12;
-   M8 consume-and-zero (owner zeroes each fanout row after reading it — sound
-   because producers never re-touch a flagged row, and the retirement gate
-   orders the zero before any next-epoch accumulate); dual-detect compare.
-5. Detector run at the winning config; then screens; then decision campaigns.
+1. `packet.cuh`: `accumulate_peer_bf162` (additive primitive; existing callers
+   bit-identical), grain/scope precondition documented.
+2. `moe_mps_adapter.cuh`: `mode_is_stream += {12,13,9}`; `mode_is_direct_accum`;
+   validation (12/13 ⇒ physical g==1, pull_fallback==0, C>0); detector via `g`
+   bit 4 (g = 1|0x10, exp_20 idiom — zero host-bridge change); `run_service`
+   mode-12 body (protocol-identical: same counters as mode 2, no payload);
+   mode-13 body (per-row counter, `pushed` deleted); mode-9 flush-fence swap
+   (untrusted diagnostic). Fences stay byte-identical to mode 2 for 12/13.
+3. `n2_phase2_gm_mps.cpp` (`#ifdef N2GM_TASK_DONE_HOOK`): LDS peer-base table +
+   heap-relative slot offset built once per body; PHASE-2 addressing branches
+   on it; standalone inclusion sees `nullptr`, bit-identical.
+4. `k0pf6gm_device_tile_mps.hip`: SRC_REV 20; entry guard (12/13 ⇒ MAXTOK
+   power of two); task-done enqueues (agent) for 2/3/4/7/8/9/12/13 — restores
+   mode 8's enqueue after the merge dropped it; M8 consume-and-zero for 12/13;
+   dual-detect compare.
+5. Detector run at the winning config; screens; decision campaigns.
 
-## What mode 12 deliberately does NOT change
+## What modes 12/13 deliberately do NOT change
 
 - `slots` layout `[world][MAXTOK][7168]`, `row_ready` indexing, `pull_src`/
-  `pull_ptr` meanings, M8's address math (`base_slot` is already exactly the
+  `pull_ptr` meanings, M8's address math (`base_slot` already names the
   accumulate target), M9 retirement, ABI (63 words), host code. Mode 2 stays
-  the validated ratchet arm; the A/B is the same kernel at two configs.
-- Task-done's all-lane `vmcnt(0)` + `__syncthreads()` + tid0 release chain —
-  only the release/acquire *scopes* strengthen (agent → system) for mode 12.
+  the validated ratchet arm; the A/B is the same kernel at several configs.
+- Task-done's all-lane `vmcnt(0)` + `__syncthreads()` + tid0 `release(agent)`
+  chain — IDENTICAL to mode 2 (the maximal-system-scope protocol-review chain
+  was deliberately NOT shipped after exp_20 priced fence count; the soundness
+  of the agent-scoped chain rides on the vmcnt fabric-ACK semantics measured
+  in exp_18 plus the flush's existing system release + owner acquire).

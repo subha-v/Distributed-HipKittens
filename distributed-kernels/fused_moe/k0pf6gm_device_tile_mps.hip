@@ -101,7 +101,7 @@
 // .cuh-only change, then confirm a new hsaco mtime under
 // ~/.cache/k0-mok-synthetic-prefill/mori/jit/gfx950_mlx5/*/ before believing
 // any number. The value is never read; only its presence in the hash matters.
-#define K0P6_MPS_SRC_REV 19
+#define K0P6_MPS_SRC_REV 20
 
 // exp_56 (Option C): per-source SEGMENTED receive layout + chunk-counted release.
 //  * Row index = source*MAXTOK + fetch_add(dest_counter[source] on dest, 1)  (waitless).
@@ -294,28 +294,35 @@ __device__ __forceinline__ int k0p6_mps_task_start(const long long* desc) {
 __device__ __forceinline__ void k0p6_mps_task_done(int b, int nc, int tid,
                                                    const long long* k0p6_desc) {
   if (tid != 0) return;
-  // Stream modes ONLY: 2 (tail pool), 3 (whole-die pool), 4 (exp_20 paced tail
-  // pool), 7 (exp_20 payload-free tail pool), 12 (exp_21 remote accumulate).
-  // exp_20's modes 5/6 reserve a pool but keep mode 0's parity publication, so
-  // they must keep the parity part_done bump in the else arm -- an open-ended
-  // `>= 2` would have silently enqueued events nobody consumes.
+  // Stream modes ONLY: 2 (tail pool), 3 (whole-die pool), 4/8 (exp_20 paced /
+  // poll-backoff tail pool), 7 (exp_20 payload-free tail pool), 9 (exp_21
+  // flush-fence diagnostic), 12/13 (exp_21 remote accumulate, chunked/per-row
+  // counters). exp_20's modes 5/6 reserve a pool but keep mode 0's parity
+  // publication, so they must keep the parity part_done bump in the else arm
+  // -- an open-ended `>= 2` would have silently enqueued events nobody
+  // consumes.
+  //
+  // Scope discipline (exp_20-informed, exp_21): the enqueue stays AGENT for ALL
+  // modes including 12/13. The review's maximal chain ran the remote-atomic
+  // version at SYSTEM scope, but exp_20 §4 showed fence count is the prime
+  // interference suspect and an earlier exp_12 measurement priced per-task
+  // fences. The sound + fence-free chain instead rides: (1) task-done's
+  // all-lane vmcnt(0) drains the remote RMWs to fabric-ACK (measured
+  // completion semantics in exp_18), (2) the service-side acq_rel counting
+  // cells chain the contributors' causality into the flagging wave
+  // (release-sequence on one cell), (3) flush_pending's existing
+  // release_signal_batch_system() + the owner's acquire_payload_system()
+  // (buffer_invl2, kills stale slot lines) close the device boundary. Zero
+  // additional fences vs the mode-2 ratchet.
   const unsigned long long k0p6_m =
       (unsigned long long)k0p6_dread(k0p6_desc, K0P6_D_MPS_CFG) >> 16 & 0xFFull;
-  if (k0p6_m - 2ull <= 2ull || k0p6_m == 7ull || k0p6_m == 12ull) {
+  if (k0p6_m - 2ull <= 2ull || k0p6_m == 7ull || k0p6_m == 8ull ||
+      k0p6_m == 9ull || k0p6_m == 12ull || k0p6_m == 13ull) {
     std::uint32_t* mps_q = (std::uint32_t*)k0p6_dread(k0p6_desc, K0P6_D_MPS_Q);
     std::uint32_t* mps_state =
         (std::uint32_t*)k0p6_dread(k0p6_desc, K0P6_D_MPS_STATE);
-    if (k0p6_m == 12ull) {
-      // exp_21 mode 12: the payload now lives in the OWNER's memory, so the release
-      // chain that publishes it (event store -> service acquire -> flush's
-      // system release -> owner acquire) starts HERE, at system scope. The
-      // queue cell remains agent-local; only the fence widens.
-      hk_moe::mps::enqueue_tile_release<hk_moe::scope::system>(
-          mps_q, mps_state + K0P6_MPS_ST_TAIL, b, nc);
-    } else {
-      hk_moe::mps::enqueue_tile_release(
-          mps_q, mps_state + K0P6_MPS_ST_TAIL, b, nc);
-    }
+    hk_moe::mps::enqueue_tile_release(
+        mps_q, mps_state + K0P6_MPS_ST_TAIL, b, nc);
   } else {
     hk_moe::arrive_local_count(
         ((unsigned int*)k0p6_dread(k0p6_desc, K0P6_D_PART_DONE)) + b);
@@ -614,7 +621,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
         // shift/mask inside the epilogue's unrolled loop, so a power-of-two
         // MAXTOK is a hard requirement there (the donor's division would be a
         // spill machine at the pointer peak).
-        (hk_moe::mps::mode_is_remote_accum(entry_cfg) &&
+        (hk_moe::mps::mode_is_direct_accum(entry_cfg) &&
          (MAXTOK & (MAXTOK - 1)) != 0)) {
       if (bid == 0 && tid == 0) atomicOr(pperr, K0P6_MPS_ERR_CONFIG);
       return;
@@ -1714,7 +1721,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
               batch * NT, T, epoch32, spin_limit, pull_ptr, pull_src,
               row_ready, T_loc_max, pperr, lane, cur, out, base_slot, base_pull);
         }
-      } else if (hk_moe::mps::mode_is_remote_accum(m8cfg)) {
+      } else if (hk_moe::mps::mode_is_direct_accum(m8cfg)) {
         // exp_21 mode 12: the owner CONSUMES-AND-ZEROES each accumulated slot
         // row (the retirement gate orders this zeroing before any peer's
         // next-epoch accumulate could need the cell zero).

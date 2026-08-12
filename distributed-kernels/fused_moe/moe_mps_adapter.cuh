@@ -157,42 +157,66 @@ inline constexpr std::uint32_t kDiagVariantWrite = 4u;
 // poll off costs nothing when events ARE available.
 __host__ __device__ __forceinline__ bool mode_is_stream(config c) {
     return c.mode == 2u || c.mode == 3u || c.mode == 4u || c.mode == 7u ||
-           c.mode == 8u || c.mode == 12u;
+           c.mode == 8u || c.mode == 9u || c.mode == 12u || c.mode == 13u;
 }
 
-// ---- exp_21 mode 12: DIRECT REMOTE ACCUMULATE (A11/M11) ----------------------
-// (Numbered 12: exp_20's Tier-1 diagnostics hold 4-8; 9-11 are left free for
-// that series to close out.) The M7 epilogue accumulates each tile DIRECTLY
-// into the owner's slot with the remote packed-bf16 atomic exp_18 proved over
-// xGMI: the ~936 MB part-write / pool-read / pool-push protocol collapses to
-// ~312 MB of remote RMWs and the pool keeps only the readiness bookkeeping
-// (arrivals, chunk counts, flags), so C can shrink an order of magnitude. The
-// owner zeroes each slot row right after consuming it in M8
+// ---- exp_21 mode 9: the flush-fence ATTRIBUTE diagnostic (exp_06-style,
+// NOT correctness-preserving) ----------------------------------------------
+// Mode 9 is mode 2 with flush_pending's wave-level release_signal_batch_system
+// weakened to AGENT. exp_20 §4 named flush's per-batch (~2,400/epoch)
+// system-scope releases the prime interference suspect: the only mechanism
+// left invisible to a rate knob, a volume knob, and per-byte cost. Weakening
+// the fence drops the acquire edge the owner's M8 acquire payload read
+// formally needs, so its M7 attribution is valid but its combine output is
+// not trusted -- a labelled diagnostic exactly like exp_06's scope swap.
+inline constexpr std::uint32_t kModeFlushAgent = 9u;
+
+// ---- exp_21 modes 12/13: DIRECT REMOTE ACCUMULATE (A11/M11) ------------------
+// (Numbered 12+: exp_20's Tier-1 diagnostics hold 4-8.) The M7 epilogue
+// accumulates each tile DIRECTLY into the owner's slot with the remote
+// packed-bf16 atomic exp_18 proved over xGMI: the ~936 MB part-write /
+// pool-read / pool-push protocol collapses to ~312 MB of remote RMWs and the
+// pool keeps only the readiness bookkeeping (arrivals, chunk counts, flags).
+// The owner zeroes each slot row right after consuming it in M8
 // ("consume-and-zero", made sound by the retirement gate + this harness's
 // terminal-pperr semantics -- see exp_21_direct_accumulate/design.md).
 //
+// Modes 12/13 differ ONLY in the completion-counting scheme:
+//  - mode 12 = the mode-2 scheme verbatim: nc_arr[r*16+nc] per (row, chunk)
+//    with `pushed[r]` counting chunk finals to 16 (the protocol-identical
+//    control: same protocol atomics as the ratchet, payload freed).
+//  - mode 13 = per-row target counters: nc_arr[r] with target 16*row_rem[r],
+//    deleting the `pushed` counter and the entire per-chunk completion
+//    machinery (~40% of the stream protocol's agent RMWs; STATUS's live-queue
+//    item 1 with exp_09's objection withdrawn). SOUND here and only here:
+//    the service wave reads NO payload in remote-accumulate modes
+//    (exp_20 §2a: payload is free), so per-chunk acquire edges are
+//    unnecessary and the single cell's release-sequence chains all
+//    contributing producers into the flagging wave's acq_rel RMW.
+//
 // Field discipline (exp_20 idiom -- the host bridge signature never changes):
-// mode 12 requires physical g == 1 (there are no push groups), and the `g`
-// field's bit 4 carries the DUAL-WRITE DETECTOR (g = 1 | 0x10): the epilogue
-// also writes local `part`, and M8 compares each consumed slot row against
-// the producer's part row, setting pperr bit 1<<27 on a lost update. This is
-// the review-mandated lost-update detector; rel_L1 alone cannot see it.
+// physical g must be 1 and the `g` field's bit 4 carries the DUAL-WRITE
+// DETECTOR (g = 1 | 0x10): the epilogue also writes local `part`, and M8
+// compares each consumed slot row against the producer's part row, setting
+// pperr bit 1<<27 on a lost update. This is the review-mandated lost-update
+// detector; rel_L1 alone cannot see it.
 inline constexpr std::uint32_t kModeRemoteAccum = 12u;
+inline constexpr std::uint32_t kModeDirectRows = 13u;
 inline constexpr std::uint32_t kRemoteAccumGMask = 0xFu;   // physical g bits
 inline constexpr std::uint32_t kRemoteAccumDetectBit = 0x10u;
-#define K0P6_MPS_ERR_DUAL 134217728    // 1<<27: mode-12 dual-write detect mismatch
+#define K0P6_MPS_ERR_DUAL 134217728    // 1<<27: dual-write detector mismatch
 
-__host__ __device__ __forceinline__ bool mode_is_remote_accum(config c) {
-    return c.mode == kModeRemoteAccum;
+__host__ __device__ __forceinline__ bool mode_is_direct_accum(config c) {
+    return c.mode == kModeRemoteAccum || c.mode == kModeDirectRows;
 }
 
 __host__ __device__ __forceinline__ bool detect_dual(config c) {
-    return mode_is_remote_accum(c) &&
+    return mode_is_direct_accum(c) &&
            (c.group_slices & kRemoteAccumDetectBit) != 0u;
 }
 
 __host__ __device__ __forceinline__ std::uint32_t physical_g(config c) {
-    return mode_is_remote_accum(c) ? (c.group_slices & kRemoteAccumGMask)
+    return mode_is_direct_accum(c) ? (c.group_slices & kRemoteAccumGMask)
                                    : c.group_slices;
 }
 
@@ -232,18 +256,18 @@ __host__ __device__ __forceinline__ bool config_is_valid(config c) {
     // 14-35% band, so this is an extrapolation the sweep has to justify.
     if (c.reserved_comm_ctas > 128u) return false;
     if (c.reserved_comm_ctas >= 256u) return false;
-    if (mode_is_remote_accum(c)) {
-        // exp_21 mode 12: physical g must be 1 (there are no push groups) and
-        // the only legal extra bit is the 0x10 dual-write detector.
+    if (mode_is_direct_accum(c)) {
+        // exp_21 modes 12/13: physical g must be 1 (there are no push groups)
+        // and the only legal extra bit is the 0x10 dual-write detector.
         if ((c.group_slices & kRemoteAccumGMask) != 1u) return false;
         if ((c.group_slices & ~(kRemoteAccumGMask | kRemoteAccumDetectBit)) != 0u)
             return false;
-        // Part is never written in mode 12, so a remote-part pull has nothing
-        // to read: forbid rather than silently corrupt.
+        // Part is never written in modes 12/13, so a remote-part pull has
+        // nothing to read: forbid rather than silently corrupt.
         if (c.pull_fallback) return false;
     } else if (c.group_slices != 1u && c.group_slices != 2u &&
                c.group_slices != 4u && c.group_slices != 16u) return false;
-    if (c.mode > 12u) return false;
+    if (c.mode > 13u) return false;
     // Mode 7 moves no payload into the slots, so M8 must take the pull path.
     if (c.mode == 7u && !c.pull_fallback) return false;
     if (mode_is_stream(c) && c.reserved_comm_ctas == 0u) return false;
@@ -389,7 +413,7 @@ struct service_env {
     std::uint32_t pace;                      // exp_20 mode 4: s_sleep units/push
     std::uint32_t poll_backoff;              // exp_20 mode 8: s_sleep units/spin
     bool no_payload;                         // exp_20 mode 7: skip the copy
-    std::uint32_t mode;                      // exp_21: 12 = remote accumulate
+    std::uint32_t mode;                      // exp_21: 12/13 = remote accumulate
     std::uint64_t spin_limit;
     std::uint32_t events_total;              // E = (nvi[0] >> 5) * 16
     std::uint32_t queue_capacity;            // (PADMAX/32)*16
@@ -536,7 +560,14 @@ __device__ __forceinline__ void flush_pending(const service_env& env,
 #endif
     __syncwarp();
     if (lane == 0) {
-        hk_moe::release_signal_batch_system();
+        // exp_21 mode 9 (diagnostic, exp_06-style): the flush's system release
+        // weakened to agent to attribute its ~2,400/epoch cost. NOT trusted
+        // for combine correctness.
+        if (env.mode == kModeFlushAgent) {
+            hk_moe::release_signal_batch_agent();
+        } else {
+            hk_moe::release_signal_batch_system();
+        }
         for (std::uint32_t i = 0; i < s.flag_count; ++i) {
             const std::uint32_t r = s.flag_rows[i];
             const std::uint32_t owner = r / (std::uint32_t)env.maxtok;
@@ -628,17 +659,14 @@ __device__ __forceinline__ void run_service(
         const std::uint32_t ev = s.event;
         if (ev == 0u) break;
         // Wave-local payload acquire (a CTA-scope cta_acquire would deadlock:
-        // the waves of one CTA iterate different stripe lengths). Mode 8
-        // acquires at SYSTEM scope: it is the middle link of the chain that
-        // carries the producer's remote atomics to the owner's flag
-        // (producer system-release -> this acquire -> flush's system
-        // release). Modes 2/3/4/7 push a payload they read locally, so agent
-        // remains correct there and is byte-identical to the ratchet.
-        if (env.mode == kModeRemoteAccum) {
-            kittens::distributed::thread_acquire<scope::system>();
-        } else {
-            kittens::distributed::thread_acquire<scope::agent>();
-        }
+        // the waves of one CTA iterate different stripe lengths). exp_21 keeps
+        // this at AGENT scope for ALL modes including 12/13: exp_20's §4 puts
+        // fence count at the top of the interference suspect list, and the
+        // remote-accumulate chain needs no per-event system acquire -- the
+        // acq_rel counting cells chain producer causality into the flagging
+        // wave and the OWNER's acquire_payload_system closes the device
+        // boundary (see k0p6_mps_task_done's scope note).
+        kittens::distributed::thread_acquire<scope::agent>();
         // Readiness timestamps live on the SERVICE wave (off the MFMA wave):
         // first/last tile-event observed. Service waves already poll at the
         // queue tail, so this is the earliest observable readiness point
@@ -672,6 +700,22 @@ __device__ __forceinline__ void run_service(
             // probe loop below relies on) and was reverted; the measurement is
             // the justification for M4, whose per-XCD counters cut scope and
             // footprint together. See exp_06_atomic_scope/result.md.
+            if (env.mode == kModeDirectRows) {
+                // exp_21 mode 13: ONE counter per row, target 16*row_rem.
+                // Deletes the per-chunk cells AND the `pushed` RMW. exp_09's
+                // old objection ("fewer lines per event") is withdrawn: the 32
+                // live lanes of an event address 32 DIFFERENT rows, so exp_07's
+                // essential line-spread is preserved. Soundness: in a
+                // remote-accumulate mode the service wave reads NO payload, so
+                // no per-chunk acquire edge is needed; the last arriver's
+                // acq_rel RMW on the one cell is in the release sequence of
+                // every contributing producer's arrival RMW on that same cell,
+                // chaining all 16 chunks' causalities into this wave's flush.
+                const std::uint32_t old =
+                    kittens::distributed::detail::fetch_add_acq_rel<scope::agent>(
+                        env.nc_arr + (std::size_t)r, 1u);
+                if (old + 1u == target * 16u) push_lead = true;
+            } else {
             const std::uint32_t old =
                 kittens::distributed::detail::fetch_add_acq_rel<scope::agent>(
                     env.nc_arr + (std::size_t)r * 16u + (std::size_t)nc, 1u);
@@ -722,6 +766,7 @@ __device__ __forceinline__ void run_service(
                     }
                 }
             }
+            }
         }
         const unsigned long long ballot = __ballot(push_lead);
         if (lane == 0) s.push_count = 0u;
@@ -748,6 +793,22 @@ __device__ __forceinline__ void run_service(
             // lane unique exactly as in stream mode's g==1 arm.
             for (std::uint32_t i = 0; i < npush; ++i) {
                 retire_pushed_row(env, s, s.rows[i], 1u, lane);
+            }
+            continue;
+        }
+        if (env.mode == kModeDirectRows) {
+            // exp_21 mode 13: the nc_arr RMW already told us this ROW is fully
+            // arrived (single-cell ordering through all 16 chunks' producers),
+            // so the completed rows flag DIRECTLY -- no `pushed` counter at
+            // all. The per-row flush discipline below mirrors
+            // retire_pushed_row's exactly.
+            for (std::uint32_t i = 0; i < npush; ++i) {
+                if (lane == 0) {
+                    s.flag_rows[s.flag_count] = s.rows[i];
+                    ++s.flag_count;
+                }
+                __syncwarp();
+                if (s.flag_count >= env.flush_rows) flush_pending(env, s, lane);
             }
             continue;
         }

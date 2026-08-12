@@ -77,21 +77,25 @@ LOSE and the fallback is the hybrid (local part pre-reduce + pool pushes with
 plain vector stores = today's mode 2) — still publishable as a measured limit
 of fabric RMWs. `atomic-LOCAL` calibrates the source-side L2 RMW rate.
 
-## 2. Screens (mode 12 vs mode 2 anchor; 25-95 s each)
+## 2. Screens (modes 12/13 vs mode 2 anchor; 25-95 s each)
 
 Per point, from `~/amd-master/auto-gpu-kernel/k0_fused_moe`:
 
 ```bash
 setsid timeout 1800 env K0_MOK_ARMS=production,mps_mega \
   K0_MOK_WARMUP_ITERS=1 K0_MOK_TIMED_ITERS=1 \
-  K0_MOK_OUTPUT_ROOT=$HOME/k0-mok-exp21/C<c>_m12 \
+  K0_MOK_OUTPUT_ROOT=$HOME/k0-mok-exp21/<tag> \
   K0_MOK_RUN_TIMEOUT=1500 \
-  K0_MPS_CFG="C=<c>,g=1,mode=12,flush_rows=16" \
-  bash benchmarks/mok_synthetic_prefill/run_campaign.sh e21C<c>m12 1
+  K0_MPS_CFG="C=<c>,g=1,mode=<m>,flush_rows=16,timestamps=1" \
+  bash benchmarks/mok_synthetic_prefill/run_campaign.sh <tag> 1
 ```
 
-Sweep C ∈ {4,8,16,32,64}. Discriminator: every runN.log must contain `[MARK]`
-lines and runN/ eight rank JSONs (else a config rejection is masquerading).
+Grid: ratchet anchor `C=64 mode=2` (reproduce 6.94-6.97), `mode 12 C=64`,
+`mode 13 C=64`, `mode 13 C=32`, `mode 13 C=16`, `mode 9 C=64 timestamps=1`
+(fence attribution). Discriminator: every runN.log contains `[MARK]` and
+runN/ holds eight rank JSONs (else a config rejection is masquerading as a
+pass). Mode 9's combine output is UNTRUSTED by construction (exp_06-style);
+read its M7/combine stamps only.
 
 ## 3. Detector certification (per winning C)
 
