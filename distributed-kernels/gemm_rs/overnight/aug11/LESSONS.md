@@ -1400,6 +1400,73 @@ success. Assert the build completed before trusting a sha comparison.
 the stale local copy**, recovered only by re-aggregating from node-only raw samples.
 Use `push_scoped.ps1`, and never push while a run is live.
 
+## DECISIVE — allocation ORDER fabricates a p ≈ 1e-101 result on identical code
+
+The most important methodological result of the session. exp_26's win is
+**withdrawn** and `PERSHAPE` is **reverted to 0**.
+
+Both binaries in one pool as `ours` and `ours_prev`, `torch.equal` asserted on all
+8 ranks (all-reduced with MIN so one bad rank stops all eight), each arm's `rgroup`
+read from its own build (shape 5: `ours` 2, `ours_prev` 1, distinct), arm order
+balanced by a **complete Latin square** — all 3! permutations over seven blocks,
+**residual pinning exactly zero** — and 336 paired rounds per cell.
+
+**Shape 5** (negative = `PERSHAPE=2` faster):
+
+| protocol | `ours` allocated **1st** | `ours` allocated **3rd** |
+|---|---:|---:|
+| pipelined | **−3.11%**, 336/336 wins, null −0.93% | **+5.85%**, 0/336 wins, null +1.52% |
+| graded | **−2.92%**, 336/336, null −1.11% | **+5.17%**, 0/336, null +1.43% |
+
+**Both at p ≈ 1e-101, and they disagree in SIGN.** Same two binaries, same pool,
+same balanced ordering. The only difference is **which arm was constructed first**.
+
+**A p of 1e-101 that reverses when you permute the setup is measuring the
+instrument**, and the perfect internal consistency — 336/336 and 0/336 — is the
+signature. **Noise widens; artifacts reverse.**
+
+**The clincher, on identical code:** on shape 6 both arms compile to `rgroup` 4 and
+are *literally the same computation*, and the same arrangement still reports
+**−1.67% against a −0.14% null, clearing its own null by 10×**. The effect is
+manufacturable on demand, at exp_26's exact shape and size class.
+
+**Order-balanced estimate**, with the residual **measured** on the five shapes where
+both rules agree and truth is exactly zero: shape 5 is **+1.37% pipelined / +1.12%
+graded SLOWER**, against worst control residuals of 0.64% / 0.36%. **exp_26's
+−6.56% appears in no configuration.**
+
+**Why no shuffle can fix this, and what actually can.** Allocation happens **once
+per process, before round 1**, so no within-round permutation — not even a complete
+Latin square — can touch it. The Latin square fixes *execution* order; this is
+*construction* order. **Running both construction orders is the only control**, and
+every future paired A/B in this tree must do so and report both.
+
+**Verdict and the rule it sets.** Formally **INDETERMINATE** (the orders disagree in
+sign), so the tie is broken on **burden of proof**: a candidate ships only when it
+is *shown* better. Its sole support is withdrawn and the only estimate with a
+measured residual says mildly slower. **Reverted to 0.** If ever revisited, revisit
+spelling **2**, never 1.
+
+### Corrected null floors, and floors are now known to be position-dependent
+
+Identical code, 336 rounds per cell, graded / pipelined %:
+
+| shape | 1 | 2 | 3 | 4 | 5 | 6 |
+|---|---|---|---|---|---|---|
+| floor (`ours` first) | 0.09/0.46 | 0.18/0.59 | 0.16/0.24 | 0.42/0.56 | 1.11/0.93 | 0.02/0.14 |
+
+Mean **0.51% graded / 0.60% pipelined**, against 1.62% graded under the cyclic
+defect. **And the floor depends on the arms' positions** — shape 5 is 0.93% at
+1↔3 and **1.52%** at 3↔1. **A floor quoted without stating the arm positions is
+incomplete**, which retroactively qualifies every floor in this file.
+
+### Disclosed systematic bias in tonight's ladder
+
+`ARM_SPECS`' fixed order gave `ours` **first-position placement in every ladder run
+tonight**, worth **0.9-1.5% on shape 5 in our favour**. That is inside the ±2% ratio
+floor, so **1.1165× graded / 1.1111× pipelined stand** — but it is systematic, not
+random, and it must be disclosed with those numbers rather than absorbed into them.
+
 ## Measurement discipline carried into the figure work
 
 - **The harness bias is per-allocation AND partly allocation-ORDER, not

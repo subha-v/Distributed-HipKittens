@@ -33,11 +33,13 @@ seven queue items produced data; exp_22's third arm is the only piece still owed
    *same* `rgroup` and are therefore the same computation. Order-balanced against
    a residual measured on the five identical-code shapes, shape 5 is **+1.37%
    pipelined / +1.12% graded SLOWER** — no 6.56% win in any configuration.
-   **Recommendation: revert `PERSHAPE` to 0** (never to 1). Formally the
+   **DECISION TAKEN: `PERSHAPE` is REVERTED to 0** (never to 1). Formally the
    pre-registered outcome is INDETERMINATE because the two orders disagree in
-   sign, so the tree is **left at PERSHAPE=2 pending that call**; it stays
-   harmless meanwhile, being bit-identical to the incumbent with an unchanged
-   register tuple.
+   sign, so the tie is broken on **burden of proof** — a candidate ships only when
+   it is *shown* better, its sole support is withdrawn, and the only estimate with
+   a measured residual says mildly slower. The reasoning is written at the macro's
+   definition site in `gemm_rs_mi300x.cpp`. Spelling 2 is the one to revisit if it
+   is ever revisited, and it must be judged in **both construction orders**.
 
    **Caveat this creates for every ladder number:** `ARM_SPECS` constructs arms in
    a fixed order, so `ours` was allocated first in every ladder run tonight, and
@@ -45,11 +47,6 @@ seven queue items produced data; exp_22's third arm is the only piece still owed
    floor, so 1.1165× / 1.1111× stand, but it is systematic and favours us until
    the ladder is re-run with allocation order rotated across launches.
 
-3. **A single instrument defect explains three separate "mysteries" from tonight**,
-   and it inflated the noise floors this whole session quoted — see LESSONS,
-   "the pairwise-offset artifact". Rotating arm order so every arm is first exactly
-   once still pins every *pair* at a constant offset. Fixing it collapsed the mean
-   graded null floor **1.62% → 0.62%** and shape 6's **4.31% → 0.60%**.
 3. **RE-MEASURED (exp_24 §remeasure, binary `fb3d670b`): the projection did NOT
    hold and the gap to rank-1 did not move.** `ours/rank-1` = **1.1165× graded /
    1.1111× pipelined**, against 1.0971× / 1.1189× on the pre-exp_26 binary — both
@@ -77,8 +74,8 @@ seven queue items produced data; exp_22's third arm is the only piece still owed
 | **Fig 4** waterfall | exp_23 | **1.113×** cumulative = **1.082× task order × 1.028× granularity**; 192/192 arms correct at both tolerances | `exp_23_waterfall/waterfall.json`, `stats.json` |
 | Q1 rung validity | exp_23 | four rungs are four binaries, distinguished at the sites their mechanisms predict | `exp_23_waterfall/fingerprints.json` |
 | Q5 sensitivity | exp_25 | **premise falsified in sign, then shown NOT IDENTIFIABLE** (mask ⟂ comm share confounded at ρ=±1.00) | `exp_25_sensitivity/knob_by_shape.json` |
-| Q6 ladders | exp_24 | **LANDED, both instruments.** Controlled: **1.0971× graded / 1.1189× pipelined** vs rank-1, `ours/reference` 0.8863×. Evaluator: **1.6159×** and **1.1349×** — the ordering flips | `exp_24_ladders/ladders.json` |
-| — | Track B win | exp_26 | **LANDED** — per-shape release group; shape 5 **−6.56%**, 80/80 paired rounds, full ladder + M9 green | `exp_26_release_pershape/logs/ab_pershape_*.json` |
+| Q6 ladders | exp_24 | **LANDED, both instruments.** Controlled: **1.0971× graded / 1.1189× pipelined** vs rank-1, `ours/reference` 0.8863×. Evaluator: **1.6159×** and **1.1349×** — the ordering flips. Re-measure at the candidate config: **1.1165× / 1.1111×**, unchanged | `exp_24_ladders/ladders.json`, `result_remeasure.md`, `result_ab_prev.md` |
+| — | Track B candidate | exp_26 | **WITHDRAWN AND REVERTED.** Correct and fully gated, but the −6.56% was an allocation-order artifact: the same A/B reads −3.11% or +5.85% depending only on which arm is built first, both p≈1e-101 | `exp_26_release_pershape/logs/ab_pershape_*.json`, `exp_24_ladders/result_ab_prev.md` |
 
 ### What died tonight (negatives are results)
 
@@ -96,6 +93,13 @@ seven queue items produced data; exp_22's third arm is the only piece still owed
   establish an HBM bound for the production kernel.
 - **XCD-aware tile order**, priced and retired as small: perfect locality saves
   316 MB ≈ 319 GB/s of a plateau we use 9.6% of.
+- **exp_26's −6.56% shape-5 win**, withdrawn as an allocation-order artifact and
+  reverted. The rule itself is correct and fully gated — it is just not faster.
+- **`sync` as an optimization target.** The phase ring measures the producer
+  credit-wait at 2.1 µs where the ablation priced it at 52.9 µs; a single-cut
+  delta is a counterfactual, not a residency.
+- **The ±10% integral gate** I specified for Fig 3: a conservation identity that
+  closes at 1e-16 and could never have failed.
 
 ### The three rules that changed, and they affect all future work
 

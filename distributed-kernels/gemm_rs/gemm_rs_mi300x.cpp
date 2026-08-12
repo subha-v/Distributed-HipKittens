@@ -124,13 +124,42 @@
 // whose reducers got 2 rounds of work) and as inside its own noise on
 // 8192x4096x14336 itself, before WGM and the NR retune moved both. It is a
 // measurement, and exp_26 makes it against a paired null arm.
-// GATED AND LANDED AS 2 (aug11/exp_26_release_pershape/result.md). The bar was:
-// the full ladder (M3 at both 1e-2 and 2e-3, M4, M5) plus -- because this moves
-// publication order -- M9 with CTRL_PUBLISH_EARLY still failing, plus a paired
-// timing win against a null arm in BOTH construction orders. All of it holds:
-// on 8192x4096x14336 the shipped value beats the incumbent in 80 of 80 paired
-// rounds, median -6.56%, against a null arm of -0.61% on the same shape, and it
-// is bit-identical to the incumbent everywhere.
+// REVERTED TO 0 ON 2026-08-12. It was landed as 2 on a paired A/B that measured
+// -6.56% on 8192x4096x14336 in 80 of 80 rounds against a -0.61% null, with a
+// full green ladder including M9. **That win was an artifact of allocation
+// order and does not exist.**
+//
+// The decisive test put both binaries in ONE pool as `ours` and `ours_prev`,
+// bit-equality-asserted on all 8 ranks, arm order balanced by a complete Latin
+// square (all 3! permutations, residual pinning exactly zero), 336 paired rounds
+// per cell. Shape 5, negative = this rule faster:
+//
+//     `ours` allocated 1st : -3.11% pipelined, 336/336 wins
+//     `ours` allocated 3rd : +5.85% pipelined,   0/336 wins
+//
+// Both at p ~ 1e-101. Same two binaries, same pool, same balanced ordering; the
+// only difference is which arm was CONSTRUCTED first. A p of 1e-101 that
+// reverses under permutation of the setup is measuring the instrument, and the
+// perfect internal consistency is the signature -- noise widens, artifacts
+// reverse.
+//
+// The clincher: on 8192x8192x29568 both arms compile to rgroup 4 and are
+// literally the same computation, and the same arrangement still reports -1.67%
+// against a -0.14% null, clearing its own null by 10x. The effect is
+// manufacturable on identical code, at exp_26's shape and size class.
+//
+// Order-balanced, with the residual MEASURED on the five shapes where both rules
+// agree and truth is exactly zero, shape 5 comes out +1.37% pipelined / +1.12%
+// graded SLOWER. exp_26's -6.56% appears in no configuration.
+//
+// Allocation happens once per process, before the first round, so no
+// within-round permutation can control it -- running both construction orders is
+// the only control, and any future paired A/B in this tree must do so.
+//
+// Formally the outcome is INDETERMINATE, since the two orders disagree in sign.
+// Reverted on burden of proof: a candidate ships only when it is shown better,
+// and this one's sole support is withdrawn while the only estimate with a
+// measured residual says mildly slower.
 //
 // It briefly defaulted to 1 before any of that had been run, which would have
 // silently redefined the production binary for every other experiment building
@@ -152,14 +181,18 @@
 //      of group sizes, so rgroup is again one of a handful of literals. Its
 //      resource tuple is the incumbent's on all seven instantiations, to the
 //      register, and it adds between -1 and +7 instructions -- the extra rung
-//      and nothing else. THIS IS THE SHIPPED RULE.
+//      and nothing else. Correct and fully gated, but NOT faster; see above.
+//
+// If this is ever revisited, 2 is the spelling to revisit -- never 1, which is
+// the same rule with a strictly worse schedule. And it must be judged in BOTH
+// construction orders, because one order alone fabricates a 1e-101 result here.
 //
 // The ladder is `{RELEASE_GROUP, 2, 1}` -- a strict generalization of the
 // incumbent, one rung added. A CTA owning 3 tiles takes the 2 rung and its last
 // group is truncated to 1 by `emitted`, the same conservative treatment every
 // short CTA already gets.
 #ifndef HK_GEMM_RS_MI300X_RELEASE_GROUP_PERSHAPE
-#define HK_GEMM_RS_MI300X_RELEASE_GROUP_PERSHAPE 2
+#define HK_GEMM_RS_MI300X_RELEASE_GROUP_PERSHAPE 0
 #endif
 
 // exp_14 (E4b) tile screening. BM/BN/BK are template parameters, so unlike the
