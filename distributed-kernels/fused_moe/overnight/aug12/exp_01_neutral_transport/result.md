@@ -46,6 +46,17 @@ Two subsequent preflights correctly launched no work but exposed defunct
 children from the first `MPI_ABORT`; the live-process guard now ignores `Z`
 state while retaining `rocm-smi --showpids` as the device-side authority.
 
+Attempt 4 was the first execution of the rank protocol. The `cu_push` positive
+run failed, while all three applicable negative controls detected their
+mutation on both ranks. This is a positive-path failure, not a launcher
+failure and not a transport verdict. Source rev 1's gate artifact omitted the
+positive rank metrics needed to distinguish data/protocol failure from the
+independent timer-agreement gate. Source rev 2 therefore adds digest, poison,
+epoch, credit, and timer diagnostics without changing the protocol. Its
+CPU-only selftest and gfx950 build pass; the diagnostic rerun is pending.
+Evidence: `raw/rank_gate_cu_push_attempt4.{log,json}` and
+`raw/rank_gate_runner_attempt4.jsonl`.
+
 ## Fresh node calibration
 
 A fresh exp_22 quick-tier run completed on the `ablations` checkout before the

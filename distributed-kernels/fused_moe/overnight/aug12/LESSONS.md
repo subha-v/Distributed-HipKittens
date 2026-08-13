@@ -64,3 +64,8 @@
 - `harness:` Ignore `Z`-state children in process-overlap preflight. A defunct
   MPI rank has no executable task and cannot retain a KFD queue; live process
   state plus `rocm-smi --showpids` remains the launch authority.
+- `rank-gate:` The first actual two-rank CU-push protocol execution failed its
+  positive run but detected no-publication, redirected-destination, and
+  early-publication on both ranks. Do not infer a transport failure yet:
+  source rev 1 did not serialize positive digest/epoch/credit/timer metrics.
+  Source rev 2 adds those diagnostics without changing transport semantics.

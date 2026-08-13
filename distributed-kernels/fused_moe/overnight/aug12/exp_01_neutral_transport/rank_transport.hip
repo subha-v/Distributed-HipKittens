@@ -5,7 +5,7 @@
 // epoch + directed-credit protocol.  The three payload paths are separate
 // kernels/host paths so an unused method cannot perturb another method's
 // device code generation.
-#define EXP01_RANK_SRC_REV 1
+#define EXP01_RANK_SRC_REV 2
 
 #include <hip/hip_runtime.h>
 #include <mpi.h>
@@ -1160,6 +1160,7 @@ void append_jsonl(const std::string& path, const std::string& record) {
 }
 
 std::string gate_artifact_json(const Options& options, bool pass,
+                               const IterationResult& positive,
                                const std::array<bool, 5>& detected,
                                bool early_valid) {
     static constexpr const char* names[5] = {
@@ -1169,7 +1170,33 @@ std::string gate_artifact_json(const Options& options, bool pass,
     out << "{\"artifact_version\":\"exp01.rank-gate.v1\",\"point_id\":\""
         << point_id(options) << "\",\"source_rev\":" << EXP01_RANK_SRC_REV
         << ",\"pass\":" << (pass ? "true" : "false")
-        << ",\"negative_controls\":{";
+        << ",\"positive\":{\"all_rank_errors\":"
+        << positive.all_rank_errors << ",\"ranks\":[";
+    for (std::size_t i = 0; i < positive.ranks.size(); ++i) {
+        if (i) out << ',';
+        const RankMetric& rank = positive.ranks[i];
+        out << "{\"rank\":" << i
+            << ",\"ready\":" << rank.ready
+            << ",\"ready_observed\":" << rank.ready_observed
+            << ",\"completion_epoch\":" << rank.completion_epoch
+            << ",\"credit_ready\":" << rank.credit_ready
+            << ",\"credit_observed\":" << rank.credit_observed
+            << ",\"generation_pass\":" << rank.generation_pass
+            << ",\"mismatches\":" << rank.mismatches
+            << ",\"poison_survivors\":" << rank.poison_survivors
+            << ",\"sample_failures\":" << rank.sample_failures
+            << ",\"actual_xor\":\"" << hex64(rank.digest_actual_xor)
+            << "\",\"expected_xor\":\"" << hex64(rank.digest_expected_xor)
+            << "\",\"actual_add\":\"" << hex64(rank.digest_actual_add)
+            << "\",\"expected_add\":\"" << hex64(rank.digest_expected_add)
+            << "\",\"timer_agreement\":" << rank.timer_agreement
+            << ",\"transport_event_us\":" << rank.transport_event_us
+            << ",\"transport_device_us\":" << rank.transport_device_us
+            << ",\"consumer_event_us\":" << rank.consumer_event_us
+            << ",\"consumer_device_us\":" << rank.consumer_device_us
+            << '}';
+    }
+    out << "]},\"negative_controls\":{";
     for (int i = 0; i < 5; ++i) {
         if (i) out << ',';
         const bool applicable = i < 3 || options.depth == 2;
@@ -1236,7 +1263,8 @@ int run_gate(const Options& options, Buffers& buffers,
         early_valid;
     if (g_rank == 0) {
         write_atomic_text(gate_path,
-                          gate_artifact_json(options, pass, detected, early_valid));
+                          gate_artifact_json(options, pass, positive, detected,
+                                             early_valid));
         std::printf("RANK_GATE point=%s pass=%s artifact=%s\n",
                     point_id(options).c_str(), pass ? "true" : "false",
                     gate_path.c_str());

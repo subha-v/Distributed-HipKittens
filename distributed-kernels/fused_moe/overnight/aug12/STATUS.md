@@ -12,7 +12,9 @@ plot-ready artifact lands here.
 ## Current state
 
 - Stage 0/1 neutral transport plane: **IN PROGRESS** — one-process 64 KiB
-  anchor gated for CU push, CU pull, and host copy; rank-per-GPU gate next
+  anchor gated; first rank-per-GPU CU-push execution failed only its positive
+  run while detecting every applicable negative control. Source rev 2 adds
+  positive rank diagnostics; rerun pending.
 - Fresh exp_22 calibration: **GREEN** — 9/9 quick-tier points, no verification
   failures; payload concurrent/isolated `0.9968`, protocol/payload `0.5883`
 - Diagnostic anchor: CU pull/CU push `0.993609×` (inside ±2% equivalence);
