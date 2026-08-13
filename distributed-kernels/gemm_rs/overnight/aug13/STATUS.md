@@ -31,6 +31,26 @@ archived node-side as `raw_prior_s0/`. One environment note: two ssh
 blackouts to the node during the campaign (a ~35 min network flap and a
 ~1 h Conductor pre-auth failure) — the detached run was unaffected.
 
+### exp_03 — ladder run 1: ABORTED AT M9 (GPU fault); attribution running
+
+M1–M5 + placement + lds_race all green (cmid's k-loop profile is exactly
+the designed 32/32 mid-commit split; VGPR 246/248, 0 spills; lds_race 0
+hazards; M3 17/17 both tolerances; M4/M5 green). M9 on the cmid module hit
+"Memory access fault by GPU node-7" and WEDGED in the GPU coredump handler
+— timeout's TERM could not land; recovered by kill -9 45 min later, ABORT
+completed, lease released, KFD clean, no node reset. The run's stdout was
+buffered and lost, so the faulting kernel (golden e3base vs cmid vs the
+publish-early control — every M9 epoch runs all of them) is UNKNOWN; M9's
+own docstring names this exact signature as its stale-golden failure mode,
+and M9 had not run green on any module in the aug13 branch state before
+tonight. M7 never ran — NO speed verdict on row B. Attribution
+(`m9_attrib.sh`: canary M3(prod), then unbuffered full-scale M9 on cmid and
+on the cmid0 base twin, wedge-proofed) is running; interpretation table
+pre-registered in `exp_03_commit_mid/result.md`. Advisory: M2's flag-off
+ratchet vs exp_27's archive shows 18 diff lines — census.sh's documented
+pre-revert-source caveat, not a production change (build_arms.sh never
+writes the production .so).
+
 ### exp_03 — COMMIT_MID mainloop arm [STAGED, awaiting GPU window]
 
 exp_27's design row B (the pre-registered first mainloop code arm — commit
