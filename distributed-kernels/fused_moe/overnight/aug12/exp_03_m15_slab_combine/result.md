@@ -68,6 +68,39 @@ session: C ∈ {24, 32} × flush_rows ∈ {8, 16, 32} (the quota bound may bind
 at higher C), and flush_rows=0 to isolate pure protocol-deletion from the
 sweep term.
 
+## Session 2 (2026-08-13): the C response curve, its decomposition, and three adjudicated arms
+
+All same-session, stamps-off, 5-rotation medians, every gate green unless noted:
+
+| arm | p50 median µs | × production | verdict |
+|---|---:|---:|---|
+| M15 C=8 | 6,385.2 | 0.8288 | |
+| M15 C=16 | 6,292.4 | 0.8165 | |
+| M15 C=24 | 5,848.5 | 0.7589 | |
+| **M15 C=28** | **5,822.0** | **0.7544** | **shipping config** |
+| M15 C=32 | — | — | liveness instability: 1/2 runs hung, no rank JSONs; do not use without diagnosis |
+| M15 C=24, flush_rows=1 | 5,943.1 | 0.7698 | pool-sweep term ≈ +95 µs when quota starved |
+| m17 (RR scatter) C=24 d4 | 5,845.3 | 0.7585 | tie with plain C=24 — interleave neutral at balanced routing; parked as skew insurance |
+| m17 C=24 d8 | 5,883.3 | 0.7624 | depth-4 optimum survives link-spreading |
+| m15b (staged wide-push, g=65) | 9,087.1 | 1.1768 | **falsified** (correct — 5/5 gates green — but ~2.8 ms slower) |
+
+**The C=24 stamps (e03stampc24) decompose the −444 µs (C 16→24):** plan
+376.2 (flat), M6 2,441.8 (flat), **M7 2,299.3 (−353.8)**, combine residue
+177.4 (flat). Giving up 8 compute CTAs made the M7 phase 13% faster: the
+epilogue RMW stream is deep in a fabric-congestion regime and **C acts as an
+injector-concurrency throttle** — a second, coarser flow-control knob on top
+of depth 4. The flush_rows=1 arm separates the terms: sweep ≈ 95 µs,
+concurrency relief ≈ 354 µs, orthogonal.
+
+Two mechanism hypotheses adjudicated by the new arms: (a) *op class* — m15b
+deleted the RMW class entirely (locally-folded stage + wide posted pushes)
+and lost 2.8 ms: the op class is NOT the tax; (b) *per-link burst
+concentration* — m17 spread each wave's window over ~7 links and tied: burst
+locality is NOT the tax at balanced routing. What remains standing is
+**aggregate injector concurrency**: how many CTAs are in their epilogue
+simultaneously. The C knob (and possibly a finer in-kernel pacing successor)
+is the mechanism-true control.
+
 ## Open items
 
 - The staged wide-push arm (`-DK0P6_M15_STAGED=1`, "mode 15b") is built and

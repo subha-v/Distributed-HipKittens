@@ -111,3 +111,22 @@ denominator stable 7,706–7,719, control reproduces the published ratchet to
   mode=12, flush_rows=16 = 6,292.4 µs = 0.8165×.** The 0.80× line (6,172)
   is 120 µs away; nearest levers: C∈{24,32}×flush sweep, the C≤8-era
   stamps-off confirmation, staged arm (mode 15b), G=4-class M6 work.
+
+---
+
+## 2026-08-13 session 2: the C response curve — M15 lands 0.7544×
+
+- **New ratchet candidate: M15 `C=28, g=353, mode=12, flush_rows=16` =
+  5,822.0 µs = 0.7544× production** (5/5 green; curve C=8→16→24→28:
+  6,385→6,292→5,848→5,822; C=32 has a 1-in-2 liveness hang, undiagnosed).
+- C=24 stamps: the C 16→24 win (−444 µs) is **−354 µs in the M7 stamp**
+  (combine residue flat) — C is an injector-concurrency throttle on the
+  congestion-shaped epilogue RMW stream, a second flow-control knob on top
+  of depth 4. flush_rows=1 arm isolates the pool-sweep term at ≈ +95 µs.
+- Adjudicated: m15b staged wide-push **falsified** (9,087.1 = 1.1768×,
+  correct but ~2.8 ms slower — op class is not the tax); m17 RR-scatter
+  **tie** at balanced (5,845.3 d4; d8 5,883.3 — depth-4 optimum robust;
+  parked as skew insurance). Full table in `exp_03_m15_slab_combine/result.md`.
+- Harness: `run_campaign.sh` now forwards `K0_M15B`; two m17 campaigns were
+  manually summarized after a transient script corruption (fixed, `bash -n`
+  verified, backup `~/run_campaign.sh.pre_m15b`).
