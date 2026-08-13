@@ -38,6 +38,15 @@ ReduceScatter and fused-MoE porting work. Donor measurements and new
 abstraction rewrites are kept separate; a port does not inherit a donor's
 performance result until its architecture-specific GPU parity gates pass.
 
+Current fused-MoE overlap research lives under
+`distributed-kernels/fused_moe/overnight/`: the aug11 evidence corpus and
+methodology study, and the aug12 design docs —
+`OVERLAP_KERNEL_DESIGN_IDEAS.md` (the K0–K8 build queue) plus
+`OVERLAP_KERNEL_DESIGN_ADDENDUM.md` (prior-corpus re-grades of the SDMA and
+task-order arms, and four new arms: slab-certified combine, staged CU
+wide-push combine, source-interleaved scatter, backward plan-reuse, and the
+compact-MAXTOK small-T path).
+
 Latest additions to the device primitive layer and the fused-MoE port
 (`distributed-kernels/fused_moe/`):
 
