@@ -151,6 +151,13 @@
 #define K0P6_M15_D_LEN K0P6_MPS_D_LEN
 #endif
 
+// Kernel symbol name, parametric so a RUN PIN branch can compile this body
+// under the harness's expected name (the ablations-tbo16 pin pattern). The
+// default is the sibling name; ablations-m15 sets it to k0pf6gm_mps_mega.
+#ifndef K0P6_M15_KERNEL_NAME
+#define K0P6_M15_KERNEL_NAME k0pf6gm_m15_mega
+#endif
+
 // Slab count. S=2 is the only value where the 448-column nc chunks and M8's
 // 1024-byte chunks co-align (column 3584 = nc 8 = M8 chunk 7); it is also the
 // fence-law optimum (each extra boundary is an M7.5-class rendezvous).
@@ -439,7 +446,7 @@ __device__ __forceinline__ void k0p6_m15_m8_batch(
 }
 
 // ================================================================================================
-extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_m15_mega(
+extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
     const long long* __restrict__ desc, int* __restrict__ pperr, long long spin_limit) {
   if (desc == nullptr || pperr == nullptr) return;
   const int TOPK = (int)k0p6_dread(desc, K0P6_D_TOPK);
