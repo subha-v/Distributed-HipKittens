@@ -83,6 +83,16 @@ event/device times were 1,215.04/1,210.12 µs and 1,260.52/1,256.12 µs.
 Artifacts:
 `raw/rank_cu_pull_64k_one_epoch_{gate,soak,runner,provenance}_v1.*`.
 
+The rank-per-GPU host-copy anchor passed its gate but **FAILED the 600-epoch
+soak** with two rank errors. The gate itself was clean on both ranks, including
+all applicable controls and timer agreement; its transport events were
+10,005.2 and 10,668.6 µs. Source rev 3's soak artifact recorded only the error
+count, so it cannot distinguish data/protocol failure from timer rejection or
+identify the epoch. Source rev 4 adds first-failure epoch and per-rank
+digest/poison/epoch/timer metrics without changing the transport. Its selftest
+and gfx950 build pass; the diagnostic gate+soak rerun is pending. Evidence:
+`raw/rank_host_copy_64k_one_epoch_{gate_v1,soak_attempt1,runner_attempt1,provenance_attempt1}.*`.
+
 ## Fresh node calibration
 
 A fresh exp_22 quick-tier run completed on the `ablations` checkout before the

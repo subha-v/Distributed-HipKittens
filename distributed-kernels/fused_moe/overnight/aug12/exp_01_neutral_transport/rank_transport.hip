@@ -5,7 +5,7 @@
 // epoch + directed-credit protocol.  The three payload paths are separate
 // kernels/host paths so an unused method cannot perturb another method's
 // device code generation.
-#define EXP01_RANK_SRC_REV 3
+#define EXP01_RANK_SRC_REV 4
 
 #include <hip/hip_runtime.h>
 #include <mpi.h>
@@ -1297,9 +1297,15 @@ int run_soak(const Options& options, Buffers& buffers,
     }
     reinitialize_protocol(options, buffers);
     int errors = 0;
+    int first_failure_epoch = 0;
+    IterationResult first_failure;
     for (int epoch = 1; epoch <= 600 && errors == 0; ++epoch) {
         IterationResult result = run_iteration(
             options, buffers, static_cast<std::uint32_t>(epoch), Control::none);
+        if (result.all_rank_errors != 0) {
+            first_failure_epoch = epoch;
+            first_failure = result;
+        }
         errors += result.all_rank_errors;
     }
     const bool pass = errors == 0;
@@ -1308,7 +1314,33 @@ int run_soak(const Options& options, Buffers& buffers,
         out << "{\"artifact_version\":\"exp01.rank-soak.v1\",\"point_id\":\""
             << point_id(options) << "\",\"source_rev\":" << EXP01_RANK_SRC_REV
             << ",\"soak_epochs\":600,\"all_rank_errors\":" << errors
-            << ",\"pass\":" << (pass ? "true" : "false") << '}';
+            << ",\"pass\":" << (pass ? "true" : "false")
+            << ",\"first_failure_epoch\":" << first_failure_epoch
+            << ",\"first_failure_ranks\":[";
+        for (std::size_t i = 0; i < first_failure.ranks.size(); ++i) {
+            if (i) out << ',';
+            const RankMetric& rank = first_failure.ranks[i];
+            out << "{\"rank\":" << i
+                << ",\"ready\":" << rank.ready
+                << ",\"ready_observed\":" << rank.ready_observed
+                << ",\"completion_epoch\":" << rank.completion_epoch
+                << ",\"credit_observed\":" << rank.credit_observed
+                << ",\"generation_pass\":" << rank.generation_pass
+                << ",\"mismatches\":" << rank.mismatches
+                << ",\"poison_survivors\":" << rank.poison_survivors
+                << ",\"sample_failures\":" << rank.sample_failures
+                << ",\"actual_xor\":\"" << hex64(rank.digest_actual_xor)
+                << "\",\"expected_xor\":\"" << hex64(rank.digest_expected_xor)
+                << "\",\"actual_add\":\"" << hex64(rank.digest_actual_add)
+                << "\",\"expected_add\":\"" << hex64(rank.digest_expected_add)
+                << "\",\"timer_agreement\":" << rank.timer_agreement
+                << ",\"transport_event_us\":" << rank.transport_event_us
+                << ",\"transport_device_us\":" << rank.transport_device_us
+                << ",\"consumer_event_us\":" << rank.consumer_event_us
+                << ",\"consumer_device_us\":" << rank.consumer_device_us
+                << '}';
+        }
+        out << "]}";
         write_atomic_text(soak_path, out.str());
         std::printf("RANK_SOAK point=%s pass=%s epochs=600 artifact=%s\n",
                     point_id(options).c_str(), pass ? "true" : "false",

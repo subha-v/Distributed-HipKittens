@@ -81,3 +81,7 @@
 - `rank-gate:` The matched 64 KiB two-rank CU-pull anchor passed the same gate
   ladder and 600 epochs with zero rank errors. Its gate transport spans were
   1,215–1,261 µs; performance conclusions still await rotated timed points.
+- `host-copy:` The two-rank 64 KiB host-copy path passed its positive and
+  negative-control gate but failed before completing the 600-epoch acceptance
+  ladder with two rank errors. Preserve this as a method-specific soak failure;
+  source rev 4 adds first-failure diagnostics before any protocol change.
