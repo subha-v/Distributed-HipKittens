@@ -66,8 +66,15 @@ transport interval around a 1,278.81 µs HIP event. Rank 0 independently missed
 the consumer tolerance (1,622.27 vs 1,464.76 µs). Source rev 3 changes only
 the stamp clock to the globally synchronized 100 MHz `s_memrealtime` used by
 the gated one-process diagnostic; payload, publication, and lifetime code are
-unchanged. The selftest and gfx950 build pass; the corrected gate is pending.
+unchanged. The selftest and gfx950 build pass.
 Evidence: `raw/rank_gate_cu_push_attempt5.{log,json}`.
+
+The corrected rank-per-GPU CU-push anchor is **GREEN**. Both ranks passed exact
+payload/protocol checks and timer agreement; HIP-event/device-stamp transport
+times were 1,279.96/1,275.72 µs and 1,280.69/1,276.28 µs. All applicable
+negative controls passed, followed by a 600-epoch soak with zero rank errors.
+Artifacts:
+`raw/rank_cu_push_64k_one_epoch_{gate,soak,runner,provenance}_v1.*`.
 
 ## Fresh node calibration
 

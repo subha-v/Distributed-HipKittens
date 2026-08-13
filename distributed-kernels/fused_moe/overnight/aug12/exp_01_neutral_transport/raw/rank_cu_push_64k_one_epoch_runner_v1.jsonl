@@ -1,0 +1,2 @@
+{"timestamp_utc":"2026-08-13T01:33:54Z","stage":0,"phase":"gate","method":"cu_push","record_bytes":65536,"lifetime":"one_epoch","rotation_index":0,"exit_code":0,"classification":"completed","log":"/home/subvadla/aug12_exp01/rank_gate_v6/gate-cu_push-rb65536-one_epoch.log"}
+{"timestamp_utc":"2026-08-13T01:34:17Z","stage":0,"phase":"soak","method":"cu_push","record_bytes":65536,"lifetime":"one_epoch","rotation_index":0,"exit_code":0,"classification":"completed","log":"/home/subvadla/aug12_exp01/rank_gate_v6/soak-cu_push-rb65536-one_epoch.log"}
