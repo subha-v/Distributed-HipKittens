@@ -59,6 +59,12 @@ wide-push transport arm. Contract and gate ladder in
 ratchet in the same session, all correctness/poison/soak gates green.** The
 same session adjudicated the mode-16 TBO-2 deferred-combine arm at +75.8 µs
 (falsified; `overnight/aug12/exp_02_tbo_deferred_combine/result.md`).
+T-generalization (`overnight/aug13/exp_04_tgen/result.md`, branch
+`ablations-tgen`): the T≠4096 wrong-output defect was root-caused to the M2
+hole-sentinel's phantom chunks and fixed exact-math-at-4096 (`af030778`);
+campaign-grade M15 C=28 vs production is 0.7557× at T=4096 (no regression),
+0.8845× at T=2048, and inverts to 1.0940× at T=1024, with the T=2048 C-sweep
+showing the reserved-CTA response still monotone (C=28 best).
 
 Latest additions to the device primitive layer and the fused-MoE port
 (`distributed-kernels/fused_moe/`):
