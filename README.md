@@ -250,10 +250,14 @@ If you use or build on this work, please consider citing:
 This branch carries the MI300X GEMM→ReduceScatter kernel and its experiment
 record under `distributed-kernels/gemm_rs/overnight/`. aug13 session: exp_24's
 official-evaluator "ours" arm had run with `HK_DEBUG=1` (per-call debug sync +
-blocking D2H read + stderr writes inside the timed region). Re-measured with
-the fast path live (exp_01 S0, same-session rotation): ours 397.2 µs geomean
-vs rank-1 335.5 and reference 489.8 — we beat reference GEMM+RCCL under the
-official evaluator (0.811×) and sit 1.184× behind rank-1 (was reported
-1.616×). The evaluator driver now defaults HK_DEBUG=0. exp_03 (the exp_27
-row-B mainloop arm behind a default-off flag, full gate ladder + paired A/B)
-is staged for the next GPU window. See `overnight/aug13/STATUS.md`.
+blocking D2H read + stderr writes inside the timed region); the evaluator
+driver now defaults HK_DEBUG=0. exp_01's full rotation campaign (5 sessions,
+both arm orderings, all passes gated) made the three-arm table order-balanced
+and citable: **ours/rank-1 = 1.120, 95% CI [1.080, 1.163]; ours/reference =
+0.764, 95% CI [0.727, 0.803]** — ours beats reference GEMM+RCCL in every
+session under the official evaluator, and the rank-1 gap is carried by shapes
+5/6 (1.31×/1.22×) with shape 1 a small ours win. Session-to-session drift is
+3.4–8.8% of an arm's geomean, so only within-session paired ratios are
+quoted. exp_03 (the exp_27 row-B mainloop arm behind a default-off flag, full
+gate ladder + paired A/B on shapes 5/6) is next. See
+`overnight/aug13/STATUS.md`.

@@ -1,12 +1,24 @@
 # exp_01 result — instrument B re-measured with the fast path live
 
-**Status: S0 (one full rotation, all three arms, same session) COMPLETE; the
-rotation sessions s1–s4 were cleanly aborted at a pass boundary when the
-operator paused the session.** The rotation questions (Q2 spread, Q3 drift,
-same-session D contrast) are therefore PARTIALLY answered; the headline (Q1)
-is answered decisively. Numbers below are geomean over the six graded shapes
-of per-shape best, µs, from the official `eval.py`, one process per rank —
-exactly exp_24 §12's statistic.
+**Status: COMPLETE.** Two campaigns: the aug13a session (S0 only, one full
+rotation O→R→K; s1–s4 aborted at a pass boundary by an operator pause) and
+the aug13b full campaign (s0 re-run + s1–s4, all 18 bench passes green,
+2026-08-13 20:16–22:14Z), which answers Q2 and Q3 and delivers the
+order-balanced table (§ "Rotation campaign" below). Numbers are geomean over
+the six graded shapes of per-shape best, µs, from the official `eval.py`, one
+process per rank — exactly exp_24 §12's statistic. The aug13a raw tree is
+archived node-side as `raw_prior_s0/`; `raw/` holds the aug13b campaign.
+
+## HEADLINE (order-balanced, the citable numbers)
+
+- **`ours/rank-1` = 1.1203, 95% CI [1.0795, 1.1628]** (n=5 within-session
+  pairs, both arm orderings covered; neither ordering flips the sign).
+- **`ours/reference` = 0.7641, 95% CI [0.7268, 0.8033]** — ours beats
+  reference GEMM+RCCL in EVERY session, under every arm order.
+- The HK_DEBUG tax, now measured same-session: **+44.3% / +43.6%** (s1, s2).
+- The gap to rank-1 is carried by shapes 5/6 (1.305 [1.273, 1.338] and
+  1.220 [1.188, 1.253]); shapes 2–4 contribute ~1.09–1.14; shape 1 reads as
+  a small ours WIN (0.895, CI [0.761, 1.052] crosses 1).
 
 ## Q1 — ANSWERED: exp_24 §12's "ours" arm was measuring its own debug harness
 
@@ -78,16 +90,59 @@ number tonight) and benchmark mode's obligatory checked first call per case
   throughout; kfd-clean between passes; every pass `check: pass`.
 - Fast-path assertion per ours pass: stderr must contain zero `[hk ]` lines.
 
-## What was NOT measured (owed to the next session)
+## Rotation campaign (aug13b) — Q2 and Q3 ANSWERED
 
-- The same-session `ours_dbg` (D) contrast — the debug tax is currently
-  quantified cross-run (578.7 exp_24 vs 397.2 S0) plus a same-day smoke
-  (shape 2: 190.9/200.8 fast vs 352.1 exp_24); s1/s2 would have paired it
-  in-session.
-- Arm-order rotation and drift bounds (s1–s4): S0 ran O→R→K only. exp_24's
-  one-rotation caveat therefore still applies to the absolute µs; the O/R and
-  O/K ratios quoted are within-session and safe against drift, but carry a
-  single arm-order.
-- Re-run: `cd overnight/aug13/exp_01_eval_rotation && setsid nohup bash
-  run_rotation.sh > run_rotation.log 2>&1 &` reproduces everything including
-  S0 (~40 min) and the four rotation sessions (~100 min).
+Full campaign (s0 O R K; s1 K R O D; s2 D O R K; s3 K O R; s4 O K R), one
+node session 20:16–22:14Z, lease held throughout, clocks pinned 1900, M3
+17/17 re-gated on the production binary before any timed pass, every pass
+`check: pass`, every O pass fast-path-asserted (0 `[hk ]` lines). Analysis:
+`paired_ci.py raw/` (t-based CIs on log-ratios over sessions; the session is
+the pairing unit — both arms share clocks, boot state and drift).
+
+| sess | order | O | K | R | O/K | O/R |
+|---|---|---:|---:|---:|---:|---:|
+| s0 | O R K | 383.9 | 353.9 | 502.1 | 1.0846 | 0.7645 |
+| s1 | K R O D | 396.9 | 360.0 | 498.1 | 1.1026 | 0.7969 |
+| s2 | D O R K | 390.9 | 352.8 | 511.8 | 1.1080 | 0.7638 |
+| s3 | K O R | 387.2 | 330.9 | 540.8 | 1.1703 | 0.7161 |
+| s4 | O K R | 391.9 | 344.3 | 501.4 | 1.1383 | 0.7816 |
+
+**Q2 — order-balanced ratios (n=5 within-session pairs):**
+
+- `O/K` = **1.1203, 95% CI [1.0795, 1.1628]**. By construction order:
+  O-before-K sessions (s0/s2/s4) GM 1.1101, K-before-O (s1/s3) GM 1.1359 —
+  a ~2.3% ordering effect that does NOT flip the sign (the exp_26 bar).
+  rank-1 is genuinely faster; the aug13a single-session 1.1841 was the high
+  tail of a spread this campaign bounds.
+- `O/R` = **0.7641, 95% CI [0.7268, 0.8033]**; ours wins all 5 sessions
+  under both orderings. The beat-reference claim is order-balanced.
+- `O/D` = 0.6946 (n=2): the debug tax same-session is **D/O = 1.4434 (s1) /
+  1.4360 (s2)** — matching the cross-run estimate 578.7/397.2 = 1.457 and
+  closing the contrast owed by aug13a.
+
+Per-shape O/K with CIs: 64 **0.895 [0.761, 1.052]** (a small ours win, CI
+crosses 1); 512 1.094 [1.007, 1.189]; 2048 1.137 [1.048, 1.233]; 4096
+1.116 [1.038, 1.199]; 8192a **1.305 [1.273, 1.338]**; 8192b
+**1.220 [1.188, 1.253]**. The rank-1 gap remains concentrated in shapes
+5/6's device schedule — the exp_03 target — with shapes 2–4 as the second
+pool (~1.09–1.14).
+
+**Q3 — drift bound:** per-arm GM spread across the 5 sessions: O **3.40%**,
+K **8.79%**, R **8.57%** (D 2.08%, n=2). rank-1 and reference carry 2.5× our
+session noise; cross-session absolute µs is not citable for any arm at the
+few-percent level, and single-session ratio readings move by up to ±5 points
+of O/K (1.085–1.170 observed). Within-session paired ratios with the CI
+above are the citable statistic.
+
+**Arm-first contrast** (GM when the arm ran first vs later in the session):
+O 0.9903, K 0.9853, D 0.9796 — running first is worth ~1–2%, consistent
+with the aug11 allocation-order lesson, and inside the drift bound.
+
+**aug13a vs aug13b cross-check:** aug13a S0 read O 397.2 / K 335.5 /
+R 489.8; aug13b s0 read 383.9 / 353.9 / 502.1. Each arm moved 3–6% across
+nights — the drift Q3 quantifies — while the within-session verdicts
+(K < O < R) and the O/R < 1 headline reproduced in every session.
+
+Re-run: `cd overnight/aug13/exp_01_eval_rotation && setsid nohup bash
+run_rotation.sh > run_rotation.log 2>&1 &` (~2 h; archives nothing itself —
+move `raw/` aside first).

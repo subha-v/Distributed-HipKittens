@@ -12,6 +12,25 @@ number; one 8-GPU job at a time behind `tools/gpu_lease.sh`; clocks pinned.
 
 ## Log (newest first)
 
+### exp_01 — rotation campaign COMPLETE (aug13b): the order-balanced table
+
+s0–s4 ran 2026-08-13 20:16–22:14Z (18/18 bench passes green, M3 re-gated
+17/17 first, every O pass fast-path-asserted). **Citable, order-balanced
+(n=5 within-session pairs): `ours/rank-1` = 1.1203 [1.0795, 1.1628];
+`ours/reference` = 0.7641 [0.7268, 0.8033] — ours beats reference in every
+session under both arm orders, and neither ordering flips the O/K sign
+(O-first 1.1101 / K-first 1.1359).** Debug tax same-session: D/O =
+1.4434/1.4360 (s1/s2), matching the cross-run 1.457. Q3 drift: per-arm GM
+spread over sessions O 3.40% / K 8.79% / R 8.57% — single-session ratios
+move by up to ±5 points of O/K (1.085–1.170 observed); only within-session
+paired ratios are citable. Per-shape O/K: shape 1 a small ours WIN (0.895,
+CI crosses 1); shapes 5/6 carry the gap (1.305 [1.273, 1.338] /
+1.220 [1.188, 1.253]); shapes 2–4 ~1.09–1.14. Tables and CIs:
+`exp_01_eval_rotation/result.md`; analysis `paired_ci.py raw/`. aug13a raw
+archived node-side as `raw_prior_s0/`. One environment note: two ssh
+blackouts to the node during the campaign (a ~35 min network flap and a
+~1 h Conductor pre-auth failure) — the detached run was unaffected.
+
 ### exp_03 — COMMIT_MID mainloop arm [STAGED, awaiting GPU window]
 
 exp_27's design row B (the pre-registered first mainloop code arm — commit
@@ -81,13 +100,9 @@ by the runner and LEFT PINNED at checkpoint (the aug11 convention).
   your own ssh session (the pattern matches the remote command line). Use a
   distinctive pattern or the PID.
 
-## NEXT STEPS, in order (all staged, nothing speculative)
+## NEXT STEPS, in order
 
-1. **Finish exp_01's rotation sessions** (s1–s4: orders K R O D / D O R K /
-   K O R / O K R): `cd overnight/aug13/exp_01_eval_rotation && setsid nohup
-   bash run_rotation.sh > run_rotation.log 2>&1 &` (~2.5 h; re-runs S0 too,
-   which doubles as the reproduction). This closes Q2 (both-order ratios), Q3
-   (drift bound) and the same-session D contrast.
+1. ~~Finish exp_01's rotation sessions~~ DONE (aug13b, see log above).
 2. **exp_03 (staged, one command): the exp_27 row-B mainloop arm** — commit
    between the MFMA halves, behind `HK_GEMM_RS_MI300X_COMMIT_MID` (default 0).
    `setsid nohup bash overnight/aug13/exp_03_commit_mid/run_ab.sh > run_ab.log
@@ -96,7 +111,13 @@ by the runner and LEFT PINNED at checkpoint (the aug11 convention).
    M7 (shapes 5/6 × both allocation orders, Latin-square blocks, bit-exactness
    asserted). Pre-registration and falsifier in its plan.md (exp_27 §6
    verbatim: shape 6 pool −5.0%±3.0%, geomean −0.9%; |Δ|<1.5% on shape 6
-   closes the whole B/C/D family).
+   closes the whole B/C/D family). If it lands, extend to shapes 2/3 (the
+   second gap pool per exp_01's order-balanced per-shape CIs) before any
+   ratchet move; ship only if better under BOTH allocation orders.
 3. Then the §7 queue as ranked: row C (LDS offset prefill) or row E
    (warp-group ping-pong) depending on exp_03's verdict; K4 depth-bounding of
    the emit path is the standing alternative if the mainloop family closes.
+   The reducer-count C-sweep (§7 item 3) needs a host-side-only override
+   (e.g. `HK_GEMM_RS_MI300X_NR_OVERRIDE`, default 0 = table) — the table
+   lives in `gemm_rs_mi300x_host_abi.hpp` (`scored_shapes`), so the device
+   `.text` ratchet is untouched by construction.
