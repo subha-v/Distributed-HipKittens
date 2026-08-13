@@ -76,6 +76,13 @@ negative controls passed, followed by a 600-epoch soak with zero rank errors.
 Artifacts:
 `raw/rank_cu_push_64k_one_epoch_{gate,soak,runner,provenance}_v1.*`.
 
+The matched rank-per-GPU CU-pull anchor is also **GREEN**. Both ranks passed
+exact payload/protocol checks, timer agreement, all applicable negative
+controls, and the 600-epoch soak with zero rank errors. Gate transport
+event/device times were 1,215.04/1,210.12 µs and 1,260.52/1,256.12 µs.
+Artifacts:
+`raw/rank_cu_pull_64k_one_epoch_{gate,soak,runner,provenance}_v1.*`.
+
 ## Fresh node calibration
 
 A fresh exp_22 quick-tier run completed on the `ablations` checkout before the

@@ -78,3 +78,6 @@
   passed exact digest/poison/epoch/credit checks, all applicable negative
   controls, host/device timer agreement, and a 600-epoch soak with zero rank
   errors. The prior failure was exclusively timer instrumentation.
+- `rank-gate:` The matched 64 KiB two-rank CU-pull anchor passed the same gate
+  ladder and 600 epochs with zero rank errors. Its gate transport spans were
+  1,215–1,261 µs; performance conclusions still await rotated timed points.

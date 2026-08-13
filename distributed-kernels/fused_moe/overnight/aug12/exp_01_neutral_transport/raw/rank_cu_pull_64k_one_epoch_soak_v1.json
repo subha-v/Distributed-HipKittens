@@ -1,0 +1,1 @@
+{"artifact_version":"exp01.rank-soak.v1","point_id":"rank2|cu_pull|rb65536|tb67108864|one_epoch|d1|rev3","source_rev":3,"soak_epochs":600,"all_rank_errors":0,"pass":true}
