@@ -328,6 +328,7 @@ N2_P2_QUAL void N2_P2_NAME(
         (unsigned long long)k0p6_dread(k0p6_desc, K0P6_D_MPS_CFG);
     if (hk_moe::mps::mode_is_direct_accum(
             hk_moe::mps::decode_config(m7cfg))) {
+#ifndef N2GM_M7TAB_FILL
       const auto* m7sym = k0p6_symmetric(k0p6_desc);
       const unsigned long long m7_slots =
           (unsigned long long)k0p6_dread(k0p6_desc, K0P6_D_MPS_SLOTS);
@@ -376,6 +377,15 @@ N2_P2_QUAL void N2_P2_NAME(
             : (const void*)m7sym->heap_bases.select<8>(tid);
         m7tab[tid] = (unsigned long long)(std::uintptr_t)pb + m7_slot_off;
       }
+#else
+      // M15-DELTA (B): includer-supplied target-table fill (e.g. the staged
+      // local-fold arm points m7tab at a LOCAL stage laid out per owner so
+      // the epilogue's shift/mask/atomic instruction stream is bit-identical
+      // and only the pointer VALUES change). Contract: the macro must declare
+      // `const unsigned int m7_mtok` and store m7tab[tid] for tid < 8. The
+      // undefined arm above is the donor's token stream verbatim.
+      N2GM_M7TAB_FILL
+#endif
       m7_sh = 31 - __clz((unsigned int)m7_mtok);  // MAXTOK = 2^m7_sh (guard)
       m7_tok_mask = m7_mtok - 1u;
       m7_peer_tab = m7tab;
@@ -449,13 +459,29 @@ N2_P2_QUAL void N2_P2_NAME(
   k0p6_defer m7_pend{-1, 0, 0};
 #endif
 
+  // M15-DELTA (A): optional half-open task range + runtime-order decode. Both
+  // default-undefined, and the undefined arms below are the donor's exact
+  // token stream (gate: .text identity of every existing includer's build).
+  // An includer that defines N2GM_TASK_LO/N2GM_TASK_HI (e.g. as names bound
+  // through N2_HOOK_CTX_ARG) slices the task space into slabs; one that
+  // defines N2GM_TASK_DECODE picks a different task->(tile,nc) order (the
+  // nc-major order of exp_29/exp_35 rung (e)).
+#if defined(N2GM_TASK_LO) && defined(N2GM_TASK_HI)
+  for (int task = (int)(N2GM_TASK_LO) + (int)(N2GM_TASK_START);
+       task < (int)(N2GM_TASK_HI); task += (int)(N2GM_TASK_STRIDE)) {
+#else
   for (int task = (int)(N2GM_TASK_START); task < num_tasks;
        task += (int)(N2GM_TASK_STRIDE)) {
+#endif
 #ifdef N2GM_TASK_LOOP_HEAD_HOOK
     N2GM_TASK_LOOP_HEAD_HOOK
 #endif
+#ifndef N2GM_TASK_DECODE
     const int tile = task / kNChunksP2;
     const int nc = task - tile * kNChunksP2;   // output n-chunk 0..15
+#else
+    N2GM_TASK_DECODE(task, tile, nc, num_tiles)
+#endif
     const int b0 = n2gm_tile_b0(tile);         // first 32-block of the tile
     const int e = sorted_eid[b0];
     const int gcount = n2gm_tile_gcount(tile); // live sub-blocks (1..kGM)

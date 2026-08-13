@@ -47,6 +47,14 @@ task-order arms, and four new arms: slab-certified combine, staged CU
 wide-push combine, source-interleaved scatter, backward plan-reuse, and the
 compact-MAXTOK small-T path).
 
+The first new kernel from that program is
+`distributed-kernels/fused_moe/k0pf6gm_device_tile_m15.hip`
+(`k0pf6gm_m15_mega`): the mode-12 depth-4 ratchet restructured into an
+nc-major, two-slab GEMM-2 with slab-certified coarse readiness, a mid-epoch
+front-half combine running in GEMM-2's shadow, and a compile-gated staged
+wide-push transport arm. Unmeasured; contract and gate ladder in
+`overnight/aug12/M15_DESIGN.md`.
+
 Latest additions to the device primitive layer and the fused-MoE port
 (`distributed-kernels/fused_moe/`):
 
