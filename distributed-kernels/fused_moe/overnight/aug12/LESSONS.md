@@ -61,3 +61,6 @@
   filters the remapped ordinals again; `0,4` became one visible GPU. The first
   rank-gate attempt was a clean pre-protocol launcher failure and the runner
   now uses only `ROCR_VISIBLE_DEVICES`.
+- `harness:` Ignore `Z`-state children in process-overlap preflight. A defunct
+  MPI rank has no executable task and cannot retain a KFD queue; live process
+  state plus `rocm-smi --showpids` remains the launch authority.

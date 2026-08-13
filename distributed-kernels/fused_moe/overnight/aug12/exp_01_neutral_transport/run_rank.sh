@@ -147,7 +147,14 @@ PROVENANCE="$ARTIFACT_DIR/provenance.txt"
 
 check_gpu_idle() {
   local contenders
-  contenders=$(pgrep -af '(^|/)(mpirun|mpiexec|torchrun)( |$)|rank_transport|mok_synthetic' || true)
+  # MPI_ABORT can leave defunct children until the container init reaps them.
+  # A zombie cannot own a KFD queue or GPU allocation, so reject only live
+  # launchers/workers here; rocm-smi below remains the device-side authority.
+  contenders=$(ps -eo pid=,stat=,comm=,args= | awk '
+    $2 ~ /^Z/ {next}
+    $3 == "mpirun" || $3 == "mpiexec" || $3 == "torchrun" ||
+    $3 == "rank_transport" || $0 ~ /[m]ok_synthetic/ {print}
+  ')
   if [[ -n "$contenders" ]]; then
     echo "run_rank.sh: GPU/process preflight found a possible contender:" >&2
     echo "$contenders" >&2

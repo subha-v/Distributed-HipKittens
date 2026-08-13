@@ -42,6 +42,9 @@ double-filtered the ROCR-remapped ordinal space, so rank 0 saw fewer than two
 GPUs. Exit code 2 is classified as a launcher/runtime failure, not a method
 failure. The runner now exports only `ROCR_VISIBLE_DEVICES`; attempt-1 logs and
 provenance are preserved under `raw/rank_gate_*_attempt1.*`.
+Two subsequent preflights correctly launched no work but exposed defunct
+children from the first `MPI_ABORT`; the live-process guard now ignores `Z`
+state while retaining `rocm-smi --showpids` as the device-side authority.
 
 ## Fresh node calibration
 
