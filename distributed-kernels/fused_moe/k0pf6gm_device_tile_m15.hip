@@ -69,6 +69,19 @@
 #define K0P6_M15_STAGED 0
 #endif
 
+// M17: round-robin source-interleaved scatter. The donor scatter's atomic
+// landing order is approximately source-banded, so consecutive positions in
+// every expert block share an owner and the epilogue's depth-4 vmcnt window
+// concentrates its outstanding RMWs on ONE XGMI link at a time (per-link
+// bursts + head-of-line blocking under the throttle). Iterating pairs in a
+// source-rotating permutation makes consecutive cursor positions land on
+// rotating owners: the same depth spans ~7 links. Plan-side only — zero M7
+// code touched, zero protocol. DEFAULT 0: the default arm's scatter call is
+// the donor's, textually identical.
+#ifndef K0P6_M15_SCATTER_RR
+#define K0P6_M15_SCATTER_RR 0
+#endif
+
 // exp_27 shipped arm: M6 reads token-major sc_stage; M5's transpose is dead.
 #ifndef K0P6_MPS_ASCALE_TM
 #define K0P6_MPS_ASCALE_TM 1
@@ -330,6 +343,41 @@ __device__ __forceinline__ void k0p6_m15_task_done_defer(
 #undef N2_P2_NAME
 #undef N2_P2_QUAL
 #undef N2GM_G
+
+#if K0P6_M15_SCATTER_RR
+// M17 scatter: the donor's stage-5 live-pair scatter (hkp_sort.hpp) with the
+// iteration order permuted source-round-robin. Bijective over the pair space
+// (q -> (src = q & 7, off = q >> 3); world == 8 is entry-guarded), same
+// per-expert atomic cursors, same sti/swt packing, same overflow bit — only
+// the atomic LANDING order (and therefore the owner sequence within each
+// sorted expert block) changes.
+__device__ __forceinline__ void k0p6_m15_scatter_rr(
+    const int* __restrict__ recv_eid, const float* __restrict__ recv_wgt,
+    int world, int MAXTOK, int TOPK, int lo, int E, int PADMAX,
+    int* __restrict__ scratch, int* __restrict__ sti, float* __restrict__ swt,
+    int* __restrict__ pperr, int ovf_bit) {
+  const int rows = world * MAXTOK;
+  const int pairs = rows * TOPK;
+  for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < pairs;
+       i += gridDim.x * blockDim.x) {
+    const int q = i / TOPK;
+    const int s = i - q * TOPK;
+    const int src = q & (world - 1);
+    const int off = q >> 3;
+    const int row = src * MAXTOK + off;
+    const int j = row * TOPK + s;
+    const int e = recv_eid[j];
+    if (e < lo || e >= lo + E) continue;
+    const int pos = atomicAdd(&scratch[K0P6_SC_CUR + (e - lo)], 1);
+    if (pos >= PADMAX) {
+      atomicOr(pperr, ovf_bit);
+      continue;
+    }
+    sti[pos] = (row & 0x00FFFFFF) | (s << 24);
+    swt[pos] = recv_wgt[j];
+  }
+}
+#endif
 
 // ---- small shared helpers -----------------------------------------------------------------
 __device__ __forceinline__ float k0p6_bf16_to_f32(unsigned short b) {
@@ -964,8 +1012,14 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
 
     const int pairs = T_ext * TOPK;
     k0p6_sort::pad(scratch, E, T_ext, TOPK, PADMAX, sti, swt, pperr, 4194304);
+#if K0P6_M15_SCATTER_RR
+    k0p6_m15_scatter_rr(recv_eid, recv_wgt, world, MAXTOK, TOPK, lo, E, PADMAX,
+                        scratch, sti, swt, pperr, 1048576);
+    (void)pairs;
+#else
     k0p6_sort::scatter(recv_eid, recv_wgt, pairs, lo, E, TOPK, PADMAX, scratch, sti, swt,
                        pperr, 1048576);
+#endif
     hkp::pull_src_fill(pull_stage, pull_ptr, T, TOPK, T * world, pull_src, pperr, 1048576);
 
     hkp::grid_barrier(bar, tid, bar_err);   // M5
