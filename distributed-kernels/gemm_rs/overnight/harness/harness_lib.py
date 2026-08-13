@@ -35,7 +35,13 @@ rt = _load("dhk_rt")
 def load_kernel(control=False, module_name=None):
     if module_name is not None:
         return _load(module_name)
-    return _load("gemm_rs_mi300x_control" if control else "gemm_rs_mi300x")
+    if control:
+        return _load("gemm_rs_mi300x_control")
+    # aug13 exp_03: let the gate ladder (M3/M5/M9) run against a candidate
+    # module without touching the production .so. Explicit module_name and the
+    # control path are never overridden; default behaviour is unchanged when
+    # the variable is unset.
+    return _load(os.environ.get("HK_KERNEL_MODULE", "gemm_rs_mi300x"))
 
 
 # ---------------------------------------------------------------------------

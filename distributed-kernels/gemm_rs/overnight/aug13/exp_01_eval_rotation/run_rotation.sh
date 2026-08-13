@@ -51,6 +51,22 @@ check_pass() { # check_pass <popcorn_file> <what>
     LOG "$2: check pass"
 }
 
+# eval.py TEST mode hardcodes a 60 s per-case pool timeout, and on this node
+# the first case of a fresh 8-worker spawn pool pays ~40 s of bootstrap before
+# any rank reaches the kernel -- so TEST mode times out on case 1 for EVERY
+# arm. This is pre-existing: exp_24's archived ours/test.popcorn.txt (08:27)
+# shows the identical truncation, and its driver did not gate on it. The
+# correctness gates that actually bind are (a) our single-process M3 matrix run
+# below, and (b) benchmark mode's obligatory checked first call per case
+# (180 s timeout), which feeds the `check: pass` line every session asserts.
+check_test_nonfatal() { # check_test_nonfatal <popcorn_file> <what>
+    if grep -q "^check: pass" "$1" 2>/dev/null; then
+        LOG "$2: check pass"
+    else
+        LOG "$2: TEST-MODE TIMEOUT/FAIL (recorded, non-fatal; see plan.md)"
+    fi
+}
+
 ours_env() { # ours_env <dbg>
     echo "POPCORN_FD=3 POPCORN_GPUS=8 HK_BUILD_DIR=$ON/harness/build HK_DEBUG=$1 TMPDIR=$OURS/.tmp TORCH_EXTENSIONS_DIR=$OURS/.ext"
 }
@@ -100,7 +116,11 @@ rank1_pass() { # rank1_pass <mode> <cases> <label> <dest>
     local shim
     shim=$(grep -c SHIM_WAS_CALLED "$R1/$label.stderr.txt" 2>/dev/null || true)
     [ "${shim:-0}" -eq 0 ] || die "rank1 sudo shim fired ($shim)"
-    check_pass "$dest/$label.popcorn.txt" "rank1 $label"
+    if [ "$mode" = "test" ]; then
+        check_test_nonfatal "$dest/$label.popcorn.txt" "rank1 $label"
+    else
+        check_pass "$dest/$label.popcorn.txt" "rank1 $label"
+    fi
 }
 
 # ---------------------------------------------------------------- lease + clocks
@@ -110,6 +130,19 @@ trap 'bash "$T/gpu_lease.sh" release aug13_exp01' EXIT
 
 LOG "pinning clocks"
 bash "$T/set_clocks.sh" pin 1900 | tail -4
+
+# ---------------------------------------------------------------- M3 gate
+# The production .so (rebuilt 2026-08-12 13:46 after the PERSHAPE revert) has
+# not been re-gated since that rebuild; run the full 17-shape correctness
+# matrix at both tolerances before any timed number.
+LOG "M3 correctness gate (17 shapes, 1e-2 and 2e-3)"
+kfd_wait_clean 30 10 || die "node not clean before M3"
+docker exec -w "$ON/harness" "$NAME" bash -c "timeout 1200 python3 m3_correctness.py all" > "$RAW/m3_gate.log" 2>&1 \
+    || die "M3 correctness gate failed (see $RAW/m3_gate.log)"
+grep -q "FAIL" "$RAW/m3_gate.log" && die "M3 log contains FAIL rows"
+grep -q "/17 shapes PASSED" "$RAW/m3_gate.log" || die "M3 summary line missing"
+grep -q "17/17 shapes PASSED" "$RAW/m3_gate.log" || die "M3 not 17/17"
+LOG "M3 gate green (17/17)"
 
 # ---------------------------------------------------------------- S0: stage + gate
 LOG "===== S0 stage: ours ====="
@@ -127,7 +160,7 @@ cat $OURS/cases_bench.txt"
 kfd_wait_clean 30 10 || die "node not clean before ours test"
 run "cd $OURS && $(ours_env 0) timeout 900 python3 eval.py test cases_test.txt 3>$OURS/test.popcorn.txt >$OURS/test.stdout.txt 2>$OURS/test.stderr.txt"
 save "$OURS" test "$RAW/s0/ours_test"
-check_pass "$RAW/s0/ours_test/test.popcorn.txt" "ours test"
+check_test_nonfatal "$RAW/s0/ours_test/test.popcorn.txt" "ours test"
 bench_ours 0 "$RAW/s0/O"
 
 LOG "===== S0 stage: reference ====="
@@ -136,7 +169,7 @@ run "cp $OURS/cases_bench.txt $REF/cases_bench.txt"
 kfd_wait_clean 30 10 || die "node not clean before reference test"
 run "cd $REF && POPCORN_FD=3 POPCORN_GPUS=8 TMPDIR=$REF/.tmp TORCH_EXTENSIONS_DIR=$REF/.ext timeout 900 python3 eval.py test cases_test.txt 3>$REF/test.popcorn.txt >$REF/test.stdout.txt 2>$REF/test.stderr.txt"
 save "$REF" test "$RAW/s0/reference_test"
-check_pass "$RAW/s0/reference_test/test.popcorn.txt" "reference test"
+check_test_nonfatal "$RAW/s0/reference_test/test.popcorn.txt" "reference test"
 bench_reference "$RAW/s0/R"
 
 LOG "===== S0 stage: rank1 ====="

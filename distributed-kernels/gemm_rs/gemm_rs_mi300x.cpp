@@ -195,6 +195,17 @@
 #define HK_GEMM_RS_MI300X_RELEASE_GROUP_PERSHAPE 0
 #endif
 
+// exp_03 (aug13) — exp_27 design row B, the first mainloop code arm. 0 keeps
+// the incumbent tail commit and MUST leave the production .text byte-identical
+// (the exp_38 ratchet discipline); 1 moves the k-loop's load_commit pair from
+// the pre-barrier tail to between the two MFMA halves, trading half of the
+// global load's MFMA cover for a drain-free barrier approach. Candidate
+// builds only (gemm_rs_mi300x_cmid.so); never default it on without the full
+// ladder plus the ISA placement assert in aug13/exp_03_commit_mid/.
+#ifndef HK_GEMM_RS_MI300X_COMMIT_MID
+#define HK_GEMM_RS_MI300X_COMMIT_MID 0
+#endif
+
 // exp_14 (E4b) tile screening. BM/BN/BK are template parameters, so unlike the
 // reducer split they cannot be swept from the host without an instantiation per
 // candidate. Off by default: the extra rows exist only in the sweep module, so
@@ -670,6 +681,32 @@ void gemm_rs_mi300x_kernel(const mi300x_globals g) {
                             }
                         }
                         mma_ABt(C_accum, A_frag, B_frag, C_accum);
+#if HK_GEMM_RS_MI300X_COMMIT_MID
+                        // exp_03 (aug13), exp_27 design row B: place the commit
+                        // BETWEEN the MFMA halves instead of on the pre-barrier
+                        // tail, so half 1's MFMAs cover the vmcnt(0) + ds_write
+                        // + lgkmcnt(0) window (W2 -> ~0) and the barrier is
+                        // reached with no drain in front of it. `kh == 0`
+                        // resolves at unroll time (KH >= 2 on every row), so
+                        // exactly one commit is emitted per trip either way.
+                        //
+                        // The acc_anchor before it pins half 0's MFMAs above
+                        // the commit -- the same data-dependence mechanism the
+                        // tail commit uses (hints do not work in this TU,
+                        // exp_09 arms A0/A2). Buffer safety is unchanged from
+                        // the straight-line argument above: the commit writes
+                        // As[(k+1)&1], which iteration k never reads, and the
+                        // __syncthreads() ending k still separates it from its
+                        // readers in k+1. What this arm trades away is half of
+                        // the global load's MFMA cover (the vmcnt(0) now waits
+                        // 32 MFMAs after issue instead of 64) -- that trade is
+                        // the entire measurement.
+                        if (kh == 0) {
+                            m3::acc_anchor(C_accum);
+                            m3::load_commit<NT>(As[(k + 1) & 1], abuf);
+                            m3::load_commit<NT>(Bs[(k + 1) & 1], bbuf);
+                        }
+#endif
                     }
                     // Keep every MFMA ABOVE the commit's vmcnt(0).
                     //
@@ -689,10 +726,12 @@ void gemm_rs_mi300x_kernel(const mi300x_globals g) {
                     // is the mechanism that already works in this TU.
                     m3::acc_anchor(C_accum);
                     __builtin_amdgcn_s_setprio(0);
+#if !HK_GEMM_RS_MI300X_COMMIT_MID
                     // COMMIT: vmcnt(0) lands what was issued before the MFMAs, then
                     // the ds_writes publish it and lgkmcnt(0) drains them.
                     m3::load_commit<NT>(As[(k + 1) & 1], abuf);
                     m3::load_commit<NT>(Bs[(k + 1) & 1], bbuf);
+#endif
                     __syncthreads();
                 }
                 HK_TRACE_STAMP(MAINLOOP_END);
