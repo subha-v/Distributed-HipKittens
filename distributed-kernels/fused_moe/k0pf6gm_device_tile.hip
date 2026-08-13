@@ -786,9 +786,22 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mega(
           // word is settled: Step B already polled/acquired every chunk this rank consumes, and the
           // producer published all nchunks unconditionally. epoch match guaranteed by Step B success.
           const unsigned int fill = (unsigned int)(w & 0xffffffffu);
+          // exp_04_tgen (aug13) T-GENERALIZATION FIX: chunk c's rows live in
+          // [c*CHUNK, min((c+1)*CHUNK, MAXTOK)) of segment s. The unclamped
+          // (c+1)*CHUNK end was only in-segment because NCHUNK_MAX*CHUNK ==
+          // MAXTOK at T=4096. At MAXTOK<4096 the phantom chunks (fill=0)
+          // mapped past the segment end onto FOLLOWING segments' LIVE rows,
+          // spraying recv_eid=-1 over every segment except s=0: scatter
+          // dropped those rows, the GEMM never computed them, and the arms
+          // returned wrong output at T=1024/2048 with pperr=0 (exp_36). The
+          // clamp restores "hole writes stay inside their own segment"; at
+          // MAXTOK=4096 seg_row1 == (c+1)*CHUNK for all 8 chunks, so the
+          // written ranges are IDENTICAL to the pre-fix kernel's.
+          long long seg_row1 = (long long)(c + 1) * K0P6_CHUNK;
+          if (seg_row1 > (long long)MAXTOK) seg_row1 = (long long)MAXTOK;
           const long long base = (long long)s * (long long)MAXTOK + (long long)c * K0P6_CHUNK;
           const long long hole0 = (base + (long long)fill) * TOPK;
-          const long long hole1 = (base + (long long)K0P6_CHUNK) * TOPK;
+          const long long hole1 = ((long long)s * (long long)MAXTOK + seg_row1) * TOPK;
           for (long long i = hole0 + gtid; i < hole1; i += gstride) recv_eid_h[i] = -1;
         }
       }
