@@ -27,7 +27,7 @@ def functions(path):
     funcs, name, body = {}, None, None
     for raw in open(path, errors="replace"):
         line = raw.rstrip()
-        m = re.match(r"^([A-Za-z_.$][\w.$]*):\s*$", line)
+        m = re.match(r"^([A-Za-z_.$][\w.$]*):\s*(?:;.*)?$", line)
         if m and m.group(1).startswith("_Z"):
             if name:
                 funcs[name] = body
@@ -74,16 +74,39 @@ def kloop_span(body):
 
 
 def mfma_vmcnt_profile(span):
-    """(mfmas before first vmcnt(0), mfmas after it, total mfma, n vmcnt0)."""
+    """Rotation-invariant placement profile of the k-loop.
+
+    The compiler rotates the K_TAIL loop (the header holds the second MFMA
+    half), so absolute position is meaningless. The loop body is treated as a
+    CIRCLE and two circular distances are measured, in MFMAs:
+
+      tail_mfma: from the FIRST vmcnt(0) forward to the s_barrier
+                 (0 in the incumbent: the commit sits right at the barrier;
+                 ~32 in the cmid arm: half 2 covers the drain)
+      head_mfma: from the s_barrier forward to the first vmcnt(0)
+                 (~64 incumbent, ~32 cmid)
+
+    Returns (tail_mfma, head_mfma, total_mfma, n_vmcnt0) or Nones.
+    """
     insts = [v for k, v in span if k == "inst"]
     total = sum(1 for v in insts if v.startswith("v_mfma"))
     vm0 = [i for i, v in enumerate(insts)
            if v.startswith("s_waitcnt") and re.search(r"vmcnt\(0\)", v)]
-    if not vm0:
-        return None, None, total, 0
-    before = sum(1 for v in insts[:vm0[0]] if v.startswith("v_mfma"))
-    after = sum(1 for v in insts[vm0[0]:] if v.startswith("v_mfma"))
-    return before, after, total, len(vm0)
+    bar = [i for i, v in enumerate(insts) if v.startswith("s_barrier")]
+    if not vm0 or not bar:
+        return None, None, total, len(vm0)
+
+    def circ_mfma(a, b):
+        n, i = 0, (a + 1) % len(insts)
+        while i != b:
+            if insts[i].startswith("v_mfma"):
+                n += 1
+            i = (i + 1) % len(insts)
+        return n
+
+    tail = circ_mfma(vm0[0], bar[0])
+    head = circ_mfma(bar[0], vm0[0])
+    return tail, head, total, len(vm0)
 
 
 def resources(log_path):
@@ -121,24 +144,24 @@ def main():
             if span is None:
                 continue
             found += 1
-            before, after, total, nvm = mfma_vmcnt_profile(span)
+            tail, head, total, nvm = mfma_vmcnt_profile(span)
             tail_flag = TAIL.search(sym)
             label = f"<256,256,32,{'true' if tail_flag and tail_flag.group(1) == '1' else 'false'}>"
-            print(f"[{tag}] {label}: k-loop mfma={total} "
-                  f"vmcnt0_in_loop={nvm} mfma_before_first={before} after={after}")
+            print(f"[{tag}] {label}: k-loop mfma={total} vmcnt0={nvm} "
+                  f"mfma(vmcnt0->barrier)={tail} mfma(barrier->vmcnt0)={head}")
             if check == "tail":
-                good = nvm >= 1 and before is not None and before >= 48
+                good = nvm >= 1 and tail is not None and tail <= 2
                 if not good:
-                    print(f"  FAIL: base arm expects the tail commit "
-                          f"(>=48 MFMA before vmcnt(0)); got {before}")
+                    print(f"  FAIL: base arm expects the commit AT the barrier "
+                          f"(tail<=2 MFMA); got {tail}")
                     ok = False
             else:
-                good = (nvm >= 1 and before is not None
-                        and 25 <= before <= 40 and after >= 25)
+                good = (nvm >= 1 and tail is not None
+                        and tail >= 25 and head >= 25)
                 if not good:
                     print(f"  FAIL: cmid arm expects the mid commit "
-                          f"(25<=before<=40, after>=25); got before={before} "
-                          f"after={after}")
+                          f"(>=25 MFMA on both sides); got tail={tail} "
+                          f"head={head}")
                     ok = False
         if found == 0:
             print(f"[{tag}] FAIL: no 256x256 k-loop found in {path}")
@@ -150,7 +173,10 @@ def main():
             if vgpr is None:
                 continue
             scratch = fields.get("ScratchSize [bytes/lane]", 0)
-            spills = sum(v for k, v in fields.items() if "Spill" in k)
+            # SGPR spills of 54-88 are present in the shipped incumbent (they
+            # spill to VGPR lanes, exp_27 census); the gate is VGPR spills.
+            spills = sum(v for k, v in fields.items()
+                         if "Spill" in k and "VGPR" in k)
             status = "ok"
             if vgpr > 248 or scratch != 0 or spills != 0:
                 status = "FAIL"

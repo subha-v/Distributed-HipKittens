@@ -248,8 +248,12 @@ If you use or build on this work, please consider citing:
 ### GEMM-RS branch campaign log (aug13)
 
 This branch carries the MI300X GEMM→ReduceScatter kernel and its experiment
-record under `distributed-kernels/gemm_rs/overnight/`. aug13 session: found
-that exp_24's official-evaluator "ours" arm ran with `HK_DEBUG=1` (per-call
-debug sync + D2H read + stderr writes inside the timed region); exp_01 re-runs
-the evaluator ladder with the fast path live and rotated arm order. See
-`overnight/aug13/STATUS.md`.
+record under `distributed-kernels/gemm_rs/overnight/`. aug13 session: exp_24's
+official-evaluator "ours" arm had run with `HK_DEBUG=1` (per-call debug sync +
+blocking D2H read + stderr writes inside the timed region). Re-measured with
+the fast path live (exp_01 S0, same-session rotation): ours 397.2 µs geomean
+vs rank-1 335.5 and reference 489.8 — we beat reference GEMM+RCCL under the
+official evaluator (0.811×) and sit 1.184× behind rank-1 (was reported
+1.616×). The evaluator driver now defaults HK_DEBUG=0. exp_03 (the exp_27
+row-B mainloop arm behind a default-off flag, full gate ladder + paired A/B)
+is staged for the next GPU window. See `overnight/aug13/STATUS.md`.

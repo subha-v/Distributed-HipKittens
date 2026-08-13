@@ -35,8 +35,16 @@ world_size: 8; m: 8192; n: 8192; k: 29568; has_bias: False; seed: 42
 EOF
 echo staged"
 
+# HK_DEBUG defaults to 0 as of aug13/exp_01. It defaulted to 1, and exp_24
+# §12's evaluator "ours" arm inherited it: DEBUG disables hk_submission's
+# exp_12 fast path and adds a per-call synchronize + blocking D2H error-bit
+# read + ~5 flushed stderr lines per rank INSIDE the evaluator's timed region.
+# That self-inflicted tax was most of the "arm-dependent inflation" that put
+# ours at 578.7 us geomean (1.6159x vs rank-1); with the fast path live the
+# same ladder reads ~397 us and beats reference (aug13/exp_01). Set HK_DEBUG=1
+# explicitly only when debugging a hang, and never quote such a run's numbers.
 ENVS="POPCORN_FD=3 POPCORN_GPUS=8 HK_BUILD_DIR=$NODE/harness/build \
-HK_DEBUG=${HK_DEBUG:-1} TMPDIR=$DIR/.tmp TORCH_EXTENSIONS_DIR=$DIR/.ext"
+HK_DEBUG=${HK_DEBUG:-0} TMPDIR=$DIR/.tmp TORCH_EXTENSIONS_DIR=$DIR/.ext"
 
 go() {
   local mode="$1" cases="$2" tmo="$3"
