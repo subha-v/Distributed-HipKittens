@@ -1,0 +1,49 @@
+{
+  "schema_version": "exp01.executor-verification.v1",
+  "method": "host_copy_path",
+  "record_bytes": 65536,
+  "total_bytes_per_rank": 67108864,
+  "direction": "bidirectional",
+  "trace_configuration": {
+    "profiler": "rocprofv3 1.1.0",
+    "hip_runtime_trace": true,
+    "hsa_amd_trace": true,
+    "memory_copy_trace": true,
+    "kernel_trace": true,
+    "group_by_queue": true
+  },
+  "evidence": {
+    "hip_memcpy_peer_async_calls": 8192,
+    "hip_memcpy_peer_async_operation_id": 283,
+    "bytes_per_call": 65536,
+    "memory_copy_domain_records": 0,
+    "runtime_copy_kernel": "__amd_rocclr_copyBuffer",
+    "runtime_copy_kernel_ids": [
+      8,
+      16
+    ],
+    "runtime_copy_kernel_dispatches_including_auxiliary_runtime_copies": 8250,
+    "direct_correlation_example": {
+      "correlation_id": 3354,
+      "hip_api": "hipMemcpyPeerAsync",
+      "size_bytes": 65536,
+      "source_device": 1,
+      "destination_device": 0,
+      "stream_id": 2,
+      "kernel_id": 8,
+      "kernel_name": "__amd_rocclr_copyBuffer",
+      "queue_id": 2,
+      "workgroup_size": 512,
+      "grid_size": 4096
+    },
+    "hsa_memory_async_copy_on_engine_calls": 0,
+    "trace_artifact": "host_copy_anchor_trace_v1.json",
+    "trace_sha256": "e3d2fc427b14aecb45676188f98eca726adb21c5e31ec7f5b55331f008c93ff4"
+  },
+  "executor": {
+    "label": "cu",
+    "verified": true,
+    "confidence": "high"
+  },
+  "verdict": "At the 64 KiB anchor, hipMemcpyPeerAsync is lowered to correlated __amd_rocclr_copyBuffer CU kernel dispatches, not an SDMA memory-copy record. The hardware-engine label is CU for this configuration."
+}

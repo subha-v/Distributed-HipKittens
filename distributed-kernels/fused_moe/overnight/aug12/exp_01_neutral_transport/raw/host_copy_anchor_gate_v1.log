@@ -1,0 +1,3 @@
+[neutral] gates method=host_copy_path size=65536 lifetime=one_epoch soak=600
+[neutral] emitted method=host_copy_path size=65536 lifetime=one_epoch p50=22718.22 us
+[neutral] complete emitted=1 out=/home/subvadla/aug12_exp01/out/host_copy_anchor_gate.jsonl

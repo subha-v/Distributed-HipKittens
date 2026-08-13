@@ -1,0 +1,75 @@
+{
+  "schema_version": "aug12.environment.v1",
+  "captured_utc": "2026-08-13T00:58:43Z",
+  "node": "gbt350-odcdh2-c05-1.png-odc.dcgpu",
+  "kernel": "Linux 6.8.0-38-generic",
+  "gpu_count": 8,
+  "gpu_model": "AMD Instinct MI350X",
+  "gfx": "gfx950",
+  "vbios": "113-M350-01-1K1-020E",
+  "driver_version": "6.16.13",
+  "rocm": {
+    "runtime": "7.2.3",
+    "hip_version": "7.2.53211-c2d9476115",
+    "clang": "22.0.0git",
+    "torch": "2.11.0+gitd0c8b1f",
+    "torch_hip": "7.2.53211"
+  },
+  "profiler": {
+    "rocprofv3_version": "1.1.0",
+    "rocprofv3_git": "c2d94761153e1033a91744842dfc66eddd631fde",
+    "memory_copy_trace": true,
+    "hip_runtime_trace": true,
+    "hsa_trace": true,
+    "kernel_trace": true
+  },
+  "toolchain": {
+    "hipcc": "/opt/rocm/bin/hipcc",
+    "mpicxx": "/usr/bin/mpicxx",
+    "mpirun": "/usr/bin/mpirun"
+  },
+  "backends": {
+    "mori_python": "/usr/local/lib/python3.12/dist-packages/mori/__init__.py",
+    "mori_has_p2p_sdma_device_specializations": true,
+    "mori_runtime_force_selector": "unresolved",
+    "iris_python_installed": false,
+    "iris_system_header_found": false
+  },
+  "topology": {
+    "all_gpu_pairs_link_type": "XGMI",
+    "all_gpu_pairs_hops": 1,
+    "all_gpu_pairs_weight": 15,
+    "numa0_gpus": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "numa1_gpus": [
+      4,
+      5,
+      6,
+      7
+    ]
+  },
+  "idle_snapshot": {
+    "fclk_mhz": 1500,
+    "mclk_mhz": 1900,
+    "junction_temp_c_range": [
+      52,
+      60
+    ],
+    "power_w_range": [
+      215,
+      224
+    ],
+    "kfd_processes": [
+      "gpuagent"
+    ]
+  },
+  "notes": [
+    "Capture per-campaign clocks, power, temperature, process list, binary hash, and source hash again; this file is the start-state snapshot.",
+    "IRIS replication is an environment dependency, not silently omitted. Build or install a pinned IRIS backend before Stage-0 backend parity can pass.",
+    "MORI JIT sources contain P2P and SDMA specializations, but that does not establish the runtime executor selector."
+  ]
+}

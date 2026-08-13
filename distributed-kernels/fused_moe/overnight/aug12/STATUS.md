@@ -11,9 +11,14 @@ plot-ready artifact lands here.
 
 ## Current state
 
-- Stage 0/1 neutral transport plane: **IN PROGRESS**
+- Stage 0/1 neutral transport plane: **IN PROGRESS** — one-process 64 KiB
+  anchor gated for CU push, CU pull, and host copy; rank-per-GPU gate next
 - Fresh exp_22 calibration: **GREEN** — 9/9 quick-tier points, no verification
   failures; payload concurrent/isolated `0.9968`, protocol/payload `0.5883`
+- Diagnostic anchor: CU pull/CU push `0.993609×` (inside ±2% equivalence);
+  host copy/CU pull `1.454125×`
+- Executor trace: the 64 KiB `hipMemcpyPeerAsync` path is **CU-lowered**
+  (`__amd_rocclr_copyBuffer`), not SDMA
 - Stage 2 carrier plane: pending Stage-1 crossover selection
 - Stage 3 multi-stream/TBO: pending Stage-2 carrier selection
 - Stages 4–6 protocol/order/flow control: pending Stage-2 retention filter
@@ -64,6 +69,8 @@ plot-ready artifact lands here.
 | `exp_01_neutral_transport/design.md` | written |
 | `exp_01_neutral_transport/schema.json` | written, JSON-validated |
 | `exp_01_neutral_transport/calibration.json` | green diagnostic |
-| `exp_01_neutral_transport/transport_crossover.json` | pending |
+| `exp_01_neutral_transport/anchor_comparison_v1.json` | diagnostic anchor gated |
+| `exp_01_neutral_transport/raw/host_copy_anchor_executor_v1.json` | executor verified CU |
+| `exp_01_neutral_transport/transport_crossover.json` | pending Stage-1 sweep |
 | `LESSONS.md` | live |
 | `PLOTS.md` | live |

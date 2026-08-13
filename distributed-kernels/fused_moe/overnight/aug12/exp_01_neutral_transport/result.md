@@ -1,7 +1,38 @@
 # exp_01 result — neutral transport plane
 
-Status: **IN PROGRESS**  
-Stage-0/1 verdict: not yet available
+Status: **IN PROGRESS — diagnostic anchor gated**  
+Stage-0/1 verdict: final rank-per-GPU anchor and size sweep pending
+
+## One-process 64 KiB anchor
+
+CU push, CU pull, and `hipMemcpyPeerAsync` all passed exact digest/sample
+checks, poison checks, redirected-destination/early-publication/no-publication
+negative controls, a 600-epoch soak, and host/device timer agreement. Each
+timed point used five rotations and moved 64 MiB per rank bidirectionally.
+
+| method | traced executor | global p50 (µs) | global p95 (µs) | GB/s |
+|---|---|---:|---:|---:|
+| CU push | CU | 15,723.779 | 15,848.641 | 8.536 |
+| CU pull | CU | 15,623.289 | 15,657.848 | 8.591 |
+| `host_copy_path` | CU runtime copy kernel | 22,718.219 | 22,883.654 | 5.908 |
+
+CU pull/CU push is `0.993609×`, inside the pre-registered ±2% equivalence
+margin. `host_copy_path` is `1.454125×` CU pull and `1.444832×` CU push. These
+are mechanism-screen numbers, not final statistical claims: they are five
+within-process rotations rather than independent rank-per-GPU campaigns.
+
+The executor trace overturns the provisional API-based intuition. At this
+64 KiB point, rocprofv3 recorded 8,192 `hipMemcpyPeerAsync` calls, zero
+memory-copy-domain records, and direct same-correlation
+`__amd_rocclr_copyBuffer` kernel dispatches. Correlation 3354, for example,
+connects one 64 KiB device 1→0 API call to kernel id 8 on queue 2. There were
+no `hsa_amd_memory_async_copy_on_engine` calls. The arm is therefore verified
+as **CU**, not SDMA, at this configuration.
+
+Plot-ready data: `anchor_comparison_v1.json`
+(`exp01.anchor-comparison.v1`). Raw point summaries and logs are under `raw/`;
+executor adjudication is `raw/host_copy_anchor_executor_v1.json`, with the
+full 11.1 MB rocprofv3 trace in `raw/host_copy_anchor_trace_v1.json`.
 
 ## Fresh node calibration
 
@@ -48,18 +79,18 @@ Data: `calibration.json` (`exp01.calibration.v1`) and
 
 ## Open gates
 
-- build and self-test CU push, CU pull, and host copy diagnostic
-- prove early/dropped publication and redirect controls fail
-- complete a 600-epoch Stage-0 soak
 - move final arms to one process per rank
-- establish host-copy executor for every size before using the `SDMA` label
+- run the Stage-1 size sweep and independent paired campaigns
+- trace every selected host-copy size; the 64 KiB anchor is CU-lowered
 - add same-API MORI forced-P2P/forced-SDMA comparison
 - add IRIS semantic replication
 
 ## Primitives
 
-The calibration reused `translate_peer`, packetized peer stores, and the
-directional synchronization primitives through exp_22. The Stage-0
-implementation will determine whether peer pull and explicit outstanding-depth
-need additive public helpers. No primitive conclusion is claimed from the
-calibration alone.
+The diagnostic uses `peer_bases`, `translate_peer`, `store_peer_packets`,
+`load_peer_packets`, `thread_release`, `release_and_publish`, bounded epoch
+polling, and directed slot retirement. No primitive extension was required.
+The useful negative finding is that HipKittens already expresses the symmetric
+push/pull protocol without open-coded peer-pointer arithmetic; the host-copy
+path still needs an explicit publication kernel because payload transport and
+ordering remain separate concerns.

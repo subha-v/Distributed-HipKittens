@@ -1,0 +1,3 @@
+[neutral] gates method=cu_pull size=65536 lifetime=one_epoch soak=600
+[neutral] emitted method=cu_pull size=65536 lifetime=one_epoch p50=15623.29 us
+[neutral] complete emitted=1 out=/home/subvadla/aug12_exp01/out/cu_pull_anchor_gate.jsonl

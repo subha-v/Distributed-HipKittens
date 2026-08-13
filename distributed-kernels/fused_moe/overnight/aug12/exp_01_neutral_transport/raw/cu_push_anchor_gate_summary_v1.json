@@ -1,0 +1,323 @@
+{
+  "crossovers": {
+    "cu_pull_vs_host_copy_path": [],
+    "cu_push_vs_cu_pull": [],
+    "cu_push_vs_host_copy_path": []
+  },
+  "duplicate_point_ids_latest_wins": [],
+  "experiment": "aug12 exp_01 one-process neutral transport diagnostic",
+  "load_warnings": [],
+  "methods": {
+    "cu_push": {
+      "gated_points": 1,
+      "median_point_p50_us": 15723.779,
+      "points": 1,
+      "record_bytes": [
+        65536
+      ]
+    }
+  },
+  "n_invalid": 0,
+  "n_points": 1,
+  "points": [
+    {
+      "blocker": null,
+      "comparison_family": "transport_equivalent",
+      "correctness": {
+        "all_rank_errors": 0,
+        "digest_pass": true,
+        "generation_pass": true,
+        "negative_controls": {
+          "early_publication": {
+            "applicable": true,
+            "detected": true,
+            "detector": "digest_sample_poison"
+          },
+          "no_publication": {
+            "applicable": true,
+            "detected": true,
+            "detector": "bounded_poll_timeout"
+          },
+          "redirected_destination": {
+            "applicable": true,
+            "detected": true,
+            "detector": "digest_sample_poison"
+          }
+        },
+        "output_poison_overwritten": true,
+        "poison_survivors": 0,
+        "samples_pass": true,
+        "soak_epochs": 600,
+        "soak_pass": true
+      },
+      "direction": "bidirectional",
+      "executor": {
+        "label": "cu",
+        "trace_artifact": null,
+        "transport_selector": null,
+        "verified": true
+      },
+      "fanout": 1,
+      "lifetime_mode": "one_epoch",
+      "memory_type": "hip_device_peer_access",
+      "method": "cu_push",
+      "point_id": "diagnostic|cu_push|rb65536|bytes67108864|one_epoch|soak600|rev2",
+      "provenance": {
+        "arch": "gfx950",
+        "command": "/home/subvadla/aug12_exp01/out/neutral_transport --out /home/subvadla/aug12_exp01/out/cu_push_anchor_gate.jsonl --anchor --method cu_push --lifetime one_epoch --rotations 5 --warmup 2 --soak",
+        "consumer_digest": "xor_plus_modular_add_plus_deterministic_samples",
+        "devices": [
+          {
+            "name": "",
+            "pci_bus_id": "0000:76:00.0",
+            "rank": 0
+          },
+          {
+            "name": "",
+            "pci_bus_id": "0000:06:00.0",
+            "rank": 1
+          }
+        ],
+        "diagnostic_scope": "one_process_two_gpu",
+        "hip_driver": 70253211,
+        "hip_runtime": 70253211,
+        "source_rev": 2,
+        "src_revision_macro": "NEUTRAL_TRANSPORT_SRC_REV"
+      },
+      "ranks": 2,
+      "record_bytes": 65536,
+      "records_per_rank": 1024,
+      "schema_version": "exp01.transport-point.v1",
+      "status": "gated",
+      "tail_record_bytes": 65536,
+      "timing": {
+        "campaigns": 1,
+        "device_host_timer_agreement_pass": true,
+        "gbps": 8.53597140992633,
+        "global_makespan_us": {
+          "p50": 15723.779,
+          "p95": 15848.641,
+          "values": [
+            15723.779,
+            15794.769,
+            15862.109,
+            15660.859,
+            15620.479
+          ]
+        },
+        "iterations_per_campaign": 5,
+        "per_direction": [
+          {
+            "component_spans_us": {
+              "consumer": {
+                "p50": 15572.28,
+                "p95": 15689.216,
+                "values": [
+                  15700.92,
+                  15572.28,
+                  15542.36,
+                  15642.4,
+                  15549.12
+                ]
+              },
+              "producer": {
+                "p50": 32.51,
+                "p95": 32.574,
+                "values": [
+                  32.51,
+                  32.59,
+                  32.51,
+                  32.48,
+                  32.47
+                ]
+              },
+              "transport": {
+                "p50": 1301.09,
+                "p95": 1303.93,
+                "values": [
+                  1299.55,
+                  1300.85,
+                  1302.97,
+                  1304.17,
+                  1301.09
+                ]
+              }
+            },
+            "destination_rank": 0,
+            "enqueue_us": {
+              "p50": 0.0,
+              "p95": 0.0,
+              "values": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "hip_events_us": {
+              "local_wall": {
+                "p50": 15576.4332,
+                "p95": 15693.2497,
+                "values": [
+                  15704.9541,
+                  15576.4332,
+                  15546.4315,
+                  15646.4319,
+                  15553.1931
+                ]
+              },
+              "producer": {
+                "p50": 42.8,
+                "p95": 42.936,
+                "values": [
+                  42.84,
+                  42.96,
+                  42.68,
+                  42.8,
+                  42.68
+                ]
+              },
+              "transport": {
+                "p50": 1304.932,
+                "p95": 1307.757,
+                "values": [
+                  1303.413,
+                  1304.612,
+                  1306.893,
+                  1307.973,
+                  1304.932
+                ]
+              }
+            },
+            "poll_spins": [
+              1705,
+              1796,
+              1811,
+              1786,
+              1769
+            ],
+            "source_rank": 1,
+            "timestamp_rule": "spans_subtract_ticks_only_within_one_gpu",
+            "transport_initiator_rank": 1
+          },
+          {
+            "component_spans_us": {
+              "consumer": {
+                "p50": 15619.92,
+                "p95": 15821.792,
+                "values": [
+                  15619.92,
+                  15767.52,
+                  15835.36,
+                  15345.44,
+                  15592.56
+                ]
+              },
+              "producer": {
+                "p50": 31.95,
+                "p95": 32.01,
+                "values": [
+                  31.97,
+                  31.86,
+                  32.02,
+                  31.86,
+                  31.95
+                ]
+              },
+              "transport": {
+                "p50": 1299.84,
+                "p95": 1301.012,
+                "values": [
+                  1298.7,
+                  1298.57,
+                  1301.17,
+                  1300.38,
+                  1299.84
+                ]
+              }
+            },
+            "destination_rank": 1,
+            "enqueue_us": {
+              "p50": 0.0,
+              "p95": 0.0,
+              "values": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "hip_events_us": {
+              "local_wall": {
+                "p50": 15624.1121,
+                "p95": 15825.9697,
+                "values": [
+                  15624.1121,
+                  15771.6331,
+                  15839.5538,
+                  15349.39,
+                  15595.7117
+                ]
+              },
+              "producer": {
+                "p50": 42.4,
+                "p95": 42.512,
+                "values": [
+                  42.48,
+                  42.361,
+                  42.52,
+                  42.28,
+                  42.4
+                ]
+              },
+              "transport": {
+                "p50": 1304.052,
+                "p95": 1304.9888,
+                "values": [
+                  1302.412,
+                  1302.573,
+                  1305.213,
+                  1304.092,
+                  1304.052
+                ]
+              }
+            },
+            "poll_spins": [
+              1765,
+              1697,
+              1756,
+              1689,
+              1673
+            ],
+            "source_rank": 0,
+            "timestamp_rule": "spans_subtract_ticks_only_within_one_gpu",
+            "transport_initiator_rank": 0
+          }
+        ],
+        "scope": "transport_plus_dependent_consumer",
+        "timer_agreement": {
+          "absolute_delta_us": 99.6669,
+          "host_p50_us": 15723.779,
+          "max_local_hip_event_p50_us": 15624.1121,
+          "tolerance_us": 786.189
+        }
+      },
+      "total_bytes_per_rank": 67108864,
+      "work": {
+        "control_bytes": 8,
+        "descriptors": 0,
+        "launches": 4,
+        "payload_bytes": 134217728,
+        "publications": 2,
+        "queue_depth": null
+      }
+    }
+  ],
+  "schema_version": "exp01.transport-summary.v1",
+  "scope": "fast diagnostic; not final rank-per-GPU MORI/IRIS comparison",
+  "source_jsonl": "/home/subvadla/aug12_exp01/out/cu_push_anchor_gate.jsonl",
+  "status": "gated",
+  "validation_errors": {}
+}

@@ -9,7 +9,7 @@ soak, timing, and executor-label gates are all satisfied.
 | Method regime map | `exp_02_carrier_plane/carrier_regimes.json` | Stage 2 | pending Stage 1 |
 | Overlap frontier | `exp_02_carrier_plane/carrier_regimes.json` | Stage 2 | pending Stage 1 |
 | Direction map | `exp_04_protocol_plane/protocol_regimes.json` | Stages 5–6 | pending |
-| Engine crossover | `exp_01_neutral_transport/transport_crossover.json` | Stages 0–1 | in progress |
+| Engine crossover | `exp_01_neutral_transport/anchor_comparison_v1.json` | Stages 0–1 | 64 KiB diagnostic anchor gated; size sweep pending |
 | Protocol crossover | `exp_04_protocol_plane/protocol_regimes.json` | Stages 4–6 | pending |
 | Flow-control map | `exp_04_protocol_plane/protocol_regimes.json` | Stage 5 | pending |
 | Scope crossover | `exp_03_hybrid_pipeline/hybrid_pipeline.json` | Stages 3/7 | pending |

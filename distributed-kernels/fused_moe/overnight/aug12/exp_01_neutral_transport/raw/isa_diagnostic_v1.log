@@ -1,0 +1,137 @@
+clang++: warning: argument unused during compilation: '--hip-link' [-Wunused-command-line-argument]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:537:9: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  537 |         hipEventDestroy(dev.producer_begin);
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:538:9: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  538 |         hipEventDestroy(dev.producer_end);
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:539:9: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  539 |         hipEventDestroy(dev.transport_begin);
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:540:9: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  540 |         hipEventDestroy(dev.transport_end);
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:541:9: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  541 |         hipEventDestroy(dev.wall_begin);
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:542:9: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  542 |         hipEventDestroy(dev.wall_end);
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:543:9: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  543 |         hipStreamDestroy(dev.producer_stream);
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:544:9: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  544 |         hipStreamDestroy(dev.transport_stream);
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:545:9: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  545 |         hipStreamDestroy(dev.consumer_stream);
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:546:9: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  546 |         hipFree(dev.outbound);
+      |         ^~~~~~~~~~~~~~~~~~~~~
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:547:9: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  547 |         hipFree(dev.inbox);
+      |         ^~~~~~~~~~~~~~~~~~
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:548:9: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  548 |         hipFree(dev.ready);
+      |         ^~~~~~~~~~~~~~~~~~
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:549:9: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  549 |         hipFree(dev.consumed);
+      |         ^~~~~~~~~~~~~~~~~~~~~
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:550:9: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  550 |         hipFree(dev.completion_count);
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:551:9: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  551 |         hipFree(dev.expected);
+      |         ^~~~~~~~~~~~~~~~~~~~~
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:552:9: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  552 |         hipFree(dev.actual);
+      |         ^~~~~~~~~~~~~~~~~~~
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:553:9: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  553 |         hipFree(dev.producer_stamps);
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:554:9: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  554 |         hipFree(dev.transport_stamps);
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:555:9: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+  555 |         hipFree(dev.consumer_stamp);
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:1272:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+ 1272 |     hipRuntimeGetVersion(&runtime_version);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:1273:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+ 1273 |     hipDriverGetVersion(&driver_version);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:139:1: remark: Function Name: _ZN12_GLOBAL__N_115generate_kernelENS_14GenerateParamsE [-Rpass-analysis=kernel-resource-usage]
+  139 | __global__ __launch_bounds__(kThreads) void generate_kernel(GenerateParams params) {
+      | ^
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:139:1: remark:     TotalSGPRs: 49 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:139:1: remark:     VGPRs: 20 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:139:1: remark:     AGPRs: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:139:1: remark:     ScratchSize [bytes/lane]: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:139:1: remark:     Dynamic Stack: False [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:139:1: remark:     Occupancy [waves/SIMD]: 8 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:139:1: remark:     SGPRs Spill: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:139:1: remark:     VGPRs Spill: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:139:1: remark:     LDS Size [bytes/block]: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:187:1: remark: Function Name: _ZN12_GLOBAL__N_116transport_kernelENS_15TransportParamsE [-Rpass-analysis=kernel-resource-usage]
+  187 | __global__ __launch_bounds__(kThreads) void transport_kernel(TransportParams params) {
+      | ^
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:187:1: remark:     TotalSGPRs: 73 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:187:1: remark:     VGPRs: 14 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:187:1: remark:     AGPRs: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:187:1: remark:     ScratchSize [bytes/lane]: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:187:1: remark:     Dynamic Stack: False [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:187:1: remark:     Occupancy [waves/SIMD]: 8 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:187:1: remark:     SGPRs Spill: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:187:1: remark:     VGPRs Spill: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:187:1: remark:     LDS Size [bytes/block]: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:274:1: remark: Function Name: _ZN12_GLOBAL__N_113digest_kernelENS_12DigestParamsE [-Rpass-analysis=kernel-resource-usage]
+  274 | __global__ __launch_bounds__(kThreads) void digest_kernel(DigestParams params) {
+      | ^
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:274:1: remark:     TotalSGPRs: 73 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:274:1: remark:     VGPRs: 31 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:274:1: remark:     AGPRs: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:274:1: remark:     ScratchSize [bytes/lane]: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:274:1: remark:     Dynamic Stack: False [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:274:1: remark:     Occupancy [waves/SIMD]: 8 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:274:1: remark:     SGPRs Spill: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:274:1: remark:     VGPRs Spill: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:274:1: remark:     LDS Size [bytes/block]: 8208 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:371:1: remark: Function Name: _ZN12_GLOBAL__N_114publish_kernelEPjjj [-Rpass-analysis=kernel-resource-usage]
+  371 |                                std::uint32_t epoch) {
+      | ^
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:371:1: remark:     TotalSGPRs: 12 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:371:1: remark:     VGPRs: 2 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:371:1: remark:     AGPRs: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:371:1: remark:     ScratchSize [bytes/lane]: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:371:1: remark:     Dynamic Stack: False [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:371:1: remark:     Occupancy [waves/SIMD]: 8 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:371:1: remark:     SGPRs Spill: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:371:1: remark:     VGPRs Spill: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:371:1: remark:     LDS Size [bytes/block]: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:375:1: remark: Function Name: _ZN12_GLOBAL__N_118stamp_begin_kernelEPNS_5StampE [-Rpass-analysis=kernel-resource-usage]
+  375 | __global__ void stamp_begin_kernel(Stamp* stamp) {
+      | ^
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:375:1: remark:     TotalSGPRs: 10 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:375:1: remark:     VGPRs: 4 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:375:1: remark:     AGPRs: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:375:1: remark:     ScratchSize [bytes/lane]: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:375:1: remark:     Dynamic Stack: False [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:375:1: remark:     Occupancy [waves/SIMD]: 8 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:375:1: remark:     SGPRs Spill: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:375:1: remark:     VGPRs Spill: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:375:1: remark:     LDS Size [bytes/block]: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:379:1: remark: Function Name: _ZN12_GLOBAL__N_116stamp_end_kernelEPNS_5StampEm [-Rpass-analysis=kernel-resource-usage]
+  379 | __global__ void stamp_end_kernel(Stamp* stamp, std::uint64_t work) {
+      | ^
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:379:1: remark:     TotalSGPRs: 12 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:379:1: remark:     VGPRs: 5 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:379:1: remark:     AGPRs: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:379:1: remark:     ScratchSize [bytes/lane]: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:379:1: remark:     Dynamic Stack: False [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:379:1: remark:     Occupancy [waves/SIMD]: 8 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:379:1: remark:     SGPRs Spill: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:379:1: remark:     VGPRs Spill: 0 [-Rpass-analysis=kernel-resource-usage]
+/home/subvadla/aug12_exp01/src/neutral_transport.hip:379:1: remark:     LDS Size [bytes/block]: 0 [-Rpass-analysis=kernel-resource-usage]
+21 warnings generated when compiling for gfx950.

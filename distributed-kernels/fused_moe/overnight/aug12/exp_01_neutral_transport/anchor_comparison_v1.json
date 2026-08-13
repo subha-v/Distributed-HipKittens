@@ -1,0 +1,63 @@
+{
+  "schema_version": "exp01.anchor-comparison.v1",
+  "scope": "one_process_two_gpu_diagnostic",
+  "record_bytes": 65536,
+  "total_bytes_per_rank": 67108864,
+  "direction": "bidirectional",
+  "lifetime_mode": "one_epoch",
+  "rotations": 5,
+  "gates": {
+    "negative_controls_per_method": [
+      "redirected_destination",
+      "early_publication",
+      "no_publication"
+    ],
+    "soak_epochs_per_method": 600,
+    "all_methods_passed": true
+  },
+  "points": [
+    {
+      "method": "cu_push",
+      "executor": {
+        "label": "cu",
+        "verified": true
+      },
+      "global_makespan_p50_us": 15723.779,
+      "global_makespan_p95_us": 15848.641,
+      "gbps": 8.535971
+    },
+    {
+      "method": "cu_pull",
+      "executor": {
+        "label": "cu",
+        "verified": true
+      },
+      "global_makespan_p50_us": 15623.289,
+      "global_makespan_p95_us": 15657.8478,
+      "gbps": 8.590875
+    },
+    {
+      "method": "host_copy_path",
+      "executor": {
+        "label": "cu",
+        "verified": true,
+        "trace_artifact": "raw/host_copy_anchor_trace_v1.json",
+        "adjudication_artifact": "raw/host_copy_anchor_executor_v1.json"
+      },
+      "global_makespan_p50_us": 22718.219,
+      "global_makespan_p95_us": 22883.654,
+      "gbps": 5.907934
+    }
+  ],
+  "ratios": {
+    "cu_pull_over_cu_push": 0.993609043,
+    "host_copy_path_over_cu_pull": 1.454125249,
+    "host_copy_path_over_cu_push": 1.444831996
+  },
+  "provisional_verdict": "CU push and CU pull are equivalent within the frozen plus-or-minus 2 percent margin at the 64 KiB diagnostic anchor. hipMemcpyPeerAsync is CU-lowered here and is about 45 percent slower end-to-end because it enqueues one runtime copy kernel per record.",
+  "limitations": [
+    "This is the one-process diagnostic, not the final rank-per-GPU comparison.",
+    "Five within-process rotations are not independent campaign replicates.",
+    "Stage-1 size sweep and paired cluster bootstrap remain pending."
+  ]
+}

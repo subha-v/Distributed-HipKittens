@@ -32,3 +32,27 @@
 - `scope:` This is machine-state calibration only. The one-process exp_22
   topology, missing negative controls, and missing 600-epoch soak make it
   inadmissible as a Stage-0 transport-method result.
+
+## 2026-08-12 — gated one-process 64 KiB transport anchor
+
+- `correctness:` CU push, CU pull, and `host_copy_path` each passed exact
+  digest/samples, poison overwrite, redirected-destination, early-publication,
+  no-publication, 600-epoch soak, and host/device timer gates.
+- `anchor:` Global p50 makespans were CU push `15,723.779 µs`, CU pull
+  `15,623.289 µs`, and host copy `22,718.219 µs`. CU pull/CU push is
+  `0.993609×`, inside the frozen ±2% equivalence interval. This is diagnostic,
+  not confirmatory, because the five rotations share one process.
+- `executor:` The 64 KiB `hipMemcpyPeerAsync` arm is CU-lowered, not SDMA.
+  rocprofv3 found 8,192 peer-copy API calls, zero memory-copy-domain records,
+  direct same-correlation `__amd_rocclr_copyBuffer` dispatches, and zero
+  `hsa_amd_memory_async_copy_on_engine` calls.
+- `method:` An API→CU-kernel correlation is positive executor evidence even
+  when rocprofv3's memory-copy domain is empty. The pre-registered
+  “no CU payload kernel” expectation was falsified and superseded for
+  CU-lowered host APIs.
+- `mechanism:` One runtime copy-kernel enqueue per 64 KiB record makes the host
+  path `1.454125×` CU pull end-to-end at the anchor. Do not call this an SDMA
+  loss; no SDMA executor participated.
+- `primitives:` `peer_bases`, `translate_peer`, packet push/pull, system-scope
+  publication, bounded polling, and directed retirement were sufficient; no
+  additive primitive was required for the diagnostic.
