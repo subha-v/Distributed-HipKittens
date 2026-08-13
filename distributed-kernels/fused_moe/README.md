@@ -33,9 +33,16 @@ while keeping operator policy separate from distributed mechanisms.
 - `overnight/` — date-organized experiment log (see `overnight/README.md`):
   `aug10/` holds the MPS overnight loop that produced the current ratchet
   (`mps_mega` 0.888× production, exp_01–exp_21, STATUS/LESSONS ledgers);
-  `aug11/` holds the planned NanoFlow-analog instrumentation experiments
-  (exp_22 saturation-vs-CTA-count ubench, exp_23 resource-utilization
-  timeline).
+  `aug11/` holds the paper-figure campaigns (exp_22–exp_38: saturation,
+  attribution, waterfall, placement, mode-14 coarse readiness, ratchet
+  restore) plus `OVERLAP_METHODOLOGY_STUDY.md` (the staged
+  communication/computation-overlap research program);
+  `aug12/` holds the neutral transport/overlap ablation suite
+  (`exp_01_neutral_transport/`) plus `OVERLAP_KERNEL_DESIGN_IDEAS.md` —
+  the novel kernel-design queue derived from the measured evidence: SDMA
+  pack dispatch (K1), staged-SDMA combine transport (K2/mode 15), TBO-2
+  epoch-pipelined megakernel (K3), nc-major task order (K0),
+  per-destination credits for skew (K6), and the workload-strategy map.
 - `../common/check_port_invariants.py` — static and optional upstream hash checks.
 
 The common HipKittens layer does not know routing, task descriptors, or the PF6
