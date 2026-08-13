@@ -1,0 +1,20 @@
+--- /home/subvadla/amd-master/auto-gpu-kernel/k0_fused_moe/prefill_opt/kernels/k0pf6gm_mega.hip	2026-08-06 23:47:35.475497637 +0000
++++ /home/subvadla/tgen_kernels/k0pf6gm_mega.hip	2026-08-13 06:27:20.781168951 +0000
+@@ -726,9 +726,16 @@
+           // word is settled: Step B already polled/acquired every chunk this rank consumes, and the
+           // producer published all nchunks unconditionally. epoch match guaranteed by Step B success.
+           const unsigned int fill = (unsigned int)(w & 0xffffffffu);
++          // exp_04_tgen (aug13) T-GENERALIZATION FIX (private copy; mirrors the DHK
++          // chassis fix at ablations-tgen af030778): clamp the chunk end to the
++          // segment so phantom chunks (c*CHUNK >= MAXTOK) sentinel nothing instead
++          // of spraying recv_eid=-1 over following segments (the exp_36 T=1024/2048
++          // wrong-output blocker). Exact-math at MAXTOK=4096.
++          long long seg_row1 = (long long)(c + 1) * K0P6_CHUNK;
++          if (seg_row1 > (long long)MAXTOK) seg_row1 = (long long)MAXTOK;
+           const long long base = (long long)s * (long long)MAXTOK + (long long)c * K0P6_CHUNK;
+           const long long hole0 = (base + (long long)fill) * TOPK;
+-          const long long hole1 = (base + (long long)K0P6_CHUNK) * TOPK;
++          const long long hole1 = ((long long)s * (long long)MAXTOK + seg_row1) * TOPK;
+           for (long long i = hole0 + gtid; i < hole1; i += gstride) recv_eid_h[i] = -1;
+         }
+       }

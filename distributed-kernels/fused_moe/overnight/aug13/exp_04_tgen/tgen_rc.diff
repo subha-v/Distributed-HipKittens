@@ -1,0 +1,18 @@
+--- /home/subvadla/e36/rc_T.sh	2026-08-12 11:14:58.251290167 +0000
++++ /home/subvadla/e36/rc_Ttgen.sh	2026-08-13 06:28:24.776165137 +0000
+@@ -116,6 +116,7 @@
+       --cap-add SYS_PTRACE --security-opt seccomp=unconfined \
+       -v "${WORKSPACE_ROOT}:/workspace/amd-master:ro" \
+       -v "${DHK_ROOT}:/workspace/Distributed-HipKittens:ro" \
++      -v "${HOME}/tgen_kernels:/workspace/tgen_kernels:ro" \
+       -v "${cache_root}:/work" \
+       -v "${run_dir}:/out" \
+       -e HSA_XNACK=1 \
+@@ -125,6 +126,7 @@
+       -e "K0_CONTAINER_IMAGE=${image}" \
+       -e K0_BASE=/workspace/amd-master/auto-gpu-kernel/k0_fused_moe \
+       -e K0_DHK_ROOT=/workspace/Distributed-HipKittens \
++      -e K0PF3_SRC_DIR=/workspace/tgen_kernels \
+       -e K0_PYBIND_DIR=/work/build/python \
+       -e K0_OUT_DIR=/out \
+       -e K0_INPUT_MODE=mok_synthetic \
