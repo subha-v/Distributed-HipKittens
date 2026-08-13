@@ -52,8 +52,13 @@ The first new kernel from that program is
 (`k0pf6gm_m15_mega`): the mode-12 depth-4 ratchet restructured into an
 nc-major, two-slab GEMM-2 with slab-certified coarse readiness, a mid-epoch
 front-half combine running in GEMM-2's shadow, and a compile-gated staged
-wide-push transport arm. Unmeasured; contract and gate ladder in
-`overnight/aug12/M15_DESIGN.md`.
+wide-push transport arm. Contract and gate ladder in
+`overnight/aug12/M15_DESIGN.md`. **Measured 2026-08-13 on 8× MI350X
+(`overnight/aug12/exp_03_m15_slab_combine/result.md`): 6,292.4 µs p50 =
+0.8165× the AITER+MORI production arm — −191.4 µs below the prior mode-12
+ratchet in the same session, all correctness/poison/soak gates green.** The
+same session adjudicated the mode-16 TBO-2 deferred-combine arm at +75.8 µs
+(falsified; `overnight/aug12/exp_02_tbo_deferred_combine/result.md`).
 
 Latest additions to the device primitive layer and the fused-MoE port
 (`distributed-kernels/fused_moe/`):

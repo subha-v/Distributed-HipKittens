@@ -82,3 +82,32 @@ plot-ready artifact lands here.
 | `OVERLAP_KERNEL_DESIGN_IDEAS.md` | written (K0–K8 design queue) |
 | `LESSONS.md` | live |
 | `PLOTS.md` | live |
+
+---
+
+## 2026-08-13 session: mode 16 adjudicated, M15 lands a new best
+
+Same-session tournament (all 5-rotation campaigns, stamps-off, production
+denominator stable 7,706–7,719, control reproduces the published ratchet to
+1.1 µs; full records in `exp_02_tbo_deferred_combine/result.md` and
+`exp_03_m15_slab_combine/result.md`):
+
+| arm | p50 median µs | × production |
+|---|---:|---:|
+| production | 7,712.0 | 1.000 |
+| pf6gm_mega | 6,908.8 | 0.8958 |
+| mode-12 ratchet (in-session control) | 6,483.8 | 0.8407 |
+| mode 16 TBO-2 deferred combine | 6,559.6 | 0.8513 — **rung falsified** (+75.8, falsifier +30) |
+| **M15 slab-certified pipelined combine, C=16** | **6,292.4** | **0.8165 — NEW BEST, −191.4 µs** |
+| M15, C=8 | 6,385.2 | 0.8288 (placement law inverts: pool sweeps are productive) |
+
+- mode 16's eager failure was a host-side 1-based-epoch off-by-one in the
+  parity helpers (patches 4/5 on the node driver); kernel exonerated.
+- M15 attribution: M7+combine 3,026.1 → 2,833.1 (combine residue 324 → 180);
+  M6 flat; budget closes onto the end-to-end delta within 2 µs. exp_38
+  issue-run gate: 282 atomics / 10 runs / mean 28.2 / one vmcnt(0) — the
+  injection window is wider than the ratchet's.
+- **Ratchet candidate: `k0pf6gm_m15_mega` (ablations-m15 pin) C=16, g=353,
+  mode=12, flush_rows=16 = 6,292.4 µs = 0.8165×.** The 0.80× line (6,172)
+  is 120 µs away; nearest levers: C∈{24,32}×flush sweep, the C≤8-era
+  stamps-off confirmation, staged arm (mode 15b), G=4-class M6 work.
