@@ -57,6 +57,18 @@ CPU-only selftest and gfx950 build pass; the diagnostic rerun is pending.
 Evidence: `raw/rank_gate_cu_push_attempt4.{log,json}` and
 `raw/rank_gate_runner_attempt4.jsonl`.
 
+The source-rev-2 rerun resolves the failure: payload correctness and protocol
+state are green on both ranks (exact XOR/ADD digests, zero mismatches, zero
+poison/sample failures, ready/completion epoch 1, returned credit 1). Only
+timer agreement failed. `clock64()` spans from separate one-CTA stamp kernels
+are not a valid cross-CU interval: rank 1 reported a 55,576.5 µs device
+transport interval around a 1,278.81 µs HIP event. Rank 0 independently missed
+the consumer tolerance (1,622.27 vs 1,464.76 µs). Source rev 3 changes only
+the stamp clock to the globally synchronized 100 MHz `s_memrealtime` used by
+the gated one-process diagnostic; payload, publication, and lifetime code are
+unchanged. The selftest and gfx950 build pass; the corrected gate is pending.
+Evidence: `raw/rank_gate_cu_push_attempt5.{log,json}`.
+
 ## Fresh node calibration
 
 A fresh exp_22 quick-tier run completed on the `ablations` checkout before the

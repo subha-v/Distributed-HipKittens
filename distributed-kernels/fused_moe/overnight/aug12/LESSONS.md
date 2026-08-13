@@ -69,3 +69,8 @@
   early-publication on both ranks. Do not infer a transport failure yet:
   source rev 1 did not serialize positive digest/epoch/credit/timer metrics.
   Source rev 2 adds those diagnostics without changing transport semantics.
+- `timing:` Never subtract `clock64()` values written by separate kernels:
+  they may execute on different CUs. The rev-2 rank gate was data/protocol
+  correct on both ranks, but one such span read 55,576.5 µs against a
+  1,278.81 µs HIP event. Use the globally synchronized 100 MHz
+  `s_memrealtime` counter for cross-kernel device spans.

@@ -5,7 +5,7 @@
 // epoch + directed-credit protocol.  The three payload paths are separate
 // kernels/host paths so an unused method cannot perturb another method's
 // device code generation.
-#define EXP01_RANK_SRC_REV 2
+#define EXP01_RANK_SRC_REV 3
 
 #include <hip/hip_runtime.h>
 #include <mpi.h>
@@ -49,6 +49,7 @@ constexpr std::uint64_t kPoison = 0xd15ea5edbad0c0deull;
 constexpr std::uint64_t kOutputPoison = 0xfacefeedcafebeefull;
 constexpr std::uint32_t kThreads = 256;
 constexpr std::uint64_t kChunkBytes = 1ull << 20;
+constexpr std::uint64_t kRealtimeHz = 100000000ull;
 constexpr int kDigestBlocks = 256;
 constexpr int kSampleCount = 8;
 constexpr std::uint64_t kDefaultSpinLimit = 1ull << 22;
@@ -334,6 +335,13 @@ struct DeviceStamps {
     unsigned long long consumer_end;
 };
 
+__device__ __forceinline__ std::uint64_t realtime_now() {
+    std::uint64_t ticks;
+    asm volatile("s_memrealtime %0\n\ts_waitcnt lgkmcnt(0)"
+                 : "=s"(ticks) :: "memory");
+    return ticks;
+}
+
 __global__ void fill_payload_kernel(std::uint64_t* destination,
                                     std::uint64_t total_words,
                                     std::uint64_t words_per_record,
@@ -381,7 +389,7 @@ __global__ void reset_digest_kernel(DeviceDigest* digest) {
 }
 
 __global__ void stamp_kernel(unsigned long long* destination) {
-    if (blockIdx.x == 0 && threadIdx.x == 0) *destination = clock64();
+    if (blockIdx.x == 0 && threadIdx.x == 0) *destination = realtime_now();
 }
 
 __global__ void delay_kernel(std::uint64_t cycles) {
@@ -1029,7 +1037,7 @@ IterationResult run_iteration(const Options& options, Buffers& buffers,
                  hipMemcpyDeviceToHost));
 
     const double cycles_per_us =
-        static_cast<double>(buffers.properties.clockRate) / 1000.0;
+        static_cast<double>(kRealtimeHz) / 1.0e6;
     RankMetric local;
     local.producer_us = static_cast<double>(producer_ms) * 1000.0;
     local.transport_event_us = static_cast<double>(transport_ms) * 1000.0;
