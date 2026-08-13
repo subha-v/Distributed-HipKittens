@@ -84,7 +84,7 @@ namespace hk_moe::mps {
 // overnight/aug12/exp_02_tbo_deferred_combine/design.md for the full protocol
 // delta and the required host allocation/gate-lag patch.
 #ifndef K0P6_MPS_ENABLE_TBO
-#define K0P6_MPS_ENABLE_TBO 0
+#define K0P6_MPS_ENABLE_TBO 1
 #endif
 
 // ---- K0P6_D_MPS_STATE scalar word lanes -------------------------------------

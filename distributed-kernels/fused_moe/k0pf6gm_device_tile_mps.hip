@@ -104,7 +104,7 @@
 // .cuh-only change, then confirm a new hsaco mtime under
 // ~/.cache/k0-mok-synthetic-prefill/mori/jit/gfx950_mlx5/*/ before believing
 // any number. The value is never read; only its presence in the hash matters.
-#define K0P6_MPS_SRC_REV 31
+#define K0P6_MPS_SRC_REV 32
 
 // exp_27: which activation-scale layout M6 reads, and therefore whether M5's
 // scale transpose exists at all.
