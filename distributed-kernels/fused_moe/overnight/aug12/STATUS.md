@@ -74,5 +74,10 @@ plot-ready artifact lands here.
 | `exp_01_neutral_transport/anchor_comparison_v1.json` | diagnostic anchor gated |
 | `exp_01_neutral_transport/raw/host_copy_anchor_executor_v1.json` | executor verified CU |
 | `exp_01_neutral_transport/transport_crossover.json` | pending Stage-1 sweep |
+| `exp_02_tbo_deferred_combine/plan.md` | written; GPU gates pending (lease) |
+| `exp_02_tbo_deferred_combine/design.md` | written (protocol delta + happens-before proof) |
+| `exp_02_tbo_deferred_combine/host_patch_spec.md` | written (required host allocations + gate lag) |
+| **mode 16 kernel** | **IMPLEMENTED** behind `K0P6_MPS_ENABLE_TBO=0` default; CPU audits green; awaiting node build + gate ladder |
+| `OVERLAP_KERNEL_DESIGN_IDEAS.md` | written (K0–K8 design queue) |
 | `LESSONS.md` | live |
 | `PLOTS.md` | live |

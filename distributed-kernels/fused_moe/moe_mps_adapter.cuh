@@ -58,6 +58,35 @@ namespace hk_moe::mps {
 #define K0P6_MPS_ENABLE_MODE14 0
 #endif
 
+// ---- exp_02 (aug12) mode 16: DEFERRED COMBINE (TBO-2 epoch pipelining, stage
+// A+B). SAME DISCIPLINE AS MODE 14, FOR THE SAME MEASURED REASON: merely adding
+// a third compare to `mode_is_direct_accum` once cost the mode-12 ratchet
+// +726.9 us through whole-function register allocation (exp_38). Everything
+// mode 16 adds sits behind this flag, default OFF, so the DEFAULT build of
+// this tree stays `.text`-identical to the TBO-free build. Turn it on with
+// -DK0P6_MPS_ENABLE_TBO=1 to run exp_02's mode-16 arms.
+//
+//   *** NEVER PUBLISH A MODE-12 NUMBER FROM A TBO=1 BINARY ***
+//
+// Mode 16 IS mode 12's transport (remote packed-bf16 epilogue accumulate with
+// the depth-4 throttle) and mode 12's readiness protocol (event queue, drain,
+// per-row row_ready) VERBATIM. The one semantic change is WHEN the combine
+// (M8) runs: launch i runs M7/drain for epoch i but claims the combine batches
+// of epoch i-1, in two windows -- the plan shadow (all CTAs, after
+// pull_src_fill, before the M5 grid barrier, where mode 12's CTAs 2..255 are
+// idle at the ratchet config) and the usual M8 window for leftovers. To make
+// deferral sound, seven buffers are allocated at TWICE their size and indexed
+// by epoch parity (write side = current epoch's parity, consume side = the
+// deferred epoch's parity): slots(61), row_ready(25), pull_stage(12),
+// pull_cnt(13), pull_ptr(18), pull_src(19), out(32). M0's retire-wait loosens
+// from epoch-1 to epoch-2 (the ping-pong protection depth) and M9 pokes
+// retired := epoch-1 (the epoch whose slots M8 just consumed+zeroed). See
+// overnight/aug12/exp_02_tbo_deferred_combine/design.md for the full protocol
+// delta and the required host allocation/gate-lag patch.
+#ifndef K0P6_MPS_ENABLE_TBO
+#define K0P6_MPS_ENABLE_TBO 0
+#endif
+
 // ---- K0P6_D_MPS_STATE scalar word lanes -------------------------------------
 #define K0P6_MPS_ST_TICKET 0   // finish-order role tickets (agent monotonic)
 #define K0P6_MPS_ST_TAIL 1     // event tail ticket (monotonic, capacity-bound)
@@ -258,7 +287,26 @@ inline constexpr std::uint32_t kDiagVariantWrite = 4u;
 // this predicate stays byte-identical for every mode that predates exp_34.
 __host__ __device__ __forceinline__ bool mode_is_stream(config c) {
     return c.mode == 2u || c.mode == 3u || c.mode == 4u || c.mode == 7u ||
-           c.mode == 8u || c.mode == 9u || c.mode == 12u || c.mode == 13u;
+           c.mode == 8u || c.mode == 9u || c.mode == 12u || c.mode == 13u
+#if K0P6_MPS_ENABLE_TBO
+           || c.mode == 16u   // kModeDeferCombine (declared below; literal idiom
+                             // matches this predicate's other arms)
+#endif
+        ;
+}
+
+// exp_02 mode 16. Kept out of the mode_is_stream comment chain above for the
+// same reason mode 14 asked for its own predicate: mode 16 wants the drain AND
+// the dynamic-ticket M8 half of mode_is_stream's gates, and the constant is
+// declared below. One predicate, one compare, used under K0P6_MPS_ENABLE_TBO
+// only.
+__host__ __device__ __forceinline__ bool mode_is_tbo(config c) {
+#if K0P6_MPS_ENABLE_TBO
+    return c.mode == 16u;    // kModeDeferCombine (declared below)
+#else
+    (void)c;
+    return false;
+#endif
 }
 
 // ---- exp_21 mode 9: the flush-fence ATTRIBUTE diagnostic (exp_06-style,
@@ -328,6 +376,23 @@ inline constexpr std::uint32_t kModeDirectRows = 13u;
 // which is the placement arm exp_37 wants; `is_service_cta` is deliberately
 // left UNCHANGED so the M7 stride `nct - C` and the reservation stay consistent.
 inline constexpr std::uint32_t kModeCoarseReady = 14u;
+
+// ---- exp_02 (aug12) mode 16: DEFERRED COMBINE (TBO-2 stage A+B) -------------
+// Mode 16 rides mode 12's remote-accumulate transport AND mode 12's per-row
+// readiness protocol unchanged. The experiment is purely TEMPORAL: epoch i's
+// combine runs inside launch i+1, claimed in the plan shadow (M4->M5 window,
+// where the ratchet config leaves CTAs 2..255 with no stripe work) and in the
+// regular M8 window for leftovers. Its overlap claim: M8's poll ballots all
+// pass on first check (the producing epoch completed last launch), so the
+// combine becomes ~330 us of unconditional load/store work absorbable into
+// plan's idle capacity, and the epoch's tail loses the whole combine phase.
+// Epoch 0 has no previous epoch: M8 and the retired-poke fall back to the
+// same-epoch values, so generation 0 is just mode 12 semantics.
+// Fields: identical grammar to modes 12/13 (physical g must be 1; the legal
+// g-bits are the direct-accumulate set; detect is REJECTED -- the deferred
+// detector would race non-parity `part` across generations; throttle/depth
+// unchanged; flush_rows keeps its drain meaning).
+inline constexpr std::uint32_t kModeDeferCombine = 16u;
 inline constexpr std::uint32_t kRemoteAccumGMask = 0xFu;   // physical g bits
 inline constexpr std::uint32_t kRemoteAccumDetectBit = 0x10u;
 #define K0P6_MPS_ERR_DUAL 134217728    // 1<<27: dual-write detector mismatch
@@ -402,6 +467,9 @@ __host__ __device__ __forceinline__ bool mode_is_direct_accum(config c) {
 #if K0P6_MPS_ENABLE_MODE14
            || c.mode == kModeCoarseReady
 #endif
+#if K0P6_MPS_ENABLE_TBO
+           || c.mode == kModeDeferCombine
+#endif
         ;
 }
 
@@ -444,9 +512,17 @@ __host__ __device__ __forceinline__ std::uint32_t throttle_depth_sel(config c) {
 // would silently also be an exp_24-A comparison.
 __host__ __device__ __forceinline__ bool skip_dead_part_zero(config c) {
 #if K0P6_MPS_ENABLE_MODE14
-    return (c.mode == kModeRemoteAccum || mode_is_coarse(c)) &&
+    return (c.mode == kModeRemoteAccum || mode_is_coarse(c)
+#if K0P6_MPS_ENABLE_TBO
+            || mode_is_tbo(c)
+#endif
+            ) &&
+#else
+#if K0P6_MPS_ENABLE_TBO
+    return (c.mode == kModeRemoteAccum || mode_is_tbo(c)) &&
 #else
     return c.mode == kModeRemoteAccum &&
+#endif
 #endif
            (c.group_slices & kRemoteAccumSkipPartZeroBit) != 0u &&
            !detect_dual(c) && !c.pull_fallback;
@@ -532,9 +608,17 @@ __host__ __device__ __forceinline__ bool config_is_valid(config c) {
         // it is never silently ignored.
         if ((c.group_slices & kRemoteAccumSkipPartZeroBit) != 0u) {
 #if K0P6_MPS_ENABLE_MODE14
-            if (c.mode != kModeRemoteAccum && !mode_is_coarse(c)) return false;
+            if (c.mode != kModeRemoteAccum && !mode_is_coarse(c)
+#if K0P6_MPS_ENABLE_TBO
+                && !mode_is_tbo(c)
+#endif
+                ) return false;
+#else
+#if K0P6_MPS_ENABLE_TBO
+            if (c.mode != kModeRemoteAccum && !mode_is_tbo(c)) return false;
 #else
             if (c.mode != kModeRemoteAccum) return false;
+#endif
 #endif
             if ((c.group_slices & kRemoteAccumDetectBit) != 0u) return false;
         }
@@ -552,9 +636,21 @@ __host__ __device__ __forceinline__ bool config_is_valid(config c) {
         if ((c.group_slices & kCoarseKeepDrainBit) != 0u &&
             !mode_is_coarse(c)) return false;
 #endif
+#if K0P6_MPS_ENABLE_TBO
+        // exp_02 mode 16: same rejection shape as mode 14's -- the dual-write
+        // detector's M8 instantiation POLLS the per-row flags AND pulls the
+        // producer's `part` tower. Under deferral `part` is NOT parity-indexed
+        // (nothing else writes it), so a deferred detector would compare epoch
+        // i-1's slot against epoch i's `part` -- a silent mix. Reject, exactly
+        // as mode 14 does.
+        if (mode_is_tbo(c) &&
+            (c.group_slices & kRemoteAccumDetectBit) != 0u) return false;
+#endif
     } else if (c.group_slices != 1u && c.group_slices != 2u &&
                c.group_slices != 4u && c.group_slices != 16u) return false;
-#if K0P6_MPS_ENABLE_MODE14
+#if K0P6_MPS_ENABLE_TBO
+    if (c.mode > 16u) return false;
+#elif K0P6_MPS_ENABLE_MODE14
     if (c.mode > 14u) return false;
 #else
     if (c.mode > 13u) return false;
@@ -1149,7 +1245,11 @@ __device__ __forceinline__ void run_service(
         }
         __syncwarp();
         const std::uint32_t npush = s.push_count;
-        if (env.mode == kModeRemoteAccum) {
+        if (env.mode == kModeRemoteAccum
+#if K0P6_MPS_ENABLE_TBO
+            || env.mode == kModeDeferCombine
+#endif
+            ) {
             // exp_21 mode 12: bookkeeping only. The completing lane of each
             // (row, chunk) counter counts the CHUNK toward the row's 16; the
             // payload reached the owner in the producer's own epilogue RMWs.

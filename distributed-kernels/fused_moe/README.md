@@ -38,11 +38,15 @@ while keeping operator policy separate from distributed mechanisms.
   restore) plus `OVERLAP_METHODOLOGY_STUDY.md` (the staged
   communication/computation-overlap research program);
   `aug12/` holds the neutral transport/overlap ablation suite
-  (`exp_01_neutral_transport/`) plus `OVERLAP_KERNEL_DESIGN_IDEAS.md` —
+  (`exp_01_neutral_transport/`), `OVERLAP_KERNEL_DESIGN_IDEAS.md` —
   the novel kernel-design queue derived from the measured evidence: SDMA
   pack dispatch (K1), staged-SDMA combine transport (K2/mode 15), TBO-2
   epoch-pipelined megakernel (K3), nc-major task order (K0),
-  per-destination credits for skew (K6), and the workload-strategy map.
+  per-destination credits for skew (K6), and the workload-strategy map —
+  and `exp_02_tbo_deferred_combine/`: **K3 stage A+B implemented** as
+  mode 16 (`kModeDeferCombine`) behind `K0P6_MPS_ENABLE_TBO` — epoch i's
+  combine consumed inside launch i+1 over epoch-parity buffer
+  generations, with the plan-shadow claim window before the M5 barrier.
 - `../common/check_port_invariants.py` — static and optional upstream hash checks.
 
 The common HipKittens layer does not know routing, task descriptors, or the PF6

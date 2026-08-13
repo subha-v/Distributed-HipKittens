@@ -354,7 +354,22 @@ N2_P2_QUAL void N2_P2_NAME(
       const unsigned long long m7_slot_off =
           (m7_slots - (unsigned long long)(std::uintptr_t)m7sym->local_heap_base)
           + (unsigned long long)m7_cur * (unsigned long long)m7_mtok *
-                ((unsigned long long)kHidden * 2ull);
+                ((unsigned long long)kHidden * 2ull)
+#if K0P6_MPS_ENABLE_TBO
+          // exp_02 (MPS-DELTA (7)) — producer-side slot PARITY for mode 16's
+          // deferred combine: launch e accumulates into parity (e&1); the
+          // owner's deferred M8 consumes that same generation inside launch
+          // e+1, and launch e+2 reuses the first half once its retirement
+          // edge passes. Stride = all 8 peers' per-epoch slot bytes. The term
+          // is uniform and folds to +0 in every non-TBO mode, so mode 12's
+          // epilogue arithmetic is bit-stable in a TBO build too.
+          + (hk_moe::mps::mode_is_tbo(hk_moe::mps::decode_config(m7cfg))
+                 ? (k0p6_epoch(k0p6_desc) & 1ull)
+                 : 0ull) *
+                (8ull * (unsigned long long)m7_mtok *
+                 (unsigned long long)kHidden * 2ull)
+#endif
+          ;
       if (tid < 8) {
         const void* pb = (tid == m7_cur)
             ? (const void*)m7sym->local_heap_base

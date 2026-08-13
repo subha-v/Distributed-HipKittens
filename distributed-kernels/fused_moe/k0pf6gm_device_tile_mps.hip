@@ -104,7 +104,7 @@
 // .cuh-only change, then confirm a new hsaco mtime under
 // ~/.cache/k0-mok-synthetic-prefill/mori/jit/gfx950_mlx5/*/ before believing
 // any number. The value is never read; only its presence in the hash matters.
-#define K0P6_MPS_SRC_REV 30
+#define K0P6_MPS_SRC_REV 31
 
 // exp_27: which activation-scale layout M6 reads, and therefore whether M5's
 // scale transpose exists at all.
@@ -346,7 +346,12 @@ __device__ __forceinline__ void k0p6_mps_task_done(int b, int nc, int tid,
   if (k0p6_m == 14ull) return;
 #endif
   if (k0p6_m - 2ull <= 2ull || k0p6_m == 7ull || k0p6_m == 8ull ||
-      k0p6_m == 9ull || k0p6_m == 12ull || k0p6_m == 13ull) {
+      k0p6_m == 9ull || k0p6_m == 12ull || k0p6_m == 13ull
+#if K0P6_MPS_ENABLE_TBO
+      // exp_02 mode 16: keeps mode 12's event queue + drain, so it enqueues.
+      || k0p6_m == 16ull
+#endif
+      ) {
     std::uint32_t* mps_q = (std::uint32_t*)k0p6_dread(k0p6_desc, K0P6_D_MPS_Q);
     std::uint32_t* mps_state =
         (std::uint32_t*)k0p6_dread(k0p6_desc, K0P6_D_MPS_STATE);
@@ -392,9 +397,17 @@ __device__ __forceinline__ void k0p6_mps_task_drain(const long long* k0p6_desc) 
       ((unsigned long long)k0p6_dread(k0p6_desc, K0P6_D_MPS_CFG) >> 16 &
        0xFFull);
 #if K0P6_MPS_ENABLE_MODE14
-  if (m != 12ull && m != 13ull && m != 14ull) {
+  if (m != 12ull && m != 13ull && m != 14ull
+#if K0P6_MPS_ENABLE_TBO
+      && m != 16ull
+#endif
+      ) {
 #else
-  if (m != 12ull && m != 13ull) {
+  if (m != 12ull && m != 13ull
+#if K0P6_MPS_ENABLE_TBO
+      && m != 16ull
+#endif
+      ) {
 #endif
     asm volatile("s_waitcnt vmcnt(0)" ::: "memory");
   }
@@ -452,7 +465,12 @@ __device__ __forceinline__ void k0p6_mps_task_done_maybe_defer(
     return;
   }
 #endif
-  if (m == 12ull || m == 13ull) {
+  if (m == 12ull || m == 13ull
+#if K0P6_MPS_ENABLE_TBO
+      // exp_02 mode 16: defers event publication whole-task, exactly as 12/13.
+      || m == 16ull
+#endif
+      ) {
     // Buffer the task identity UNIFORMLY (no tid guard): the flush at the
     // next task head reads it on every thread before publishing from tid0.
     if (p.b0 < 0) {
@@ -836,11 +854,28 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
         (std::uint64_t*)k0p6_dread(desc, K0P6_D_RETIRED);
     unsigned int* mega_count = (unsigned int*)k0p6_dread(desc, K0P6_D_EPOCH_CELL);
     (void)mega_count;
+#if K0P6_MPS_ENABLE_TBO
+    // exp_02 mode 16: ping-pong protection depth. With the combine deferred by
+    // one launch, slots/row_ready/pull_* are indexed by epoch parity, so a
+    // launch's M7 may write parity-(epoch&1) as soon as the owners report
+    // having CONSUMED+ZEROED epoch-2's use of that same parity -- i.e. retired
+    // >= epoch-2, not epoch-1. Every non-TBO mode keeps the donor's epoch-1
+    // depth byte-for-byte. Grid-uniform descriptor decode (mode 14's S7
+    // pattern), readfirstlane'd so it cannot extend a vector live range.
+    const bool tbo0 = __builtin_amdgcn_readfirstlane(
+        (int)hk_moe::mps::mode_is_tbo(hk_moe::mps::decode_config(
+            (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG)))) != 0;
+    const std::uint64_t retire_need =
+        tbo0 ? (epoch > 1ull ? epoch - 2ull : 0ull)
+             : (epoch > 0ull ? epoch - 1ull : 0ull);
+#else
+    const std::uint64_t retire_need = epoch > 0 ? epoch - 1ull : 0ull;
+#endif
     if (tid < world) {
-      // Directed replay lifetime: peer retirement must reach epoch-1 before
-      // this launch reuses the same addresses.
+      // Directed replay lifetime: peer retirement must reach the required
+      // depth before this launch reuses the same addresses.
       (void)hk_moe::poll_value_at_least_system(
-          retired + tid, epoch > 0 ? epoch - 1ull : 0ull,
+          retired + tid, retire_need,
           (std::uint64_t)spin_limit, pperr, 16777216);
     }
     // Retirement protects every address this launch is about to reuse. A CTA-local
@@ -963,6 +998,20 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
     unsigned int* qpush_done = (unsigned int*)k0p6_dread(desc, K0P6_D_QPUSH_DONE);
     int* pull_stage = (int*)k0p6_dread(desc, K0P6_D_PULL_STAGE);
     int* pull_cnt = (int*)k0p6_dread(desc, K0P6_D_PULL_CNT);
+#if K0P6_MPS_ENABLE_TBO
+    // exp_02 mode 16: producer-parity indexing (write side). Launch e writes
+    // its owner-combine maps into parity (e&1); the deferred M8 of launch e+1
+    // consumes that same parity through its deferred-epoch lens. Non-TBO modes
+    // add exactly +0. Grid-uniform decode, readfirstlane'd.
+    {
+      const bool tbo1 = __builtin_amdgcn_readfirstlane(
+          (int)hk_moe::mps::mode_is_tbo(hk_moe::mps::decode_config(
+              (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG)))) != 0;
+      const std::uint64_t par_w = tbo1 ? (epoch & 1ull) : 0ull;
+      pull_stage += par_w * (std::uint64_t)T * (std::uint64_t)TOPK * 2ull;
+      pull_cnt += par_w * (std::uint64_t)T;
+    }
+#endif
 
     const int gw = bid * (blockDim.x >> 6) + wid;
     const int nw = nct * (blockDim.x >> 6);
@@ -1373,6 +1422,23 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
     const int* pull_stage = (const int*)k0p6_dread(desc, K0P6_D_PULL_STAGE);
     int* pull_src = (int*)k0p6_dread(desc, K0P6_D_PULL_SRC);
     const int* hcnt = (const int*)k0p6_dread(desc, K0P6_D_HCNT);
+#if K0P6_MPS_ENABLE_TBO
+    // exp_02 mode 16: producer-parity indexing for the whole plan phase. The
+    // csr scan reads this epoch's pull_cnt and writes this epoch's pull_ptr;
+    // pull_src_fill consumes pull_stage/pull_ptr and writes pull_src -- all at
+    // parity (epoch&1). The deferred M8 of the NEXT launch consumes the same
+    // parity half. Non-TBO modes add +0. Grid-uniform, readfirstlane'd.
+    {
+      const bool tbo3 = __builtin_amdgcn_readfirstlane(
+          (int)hk_moe::mps::mode_is_tbo(hk_moe::mps::decode_config(
+              (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG)))) != 0;
+      const std::uint64_t par_p = tbo3 ? (k0p6_epoch(desc) & 1ull) : 0ull;
+      pull_cnt += par_p * (std::uint64_t)T;
+      pull_ptr += par_p * (std::uint64_t)(T + 1);
+      pull_stage += par_p * (std::uint64_t)T * (std::uint64_t)TOPK * 2ull;
+      pull_src += par_p * (std::uint64_t)T * (std::uint64_t)TOPK * 2ull;
+    }
+#endif
 
     hkp::grid_barrier(bar, tid, bar_err);   // M3
     if (hk_moe::error_bit_set_agent(pperr, 2097152)) return;
@@ -1481,6 +1547,75 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
     k0p6_sort::scatter(recv_eid, recv_wgt, pairs, lo, E, TOPK, PADMAX, scratch, sti, swt,
                        pperr, 1048576);
     hkp::pull_src_fill(pull_stage, pull_ptr, T, TOPK, T * world, pull_src, pperr, 1048576);
+
+#if K0P6_MPS_ENABLE_TBO
+    // ============ M5.shadow (exp_02 mode 16): DEFERRED COMBINE WINDOW =========
+    // After pull_src_fill, CTAs 2..255 have NO further stripe work at the
+    // mode-12 ratchet config (exp_24 A + exp_27 deleted the zero/transpose half
+    // of this span), and CTAs 0/1's scan/csr/cursors finished before it. The
+    // window is bounded by the M5 grid barrier, which M6 cannot cross, so
+    // epoch-(e-1)'s combine batches -- whose producers finished LAST launch
+    // and whose flags therefore pass first-poll -- are claimed here by every
+    // CTA as it finishes its fill stripe. The dynamic ticket (m8_next) is
+    // shared with the M8 window below, which then drains only the leftovers.
+    // Deferred-epoch pointers come fresh from desc, never from the
+    // producer-parity locals above. Soundness: identical to M8 proper --
+    // consume-and-zero of each slot row precedes this launch's M9 retirement
+    // poke (which is what unblocks the producers TWO epochs later), and
+    // readiness is carried by each batch's own per-entry poll + system
+    // acquire (they pass first-try in steady state; the bounded poll and
+    // pperr bit 25 fail closed exactly as in M8).
+    {
+      const hk_moe::mps::config cfgw = hk_moe::mps::decode_config(
+          (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
+      const std::uint64_t epoch_w = k0p6_epoch(desc);
+      if (hk_moe::mps::mode_is_tbo(cfgw) && epoch_w > 0ull &&
+          !hk_moe::error_bit_set_agent(pperr, 16777216 | 2097152 |
+                                       K0P6_MPS_ERR_SERVICE |
+                                       K0P6_MPS_ERR_CONFIG)) {
+        const std::uint64_t par_w = (epoch_w - 1ull) & 1ull;
+        const unsigned int epoch32_w = (unsigned int)epoch_w - 1u;
+        const unsigned short* slots_w =
+            (const unsigned short*)k0p6_dread(desc, K0P6_D_MPS_SLOTS) +
+            (size_t)par_w * ((size_t)world * (size_t)MAXTOK * (size_t)K0P6_H);
+        unsigned short* out_w = (unsigned short*)k0p6_dread(desc, K0P6_D_OUT) +
+                                (size_t)par_w * ((size_t)T * (size_t)K0P6_H);
+        const unsigned int* row_ready_w =
+            (const unsigned int*)k0p6_dread(desc, K0P6_D_ROW_READY) +
+            (size_t)par_w * ((size_t)world * (size_t)T_loc_max);
+        const int* pull_ptr_w = (const int*)k0p6_dread(desc, K0P6_D_PULL_PTR) +
+                                (size_t)par_w * (size_t)(T + 1);
+        const int* pull_src_w = (const int*)k0p6_dread(desc, K0P6_D_PULL_SRC) +
+                                (size_t)par_w * ((size_t)T * (size_t)TOPK * 2u);
+        const auto base_slot_w = [slots_w, cur, MAXTOK](int p, int row)
+            -> unsigned long long {
+          return (unsigned long long)(slots_w +
+                 ((size_t)p * (size_t)MAXTOK + (size_t)row -
+                  (size_t)cur * (size_t)MAXTOK) * (size_t)K0P6_H);
+        };
+        std::uint32_t* mps_state_w =
+            (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_STATE);
+        std::uint32_t* m8_next = mps_state_w + K0P6_MPS_ST_M8NEXT;
+        const int nbatches = (T + 3) / 4;
+        int* batch_slot = &s_ns[wid];
+        while (true) {
+          if (lane == 0) {
+            *batch_slot =
+                kittens::distributed::fetch_add_relaxed<hk_moe::scope::agent>(
+                    m8_next, 1u);
+          }
+          __syncwarp();
+          const int batch = *batch_slot;
+          if (batch >= nbatches) break;
+          k0p6_mps_m8_batch<4, decltype(base_slot_w)&, decltype(base_slot_w)&,
+                            false, true>(
+              batch * 4, T, epoch32_w, spin_limit, pull_ptr_w, pull_src_w,
+              row_ready_w, T_loc_max, pperr, lane, cur, out_w, base_slot_w,
+              base_slot_w);
+        }
+      }
+    }
+#endif
 
     hkp::grid_barrier(bar, tid, bar_err);   // M5 publishes sti/swt/pull_src/part/sc_dst
     if (hk_moe::error_bit_set_agent(pperr, 2097152)) return;
@@ -1632,6 +1767,14 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
         env.part = (const unsigned short*)k0p6_dread(desc, K0P6_D_PART);
         env.slots = (unsigned short*)k0p6_dread(desc, K0P6_D_MPS_SLOTS);
         env.row_ready = (std::uint32_t*)k0p6_dread(desc, K0P6_D_ROW_READY);
+#if K0P6_MPS_ENABLE_TBO
+        // exp_02 mode 16: the drain publishes THIS epoch's flags into parity
+        // (epoch&1); the deferred M8 of the next launch polls that same half.
+        env.row_ready += ((hk_moe::mps::mode_is_tbo(scfg)
+                               ? (k0p6_epoch(desc) & 1ull)
+                               : 0ull)) *
+                         (std::uint64_t)world * (std::uint64_t)T_loc_max;
+#endif
         env.pperr = pperr;
         env.ts = (std::uint64_t*)(mps_state + K0P6_MPS_ST_WORDS);
         env.symmetric = symmetric;
@@ -2031,6 +2174,28 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
         ? nullptr : (const unsigned short*)k0p6_dread(desc, K0P6_D_MPS_SLOTS);
     const std::uint64_t epoch = k0p6_epoch(desc);
     const unsigned int epoch32 = (unsigned int)epoch;
+#if K0P6_MPS_ENABLE_TBO
+    // exp_02 mode 16: the M8 of launch e consumes epoch e-1, so every pointer
+    // below is shifted by the DEFERRED epoch's parity, and the poll epoch is
+    // e-1's. At epoch 0 there is no previous epoch: the whole claim section is
+    // skipped (M9 still retires the launch). Non-TBO modes get par_c = 0 and
+    // epoch32_c = epoch32, so their codegen is unchanged. m8cfg is decoded at
+    // the top of this scope.
+    const bool tbo8 = hk_moe::mps::mode_is_tbo(m8cfg);
+    const std::uint64_t par_c =
+        (tbo8 && epoch > 0ull) ? ((epoch - 1ull) & 1ull) : 0ull;
+    const unsigned int epoch32_c =
+        (tbo8 && epoch > 0ull) ? (epoch32 - 1u) : epoch32;
+    const bool m8_empty = tbo8 && (epoch == 0ull);
+    // slots is const-qualified; carry the parity term as an element offset.
+    const std::size_t slots_par =
+        (std::size_t)par_c * (std::size_t)world * (std::size_t)MAXTOK *
+        (std::size_t)K0P6_H;
+#else
+    const std::uint64_t par_c = 0ull;
+    const unsigned int epoch32_c = epoch32;
+    const bool m8_empty = false;
+#endif
     // exp_34: mode 14 compiles the per-batch readiness ballot out, so bit 25 --
     // which in mode 14 means "the M7.5 cross-rank rendezvous timed out" -- has to
     // be caught HERE or a failed rendezvous would read unfinished slots. This is
@@ -2048,6 +2213,13 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
     const int* pull_src = (const int*)k0p6_dread(desc, K0P6_D_PULL_SRC);
     const unsigned int* row_ready =
         (const unsigned int*)k0p6_dread(desc, K0P6_D_ROW_READY);
+#if K0P6_MPS_ENABLE_TBO
+    // exp_02 mode 16: consume-side parity shifts (deferred epoch's half).
+    out += par_c * ((size_t)T * (size_t)K0P6_H);
+    pull_ptr += par_c * (size_t)(T + 1);
+    pull_src += par_c * ((size_t)T * (size_t)TOPK * 2u);
+    row_ready += par_c * ((size_t)world * (size_t)T_loc_max);
+#endif
 
     // mode 0 (+pull_fallback): the producer's remote part row over xGMI.
     // slot modes: the producer's slice-landing slot in THIS rank's own memory
@@ -2057,6 +2229,18 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
       return (unsigned long long)hk_moe::peer_ptr(
           part + (size_t)row * (size_t)K0P6_H, p, symmetric);
     };
+#if K0P6_MPS_ENABLE_TBO
+    // exp_02: deferred-epoch parity folds into the slot base (0 in every
+    // non-TBO arm, and at epoch 0). Flag-off builds keep the donor lambda so
+    // the default `.text` is unchanged.
+    const auto base_slot =
+        [slots, cur, MAXTOK, slots_par](int p, int row) -> unsigned long long {
+      return (unsigned long long)(slots + slots_par +
+             ((size_t)p * (size_t)MAXTOK + (size_t)row -
+              (size_t)cur * (size_t)MAXTOK) *
+                 (size_t)K0P6_H);
+    };
+#else
     const auto base_slot =
         [slots, cur, MAXTOK](int p, int row) -> unsigned long long {
       return (unsigned long long)(slots +
@@ -2064,21 +2248,24 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
               (size_t)cur * (size_t)MAXTOK) *
                  (size_t)K0P6_H);
     };
+#endif
 
     const int gw = bid * (blockDim.x >> 6) + wid;
     const int nw = nct * (blockDim.x >> 6);
     constexpr int NT = 4;
-    if (!m8_dynamic) {
+    if (m8_empty) {
+      // exp_02 mode 16, epoch 0: nothing to consume yet; fall straight to M9.
+    } else if (!m8_dynamic) {
       // Parity's static wave stripes, one per address form.
       if (m8_pull) {
         for (int tok0 = gw * NT; tok0 < T; tok0 += nw * NT) {
-          k0p6_mps_m8_batch<NT>(tok0, T, epoch32, spin_limit, pull_ptr,
+          k0p6_mps_m8_batch<NT>(tok0, T, epoch32_c, spin_limit, pull_ptr,
                                 pull_src, row_ready, T_loc_max, pperr, lane,
                                 cur, out, base_pull, base_pull);
         }
       } else {
         for (int tok0 = gw * NT; tok0 < T; tok0 += nw * NT) {
-          k0p6_mps_m8_batch<NT>(tok0, T, epoch32, spin_limit, pull_ptr,
+          k0p6_mps_m8_batch<NT>(tok0, T, epoch32_c, spin_limit, pull_ptr,
                                 pull_src, row_ready, T_loc_max, pperr, lane,
                                 cur, out, base_slot, base_slot);
         }
@@ -2099,7 +2286,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
           __syncwarp();
           const int batch = *batch_slot;
           if (batch >= nbatches) break;
-          k0p6_mps_m8_batch<NT>(batch * NT, T, epoch32, spin_limit, pull_ptr,
+          k0p6_mps_m8_batch<NT>(batch * NT, T, epoch32_c, spin_limit, pull_ptr,
                                 pull_src, row_ready, T_loc_max, pperr, lane,
                                 cur, out, base_pull, base_pull);
         }
@@ -2117,7 +2304,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
           if (batch >= nbatches) break;
           k0p6_mps_m8_batch<NT, decltype(base_slot)&, decltype(base_pull)&,
                             true, true>(
-              batch * NT, T, epoch32, spin_limit, pull_ptr, pull_src,
+              batch * NT, T, epoch32_c, spin_limit, pull_ptr, pull_src,
               row_ready, T_loc_max, pperr, lane, cur, out, base_slot, base_pull);
         }
 #if K0P6_MPS_ENABLE_MODE14
@@ -2139,7 +2326,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
           if (batch >= nbatches) break;
           k0p6_mps_m8_batch<NT, decltype(base_slot)&, decltype(base_slot)&,
                             false, true, true>(
-              batch * NT, T, epoch32, spin_limit, pull_ptr, pull_src,
+              batch * NT, T, epoch32_c, spin_limit, pull_ptr, pull_src,
               row_ready, T_loc_max, pperr, lane, cur, out, base_slot, base_slot);
         }
 #endif
@@ -2158,7 +2345,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
           if (batch >= nbatches) break;
           k0p6_mps_m8_batch<NT, decltype(base_slot)&, decltype(base_slot)&,
                             false, true>(
-              batch * NT, T, epoch32, spin_limit, pull_ptr, pull_src,
+              batch * NT, T, epoch32_c, spin_limit, pull_ptr, pull_src,
               row_ready, T_loc_max, pperr, lane, cur, out, base_slot, base_slot);
         }
       } else {
@@ -2171,7 +2358,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
           __syncwarp();
           const int batch = *batch_slot;
           if (batch >= nbatches) break;
-          k0p6_mps_m8_batch<NT>(batch * NT, T, epoch32, spin_limit, pull_ptr,
+          k0p6_mps_m8_batch<NT>(batch * NT, T, epoch32_c, spin_limit, pull_ptr,
                                 pull_src, row_ready, T_loc_max, pperr, lane,
                                 cur, out, base_slot, base_slot);
         }
@@ -2210,15 +2397,27 @@ extern "C" __global__ void __launch_bounds__(256, 1) k0pf6gm_mps_mega(
         combine_done[0] = 0u;
         mega_count[0] = (unsigned int)epoch;
         hk_moe::release_signal_batch_agent();
+        // exp_02 mode 16: the epoch this launch CERTIFIES is epoch-1 -- its
+        // slots were just consumed+zeroed by the deferred M8, so peers may
+        // reuse parity (epoch&1). mega_count keeps the launch epoch for
+        // k0p6_epoch. Non-TBO modes poke epoch exactly as the donor.
+#if K0P6_MPS_ENABLE_TBO
+        const bool tbo9 = hk_moe::mps::mode_is_tbo(hk_moe::mps::decode_config(
+            (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG)));
+        const std::uint64_t poke_epoch =
+            (tbo9 && epoch > 0ull) ? epoch - 1ull : epoch;
+#else
+        const std::uint64_t poke_epoch = epoch;
+#endif
         for (int pe = 0; pe < world; ++pe) {
           if (pe == cur) {
             hk_moe::publish_value<hk_moe::scope::agent>(
-                &retired[cur], epoch);
+                &retired[cur], poke_epoch);
           } else {
             std::uint64_t* peer =
                 hk_moe::peer_ptr(retired + cur, pe, symmetric_m9);
             hk_moe::publish_value<hk_moe::scope::system>(
-                peer, epoch);
+                peer, poke_epoch);
           }
         }
       }

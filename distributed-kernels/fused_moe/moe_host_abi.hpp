@@ -159,9 +159,23 @@ struct mps_buffer_binding {
     std::uintptr_t pushed;       // uint32[t_ext]
     std::uintptr_t claim;        // uint32[t_ext]
     std::uintptr_t state;        // 96 bytes: 8 u32 scalars + 8 u64 timestamps
-    std::uintptr_t slots;        // u16[world*maxtok*7168]; 16-byte aligned
+    std::uintptr_t slots;        // u16[world*maxtok*7168]; 16-byte aligned.
+                                 // exp_02 mode 16 (K0P6_MPS_ENABLE_TBO): allocate
+                                 // DOUBLE (two epoch generations, indexed by
+                                 // epoch parity).
     std::uint64_t config;        // hk_moe::mps::encode_config(...)
 };
+
+// exp_02 mode 16 (deferred combine / TBO-2): these SIX other buffers are also
+// indexed by epoch parity and must be allocated at double capacity by the
+// caller when the packed mode is 16 (they are donor-descriptor buffers,
+// allocated outside this binding): row_ready (slot 25, uint32[world*t_loc_max]
+// per generation), pull_stage (12), pull_cnt (13), pull_ptr (18), pull_src
+// (19), and out (32, bf16[t*h] per generation). The kernel computes each
+// parity half's offset from descriptor-carried shapes; a mode-12 or mode-14
+// arm never touches the second half. See
+// overnight/aug12/exp_02_tbo_deferred_combine/host_patch_spec.md.
+inline constexpr std::size_t tbo_generation_count = 2;
 
 [[nodiscard]] inline constexpr std::size_t mps_queue_bytes(
         std::size_t padmax) {
