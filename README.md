@@ -242,3 +242,14 @@ If you use or build on this work, please consider citing:
       url={https://arxiv.org/abs/2511.08083}, 
 }
 ```
+
+---
+
+### GEMM-RS branch campaign log (aug13)
+
+This branch carries the MI300X GEMM→ReduceScatter kernel and its experiment
+record under `distributed-kernels/gemm_rs/overnight/`. aug13 session: found
+that exp_24's official-evaluator "ours" arm ran with `HK_DEBUG=1` (per-call
+debug sync + D2H read + stderr writes inside the timed region); exp_01 re-runs
+the evaluator ladder with the fast path live and rotated arm order. See
+`overnight/aug13/STATUS.md`.
