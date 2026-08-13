@@ -1,0 +1,317 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "exp01.transport-point.v1",
+  "title": "aug12 neutral transport point",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "point_id",
+    "status",
+    "method",
+    "ranks",
+    "record_bytes",
+    "records_per_rank",
+    "total_bytes_per_rank",
+    "direction",
+    "fanout",
+    "memory_type",
+    "correctness",
+    "timing"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "exp01.transport-point.v1"
+    },
+    "point_id": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "gated",
+        "blocked",
+        "incorrect",
+        "deadlock",
+        "watchdog",
+        "censored_slow",
+        "unverified_executor"
+      ]
+    },
+    "method": {
+      "enum": [
+        "bulk_sync",
+        "cu_push",
+        "cu_pull",
+        "service_cta_push",
+        "homogeneous_staged_push",
+        "direct_producer_publish",
+        "host_copy_path",
+        "mori_put_p2p",
+        "mori_put_sdma",
+        "separate_persistent_kernels"
+      ]
+    },
+    "comparison_family": {
+      "enum": [
+        "transport_equivalent",
+        "complete_path"
+      ]
+    },
+    "ranks": {
+      "type": "integer",
+      "minimum": 2
+    },
+    "record_bytes": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "records_per_rank": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "total_bytes_per_rank": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "direction": {
+      "enum": [
+        "bidirectional",
+        "rank0_to_rank1",
+        "rank1_to_rank0"
+      ]
+    },
+    "fanout": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "memory_type": {
+      "type": "string"
+    },
+    "executor": {
+      "type": "object",
+      "required": [
+        "label",
+        "verified"
+      ],
+      "properties": {
+        "label": {
+          "enum": [
+            "cu",
+            "sdma",
+            "unknown"
+          ]
+        },
+        "verified": {
+          "type": "boolean"
+        },
+        "trace_artifact": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "transport_selector": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "work": {
+      "type": "object",
+      "properties": {
+        "payload_bytes": {
+          "type": "integer"
+        },
+        "control_bytes": {
+          "type": "integer"
+        },
+        "publications": {
+          "type": "integer"
+        },
+        "descriptors": {
+          "type": "integer"
+        },
+        "launches": {
+          "type": "integer"
+        },
+        "queue_depth": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "correctness": {
+      "type": "object",
+      "required": [
+        "digest_pass",
+        "samples_pass",
+        "poison_survivors",
+        "generation_pass",
+        "all_rank_errors",
+        "negative_controls",
+        "soak_epochs",
+        "soak_pass"
+      ],
+      "properties": {
+        "digest_pass": {
+          "type": "boolean"
+        },
+        "samples_pass": {
+          "type": "boolean"
+        },
+        "poison_survivors": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "generation_pass": {
+          "type": "boolean"
+        },
+        "all_rank_errors": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "negative_controls": {
+          "type": "object"
+        },
+        "soak_epochs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "soak_pass": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": true
+    },
+    "timing": {
+      "type": "object",
+      "required": [
+        "campaigns",
+        "iterations_per_campaign",
+        "global_makespan_us"
+      ],
+      "properties": {
+        "campaigns": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "iterations_per_campaign": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "global_makespan_us": {
+          "type": "object",
+          "properties": {
+            "p50": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "p95": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "values": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            }
+          },
+          "additionalProperties": true
+        },
+        "tp_us": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "tm_us": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "tcons_us": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "tserial_us": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "tideal_us": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "tjoint_us": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "enqueue_us": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "completion_after_final_op_us": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "gbps": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "launch_skew_us": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "rank_tail_us": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "device_host_timer_agreement_pass": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "provenance": {
+      "type": "object"
+    },
+    "blocker": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "additionalProperties": true
+}
