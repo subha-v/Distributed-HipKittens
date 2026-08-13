@@ -34,6 +34,15 @@ Plot-ready data: `anchor_comparison_v1.json`
 executor adjudication is `raw/host_copy_anchor_executor_v1.json`, with the
 full 11.1 MB rocprofv3 trace in `raw/host_copy_anchor_trace_v1.json`.
 
+## Rank-per-GPU bring-up
+
+The first two-rank gate attempt was rejected before protocol execution:
+exporting both `HIP_VISIBLE_DEVICES=0,4` and `ROCR_VISIBLE_DEVICES=0,4`
+double-filtered the ROCR-remapped ordinal space, so rank 0 saw fewer than two
+GPUs. Exit code 2 is classified as a launcher/runtime failure, not a method
+failure. The runner now exports only `ROCR_VISIBLE_DEVICES`; attempt-1 logs and
+provenance are preserved under `raw/rank_gate_*_attempt1.*`.
+
 ## Fresh node calibration
 
 A fresh exp_22 quick-tier run completed on the `ablations` checkout before the

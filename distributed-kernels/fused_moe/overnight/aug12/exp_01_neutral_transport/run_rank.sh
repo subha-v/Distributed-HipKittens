@@ -198,10 +198,13 @@ run_phase() {
   local started
   started=$(date -u +%FT%TZ)
   set +e
-  HIP_VISIBLE_DEVICES="$GPU_IDS" ROCR_VISIBLE_DEVICES="$GPU_IDS" \
+  # Use one visibility layer. Setting HIP_VISIBLE_DEVICES and
+  # ROCR_VISIBLE_DEVICES to the same physical IDs double-filters the
+  # ROCR-remapped ordinal space (for example 0,4 becomes one visible GPU).
+  ROCR_VISIBLE_DEVICES="$GPU_IDS" \
     setsid timeout --signal=TERM "$POINT_TIMEOUT" \
       mpirun -np 2 "${MPI_BIND[@]}" \
-      -x HIP_VISIBLE_DEVICES -x ROCR_VISIBLE_DEVICES \
+      -x ROCR_VISIBLE_DEVICES \
       "$BINARY" "${phase_args[@]}" \
       --method "$method" --record-bytes "$size" \
       --total-bytes 67108864 --lifetime "$lifetime" \

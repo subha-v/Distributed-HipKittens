@@ -1,0 +1,1 @@
+{"timestamp_utc":"2026-08-13T01:21:11Z","stage":0,"phase":"gate","method":"cu_push","record_bytes":65536,"lifetime":"one_epoch","rotation_index":0,"exit_code":2,"classification":"launcher_or_runtime_failure","log":"/home/subvadla/aug12_exp01/rank_gate_v1/gate-cu_push-rb65536-one_epoch.log"}

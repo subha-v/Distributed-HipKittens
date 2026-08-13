@@ -56,3 +56,8 @@
 - `primitives:` `peer_bases`, `translate_peer`, packet push/pull, system-scope
   publication, bounded polling, and directed retirement were sufficient; no
   additive primitive was required for the diagnostic.
+- `harness:` Never export the same physical-ID list through both
+  `HIP_VISIBLE_DEVICES` and `ROCR_VISIBLE_DEVICES`. ROCR remaps first and HIP
+  filters the remapped ordinals again; `0,4` became one visible GPU. The first
+  rank-gate attempt was a clean pre-protocol launcher failure and the runner
+  now uses only `ROCR_VISIBLE_DEVICES`.
