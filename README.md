@@ -89,8 +89,21 @@ routes them source-locally (exactly-once via self-source acceptance; combine
 untouched): **0.309× production with 8 replicas, 0.242× with 32, 0.217× on
 the worst layer — and 0.785× in the balanced control** (all gates green,
 5-run campaigns). Full results and fairness caveats in
-`overnight/aug14/M18_REPLICATION_RESULTS.md`; serving integration
-(m18_pin) is the next step.
+`overnight/aug14/M18_REPLICATION_RESULTS.md`.
+
+The serving integration then closed the loop the hard way.  Pair #1
+(aggregate replica set) LOST 5.7% end-to-end — the per-call diagnostic
+showed why: per-chunk set coverage is bimodal (p5=1%) and per-call max rank
+load hits 6.25x at p95, so a static set pays its carry cost on exactly the
+chunks it cannot help.  Two same-day fixes, each paired against stock on
+identical MLPerf prompts: per-layer top-16 sets (58 distinct) **+11.3%**;
+and **M19** (`K0P6_M15_ADAPTIVE`, `ablations-m19`) — per-layer replica
+slots plus an in-kernel per-chunk decision (M0.5 own-routing histogram,
+theta threshold, sender-published decision bitmaps with mirrored
+acceptance) — **+39.8% end-to-end serving throughput with TTFT p99 −32.2%**
+(13,395 vs 9,581 tok/s, n=1 pair; ≥5 order-balanced pairs + accuracy A/B
+pending; harness reference-match gates green).  Design:
+`overnight/aug14/M19_DESIGN.md`.
 
 Latest additions to the device primitive layer and the fused-MoE port
 (`distributed-kernels/fused_moe/`):

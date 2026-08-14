@@ -133,3 +133,28 @@ structurally insufficient for serving and the design moves to per-chunk
 replica selection (device-side planning prologue, MoonEP-style) or
 layer/chunk-adaptive tables.  The kernel-level result stands as measured —
 the open question is the routing statistics serving actually presents.
+
+## Serving pairs #2 and #3 (2026-08-14, later session) — THE WINS
+
+The diag pass measured the per-call distributions (n=90,050): static-set
+coverage bimodal (p5=1%, p75+=77%), per-call max rank load median 5.15x /
+p95 6.25x, and even ideal static redistribution leaves p95 at 3.05x.  Both
+fixes were built and paired the same day (identical rig as pair #1):
+
+| pair | candidate | tok/s vs stock | TTFT p50 / p99 | E2E p99 |
+|---|---|---:|---|---:|
+| #2 | M18, PER-LAYER top-16 sets (58 distinct) | **+11.3%** | −9.8% / −7.1% | −12.3% |
+| #3 | **M19: per-layer sets + per-chunk adaptive (theta=64)** | **+39.8%** | −23.1% / −32.2% | −24.2% |
+
+(#2: 11,339.5 vs 10,186.0 tok/s; #3: 13,395.4 vs 9,581.3 tok/s; 1024/1024
+both arms both pairs; all receipts 8/8.)  The day's arc: aggregate-static
+−5.7% → per-layer-static +11.3% → per-chunk-adaptive +39.8%, each step
+aimed at exactly what the previous measurement exposed.  Tails improved
+more than medians in #3 — the hot-rank overhang signature.
+
+Caveats held open: n=1 pair each; stock drifted downward across the day's
+pairs (12.6k → 10.2k → 9.6k tok/s — node state; the paired design absorbs
+it, but ≥5 order-balanced pairs remain mandatory); M19 output accuracy is
+being verified (harness reference-match gates GREEN on first campaigns;
+MLPerf AccuracyOnly A/B pending).  M19 design + kernel: `M19_DESIGN.md`,
+`ablations` @ 0430aeb7, serving `vllm-integration-m18` @ c1b76022.
