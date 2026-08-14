@@ -110,6 +110,36 @@ was real, each exposed the next layer:
 Dump path: `/results/skew/` in-container → host
 `~/20260813_m15_campaign_m15pair1/skew/<arm>/skew/`.
 
+**Pause-time update: the incremental-flush fix WORKS and banked partial
+data.** Before the stand-down halt, the patched hook wrote real dumps for the
+stock arm — one forward pass per DP worker (8 files, 50 MoE layers, 204,800
+routed rows each):
+
+- **Gini 0.3462**, all 256 experts used; top-1 expert 1.23% of tokens
+  (uniform = 0.39%) ⇒ **3.14× hot-to-mean**; top-32 experts 26.64% vs
+  bottom-32 1.57%.
+- **Per-rank routed_rows identical and step_ms p50 identical (18.1 ms)** —
+  mean rank load is flat.
+- **step_ms p99 spread 193–1066 ms across workers** — the imbalance lives in
+  the tail, not the mean.
+
+Read: the workload IS expert-skewed, EP mean load balances out, and the
+per-step tail varies wildly — consistent with the pair's p99-only
+regression. One pass, stock arm only, **a lead, not a conclusion**. The m15
+arm and full-cell coverage are the remaining measurement.
+
+Final integration-branch state: **pushed through `e346f8b4`**
+(`subha-v/amd-master`, `vllm-integration-m15`). Read handoff **§0a** first —
+it holds the five-line resume path: hook `m15_router_skew.py` (patches
+`FusedMoERouter.select_experts`), mounted via `skewhook/sitecustomize.py`,
+`M15_SKEW_OUT=/results/skew`, dumps `skew_rank<N>_pid<PID>.json`; re-run
+with `~/m15pkt_skewonly.sh` (~25 min), analyze with `~/skewreport.py`.
+Evidence bundle + `SHA256SUMS` under
+`benchmarks/2026-08-12_m15_campaign/evidence/`. Caveat: `~/amd-master-m15pkt`
+is dirty on `m15_router_skew.py` (content matches the pushed commit) — `git
+checkout --detach github/vllm-integration-m15` there before resuming, or
+fetch will abort.
+
 Secondary instrument, not yet attempted properly: the vLLM profiler. In
 0.25.1 `VLLM_TORCH_PROFILER_DIR` **does not exist**; `/start_profile` mounts
 only when the server is launched with `--profiler-config`. The profile pass
