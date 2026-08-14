@@ -200,6 +200,24 @@ Phase C — close the loop at kernel speed (this is the optimization path):
 6. Optimize against measured skew: m17 RR scatter under skew (already built),
    C re-sweep under skew, and if coarse certification is the culprit, finer
    slab granularity / work-stealing across the consuming pool.
+
+   **The m17-vs-C decision rule (source-verified 2026-08-14, never yet
+   measured under skew):** m17 (`ablations-m17` @ b7561d47, node worktree
+   `~/DHK-m17`) is the SAME M15 body with one compile arm
+   (`K0P6_M15_SCATTER_RR=1`) that permutes the stage-5 scatter iteration
+   source-round-robin (`src = q & (world-1)`, `off = q >> 3`) — bijective,
+   same cursors/packing/overflow, only the atomic LANDING order changes.
+   Donor order clusters each expert's sorted block by source rank (a span is
+   hostage to one peer); RR mixes all 8 sources through every span. So m17
+   changes ORDERING, not POPULARITY: the 3.14× hot expert keeps 3.14× the
+   work either way. Decision rule: if the p99 tail traces to peer-ordering
+   serialization inside expert blocks → m17 is the lever; if it traces to
+   expert-popularity concentration itself → C-retune/partition is the lever.
+   The banked partial data (flat p50 across workers, p99 spread 193–1066 ms
+   — intermittent stalls, not steady-state imbalance) leans m17-ward but is
+   one stock-arm pass. The cheap decider: the m15-arm histogram + per-rank
+   step_ms (~25 min on the fixed rig), then per-expert block occupancy vs
+   tail correlation.
 7. Revalidate any kernel change through the standard MoK gate ladder, then
    ONE serving pair to confirm transfer. Before quoting any final serving
    number: ≥5 order-balanced pairs + the MLPerf accuracy check.
