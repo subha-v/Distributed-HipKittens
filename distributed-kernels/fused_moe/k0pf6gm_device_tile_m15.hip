@@ -124,6 +124,33 @@
 #error "K0P6_M15_ADAPTIVE requires K0P6_M15_REPLICATE (the replica slots)"
 #endif
 
+// M20: SLOT-POOL replication — the production-practical arm.  M19's routing
+// machinery survives verbatim (per-chunk decisions, sender-published bitmaps,
+// mirrored acceptance, untouched combine); what changes is where replica
+// WEIGHTS live and where DECISIONS come from:
+//   * Replica weights live in a small triple-buffered pool shared across all
+//     layers (~1 GB at B=8), not in 41 GB of persistent per-layer copies.
+//     Slots >= E address the pool through parity-resolved bases the host
+//     bakes into each layer's descriptor (slots 66..69).
+//   * A designated subset of the service pool (last kPF CTAs) STREAMS the
+//     next-next layer's replica set from owner HBM (absolute peer VAs,
+//     host-computed from the attested symmetric heap) into the pool during
+//     the M6..M8 window — cross-layer comm/compute overlap; each layer's
+//     set is split across TWO upstream kernels' duty tables so the copy
+//     always completes in-kernel (stream order IS the certification; no
+//     flags, no tags — the schedule is static and the weights identical
+//     every step).
+//   * The per-chunk decision arrives PRECOMPUTED (descriptor slot 65,
+//     written by a trivial pre-launch bincount kernel/op): this deletes the
+//     M0.5 pre-pass and its two grid-barrier rendezvous (measured +1.2 ms).
+// DEFAULT 0; requires K0P6_M15_ADAPTIVE.
+#ifndef K0P6_M20_SLOTPOOL
+#define K0P6_M20_SLOTPOOL 0
+#endif
+#if K0P6_M20_SLOTPOOL && !K0P6_M15_ADAPTIVE
+#error "K0P6_M20_SLOTPOOL requires K0P6_M15_ADAPTIVE (the decision dataflow)"
+#endif
+
 // exp_27 shipped arm: M6 reads token-major sc_stage; M5's transpose is dead.
 #ifndef K0P6_MPS_ASCALE_TM
 #define K0P6_MPS_ASCALE_TM 1
@@ -215,7 +242,24 @@
 // u32[2 parity][world][8] (256 bits per source), peer-written in M1
 // ordered-before the rows_done epoch publication.
 #define K0P6_D_M15_REPDEC 64
+#if K0P6_M20_SLOTPOOL
+// Slot-pool arm: 65 = precomputed per-chunk decision bitmap (8 u32, written
+// before launch); 66..69 = parity-resolved pool bases for THIS layer's
+// replica slots (W13/S13/W2/S2); 70 = this layer's prefetch duty table
+// (u32 header {magic 'M20P', nchunks, rsv, rsv} then u64 triplets
+// {src_va, dst_va, bytes}, 16-byte-multiple chunks).
+#define K0P6_D_M20_DECIN 65
+#define K0P6_D_M20_W13P 66
+#define K0P6_D_M20_S13P 67
+#define K0P6_D_M20_W2P 68
+#define K0P6_D_M20_S2P 69
+#define K0P6_D_M20_PF 70
+#define K0P6_M15_D_LEN 71
+// Prefetch CTA count, carved from the service pool's measured slack.
+#define K0P6_M20_PF_CTAS 4
+#else
 #define K0P6_M15_D_LEN 65
+#endif
 #else
 #define K0P6_M15_D_LEN 64
 #endif
@@ -521,6 +565,35 @@ __device__ __forceinline__ void k0p6_m19_scatter(
 }
 #endif
 
+#if K0P6_M20_SLOTPOOL
+// M20 prefetch engine: the last kPF service CTAs stream this layer's duty
+// table — host-precomputed {src peer VA, dst pool VA, bytes} chunks of a
+// DOWNSTREAM layer's replica weights — during the M6..M8 window.  Plain
+// uint4 loads/stores; sources live in the symmetric heap (peer-readable),
+// destinations are the rank-local pool.  Completion by kernel exit is the
+// entire ordering contract (same-stream launch order certifies the reader).
+__device__ __forceinline__ void k0p6_m20_prefetch(
+    const long long* __restrict__ desc, int pf_id, int kPF, int tid) {
+  const unsigned long long* table =
+      (const unsigned long long*)k0p6_dread(desc, K0P6_D_M20_PF);
+  if (table == nullptr) return;
+  const unsigned int* head = (const unsigned int*)table;
+  if (head[0] != 0x4D323050u) return;  // "M20P"
+  const int nchunks = (int)head[1];
+  for (int c = pf_id; c < nchunks; c += kPF) {
+    const unsigned char* src =
+        (const unsigned char*)table[2 + 3 * (size_t)c + 0];
+    unsigned char* dst = (unsigned char*)table[2 + 3 * (size_t)c + 1];
+    const unsigned long long bytes = table[2 + 3 * (size_t)c + 2];
+    for (unsigned long long i = (unsigned long long)tid * 16;
+         i + 16 <= bytes; i += 256ull * 16) {
+      *reinterpret_cast<uint4*>(dst + i) =
+          *reinterpret_cast<const uint4*>(src + i);
+    }
+  }
+}
+#endif
+
 // ---- small shared helpers -----------------------------------------------------------------
 __device__ __forceinline__ float k0p6_bf16_to_f32(unsigned short b) {
   return __uint_as_float((unsigned int)b << 16);
@@ -732,6 +805,17 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
       return;
     }
 #endif
+#if K0P6_M20_SLOTPOOL
+    if (k0p6_dread(desc, K0P6_D_M20_DECIN) == 0 ||
+        (k0p6_dread(desc, K0P6_D_M20_DECIN) & 7) != 0 ||
+        k0p6_dread(desc, K0P6_D_M20_W13P) == 0 ||
+        k0p6_dread(desc, K0P6_D_M20_S13P) == 0 ||
+        k0p6_dread(desc, K0P6_D_M20_W2P) == 0 ||
+        k0p6_dread(desc, K0P6_D_M20_S2P) == 0) {
+      if (bid == 0 && tid == 0) atomicOr(pperr, K0P6_MPS_ERR_CONFIG);
+      return;
+    }
+#endif
     __syncthreads();
   }
   const int EL = E + s_nrep;  // local slot count: owned experts + replicas
@@ -798,7 +882,19 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
   }
   if (debug_stop == 1) return;
 
-#if K0P6_M15_ADAPTIVE
+#if K0P6_M20_SLOTPOOL
+  // ================= M0.5 (M20 form): decision arrives precomputed ==========================
+  // The per-chunk bitmap was written before launch (bincount + theta + pool
+  // residency, ~10 us).  Loading it costs one __syncthreads and ZERO grid
+  // barriers — the M19 pre-pass's two rendezvous (measured +1.2 ms) are gone.
+  {
+    const unsigned int* dec =
+        (const unsigned int*)k0p6_dread(desc, K0P6_D_M20_DECIN);
+    if (tid < 8) s_dec[tid] = dec[tid];
+    if (tid == 0) (void)s_theta;  // theta applied in the pre-launch op
+    __syncthreads();
+  }
+#elif K0P6_M15_ADAPTIVE
   // ================= M0.5: per-chunk replication decision ===================================
   // Histogram this rank's OWN routing into hcnt[0..255] (scratch use only:
   // M2 fully overwrites hcnt later), then every CTA derives the same 256-bit
@@ -1418,6 +1514,18 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
               (__hip_bfloat16*)k0p6_dread(desc, K0P6_D_PART),
               (const int*)k0p6_dread(desc, K0P6_D_TILE_DESC), ntiles, desc,
               t_lo, t_hi);
+#if K0P6_M20_SLOTPOOL
+        } else if (bid >= nct - K0P6_M20_PF_CTAS) {
+          // Prefetch engine: the C-sweep measured the pool C-insensitive
+          // 16..28 under skew, so these CTAs are slack.  They stream this
+          // layer's duty table (a downstream layer's replica weights) during
+          // slab 0 and skip the combine sweep in slab 1 (duty completion by
+          // kernel exit is the ordering contract).
+          if (slab == 0) {
+            k0p6_m20_prefetch(desc, bid - (nct - K0P6_M20_PF_CTAS),
+                              K0P6_M20_PF_CTAS, tid);
+          }
+#endif
         } else if (slab == 1) {
 #if !K0P6_M15_STAGED
           // ---- pool front-half combine sweep (RMW arm) --------------------

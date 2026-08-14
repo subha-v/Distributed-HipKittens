@@ -485,6 +485,19 @@ N2_P2_QUAL void N2_P2_NAME(
     const int b0 = n2gm_tile_b0(tile);         // first 32-block of the tile
     const int e = sorted_eid[b0];
     const int gcount = n2gm_tile_gcount(tile); // live sub-blocks (1..kGM)
+#if K0P6_M20_SLOTPOOL
+    // M20 slot pool: replica slots address the parity-resolved pool bases.
+    const bool m20_pooled = e >= 32;
+    const std::uint8_t* const W2e =
+        m20_pooled ? (const std::uint8_t*)k0p6_desc[K0P6_D_M20_W2P] : W2;
+    const float* const S2e =
+        m20_pooled ? (const float*)k0p6_desc[K0P6_D_M20_S2P] : S2;
+    const int ew = m20_pooled ? (e - 32) : e;
+#else
+    const std::uint8_t* const W2e = W2;
+    const float* const S2e = S2;
+    const int ew = e;
+#endif
 #ifdef N2GM_TASK_WAIT_HOOK
     // exp_59: wait a2 for each LIVE sub-block (a2_done indexed by 32-block b0+sb).
 #pragma unroll
@@ -512,7 +525,7 @@ N2_P2_QUAL void N2_P2_NAME(
       const int t = idx >> 4;
       const int k = idx & 15;
       const int ng = (kChunkN * nc + 16 * t) >> 7;
-      b2s_lds[t][k] = S2[(e * kNGroups2 + ng) * kKGroups2 + k];
+      b2s_lds[t][k] = S2e[(ew * kNGroups2 + ng) * kKGroups2 + k];
     }
     // dq2_lds[kb][row] = DQ2[(b0*32+row), kb] over kMrows.
     for (int idx = tid; idx < kKGroups2 * kMrows; idx += kThreads) {
@@ -586,9 +599,9 @@ N2_P2_QUAL void N2_P2_NAME(
 #pragma unroll
       for (int t = 0; t < kWaveTiles; ++t) {
         const std::size_t tb = aiter::fp8_weight_byte_offset(
-            e, kChunkN * nc + kWaveCols2 * wv + 16 * t, 128 * k, kHidden,
+            ew, kChunkN * nc + kWaveCols2 * wv + 16 * t, 128 * k, kHidden,
             kInter);
-        load_bfrag(bf[buf][t], W2 + tb + 16 * lane);
+        load_bfrag(bf[buf][t], W2e + tb + 16 * lane);
         stage_agpr(bf[buf][t]);
       }
     };

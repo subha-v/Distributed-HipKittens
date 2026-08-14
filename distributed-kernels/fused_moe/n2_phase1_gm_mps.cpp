@@ -335,6 +335,21 @@ N2_P1_QUAL void N2_P1_NAME(
     const int b0 = n2gm_tile_b0(tile);        // first 32-block of the tile
     const int e = sorted_eid[b0];
     const int gcount = n2gm_tile_gcount(tile, b0, e);   // live sub-blocks (1..kGM)
+#if K0P6_M20_SLOTPOOL
+    // M20 slot pool: replica slots (e >= 32 owned experts) address the
+    // parity-resolved pool bases baked into this layer's descriptor.  Tile
+    // grouping above keeps the raw slot id; only weight indexing remaps.
+    const bool m20_pooled = e >= 32;
+    const std::uint8_t* const W13e =
+        m20_pooled ? (const std::uint8_t*)k0p6_desc[K0P6_D_M20_W13P] : W13;
+    const float* const S13e =
+        m20_pooled ? (const float*)k0p6_desc[K0P6_D_M20_S13P] : S13;
+    const int ew = m20_pooled ? (e - 32) : e;
+#else
+    const std::uint8_t* const W13e = W13;
+    const float* const S13e = S13;
+    const int ew = e;
+#endif
 
     // ---- per-task LDS setup: tok/ascale/amax over kMrows (per-row); b1s per e --
     for (int i = tid; i < kMrows; i += kThreads) {
@@ -351,7 +366,7 @@ N2_P1_QUAL void N2_P1_NAME(
       const int j = (tid / kKGroups) & 1;
       const int gu = tid / (2 * kKGroups);
       const int ng = (gu == 0) ? (2 * g + j) : (kInter / 128 + 2 * g + j);
-      b1s_lds[gu][j][k] = S13[(e * kNGroups13 + ng) * kKGroups + k];
+      b1s_lds[gu][j][k] = S13e[(ew * kNGroups13 + ng) * kKGroups + k];
     }
     __syncthreads();
 
@@ -471,11 +486,11 @@ N2_P1_QUAL void N2_P1_NAME(
 #pragma unroll
       for (int c = 0; c < kColTiles; ++c) {
         const std::size_t tg = aiter::fp8_weight_byte_offset(
-            e, n_gate + 16 * c, kbyte, kW13N, kHidden);
+            ew, n_gate + 16 * c, kbyte, kW13N, kHidden);
         const std::size_t tu = aiter::fp8_weight_byte_offset(
-            e, n_up + 16 * c, kbyte, kW13N, kHidden);
-        load_bfrag(bf[buf][0][c], W13 + tg + 16 * lane);
-        load_bfrag(bf[buf][1][c], W13 + tu + 16 * lane);
+            ew, n_up + 16 * c, kbyte, kW13N, kHidden);
+        load_bfrag(bf[buf][0][c], W13e + tg + 16 * lane);
+        load_bfrag(bf[buf][1][c], W13e + tu + 16 * lane);
         stage_agpr(bf[buf][0][c]);
         stage_agpr(bf[buf][1][c]);
       }
