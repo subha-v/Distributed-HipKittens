@@ -1,10 +1,18 @@
 # exp_03 result — COMMIT_MID ladder run 1
 
-**Status: LADDER ABORTED AT M9 (GPU memory access fault); attribution
-running.** M1–M5 + placement + lds_race were green; M7 (the paired speed
-campaign) never ran, so there is NO speed verdict on row B yet. No
-production artifact was touched (`build/gemm_rs_mi300x.so` untouched by
-`build_arms.sh` by construction).
+**Status: CLOSED. Attribution verdict: the M9 fault is the INSTRUMENT'S —
+cmid and its flag-0 twin cmid0 fault identically at the same case (row 3,
+2048x2880x2880), M3(prod) canary green between them (`logs/attr_m9_*.log`,
+23:37–23:40Z). That is the golden e3base module's documented row-3 failure
+mode; the candidate is exonerated. Under the operating-mode change that
+followed (official evaluator only), COMMIT_MID was judged by the official
+benchmark instead: −0.88% GM, shape 6 −2.90%, verdict KEEP — see
+`../iter_loop/ITER_LOG.md` it01. M9 is retired; if ever revived, rebuild
+the golden per its own docstring first.**
+
+Interim record from the ladder run: M1–M5 + placement + lds_race were green;
+M7 (the paired speed campaign) never ran. No production artifact was touched
+(`build/gemm_rs_mi300x.so` untouched by `build_arms.sh` by construction).
 
 ## Ladder record (2026-08-13 22:44–23:33Z, lease aug13_exp03)
 

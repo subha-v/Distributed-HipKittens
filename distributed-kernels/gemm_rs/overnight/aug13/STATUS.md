@@ -12,6 +12,18 @@ number; one 8-GPU job at a time behind `tools/gpu_lease.sh`; clocks pinned.
 
 ## Log (newest first)
 
+### OPERATING-MODE CHANGE (user directive) + PAUSE CHECKPOINT
+
+The official evaluator is now the ONLY harness (leaderboard-564 protocol);
+rotation sessions, paired CIs and the M-gate ladder are retired unless asked
+again. Lean loop: pick change → build → official check → official bench →
+keep/revert → commit. Log: `iter_loop/ITER_LOG.md`. State at pause
+(2026-08-14 ~00:35Z): **it01 COMMIT_MID = KEEP, −0.88% GM (s6 −2.90%),
+production flip staged not executed; it02 NR sweep staged not run; M9 fault
+attributed to the M9 instrument (both flag arms fault identically), cmid
+exonerated, M9 retired.** Node: lease FREE, clocks pinned 1900 (convention),
+KFD clean, production .so untouched (md5 6bb2a223).
+
 ### exp_01 — rotation campaign COMPLETE (aug13b): the order-balanced table
 
 s0–s4 ran 2026-08-13 20:16–22:14Z (18/18 bench passes green, M3 re-gated

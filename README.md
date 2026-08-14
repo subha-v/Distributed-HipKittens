@@ -258,6 +258,12 @@ and citable: **ours/rank-1 = 1.120, 95% CI [1.080, 1.163]; ours/reference =
 session under the official evaluator, and the rank-1 gap is carried by shapes
 5/6 (1.31×/1.22×) with shape 1 a small ours win. Session-to-session drift is
 3.4–8.8% of an arm's geomean, so only within-session paired ratios are
-quoted. exp_03 (the exp_27 row-B mainloop arm behind a default-off flag, full
-gate ladder + paired A/B on shapes 5/6) is next. See
-`overnight/aug13/STATUS.md`.
+quoted. Late aug13, by user directive, the branch switched to a lean
+iteration loop on the official evaluator only (on-node scoreboard: ours
+391.9 µs GM vs rank-1 344.3): iteration 1 (COMMIT_MID, the exp_27 row-B
+mainloop commit placement) measured −0.88% GM with −2.90% on the largest
+shape and is KEPT (production flip staged for resume); a reducer-count sweep
+(`HK_GEMM_RS_NR`, default-off) is staged next; an M9 instrument fault
+(golden-module row-3 staleness — both flag arms fault identically) was
+attributed and M9 retired. Paused at user request — resume state in
+`overnight/aug13/STATUS.md` and `overnight/aug13/iter_loop/ITER_LOG.md`.

@@ -16,7 +16,9 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <stdexcept>
+#include <string>
 #include <type_traits>
 
 namespace hk_gemm_rs_mi300x::host_abi {
@@ -190,6 +192,32 @@ struct launch_config {
     if (picked == nullptr && m % generic_m_alignment != 0) {
         throw std::invalid_argument(
             "GEMM-RS mi300x: generic path requires M % 32 == 0");
+    }
+
+    // Reducer-count override, resolve-time only (aug13 iter loop, the §7 C
+    // knob). HK_GEMM_RS_NR="row:NR[,row:NR...]" swaps num_reducer_ctas for
+    // matching config_rows; unset (the default) leaves the table untouched.
+    // NR enters nothing but the producer/reducer CTA split below -- the grid
+    // stays 304 persistent CTAs and the kernel derives both pool sizes from
+    // g.num_gemm_ctas -- so this is work distribution only; the degenerate-
+    // split gate below still applies.
+    if (const char* env = std::getenv("HK_GEMM_RS_NR")) {
+        const std::string spec(env);
+        std::size_t pos = 0;
+        while (pos < spec.size()) {
+            std::size_t comma = spec.find(',', pos);
+            if (comma == std::string::npos) comma = spec.size();
+            const std::string tok = spec.substr(pos, comma - pos);
+            const std::size_t colon = tok.find(':');
+            if (colon != std::string::npos) {
+                const int row = std::atoi(tok.substr(0, colon).c_str());
+                const int nr = std::atoi(tok.substr(colon + 1).c_str());
+                if (row == cfg.config_row && nr > 0 && nr < cu_count) {
+                    cfg.num_reducer_ctas = nr;
+                }
+            }
+            pos = comma + 1;
+        }
     }
 
     const int slice_rows = m / world_size;
