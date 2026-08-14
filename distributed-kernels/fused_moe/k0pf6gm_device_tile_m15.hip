@@ -103,6 +103,27 @@
 #error "K0P6_M15_REPLICATE and K0P6_M15_STAGED both claim descriptor slot 63"
 #endif
 
+// M19: per-chunk ADAPTIVE replication on top of the M18 replica slots.  The
+// measured serving reality (2026-08-14 diag, n=90,050 router calls): per-call
+// static-set coverage is bimodal (p5=1%, p75+=77%) and per-call max rank
+// load reaches 6.25x at p95 — a static set pays its carry cost on exactly
+// the chunks it cannot help, and chunk wall-time is convex in skew (serving
+// pair #1: −5.7% end-to-end against a 4x aggregate-replay kernel win).
+// M19 decides replication PER EXPERT PER CHUNK from the routing itself: an
+// M0.5 pre-pass histograms this rank's my_ids, bit(e) = (replica slot
+// exists) && (own count >= theta, theta = M18R header word 3); M1 routes by
+// the bits and publishes them to every peer ordered-before the rows_done
+// epoch word; M2/scatter acceptance mirrors the SENDER's bits, so
+// exactly-once holds per source with no global agreement.  Cold chunk ==
+// M15 exactly (plus the pre-pass); hot chunk == M18 exactly.
+// DEFAULT 0; requires K0P6_M15_REPLICATE.
+#ifndef K0P6_M15_ADAPTIVE
+#define K0P6_M15_ADAPTIVE 0
+#endif
+#if K0P6_M15_ADAPTIVE && !K0P6_M15_REPLICATE
+#error "K0P6_M15_ADAPTIVE requires K0P6_M15_REPLICATE (the replica slots)"
+#endif
+
 // exp_27 shipped arm: M6 reads token-major sc_stage; M5's transpose is dead.
 #ifndef K0P6_MPS_ASCALE_TM
 #define K0P6_MPS_ASCALE_TM 1
@@ -183,12 +204,21 @@
 #define K0P6_M15_D_LEN 64
 #elif K0P6_M15_REPLICATE
 // Replication arm only: slot 63 holds a 16-byte-aligned device buffer
-//   u32[0] magic 0x4D313852 ("M18R"), u32[1] nrep in [1,32], u32[2..3] rsv,
+//   u32[0] magic 0x4D313852 ("M18R"), u32[1] nrep in [1,32], u32[2] EL,
+//   u32[3] theta (ADAPTIVE decision threshold; ignored by plain M18),
 //   byte 16..271  int8 lut[256]: global eid -> local slot (owned experts
 //                 e-lo on their owner; replicas E..E+nrep-1; -1 absent),
 //   byte 272..303 u32 bitmap[8]: replicated-expert set (global eid bits).
 #define K0P6_D_M15_REP 63
+#if K0P6_M15_ADAPTIVE
+// Adaptive arm adds slot 64: the symmetric per-source decision words,
+// u32[2 parity][world][8] (256 bits per source), peer-written in M1
+// ordered-before the rows_done epoch publication.
+#define K0P6_D_M15_REPDEC 64
+#define K0P6_M15_D_LEN 65
+#else
 #define K0P6_M15_D_LEN 64
+#endif
 #else
 #define K0P6_M15_D_LEN K0P6_MPS_D_LEN
 #endif
@@ -447,6 +477,50 @@ __device__ __forceinline__ void k0p6_m18_scatter(
 }
 #endif
 
+#if K0P6_M15_ADAPTIVE
+// M19 scatter: the M18 scatter with the acceptance mirrored to the SENDER'S
+// per-chunk decision bits (srcdec = [8 sources][8 u32], 256 bits each).
+//   owned slot   : foreign rows live iff the source's bit is OFF; self rows
+//                  always (a rank never sets bits for experts it owns).
+//   replica slot : live iff self row AND own bit ON.
+__device__ __forceinline__ void k0p6_m19_scatter(
+    const int* __restrict__ recv_eid, const float* __restrict__ recv_wgt,
+    int world, int MAXTOK, int TOPK, int cur, int E, int PADMAX,
+    const signed char* lut, const unsigned int* srcdec,
+    int* __restrict__ scratch, int* __restrict__ sti, float* __restrict__ swt,
+    int* __restrict__ pperr, int ovf_bit) {
+  const int rows = world * MAXTOK;
+  const int pairs = rows * TOPK;
+  for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < pairs;
+       i += gridDim.x * blockDim.x) {
+    const int q = i / TOPK;
+    const int s = i - q * TOPK;
+    const int src = q & (world - 1);
+    const int off = q >> 3;
+    const int row = src * MAXTOK + off;
+    const int j = row * TOPK + s;
+    const int e = recv_eid[j];
+    if ((unsigned)e > 255u) continue;
+    const int slot = (int)lut[e];
+    if (slot < 0) continue;
+    const unsigned int self_bit =
+        (srcdec[src * 8 + ((e >> 5) & 7)] >> (e & 31)) & 1u;
+    if (slot < E) {
+      if (src != cur && self_bit) continue;
+    } else {
+      if (src != cur || !self_bit) continue;
+    }
+    const int pos = atomicAdd(&scratch[K0P6_SC_CUR + slot], 1);
+    if (pos >= PADMAX) {
+      atomicOr(pperr, ovf_bit);
+      continue;
+    }
+    sti[pos] = (row & 0x00FFFFFF) | (s << 24);
+    swt[pos] = recv_wgt[j];
+  }
+}
+#endif
+
 // ---- small shared helpers -----------------------------------------------------------------
 __device__ __forceinline__ float k0p6_bf16_to_f32(unsigned short b) {
   return __uint_as_float((unsigned int)b << 16);
@@ -585,6 +659,11 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
   __shared__ unsigned int s_repmask[8];
   __shared__ int s_nrep;
 #endif
+#if K0P6_M15_ADAPTIVE
+  __shared__ int s_theta;
+  __shared__ unsigned int s_dec[8];       // this rank's per-chunk decision
+  __shared__ unsigned int s_srcdec[64];   // [8 sources][8 u32] for acceptance
+#endif
 
   const int tid = threadIdx.x;
   const int bid = blockIdx.x;
@@ -645,6 +724,14 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
     if (tid < 8)
       s_repmask[tid] =
           *(const unsigned int*)((const unsigned char*)rep + 272 + 4 * tid);
+#if K0P6_M15_ADAPTIVE
+    if (tid == 0) s_theta = (int)rep[3];
+    if (k0p6_dread(desc, K0P6_D_M15_REPDEC) == 0 ||
+        (k0p6_dread(desc, K0P6_D_M15_REPDEC) & 7) != 0) {
+      if (bid == 0 && tid == 0) atomicOr(pperr, K0P6_MPS_ERR_CONFIG);
+      return;
+    }
+#endif
     __syncthreads();
   }
   const int EL = E + s_nrep;  // local slot count: owned experts + replicas
@@ -711,6 +798,44 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
   }
   if (debug_stop == 1) return;
 
+#if K0P6_M15_ADAPTIVE
+  // ================= M0.5: per-chunk replication decision ===================================
+  // Histogram this rank's OWN routing into hcnt[0..255] (scratch use only:
+  // M2 fully overwrites hcnt later), then every CTA derives the same 256-bit
+  // decision word set: replicate expert e this chunk iff a replica slot
+  // exists for it here (lut[e] >= E) and this rank's count reaches theta.
+  {
+    int* hcnt_pre = (int*)k0p6_dread(desc, K0P6_D_HCNT);
+    const int* my_ids_pre = (const int*)k0p6_dread(desc, K0P6_D_MYIDS);
+    const int T_pre = input_tokens;
+    unsigned int* gbar = (unsigned int*)k0p6_dread(desc, K0P6_D_GBAR);
+    const hkp::local_grid_epoch bar{gbar, pperr, spin_limit};
+    const hkp::fail_closed bar_err{pperr, 2097152};
+    const int gtid = bid * (int)blockDim.x + tid;
+    const int gstride = nct * (int)blockDim.x;
+    for (int i = gtid; i < 256; i += gstride) hcnt_pre[i] = 0;
+    hkp::grid_barrier(bar, tid, bar_err);
+    if (hk_moe::error_bit_set_agent(pperr, 2097152)) return;
+    for (int i = gtid; i < T_pre * TOPK; i += gstride) {
+      const int e = my_ids_pre[i];
+      if ((unsigned)e < 256u) atomicAdd(&hcnt_pre[e], 1);
+    }
+    hkp::grid_barrier(bar, tid, bar_err);
+    if (hk_moe::error_bit_set_agent(pperr, 2097152)) return;
+    if (tid < 8) {
+      unsigned int word = 0u;
+      const int theta = s_theta;
+#pragma unroll 1
+      for (int b = 0; b < 32; ++b) {
+        const int e = tid * 32 + b;
+        if ((int)s_lut[e] >= E && hcnt_pre[e] >= theta) word |= 1u << b;
+      }
+      s_dec[tid] = word;
+    }
+    __syncthreads();
+  }
+#endif
+
   // ================= M1: qpush dispatch (donor verbatim) ====================================
   {
     const auto* symmetric = k0p6_symmetric(desc);
@@ -736,7 +861,17 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
       const int s = lane;
       const int eid = (s < TOPK) ? my_ids[(size_t)tau * TOPK + s] : -1;
       const float wgt = (s < TOPK) ? my_wgt[(size_t)tau * TOPK + s] : 0.0f;
-#if K0P6_M15_REPLICATE
+#if K0P6_M15_ADAPTIVE
+      // Per-chunk decision bits: replicate-hot experts route source-locally
+      // this chunk; everything else takes the ownership map (== M15).
+      const int dest =
+          (eid >= 0)
+              ? ((eid < 256 &&
+                  ((s_dec[(eid >> 5) & 7] >> (eid & 31)) & 1u) != 0u)
+                     ? cur
+                     : eid / E)
+              : -1;
+#elif K0P6_M15_REPLICATE
       // Replicated experts route source-locally: this rank computes its own
       // tokens' hits on them (dedup below folds them into the self row).
       const int dest =
@@ -859,6 +994,28 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
       const unsigned int old = __hip_atomic_fetch_add(qpush_done, 1u, __ATOMIC_ACQ_REL,
                                                       __HIP_MEMORY_SCOPE_AGENT);
       if ((old % gridDim.x) == (gridDim.x - 1)) {
+#if K0P6_M15_ADAPTIVE
+        // Publish this rank's 256-bit decision to every peer BEFORE the
+        // release + rows_done epoch words: a peer that has observed the
+        // epoch word is guaranteed to observe these.  Parity-doubled like
+        // dest_counter so a fast peer's next epoch cannot clobber a slow
+        // consumer's view.
+        {
+          unsigned int* rd_base =
+              (unsigned int*)k0p6_dread(desc, K0P6_D_M15_REPDEC) +
+              (size_t)par * (size_t)world * 8;
+          for (int pe = 0; pe < world; ++pe) {
+            unsigned int* dst =
+                (pe == cur)
+                    ? (rd_base + (size_t)cur * 8)
+                    : hk_moe::peer_ptr(rd_base + (size_t)cur * 8, pe,
+                                       symmetric);
+            for (int w = 0; w < 8; ++w)
+              hk_moe::publish_relaxed<hk_moe::scope::system>(dst + w,
+                                                             s_dec[w]);
+          }
+        }
+#endif
         hk_moe::release_signal_batch_system();
         for (int pe = 0; pe < world; ++pe) {
           const unsigned int n_s = pushed_count[pe];
@@ -984,6 +1141,18 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
     hk_moe::acquire_payload_system();
     __syncthreads();
 
+#if K0P6_M15_ADAPTIVE
+    // Every source's decision words are ordered-before its rows_done epoch
+    // word, which this region already waited on; a relaxed read suffices.
+    if (tid < 64) {
+      const unsigned int* rd =
+          (const unsigned int*)k0p6_dread(desc, K0P6_D_M15_REPDEC) +
+          (size_t)(epoch & 1ull) * (size_t)world * 8;
+      s_srcdec[tid] = hk_moe::load_relaxed<hk_moe::scope::system>(rd + tid);
+    }
+    __syncthreads();
+#endif
+
     for (int r = wave; r < T_ext; r += wave_count) {
       const int s = r / MAXTOK;
       const int off = r - s * MAXTOK;
@@ -993,7 +1162,21 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
       __syncwarp();
       if (lane < 8) {
         const int e = recv_eid[(size_t)r * 8 + lane];
-#if K0P6_M15_REPLICATE
+#if K0P6_M15_ADAPTIVE
+        // Acceptance mirrors the SENDER's per-chunk bits (see the M19
+        // scatter): owned slots reject foreign rows whose source kept the
+        // expert local; replica slots accept only self rows with the own
+        // bit set.
+        const int slot = ((unsigned)e <= 255u) ? (int)s_lut[e] : -1;
+        bool live_e = false;
+        if (slot >= 0) {
+          const unsigned int src_bit =
+              (s_srcdec[s * 8 + ((e >> 5) & 7)] >> (e & 31)) & 1u;
+          live_e = (slot < E) ? (s == cur || src_bit == 0u)
+                              : (s == cur && src_bit != 0u);
+        }
+        if (live_e) atomicAdd(&s_cnt[slot], 1);
+#elif K0P6_M15_REPLICATE
         // Same acceptance rule as the M18 scatter: LUT slot, and replicated
         // experts are live only on self-source rows (s == cur).
         const int slot = ((unsigned)e <= 255u) ? (int)s_lut[e] : -1;
@@ -1131,7 +1314,11 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
 
     const int pairs = T_ext * TOPK;
     k0p6_sort::pad(scratch, EL, T_ext, TOPK, PADMAX, sti, swt, pperr, 4194304);
-#if K0P6_M15_REPLICATE
+#if K0P6_M15_ADAPTIVE
+    k0p6_m19_scatter(recv_eid, recv_wgt, world, MAXTOK, TOPK, cur, E, PADMAX,
+                     s_lut, s_srcdec, scratch, sti, swt, pperr, 1048576);
+    (void)pairs;
+#elif K0P6_M15_REPLICATE
     k0p6_m18_scatter(recv_eid, recv_wgt, world, MAXTOK, TOPK, cur, PADMAX,
                      s_lut, s_repmask, scratch, sti, swt, pperr, 1048576);
     (void)pairs;
