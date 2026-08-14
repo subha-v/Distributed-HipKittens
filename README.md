@@ -77,6 +77,21 @@ skew. The paused bottleneck study and its resume plan live in
 iteration against the leaderboard rank-1 kernel began (gap 1.138× geomean,
 first schedule win kept at −0.88%).
 
+The aug14 session closed the serving-bottleneck question and produced
+**M18** (`K0P6_M15_REPLICATE`, RUN PIN `ablations-m18`), the static
+hot-expert replication arm. The completed skew measurement showed real
+MLPerf routing concentrates 51.9% of traffic on experts 0–7 (all one rank;
+receive-side load 5.09× fair share aggregate, 5.59× worst layer), a new
+`K0_MOK_ROUTE_HIST` harness mode replays measured histograms at kernel
+speed, and under that replay M15 degrades to 0.847× production (m17's RR
+order buys only ~1%). M18 replicates the hot experts onto every rank and
+routes them source-locally (exactly-once via self-source acceptance; combine
+untouched): **0.309× production with 8 replicas, 0.242× with 32, 0.217× on
+the worst layer — and 0.785× in the balanced control** (all gates green,
+5-run campaigns). Full results and fairness caveats in
+`overnight/aug14/M18_REPLICATION_RESULTS.md`; serving integration
+(m18_pin) is the next step.
+
 Latest additions to the device primitive layer and the fused-MoE port
 (`distributed-kernels/fused_moe/`):
 
