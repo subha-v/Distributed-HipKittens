@@ -60,6 +60,23 @@ ratchet in the same session, all correctness/poison/soak gates green.** The
 same session adjudicated the mode-16 TBO-2 deferred-combine arm at +75.8 µs
 (falsified; `overnight/aug12/exp_02_tbo_deferred_combine/result.md`).
 
+The aug13–14 session extended this three ways. (1) **Batch-size response**
+(`ablations-tgen` branch, `overnight/aug13/exp_04_tgen/result.md`): a
+one-line M2 clamp fixed the T≠4096 correctness defect, and 5-rotation
+campaigns measured M15 C=28 at 0.756× (T=4096), 0.885× (T=2048), and 1.094×
+(T=1024) of production — the megakernel family inverts at small batch,
+break-even ≈ 1,600–1,800 tokens/rank. (2) **Real serving** (amd-master
+`vllm-integration-m15` branch): M15 ran attested inside DeepSeek-R1 vLLM
+serving (58 layers × 8 ranks, receipt-gated) on real MLPerf text — parity
+throughput, better medians (TPOT p50 −2.5%), worse tails (TTFT p99 +5.7%,
+E2EL p99 +7.0%), consistent with balanced-routing tuning meeting real expert
+skew. The paused bottleneck study and its resume plan live in
+`overnight/aug14/M15_SERVING_BOTTLENECK_HANDOFF.md`. (3) **GEMM-RS**
+(`GEMM-RS` branch): the evaluator's debug-flag contamination was removed
+(ours beats the GEMM+RCCL reference at 0.764×), and competition-mode
+iteration against the leaderboard rank-1 kernel began (gap 1.138× geomean,
+first schedule win kept at −0.88%).
+
 Latest additions to the device primitive layer and the fused-MoE port
 (`distributed-kernels/fused_moe/`):
 
