@@ -260,8 +260,9 @@
 #define K0P6_D_M20_S2P 69
 #define K0P6_D_M20_PF 70
 #define K0P6_M15_D_LEN 71
-// Prefetch CTA count, carved from the service pool's measured slack.
-#define K0P6_M20_PF_CTAS 4
+// Prefetch CTA count, carved from the service pool's measured slack
+// (C-sweep 2026-08-14: the pool is C-insensitive 16..28 under skew).
+#define K0P6_M20_PF_CTAS 8
 #else
 #define K0P6_M15_D_LEN 65
 #endif
@@ -578,23 +579,36 @@ __device__ __forceinline__ void k0p6_m19_scatter(
 // destinations are the rank-local pool.  Completion by kernel exit is the
 // entire ordering contract (same-stream launch order certifies the reader).
 __device__ __forceinline__ void k0p6_m20_prefetch(
-    const long long* __restrict__ desc, int pf_id, int kPF, int tid) {
+    const long long* __restrict__ desc, int worker, int nworkers, int tid) {
   const unsigned long long* table =
       (const unsigned long long*)k0p6_dread(desc, K0P6_D_M20_PF);
   if (table == nullptr) return;
   const unsigned int* head = (const unsigned int*)table;
   if (head[0] != 0x4D323050u) return;  // "M20P"
   const int nchunks = (int)head[1];
-  for (int c = pf_id; c < nchunks; c += kPF) {
+  // Throughput-bound copy: each thread owns contiguous 256 B segments and
+  // issues 16 INDEPENDENT loads before its stores — the one-load-in-flight
+  // form was xGMI-latency-bound (~7 GB/s aggregate; measured as a ~93 ms
+  // epoch extension on the first M20 campaign).
+  for (int c = worker; c < nchunks; c += nworkers) {
     const unsigned char* src =
         (const unsigned char*)table[2 + 3 * (size_t)c + 0];
     unsigned char* dst = (unsigned char*)table[2 + 3 * (size_t)c + 1];
     const unsigned long long bytes = table[2 + 3 * (size_t)c + 2];
-    for (unsigned long long i = (unsigned long long)tid * 16;
-         i + 16 <= bytes; i += 256ull * 16) {
-      *reinterpret_cast<uint4*>(dst + i) =
-          *reinterpret_cast<const uint4*>(src + i);
+    const unsigned long long nseg = bytes >> 8;  // 256 B segments
+    for (unsigned long long s = (unsigned long long)tid; s < nseg;
+         s += 256ull) {
+      const unsigned long long base = s << 8;
+      uint4 v[16];
+#pragma unroll
+      for (int j = 0; j < 16; ++j)
+        v[j] = *reinterpret_cast<const uint4*>(src + base + 16ull * j);
+#pragma unroll
+      for (int j = 0; j < 16; ++j)
+        *reinterpret_cast<uint4*>(dst + base + 16ull * j) = v[j];
     }
+    // 256 B-multiple chunk sizes are a host-side contract (all four weight
+    // and scale tensors' per-expert strides are; asserted host-side).
   }
 }
 #endif
@@ -1521,15 +1535,14 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
               t_lo, t_hi);
 #if K0P6_M20_SLOTPOOL
         } else if (bid >= nct - K0P6_M20_PF_CTAS) {
-          // Prefetch engine: the C-sweep measured the pool C-insensitive
-          // 16..28 under skew, so these CTAs are slack.  They stream this
-          // layer's duty table (a downstream layer's replica weights) during
-          // slab 0 and skip the combine sweep in slab 1 (duty completion by
-          // kernel exit is the ordering contract).
-          if (slab == 0) {
-            k0p6_m20_prefetch(desc, bid - (nct - K0P6_M20_PF_CTAS),
-                              K0P6_M20_PF_CTAS, tid);
-          }
+          // Prefetch engine: slack service CTAs stream this layer's duty
+          // table (a downstream layer's replica weights) across BOTH slab
+          // windows — chunk space split by slab so each chunk is copied
+          // exactly once (duty completion by kernel exit is the contract).
+          k0p6_m20_prefetch(
+              desc,
+              (bid - (nct - K0P6_M20_PF_CTAS)) + slab * K0P6_M20_PF_CTAS,
+              2 * K0P6_M20_PF_CTAS, tid);
 #endif
         } else if (slab == 1) {
 #if !K0P6_M15_STAGED
