@@ -105,6 +105,21 @@ acceptance) — **+39.8% end-to-end serving throughput with TTFT p99 −32.2%**
 pending; harness reference-match gates green).  Design:
 `overnight/aug14/M19_DESIGN.md`.
 
+The evening session closed the arc with **M20** (`K0P6_M20_SLOTPOOL`,
+`ablations-m20`): M19's routing machinery with the 41 GB of per-layer
+replicas replaced by a budgeted persistent replica cache and the in-kernel
+decision pre-pass replaced by a pre-launch bitmap (deleting the measured
+1.2 ms barrier tax).  The road there produced a three-point overlap
+measurement on xGMI — pull-based weight streaming +93 ms naive / +23 ms
+unrolled (remote-read latency-bound), push-based +54 ms (the
+~1.4 GB/s/CTA service-pool law) — proving per-step MoonEP-style weight
+movement infeasible on this fabric and motivating the cache.  Final
+kernel-level numbers (5-run campaigns, gates green): **0.2483x production
+under measured serving skew (6,035 vs 24,283 us) and 0.823x balanced at
+theta=64 (~0.76 with theta above uniform), at 672 MB versus M19's 41 GB.**
+Serving integration handoff:
+`overnight/aug14/M20_SERVING_INTEGRATION_HANDOFF.md`.
+
 Latest additions to the device primitive layer and the fused-MoE port
 (`distributed-kernels/fused_moe/`):
 

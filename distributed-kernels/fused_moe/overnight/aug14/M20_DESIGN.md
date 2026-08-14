@@ -75,6 +75,43 @@ overlaps weight movement with compute ACROSS LAYERS.
   tags (a slot read by layer L must carry L's epoch tag written by L-2's
   prefetcher); the flags are rank-local so no cross-rank races exist.
 
+## MEASURED (2026-08-14 evening) — the streaming→cache arc
+
+The prefetch pipeline was built, measured, and REDESIGNED on data.  Three
+in-kernel weight-movement variants, all against the same duty:
+
+| variant | mechanism | measured cost/invocation |
+|---|---|---:|
+| pull, naive | 7 ranks read one owner, 1 load in flight/thread | **+93 ms** (~7 GB/s, latency-bound) |
+| pull, 16-wide unrolled | same direction, deep pipeline | **+23 ms** — the xGMI remote-READ path is the bound |
+| push (owner writes 7 peers) | the M7-proven write direction | **+54 ms** — per-CTA push law (~1.1–1.7 GB/s/CTA, exp_03_push_throughput) caps 8 CTAs far below the duty |
+
+Conclusion: per-invocation GB-scale weight streaming is INFEASIBLE in-kernel
+on this fabric at service-pool CTA counts (MoonEP's per-step streaming rides
+NVLink TMA multicast; xGMI has no analog).  Since the weights are constant
+across steps, per-step re-streaming is also UNNECESSARY: the final M20 is a
+**persistent replica CACHE** — per-layer slots for a host-budgeted layer
+subset, zero steady-state traffic, the prefetch engine retained only for
+rate-limited set-refresh (K0_MOK_M20_DUTY experts/invocation) — with the
+precomputed-decision dataflow unchanged.
+
+**Final numbers (5-run campaigns, all gates green, T=4096):**
+
+| routing | M20 | production | ratio |
+|---|---:|---:|---:|
+| measured serving skew | **6,035 us** | 24,283 us | **0.2483** [0.2480, 0.2498] |
+| balanced (theta=64) | 6,340 us | 7,701 us | 0.8233 [0.8217, 0.8246] |
+
+= the full M18 replication win at **672 MB (single-layer harness; serving
+scales by the layer budget)** instead of 41 GB, with M19's 1.2 ms decision
+tax deleted.  The balanced 0.823 is the theta=64 point (uniform per-expert
+count is 128, so all replicas stay active); a theta above uniform returns
+the M15-like ~0.76 — per-chunk automatic in serving where the pre-op
+computes bits per step.  Kernel: `ablations` (K0P6_M20_SLOTPOOL) + RUN PIN
+`ablations-m20`; harness: amd-master `debug/pf6-first-launch`
+(K0_MOK_M20=1, cache mode = single pool buffer after the 3x672MB mori-heap
+lesson).
+
 ## Deferred (M21 frontier, documented not built)
 
 Full epoch pipelining (M1 of epoch N+1 under M8 of N — the parity-doubled
