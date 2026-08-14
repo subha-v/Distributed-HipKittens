@@ -98,8 +98,38 @@ MLPerf-text-specific and partially warmup-diluted).
 - Kernel commits: `ablations` 0f9676ce, `ablations-m18` 92440297;
   node worktree `~/DHK-m18`.
 
-## Next
+## Serving pair #1 (2026-08-14, `vllm-integration-m18` @ 72591acd) — NEGATIVE
 
-Serving integration (m18_pin in the PF4H shim): real-checkpoint replica
-slices, M18R table from measured histograms, then ONE stock-vs-M18 serving
-pair (c32p cell) before any wider claim.
+The integration itself worked first try: env-gated on the m15 mode
+(`VLLM_PF4H_M18_REP_EXPERTS`), owner-broadcast replica weights behind `[:E]`
+views, 64-word descriptor, all receipts 8/8 including
+`M18_REPLICATION_RECEIPT`, 1024/1024 completed both arms
+(`~/20260814_m15_campaign_m18pair1b/`).  The performance did NOT transfer:
+
+| metric | stock | m18 (top-16) | delta |
+|---|---:|---:|---:|
+| input tok/s | 12,562.5 | 11,842.2 | **−5.7%** |
+| TTFT p50 / p99 | 3,089 / 5,430 ms | 3,523 / 6,469 ms | +14% / +19% |
+| TPOT p50 | 1,072 ms | 1,098 ms | +2.4% |
+
+Two suspects, in order:
+
+1. **Aggregate-vs-per-chunk statistics (prime).**  The MoK replay samples
+   every batch from the aggregate histogram — constant 58.7% replica-set
+   coverage, zero variance.  Real chunks are document slices: mean coverage
+   is still 58.7%, but chunks whose hot experts fall outside the static set
+   pay the full skew penalty PLUS the replication carry cost, and chunk
+   wall-time is convex in skew.  The per-call instrument (skew hook @
+   72591acd: per-call coverage + max-rank-load histograms) measures exactly
+   this distribution; decision pending its first pass (`m18diag`).
+2. **KV pool (secondary).**  +41 GB replica weights at
+   `--gpu-memory-utilization 0.70` halved available KV (68.8 → ~31 GiB,
+   max concurrency 64× → 29×).  Arithmetic says 32 concurrent 4k requests
+   need ~5 GB so this should not bind, but it is a confound to remove
+   (smaller nrep, or a higher utilization for both arms) before any rerun.
+
+If the per-call distribution shows high coverage variance, the static set is
+structurally insufficient for serving and the design moves to per-chunk
+replica selection (device-side planning prologue, MoonEP-style) or
+layer/chunk-adaptive tables.  The kernel-level result stands as measured —
+the open question is the routing statistics serving actually presents.
