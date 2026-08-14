@@ -21,7 +21,13 @@ Backward given dY, with **dY dispatched UNWEIGHTED** (mirror of forward):
 - dZ_row  = swiglu'(z_row) ⊙ dH2_row            (needs z saved from forward)
     dZ_g = dH2 ⊙ u ⊙ silu'(g);  dZ_u = dH2 ⊙ silu(g)
 - dX_t    = Σ_k w_tk · (W13_e^T · dZ_row)       (L1 dgrad; **w folded at the
-            combine**, exactly mirroring forward's combine)
+            dX EPILOGUE via the saved plan's swt — NOT at M8 combine**: the
+            phase map showed M1's match_any dedup makes receive rows
+            (token,dest) aggregates of up to 8 experts with different
+            weights, so per-slot weighting at combine cannot reconstruct
+            Σ w_e dX_e. The epilogue is per sorted row = per (token,expert),
+            exactly where the forward applies w today; M8 reuses
+            byte-for-byte.)
 - dW2_e  += Σ_rows w_row · dY_row ⊗ h_row       (LOCAL, no comm — FILLER)
 - dW1_e  += Σ_rows w_row · dZ_row ⊗ x_row       (LOCAL, no comm — FILLER)
 - dw_tk   = dot(dH2_row, h_row)                 (cheap row-dot; UNWEIGHTED
@@ -40,18 +46,27 @@ straight-through router grads (T1 seam inventory).
 New translation unit next to the m15 body (working name
 `k0pf6gm_device_tile_t2b.hip`), same grid (256x256), same epoch protocol:
 
-- **M0/M1 (dispatch)**: byte-portable from forward — same routing, same
-  LL128 push, but the payload is dY rows. Two options: bf16 rows (stride
-  change: 7168x2B + no scales) or fp8-on-wire (quantize dY per row-group at
-  the source — MORI measured 366→642 GB/s effective from halving combine
-  bytes; same lever applies to our dY dispatch). Start bf16 (correctness),
-  add fp8-on-wire as the measured lever.
-- **GEMM phases**: reuse the NT grouped-GEMM bodies VERBATIM against
-  **pre-transposed fp8 weight buffers** the producer already refreshes per
-  step: W2T [E, I, H]-shaped view for dH2 = W2^T dY, W13T for dX rows.
-  (The turbo grouped linear caches weight AND weightT fp8 copies per step —
-  same trick, +42 MB/expert, trivial at the 4-layer proxy.) SwiGLU' is a
-  fused elementwise between the two GEMMs, reading saved z.
+- **M0/M1 (dispatch)**: byte-portable from forward — the M1 path already
+  quantizes bf16→fp8+per-group scales in flight (8,064-byte wire rows), so
+  fp8-on-wire dY dispatch is byte-identical MECHANICS, purely a precision
+  decision. Critically, backward REUSES THE FORWARD'S SAVED SORT PLAN
+  (sti/swt/pull_ptr/pull_src/pull_stage/tile_desc/chunk fills): the
+  forward's reserve_row and scatter cursors are atomics (nondeterministic),
+  so re-derivation is forbidden — and reuse deletes M0.5/M3–M5 from the
+  backward entirely (dY rows land in the saved row assignments
+  deterministically; no reservation atomics at all).
+- **GEMM phases**: reuse the NT grouped-GEMM bodies with swapped dimension
+  constants against **pre-transposed fp8 weight buffers** (per-step W2T
+  [E,2048,7168] and W13T [E,7168,4096]; AITER preshuffle at those shapes,
+  128x128 blockscale grids transpose exactly). The geometry mapping is
+  PERFECT: dH2 (N=2048, K=7168) is phase-1's exact chunk geometry (8x256);
+  dX (N=7168, K=4096) is phase-2's exact nc geometry (16x448, K-groups
+  16→32, DQ width doubled). Phase-1's gate/up paired epilogue is exactly
+  where swiglu' emits (dgate,dup) from one GEMM + the saved z, quantized
+  to dZq [rowcap,4096] in W13-column order — precisely the K order the dX
+  GEMM consumes. The backward TU gets its own constants header (the n2
+  constants are W13/W2-specific). dw_k = dot(dH2_row, act_z_row) computed
+  in the dH2 epilogue where dH2 is live in registers.
 - **M7/M8 (combine)**: byte-portable — dX rows remote-accumulate to token
   owners with w folded at the accumulate (exactly where serving applied w).
 - **dw_k row-dots**: computed where dH2 exists (GEMM1's epilogue), written
@@ -68,18 +83,22 @@ New translation unit next to the m15 body (working name
 
 ## 3. Forward-side save hooks (the T1 forward swap grows two outputs)
 
-The forward mega already materializes both saved quantities:
-- x_rows: the unpacked fp8 expert input rows (a_dst) + scales (sc_dst) —
-  today reused per layer; T2 adds per-layer persistent save buffers
-  (descriptor slots, [t_loc_max, H] u8 + scales).
-- z: GEMM1's output before activation — today consumed in registers/LDS;
-  T2 streams it to a save buffer [t_loc_max, 2I] bf16 during the GEMM1
-  epilogue (bandwidth cost ~1 extra write of z; the recompute alternative
-  — re-run GEMM1 in backward — is the fallback if the write measures hot).
-Per-microbatch lifetime (no PP: fwd microbatch then bwd immediately);
-sizing at the proxy: 4 layers x (x_rows fp8 + z bf16) — low-GB total,
-fine in 256 GB HBM. Also saved: per-row w and row->token/k maps (already
-in the forward's sti/swt bookkeeping).
+Per the phase map (line-cited in T2_PHASE_MAP.md):
+- x_rows fp8 + scales: ALREADY persisted as a_dst (slot 8) + sc_stage (9)
+  for the whole epoch — per-layer persistence is purely per-layer
+  descriptor instances pointing 8/9 at per-layer arenas (the M20
+  per-layer-descriptor precedent; ZERO device-code change).
+- act(z): already exists quantized as A2q + DQ2 (slots 27/28) — keep per
+  layer; feeds dW2 and dw_k directly.
+- z (g,u): register-only today; add a mirrored quant-store in P1's
+  epilogue (the amax machinery is already there) → new slots Zq
+  [rowcap,4096] fp8 + DQZ [rowcap,32], keyed by sorted row (valid because
+  the sort plan is saved).
+- The sort plan itself: sti/swt/sei/nvi/tile_desc/pull_ptr/pull_src/
+  pull_stage/chunk fills (~5 MB/layer) — mandatory save (atomics make
+  re-derivation nondeterministic).
+Per-microbatch lifetime (no PP): 4 layers x (a_dst + sc + A2q/DQ2 +
+Zq/DQZ + plan) — low-GB total in 256 GB HBM.
 
 ## 4. Producer extensions
 
