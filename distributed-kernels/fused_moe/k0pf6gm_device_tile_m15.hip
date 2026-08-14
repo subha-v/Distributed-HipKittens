@@ -82,6 +82,27 @@
 #define K0P6_M15_SCATTER_RR 0
 #endif
 
+// M18: static hot-expert replication. The measured serving workload routes
+// 51.9% of all expert-slot traffic to eight experts that share one rank's
+// block (aggregate receive-side load 5.09x fair share; worst layer 5.59x),
+// and both this kernel and production degrade ~3.2-3.6x under a replay of
+// that histogram. The host replicates the hot experts' weights into extra
+// local slots on EVERY rank (E owned + nrep replicas <= K0P6_MAXE) and the
+// dispatch routes replicated experts SOURCE-LOCALLY (dest = cur), so their
+// tokens never cross XGMI, their M7 epilogue RMWs become rank-local, and
+// their GEMM work splits evenly by construction (send-side load is flat).
+// Correctness rule: a replicated expert is computed ONLY from self-source
+// rows on every rank -- the owner must reject foreign rows for it (those
+// tokens were computed at their source), which keeps every (token, expert)
+// pair computed exactly once; M7/M8 consume (dest,row) records and need no
+// change. DEFAULT 0: no replication code in the default build.
+#ifndef K0P6_M15_REPLICATE
+#define K0P6_M15_REPLICATE 0
+#endif
+#if K0P6_M15_REPLICATE && K0P6_M15_STAGED
+#error "K0P6_M15_REPLICATE and K0P6_M15_STAGED both claim descriptor slot 63"
+#endif
+
 // exp_27 shipped arm: M6 reads token-major sc_stage; M5's transpose is dead.
 #ifndef K0P6_MPS_ASCALE_TM
 #define K0P6_MPS_ASCALE_TM 1
@@ -159,6 +180,14 @@
 // the first epoch (thereafter consume-and-zeroed by the push pass). Extends
 // the descriptor length by one slot; the default arm needs no host change.
 #define K0P6_D_M15_STAGE 63
+#define K0P6_M15_D_LEN 64
+#elif K0P6_M15_REPLICATE
+// Replication arm only: slot 63 holds a 16-byte-aligned device buffer
+//   u32[0] magic 0x4D313852 ("M18R"), u32[1] nrep in [1,32], u32[2..3] rsv,
+//   byte 16..271  int8 lut[256]: global eid -> local slot (owned experts
+//                 e-lo on their owner; replicas E..E+nrep-1; -1 absent),
+//   byte 272..303 u32 bitmap[8]: replicated-expert set (global eid bits).
+#define K0P6_D_M15_REP 63
 #define K0P6_M15_D_LEN 64
 #else
 #define K0P6_M15_D_LEN K0P6_MPS_D_LEN
@@ -379,6 +408,45 @@ __device__ __forceinline__ void k0p6_m15_scatter_rr(
 }
 #endif
 
+#if K0P6_M15_REPLICATE
+// M18 scatter: the RR-permuted iteration (the depth-4 link-spreading order;
+// timing-neutral at balanced routing per the m17 tie) with LUT slot lookup in
+// place of the affine ownership window, plus the replication acceptance rule:
+// a replicated expert's pair is live only on rows whose SOURCE is this rank
+// (its foreign rows were computed at their source's replica). Same cursors,
+// same sti/swt packing, same overflow bit as the donor.
+__device__ __forceinline__ void k0p6_m18_scatter(
+    const int* __restrict__ recv_eid, const float* __restrict__ recv_wgt,
+    int world, int MAXTOK, int TOPK, int cur, int PADMAX,
+    const signed char* lut, const unsigned int* repmask,
+    int* __restrict__ scratch, int* __restrict__ sti, float* __restrict__ swt,
+    int* __restrict__ pperr, int ovf_bit) {
+  const int rows = world * MAXTOK;
+  const int pairs = rows * TOPK;
+  for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < pairs;
+       i += gridDim.x * blockDim.x) {
+    const int q = i / TOPK;
+    const int s = i - q * TOPK;
+    const int src = q & (world - 1);
+    const int off = q >> 3;
+    const int row = src * MAXTOK + off;
+    const int j = row * TOPK + s;
+    const int e = recv_eid[j];
+    if ((unsigned)e > 255u) continue;
+    const int slot = (int)lut[e];
+    if (slot < 0) continue;
+    if ((((repmask[e >> 5] >> (e & 31)) & 1u) != 0u) && src != cur) continue;
+    const int pos = atomicAdd(&scratch[K0P6_SC_CUR + slot], 1);
+    if (pos >= PADMAX) {
+      atomicOr(pperr, ovf_bit);
+      continue;
+    }
+    sti[pos] = (row & 0x00FFFFFF) | (s << 24);
+    swt[pos] = recv_wgt[j];
+  }
+}
+#endif
+
 // ---- small shared helpers -----------------------------------------------------------------
 __device__ __forceinline__ float k0p6_bf16_to_f32(unsigned short b) {
   return __uint_as_float((unsigned int)b << 16);
@@ -512,6 +580,11 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
   __shared__ unsigned int s_total;
   __shared__ int s_fill[64];
   __shared__ int s_ns[8];
+#if K0P6_M15_REPLICATE
+  __shared__ signed char s_lut[256];
+  __shared__ unsigned int s_repmask[8];
+  __shared__ int s_nrep;
+#endif
 
   const int tid = threadIdx.x;
   const int bid = blockIdx.x;
@@ -555,6 +628,29 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
       return;
     }
   }
+#if K0P6_M15_REPLICATE
+  // M18 replication table: validate, then stage the LUT + bitmap in shared.
+  {
+    const unsigned int* rep =
+        (const unsigned int*)k0p6_dread(desc, K0P6_D_M15_REP);
+    if (rep == nullptr || (((unsigned long long)rep) & 15ull) != 0ull ||
+        rep[0] != 0x4D313852u || (int)rep[1] < 1 || (int)rep[1] > 32 ||
+        E + (int)rep[1] > K0P6_MAXE) {
+      if (bid == 0 && tid == 0) atomicOr(pperr, K0P6_MPS_ERR_CONFIG);
+      return;
+    }
+    if (tid == 0) s_nrep = (int)rep[1];
+    const signed char* lut8 = (const signed char*)(rep + 4);
+    for (int i = tid; i < 256; i += (int)blockDim.x) s_lut[i] = lut8[i];
+    if (tid < 8)
+      s_repmask[tid] =
+          *(const unsigned int*)((const unsigned char*)rep + 272 + 4 * tid);
+    __syncthreads();
+  }
+  const int EL = E + s_nrep;  // local slot count: owned experts + replicas
+#else
+  const int EL = E;
+#endif
   const int T_ext = world * MAXTOK;
   const int lo = cur * E;
   const long long debug_stop = k0p6_dread(desc, K0P6_D_DEBUG);
@@ -640,7 +736,19 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
       const int s = lane;
       const int eid = (s < TOPK) ? my_ids[(size_t)tau * TOPK + s] : -1;
       const float wgt = (s < TOPK) ? my_wgt[(size_t)tau * TOPK + s] : 0.0f;
+#if K0P6_M15_REPLICATE
+      // Replicated experts route source-locally: this rank computes its own
+      // tokens' hits on them (dedup below folds them into the self row).
+      const int dest =
+          (eid >= 0)
+              ? ((eid < 256 &&
+                  ((s_repmask[(eid >> 5) & 7] >> (eid & 31)) & 1u) != 0u)
+                     ? cur
+                     : eid / E)
+              : -1;
+#else
       const int dest = (eid >= 0) ? eid / E : -1;
+#endif
       const unsigned long long match = __match_any_sync(__activemask(), dest);
       const bool primary = (s < TOPK) && ((match & ((1ULL << s) - 1ULL)) == 0ULL);
       const unsigned long long pmask = __ballot(primary);
@@ -799,7 +907,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
     int* hcnt = (int*)k0p6_dread(desc, K0P6_D_HCNT);
     const int nchunks = K0P6C_NCHUNK_MAX;
 
-    for (int i = tid; i < E; i += blockDim.x) s_cnt[i] = 0;
+    for (int i = tid; i < EL; i += blockDim.x) s_cnt[i] = 0;
     if (tid == 0) s_total = 0u;
     __syncthreads();
 
@@ -885,8 +993,19 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
       __syncwarp();
       if (lane < 8) {
         const int e = recv_eid[(size_t)r * 8 + lane];
+#if K0P6_M15_REPLICATE
+        // Same acceptance rule as the M18 scatter: LUT slot, and replicated
+        // experts are live only on self-source rows (s == cur).
+        const int slot = ((unsigned)e <= 255u) ? (int)s_lut[e] : -1;
+        const bool rep_e =
+            ((unsigned)e <= 255u) &&
+            (((s_repmask[(e >> 5) & 7] >> (e & 31)) & 1u) != 0u);
+        const bool live_e = slot >= 0 && (!rep_e || s == cur);
+        if (live_e) atomicAdd(&s_cnt[slot], 1);
+#else
         const bool live_e = (e >= lo && e < lo + E);
         if (live_e) atomicAdd(&s_cnt[e - lo], 1);
+#endif
         const unsigned int live_ballot = __ballot(live_e) & 0xFFu;
         if (lane == 0) row_remaining[r] = (unsigned int)__popcll(live_ballot);
       }
@@ -917,7 +1036,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
     }
 
     __syncthreads();
-    for (int i = tid; i < E; i += blockDim.x) hcnt[i * nct + bid] = s_cnt[i];
+    for (int i = tid; i < EL; i += blockDim.x) hcnt[i * nct + bid] = s_cnt[i];
   }
   if (debug_stop == 3) return;
 
@@ -947,9 +1066,9 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
     if (hk_moe::error_bit_set_agent(pperr, 2097152)) return;
 
     if (bid == 0) {
-      k0p6_sort::count_reduce(hcnt, E, nct, s_cnt, tid);
-      k0p6_sort::scan(s_cnt, E, T_ext, scratch, nvi, tid);
-      k0p6_sort::cursors_sei(scratch, E, PADMAX, sei, pperr, 4194304, tid);
+      k0p6_sort::count_reduce(hcnt, EL, nct, s_cnt, tid);
+      k0p6_sort::scan(s_cnt, EL, T_ext, scratch, nvi, tid);
+      k0p6_sort::cursors_sei(scratch, EL, PADMAX, sei, pperr, 4194304, tid);
       __syncthreads();
       if (tid == 0) {
         int* tile_desc = (int*)k0p6_dread(desc, K0P6_D_TILE_DESC);
@@ -957,7 +1076,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
         const int G = K0P6GM_G;
         const int bcap = PADMAX / 32;
         int nt = 0;
-        for (int e = 0; e < E; ++e) {
+        for (int e = 0; e < EL; ++e) {
           const int blk0 = scratch[K0P6_SC_ERB + e] / 32;
           const int blk1 = scratch[K0P6_SC_ERB + e + 1] / 32;
           const int nsb = blk1 - blk0;
@@ -1011,8 +1130,12 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
     if (hk_moe::error_bit_set_agent(pperr, 2097152)) return;
 
     const int pairs = T_ext * TOPK;
-    k0p6_sort::pad(scratch, E, T_ext, TOPK, PADMAX, sti, swt, pperr, 4194304);
-#if K0P6_M15_SCATTER_RR
+    k0p6_sort::pad(scratch, EL, T_ext, TOPK, PADMAX, sti, swt, pperr, 4194304);
+#if K0P6_M15_REPLICATE
+    k0p6_m18_scatter(recv_eid, recv_wgt, world, MAXTOK, TOPK, cur, PADMAX,
+                     s_lut, s_repmask, scratch, sti, swt, pperr, 1048576);
+    (void)pairs;
+#elif K0P6_M15_SCATTER_RR
     k0p6_m15_scatter_rr(recv_eid, recv_wgt, world, MAXTOK, TOPK, lo, E, PADMAX,
                         scratch, sti, swt, pperr, 1048576);
     (void)pairs;
