@@ -365,3 +365,15 @@ If you use or build on this work, please consider citing:
       url={https://arxiv.org/abs/2511.08083}, 
 }
 ```
+
+## Training megakernels (branch `ablations`, 2026-08-15)
+
+`distributed-kernels/fused_moe/` gained the T2B backward megakernel family
+(saved-plan dY dispatch, z-regeneration, dH2/dX GEMM phases, and the M8.5
+in-kernel wgrad phase in `n2_wgrad_gm_t2b.cpp` with its standalone
+validation harness `wg_standalone.hip`).  On the 8x MI350X DeepSeek-V3
+proxy: per-layer fwd 4.75 ms + backward-dgrad 7.65 ms (vs ~20-24 ms for
+the AMD turbo grouped-GEMM production path), end-to-end 19,390 tok/s/GPU
+converging — and at matched fp8 precision, the production recipes diverge
+(NaN) where this stack's 128x128-blockscale contract trains.  Full results:
+amd-master `auto-gpu-kernel/k0_fused_moe/training_bench/T1_RESULTS.md`.
