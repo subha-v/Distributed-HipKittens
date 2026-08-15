@@ -42,9 +42,28 @@ namespace production_fused_moe::n2 {
 //   B tiles [128][40] bf16 = 10,240 B  -> t2bsh_a_lds    (24,576 B)
 //   row meta (sA/sB0/sB1/tok) [32] x4  -> t2bsh_amax_lds + t2bsh_b1s_lds
 //   expert ranges [32][2]              -> t2bsh_tok_lds
+// v2.2 (AGPR tiles): the 128x128 shape measured 13,440 K-stages/CTA with
+// fixed costs dominating (structure 7.9 ms + exposed loads 13.4 of 21.3
+// total; MFMA nearly free).  Bigger tiles cut tile count, halve HBM
+// re-reads, and amortize every fixed cost over more MFMA per stage.  The
+// 256x256 shape needs 256 f32 accs/lane — the AGPR file — so build this
+// WITHOUT -amdgpu-mfma-vgpr-form=1; WG_MT/WG_NT stay knobs and 128-class
+// shapes remain buildable for vgpr-form TUs.
+#ifndef WG_MT
+#define WG_MT 256
+#endif
+#ifndef WG_NT
+#define WG_NT 256
+#endif
 inline constexpr int kWgKT = 32;      // K rows per stage
-inline constexpr int kWgMT = 128;     // CTA tile M
-inline constexpr int kWgNT = 128;     // CTA tile N
+inline constexpr int kWgMT = WG_MT;   // CTA tile M
+inline constexpr int kWgNT = WG_NT;   // CTA tile N
+inline constexpr int kWgNW = kWgNT / 4;   // per-wave N strip
+inline constexpr int kWgMi = kWgMT / 16;  // MFMA M tiles per wave
+inline constexpr int kWgNi = kWgNW / 16;  // MFMA N tiles per wave
+static_assert(4096 % kWgMT == 0 && 7168 % kWgMT == 0, "M divides");
+static_assert(4096 % kWgNT == 0 && 7168 % kWgNT == 0 && 2048 % kWgNT == 0,
+              "N divides");
 // LDS layout [m][k]: an MFMA fragment (8 k-consecutive bf16 at fixed m) is
 // ONE aligned wg_bf16x8 load.  Row stride 40 elems = 80 B keeps every row
 // 16 B-aligned (80 = 5*16); fills pay with strided 2 B writes.
@@ -108,33 +127,32 @@ __device__ inline void k0p6wg_tile(
   const int wv = tid >> 6;
   const int lr = lane & 15;        // mfma row/col index
   const int lq = lane >> 4;        // mfma K-block / acc quad
-  const int n_wave = wv * 32;      // this wave's N strip within the tile
+  const int n_wave = wv * kWgNW;   // this wave's N strip within the tile
 
-  wg_f32x4 acc[8][2];
+  wg_f32x4 acc[kWgMi][kWgNi];
 #pragma unroll
-  for (int mi = 0; mi < 8; ++mi)
+  for (int mi = 0; mi < kWgMi; ++mi)
 #pragma unroll
-    for (int ni = 0; ni < 2; ++ni) acc[mi][ni] = (wg_f32x4){0.f, 0.f, 0.f, 0.f};
+    for (int ni = 0; ni < kWgNi; ++ni)
+      acc[mi][ni] = (wg_f32x4){0.f, 0.f, 0.f, 0.f};
   (void)ldsMeta;
 
   // Per-thread stage state (software pipeline: the NEXT stage's meta chain
-  // and raw bytes load during the CURRENT stage's MFMA, hiding the
-  // sti -> tok -> scale/row dependent-load latency).  Lane map kk = tid&31:
-  // a wave's stores then span 32 DISTINCT k rows — with the [m][k] layout's
-  // 80 B row stride, the m-segment dimension is bank-degenerate (16*80 B =
-  // 1280 B = 0 mod 128 B), so kk is the only destaggering axis.
+  // and raw bytes load during the CURRENT stage's MFMA).  Lane map
+  // kk = tid&31 spans 32 DISTINCT k rows per wave-store (the m-segment
+  // dimension is bank-degenerate at the 80 B row stride).  Each thread owns
+  // kWgSegA/kWgSegB 16-byte segments of its row; a 256-wide tile spans TWO
+  // 128-column scale groups, so scales are per-segment.
+  constexpr int kWgSegA = kWgMT / 128;   // 16 B segments per thread, A side
+  constexpr int kWgSegB = kWgNT / 128;
   const int kk = tid & 31;
-  const int mseg = (tid >> 5) * 16;
-  uint4 rawA, rawB, rawB2;
-  float p_sa, p_sb0, p_sb1, p_wl;
-  int m_sti;      // meta pipeline: sti value one stage ahead of the raws
+  const int msegA = (tid >> 5) * (kWgMT / 8);
+  const int msegB = (tid >> 5) * (kWgNT / 8);
+  uint4 rawA[kWgSegA], rawB[kWgSegB], rawB2[kWgSegB];
+  float p_sa[kWgSegA], p_sb0[kWgSegB], p_sb1[kWgSegB], p_wl;
+  int m_sti;
   float m_swt;
 
-  // TWO-DEEP pipeline: the sti -> tok -> dependent-load chain, if issued in
-  // one shot, forces a vmcnt(0) inside every stage (the dependent address
-  // needs the sti VALUE).  Splitting it — meta loads two stages ahead, the
-  // tok-derived raw/scale loads one stage ahead — leaves no dependent wait
-  // in the loop body.
   auto prefetch_meta = [&](int k0) __attribute__((always_inline)) {
     const int r = k0 + kk;
     m_sti = sti[r];
@@ -145,72 +163,95 @@ __device__ inline void k0p6wg_tile(
     const int r = k0 + kk;
     const int recv = m_sti & 0x00FFFFFF;
     const bool live = recv < nrecv;
-#ifdef WG_SEQ_TOK
-    const int tok = r;  // bisect build: no gather (wrong results)
-#else
     const int tok = live ? recv : 0;
-#endif
     p_wl = live ? m_swt : 0.0f;
     if (kMode == 0) {
-      p_sa = dqdz[(std::size_t)r * 32 + (m0 >> 7)];
-      p_sb0 = xsc[(std::size_t)tok * 56 + (n0 >> 7)];
-      rawA = *reinterpret_cast<const uint4*>(
-          &dzq[(std::size_t)r * 4096 + m0 + mseg]);
-      rawB = *reinterpret_cast<const uint4*>(
-          &xrows[(std::size_t)tok * 7168 + n0 + mseg]);
+#pragma unroll
+      for (int sg = 0; sg < kWgSegA; ++sg) {
+        p_sa[sg] = dqdz[(std::size_t)r * 32 + ((m0 + msegA + 16 * sg) >> 7)];
+        rawA[sg] = *reinterpret_cast<const uint4*>(
+            &dzq[(std::size_t)r * 4096 + m0 + msegA + 16 * sg]);
+      }
+#pragma unroll
+      for (int sg = 0; sg < kWgSegB; ++sg) {
+        p_sb0[sg] = xsc[(std::size_t)tok * 56 + ((n0 + msegB + 16 * sg) >> 7)];
+        rawB[sg] = *reinterpret_cast<const uint4*>(
+            &xrows[(std::size_t)tok * 7168 + n0 + msegB + 16 * sg]);
+      }
     } else {
-      p_sa = dysc[(std::size_t)tok * 56 + (m0 >> 7)];
-      p_sb0 = dqz[(std::size_t)r * 32 + (n0 >> 7)];           // g half
-      p_sb1 = dqz[(std::size_t)r * 32 + 16 + (n0 >> 7)];      // u half
-      rawA = *reinterpret_cast<const uint4*>(
-          &dyq[(std::size_t)tok * 7168 + m0 + mseg]);
-      rawB = *reinterpret_cast<const uint4*>(
-          &zq[(std::size_t)r * 4096 + n0 + mseg]);
-      rawB2 = *reinterpret_cast<const uint4*>(
-          &zq[(std::size_t)r * 4096 + 2048 + n0 + mseg]);
+#pragma unroll
+      for (int sg = 0; sg < kWgSegA; ++sg) {
+        p_sa[sg] = dysc[(std::size_t)tok * 56 + ((m0 + msegA + 16 * sg) >> 7)];
+        rawA[sg] = *reinterpret_cast<const uint4*>(
+            &dyq[(std::size_t)tok * 7168 + m0 + msegA + 16 * sg]);
+      }
+#pragma unroll
+      for (int sg = 0; sg < kWgSegB; ++sg) {
+        const int nseg = n0 + msegB + 16 * sg;
+        p_sb0[sg] = dqz[(std::size_t)r * 32 + (nseg >> 7)];        // g half
+        p_sb1[sg] = dqz[(std::size_t)r * 32 + 16 + (nseg >> 7)];   // u half
+        rawB[sg] = *reinterpret_cast<const uint4*>(
+            &zq[(std::size_t)r * 4096 + nseg]);
+        rawB2[sg] = *reinterpret_cast<const uint4*>(
+            &zq[(std::size_t)r * 4096 + 2048 + nseg]);
+      }
     }
   };
 
-  // LDS is [m][k] (row stride kWgLdsRow = 40 elems = 80 B, 16 B-aligned for
-  // every m), so an MFMA fragment is ONE aligned wg_bf16x8 load; the fill
-  // pays with 16 strided 2 B writes per side (fire-and-forget).
+  // LDS is [m][k] (row stride 40 elems = 80 B, 16 B-aligned per row): an
+  // MFMA fragment is ONE aligned wg_bf16x8 load; the fill pays with
+  // strided 2 B writes (fire-and-forget).
   auto fill = [&]() __attribute__((always_inline)) {
-    const float sa = p_sa * p_wl;  // deferred: keeps the prefetch load-only
-    const unsigned int* pa = reinterpret_cast<const unsigned int*>(&rawA);
 #pragma unroll
-    for (int d = 0; d < 4; ++d) {
-      float f[4];
-      k0p6wg_cvt_quad(pa[d], f);
-#pragma unroll
-      for (int i = 0; i < 4; ++i)
-        ldsA[(mseg + 4 * d + i) * kWgLdsRow + kk] =
-            __float2bfloat16(f[i] * sa);
-    }
-    if (kMode == 0) {
-      const unsigned int* pb = reinterpret_cast<const unsigned int*>(&rawB);
+    for (int sg = 0; sg < kWgSegA; ++sg) {
+      const float sa = p_sa[sg] * p_wl;
+      const unsigned int* pa =
+          reinterpret_cast<const unsigned int*>(&rawA[sg]);
 #pragma unroll
       for (int d = 0; d < 4; ++d) {
         float f[4];
-        k0p6wg_cvt_quad(pb[d], f);
+        k0p6wg_cvt_quad(pa[d], f);
 #pragma unroll
         for (int i = 0; i < 4; ++i)
-          ldsB[(mseg + 4 * d + i) * kWgLdsRow + kk] =
-              __float2bfloat16(f[i] * p_sb0);
+          ldsA[(msegA + 16 * sg + 4 * d + i) * kWgLdsRow + kk] =
+              __float2bfloat16(f[i] * sa);
+      }
+    }
+    if (kMode == 0) {
+#pragma unroll
+      for (int sg = 0; sg < kWgSegB; ++sg) {
+        const unsigned int* pb =
+            reinterpret_cast<const unsigned int*>(&rawB[sg]);
+#pragma unroll
+        for (int d = 0; d < 4; ++d) {
+          float f[4];
+          k0p6wg_cvt_quad(pb[d], f);
+#pragma unroll
+          for (int i = 0; i < 4; ++i)
+            ldsB[(msegB + 16 * sg + 4 * d + i) * kWgLdsRow + kk] =
+                __float2bfloat16(f[i] * p_sb0[sg]);
+        }
       }
     } else {
-      const unsigned int* gp = reinterpret_cast<const unsigned int*>(&rawB);
-      const unsigned int* up = reinterpret_cast<const unsigned int*>(&rawB2);
 #pragma unroll
-      for (int d = 0; d < 4; ++d) {
-        float fg[4], fu[4];
-        k0p6wg_cvt_quad(gp[d], fg);
-        k0p6wg_cvt_quad(up[d], fu);
+      for (int sg = 0; sg < kWgSegB; ++sg) {
+        const unsigned int* gp =
+            reinterpret_cast<const unsigned int*>(&rawB[sg]);
+        const unsigned int* up =
+            reinterpret_cast<const unsigned int*>(&rawB2[sg]);
 #pragma unroll
-        for (int i = 0; i < 4; ++i) {
-          const float g = fg[i] * p_sb0;
-          const float v =
-              g * (1.0f / (1.0f + __expf(-g))) * (fu[i] * p_sb1);
-          ldsB[(mseg + 4 * d + i) * kWgLdsRow + kk] = __float2bfloat16(v);
+        for (int d = 0; d < 4; ++d) {
+          float fg[4], fu[4];
+          k0p6wg_cvt_quad(gp[d], fg);
+          k0p6wg_cvt_quad(up[d], fu);
+#pragma unroll
+          for (int i = 0; i < 4; ++i) {
+            const float g = fg[i] * p_sb0[sg];
+            const float v =
+                g * (1.0f / (1.0f + __expf(-g))) * (fu[i] * p_sb1[sg]);
+            ldsB[(msegB + 16 * sg + 4 * d + i) * kWgLdsRow + kk] =
+                __float2bfloat16(v);
+          }
         }
       }
     }
@@ -225,69 +266,36 @@ __device__ inline void k0p6wg_tile(
   }
   for (int k0 = s; k0 < t; k0 += kWgKT) {
     __syncthreads();  // previous stage's MFMA reads are done
-#ifdef WG_FILL_CONST
-    {  // floor probe: no loads/converts — barriers + LDS stores + MFMA only
-      const __hip_bfloat16 one = __float2bfloat16(1.0f);
-#pragma unroll
-      for (int i = 0; i < 16; ++i) {
-        ldsA[(mseg + i) * kWgLdsRow + kk] = one;
-        ldsB[(mseg + i) * kWgLdsRow + kk] = one;
-      }
-    }
-#else
     fill();
     if (k0 + kWgKT < t) {
       prefetch_meta(k0 + kWgKT);
       issue_raws(k0 + kWgKT);
     }
-#endif
     __syncthreads();
-#ifdef WG_NO_MFMA
-    continue;
-#endif
-    // ---- MFMA: 8 M tiles x 2 N tiles; one b128 frag load each ----------
-    wg_bf16x8 bv[2];
+    // ---- MFMA: kWgMi x kWgNi tiles; one b128 frag load each ------------
+    wg_bf16x8 bv[kWgNi];
 #pragma unroll
-    for (int ni = 0; ni < 2; ++ni) {
+    for (int ni = 0; ni < kWgNi; ++ni) {
       const int n = n_wave + 16 * ni + lr;
       bv[ni] = *reinterpret_cast<const wg_bf16x8*>(
           &ldsBb[n * kWgLdsRow + 8 * lq]);
     }
-#ifdef WG_HALF_MFMA
-    constexpr int kMiEnd = 4;  // bisect build: half the M tiles
-#else
-    constexpr int kMiEnd = 8;
-#endif
 #pragma unroll
-    for (int mi = 0; mi < kMiEnd; ++mi) {
+    for (int mi = 0; mi < kWgMi; ++mi) {
       const int m = 16 * mi + lr;
       const wg_bf16x8 av = *reinterpret_cast<const wg_bf16x8*>(
           &ldsAb[m * kWgLdsRow + 8 * lq]);
 #pragma unroll
-      for (int ni = 0; ni < 2; ++ni)
+      for (int ni = 0; ni < kWgNi; ++ni)
         acc[mi][ni] = k0p6wg_mfma161632(acc[mi][ni], av, bv[ni]);
     }
   }
 
   // ---- store: lane holds D[m = 16*mi + 4*lq + i][n = n_wave + 16*ni + lr]
-#ifdef WG_NO_STORE
-  {  // keep the MFMA live without the store traffic (bisect build only)
-    float sink = 0.0f;
 #pragma unroll
-    for (int mi = 0; mi < 8; ++mi)
+  for (int mi = 0; mi < kWgMi; ++mi) {
 #pragma unroll
-      for (int ni = 0; ni < 2; ++ni)
-#pragma unroll
-        for (int i = 0; i < 4; ++i) sink += acc[mi][ni][i];
-    if (sink == 12345.678f) out[0] = __float2bfloat16(sink);
-    __syncthreads();
-    return;
-  }
-#endif
-#pragma unroll
-  for (int mi = 0; mi < 8; ++mi) {
-#pragma unroll
-    for (int ni = 0; ni < 2; ++ni) {
+    for (int ni = 0; ni < kWgNi; ++ni) {
 #pragma unroll
       for (int i = 0; i < 4; ++i) {
         const int m = m0 + 16 * mi + 4 * lq + i;
@@ -329,8 +337,10 @@ __device__ inline void n2p6t2b_wgrad_body(
   }
   __syncthreads();
 
-  constexpr int kT13 = (4096 / kWgMT) * (7168 / kWgNT);   // 32*56 = 1792
-  constexpr int kT2 = (7168 / kWgMT) * (2048 / kWgNT);    // 56*16 = 896
+  constexpr int kN13 = 7168 / kWgNT;
+  constexpr int kN2 = 2048 / kWgNT;
+  constexpr int kT13 = (4096 / kWgMT) * kN13;
+  constexpr int kT2 = (7168 / kWgMT) * kN2;
   const int per_e = kT13 + kT2;
   const int total = n_experts * per_e;
   for (int tidx = bid; tidx < total; tidx += nct) {
@@ -339,16 +349,16 @@ __device__ inline void n2p6t2b_wgrad_body(
     const int s = ldsRange[2 * e + 0] * 32;
     const int t = ldsRange[2 * e + 1] * 32;
     if (u < kT13) {
-      const int m0 = (u / 56) * kWgMT;
-      const int n0 = (u % 56) * kWgNT;
+      const int m0 = (u / kN13) * kWgMT;
+      const int n0 = (u % kN13) * kWgNT;
       k0p6wg_tile<0>(dzq, dqdz, zq, dqz, xrows, xsc, dyq, dysc, sti, swt,
                      nrecv, padded, s, t, m0, n0,
                      dw13 + (std::size_t)e * 4096 * 7168, 7168,
                      ldsA, ldsB, ldsMeta);
     } else {
       const int v = u - kT13;
-      const int m0 = (v / 16) * kWgMT;
-      const int n0 = (v % 16) * kWgNT;
+      const int m0 = (v / kN2) * kWgMT;
+      const int n0 = (v % kN2) * kWgNT;
       k0p6wg_tile<1>(dzq, dqdz, zq, dqz, xrows, xsc, dyq, dysc, sti, swt,
                      nrecv, padded, s, t, m0, n0,
                      dw2 + (std::size_t)e * 7168 * 2048, 2048,
