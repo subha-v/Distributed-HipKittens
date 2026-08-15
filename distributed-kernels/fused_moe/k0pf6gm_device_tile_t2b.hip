@@ -51,7 +51,7 @@
 #include "k0pf6gm_t2b_abi.hpp"
 
 // JIT-cache guard (same contract as the forward TU).
-#define K0P6_T2B_SRC_REV 2
+#define K0P6_T2B_SRC_REV 3
 
 // Compute phases off until the adapted GEMM bodies land; the transport
 // skeleton is independently launch-testable (pperr-clean dispatch+unpack).
@@ -460,6 +460,10 @@ __device__ __forceinline__ void k0p6_m15_task_done_defer(
 #undef N2_P2B_NAME
 #undef N2_P2B_QUAL
 #undef N2GM_G
+
+// The in-kernel wgrad phase (M8.5): self-contained, no macro naming — it
+// runs post-M8 on the t2bsh_* LDS overlay (strictly after their last use).
+#include "n2_wgrad_gm_t2b.cpp"
 
 #if K0P6_M15_SCATTER_RR
 // M17 scatter: the donor's stage-5 live-pair scatter (hkp_sort.hpp) with the
@@ -1866,6 +1870,40 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
       hk_moe::mps::ts_mark(mps_ts + K0P6_MPS_TS_REDUCE_DONE, mps_ts, bid,
                            K0P6_MPS_E23_REDUCE_DONE, m8cfg.timestamps);
     }
+  }
+
+  // ================= M8.5: in-kernel wgrad (v2 — post-M8, all CTAs) ========================
+  // dW13 = (swt·dZ)^T·X, dW2 = (swt·dY)^T·act(z) as bf16-MFMA tiles over the
+  // saved sorted-space buffers (n2_wgrad_gm_t2b.cpp).  Inputs (dZq, Zq, dY
+  // rows, plan arrays) are all stable after phase-1b; outputs are rank-local
+  // arenas with overwrite semantics, so no cross-CTA ordering is needed and
+  // CTAs enter as they drain out of M8 (M9's counted arrival is completion).
+  // Gated on DWMODE != 0 — hosts still doing wgrad themselves bind 0.
+  // v3 moves these tiles into the M7 slab-wait bubbles (the filler design).
+  if ((int)k0p6_dread(desc, K0P6_D_T2B_DWMODE) != 0) {
+    production_fused_moe::n2::n2p6t2b_wgrad_body(
+        (const std::uint8_t*)k0p6_dread(desc, K0P6_D_A2Q),        // dZq
+        (const float*)k0p6_dread(desc, K0P6_D_DQ2),               // DQdZ
+        (const std::uint8_t*)k0p6_dread(desc, K0P6_D_T2B_ZQ),
+        (const float*)k0p6_dread(desc, K0P6_D_T2B_DQZ),
+        (const std::uint8_t*)k0p6_dread(desc, K0P6_D_T2B_XROWS),  // fwd x rows
+        (const float*)k0p6_dread(desc, K0P6_D_T2B_XSC),
+        (const std::uint8_t*)k0p6_dread(desc, K0P6_D_A_DST),      // dY rows
+        (const float*)k0p6_dread(desc, K0P6_D_SC_STAGE),
+        (const int*)k0p6_dread(desc, K0P6_D_STI),
+        (const float*)k0p6_dread(desc, K0P6_D_SWT),
+        (const int*)k0p6_dread(desc, K0P6_D_SEI),
+        (const int*)k0p6_dread(desc, K0P6_D_NVI),
+        (__hip_bfloat16*)k0p6_dread(desc, K0P6_D_T2B_DW13),
+        (__hip_bfloat16*)k0p6_dread(desc, K0P6_D_T2B_DW2),
+        (int)k0p6_dread(desc, K0P6_D_E), bid, nct,
+        reinterpret_cast<__hip_bfloat16*>(
+            &production_fused_moe::n2::t2bsh_a2_lds[0][0]),
+        reinterpret_cast<__hip_bfloat16*>(
+            &production_fused_moe::n2::t2bsh_a_lds[0][0][0][0]),
+        &production_fused_moe::n2::t2bsh_ascale_lds[0][0],
+        reinterpret_cast<int*>(
+            &production_fused_moe::n2::t2bsh_amax_lds[0][0]));
   }
 
   // ================= M9: counted arrival, resets, retired pokes (donor + scope fix) ========
