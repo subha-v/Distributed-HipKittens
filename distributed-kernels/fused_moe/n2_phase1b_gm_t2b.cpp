@@ -94,6 +94,9 @@ static_assert(kAChunks * kAChunkBytes == 128, "one K128 group per A tile row");
 #define N2_P1B_QUAL __global__ __launch_bounds__(kThreads, 1)
 #define N2_P1B_NAME n2_phase1b_kernel
 #endif
+#ifndef N2_HOOK_CTX_ARG
+#define N2_HOOK_CTX_ARG
+#endif
 
 N2_P1B_QUAL void N2_P1B_NAME(
     const std::uint8_t* __restrict__ dY_bytes,   // dYq rows [R, 7168] fp8
@@ -111,7 +114,8 @@ N2_P1B_QUAL void N2_P1B_NAME(
     float* __restrict__ DQdZ,                    // OUT [rowcap, 32] f32
     float* __restrict__ dw_sorted,               // OUT [rowcap] f32 (pre-zeroed)
     const int* __restrict__ tile_desc,           // SAVED plan
-    int num_tiles) {
+    int num_tiles
+    N2_HOOK_CTX_ARG) {
 #ifndef N2GM_G
 #define N2GM_G 1
 #endif

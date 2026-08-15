@@ -51,7 +51,7 @@
 #include "k0pf6gm_t2b_abi.hpp"
 
 // JIT-cache guard (same contract as the forward TU).
-#define K0P6_T2B_SRC_REV 1
+#define K0P6_T2B_SRC_REV 2
 
 // Compute phases off until the adapted GEMM bodies land; the transport
 // skeleton is independently launch-testable (pperr-clean dispatch+unpack).
@@ -382,24 +382,20 @@ __device__ __forceinline__ void k0p6_m15_task_done_defer(
 
 // ---- N2 phase bodies ----------------------------------------------------------------------
 #define N2GM_G K0P6GM_G
-#define N2_P1_QUAL __device__ __forceinline__
-#define N2_P1_NAME n2p6m15_phase1_body
+#define N2_P1B_QUAL __device__ __forceinline__
+#define N2_P1B_NAME n2p6t2b_phase1b_body
 #define N2_KERNELS_ONLY
 #define N2_HOOK_CTX_ARG , const long long* __restrict__ k0p6_desc
-#define N2GM_TASK_DONE_HOOK k0p6_a2_arrive(b, tid, k0p6_desc);
-#define N2GM_P1_SCHED_GSCALE 0
-#define N2GM_P1_ASCALE_TOKEN_MAJOR K0P6_MPS_ASCALE_TM
-#include "n2_phase1_gm_mps.cpp"
-#undef N2GM_P1_ASCALE_TOKEN_MAJOR
-#undef N2GM_P1_SCHED_GSCALE
-#undef N2GM_TASK_DONE_HOOK
+#define N2GM_P1B_ARRIVAL_HOOK k0p6_a2_arrive(b, tid, k0p6_desc);
+#include "n2_phase1b_gm_t2b.cpp"
+#undef N2GM_P1B_ARRIVAL_HOOK
 #undef N2_HOOK_CTX_ARG
 #undef N2_KERNELS_ONLY
-#undef N2_P1_NAME
-#undef N2_P1_QUAL
+#undef N2_P1B_NAME
+#undef N2_P1B_QUAL
 
-#define N2_P2_QUAL __device__ __forceinline__
-#define N2_P2_NAME n2p6m15_phase2_body
+#define N2_P2B_QUAL __device__ __forceinline__
+#define N2_P2B_NAME n2p6t2b_phase2b_body
 #define N2_KERNELS_ONLY
 // The slab bounds ride the hook-context extension point, so the shared body
 // file needs no signature change (M15-DELTA (A) there).
@@ -435,7 +431,7 @@ __device__ __forceinline__ void k0p6_m15_task_done_defer(
                                  ((unsigned long long)kHidden * 2ull);      \
   }
 #endif
-#include "n2_phase2_gm_mps.cpp"
+#include "n2_phase2b_gm_t2b.cpp"
 #if K0P6_M15_STAGED
 #undef N2GM_M7TAB_FILL
 #endif
@@ -450,8 +446,8 @@ __device__ __forceinline__ void k0p6_m15_task_done_defer(
 #undef N2GM_TASK_WAIT_HOOK
 #undef N2_HOOK_CTX_ARG
 #undef N2_KERNELS_ONLY
-#undef N2_P2_NAME
-#undef N2_P2_QUAL
+#undef N2_P2B_NAME
+#undef N2_P2B_QUAL
 #undef N2GM_G
 
 #if K0P6_M15_SCATTER_RR
@@ -1348,7 +1344,21 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
   // ================= M3..M5: DO NOT EXIST in t2b ============================================
   // The forward's saved plan (sti/swt/sei/nvi/tile_desc/num_tiles/pull_ptr/
   // pull_src, descriptor slots 14..19/53/54) is bound read-only; the sorted
-  // row space is identical to the forward's by construction.
+  // row space is identical to the forward's by construction.  What REMAINS
+  // of this region is its ordering role: one grid barrier so every CTA's
+  // M2b unpack (a_dst/sc rows) and the dw_sorted zero are visible before
+  // any CTA's phase-1b reads and dw atomics.
+  {
+    float* dw0 = (float*)k0p6_dread(desc, K0P6_D_T2B_DWTOPK);
+    for (int i = bid * (int)blockDim.x + tid; i < PADMAX;
+         i += nct * (int)blockDim.x)
+      dw0[i] = 0.0f;
+    unsigned int* gbar = (unsigned int*)k0p6_dread(desc, K0P6_D_GBAR);
+    const hkp::local_grid_epoch bar{gbar, pperr, spin_limit};
+    const hkp::fail_closed bar_err{pperr, 2097152};
+    hkp::grid_barrier(bar, tid, bar_err);
+    if (hk_moe::error_bit_set_agent(pperr, 2097152)) return;
+  }
   if (debug_stop == 4) return;
 
   #if !K0P6_T2B_PHASES
@@ -1365,20 +1375,21 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
   return;
 #else
 // ================= M6: N2 phase1 (donor verbatim) =========================================
-  production_fused_moe::n2::n2p6m15_phase1_body(
-      (const std::uint8_t*)k0p6_dread(desc, K0P6_D_A_DST),
-#if K0P6_MPS_ASCALE_TM
-      (const float*)k0p6_dread(desc, K0P6_D_SC_STAGE),
-#else
-      (const float*)k0p6_dread(desc, K0P6_D_SC_DST),
-#endif
-      (const std::uint8_t*)k0p6_dread(desc, K0P6_D_W13),
-      (const float*)k0p6_dread(desc, K0P6_D_S13),
+  production_fused_moe::n2::n2p6t2b_phase1b_body(
+      (const std::uint8_t*)k0p6_dread(desc, K0P6_D_A_DST),        // dY rows
+      (const float*)k0p6_dread(desc, K0P6_D_SC_STAGE),            // dY scales
+      (const std::uint8_t*)k0p6_dread(desc, K0P6_D_W13),          // = W2T
+      (const float*)k0p6_dread(desc, K0P6_D_S13),                 // = S2T
+      (const std::uint8_t*)k0p6_dread(desc, K0P6_D_T2B_ZQ),
+      (const float*)k0p6_dread(desc, K0P6_D_T2B_DQZ),
+      (const std::uint8_t*)k0p6_dread(desc, K0P6_D_T2B_ACTQ),
+      (const float*)k0p6_dread(desc, K0P6_D_T2B_ACTDQ),
       (const int*)k0p6_dread(desc, K0P6_D_STI),
       (const int*)k0p6_dread(desc, K0P6_D_SEI),
       (const int*)k0p6_dread(desc, K0P6_D_NVI),
-      (std::uint8_t*)k0p6_dread(desc, K0P6_D_A2Q),
-      (float*)k0p6_dread(desc, K0P6_D_DQ2),
+      (std::uint8_t*)k0p6_dread(desc, K0P6_D_A2Q),                // = dZq
+      (float*)k0p6_dread(desc, K0P6_D_DQ2),                       // = DQdZ
+      (float*)k0p6_dread(desc, K0P6_D_T2B_DWTOPK),
       (const int*)k0p6_dread(desc, K0P6_D_TILE_DESC),
       (int)((const int*)k0p6_dread(desc, K0P6_D_NUM_TILES))[0], desc);
   if (debug_stop == 5) return;
@@ -1413,11 +1424,11 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
         const hk_moe::mps::config mrole = hk_moe::mps::decode_config(
             (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
         if (!hk_moe::mps::is_service_cta(mrole, bid, nct)) {
-          production_fused_moe::n2::n2p6m15_phase2_body(
-              (const std::uint8_t*)k0p6_dread(desc, K0P6_D_A2Q),
-              (const float*)k0p6_dread(desc, K0P6_D_DQ2),
-              (const std::uint8_t*)k0p6_dread(desc, K0P6_D_W2),
-              (const float*)k0p6_dread(desc, K0P6_D_S2),
+          production_fused_moe::n2::n2p6t2b_phase2b_body(
+              (const std::uint8_t*)k0p6_dread(desc, K0P6_D_A2Q),   // dZq
+              (const float*)k0p6_dread(desc, K0P6_D_DQ2),          // DQdZ
+              (const std::uint8_t*)k0p6_dread(desc, K0P6_D_W2),    // = W13T
+              (const float*)k0p6_dread(desc, K0P6_D_S2),           // = S13T
               (const int*)k0p6_dread(desc, K0P6_D_STI),
               (const float*)k0p6_dread(desc, K0P6_D_SWT),
               (const int*)k0p6_dread(desc, K0P6_D_SEI),
