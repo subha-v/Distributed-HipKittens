@@ -151,6 +151,19 @@
 #error "K0P6_M20_SLOTPOOL requires K0P6_M15_ADAPTIVE (the decision dataflow)"
 #endif
 
+// T2B (training): forward save arm — persist z (gate,up pre-activation) for
+// the backward megakernel into descriptor slots 63 (Zq) / 64 (DQZ).  Slot 63
+// is the replication table's under REPLICATE, so the two arms are exclusive.
+#ifndef K0P6_M15_SAVE_Z
+#define K0P6_M15_SAVE_Z 0
+#endif
+#if K0P6_M15_SAVE_Z && K0P6_M15_REPLICATE
+#error "K0P6_M15_SAVE_Z and K0P6_M15_REPLICATE both claim descriptor slot 63"
+#endif
+#if K0P6_M15_SAVE_Z && K0P6_M15_STAGED
+#error "K0P6_M15_SAVE_Z and K0P6_M15_STAGED both claim descriptor slot 63"
+#endif
+
 // exp_27 shipped arm: M6 reads token-major sc_stage; M5's transpose is dead.
 #ifndef K0P6_MPS_ASCALE_TM
 #define K0P6_MPS_ASCALE_TM 1
@@ -383,9 +396,19 @@ __device__ __forceinline__ void k0p6_m15_task_done_defer(
 #define N2GM_TASK_DONE_HOOK k0p6_a2_arrive(b, tid, k0p6_desc);
 #define N2GM_P1_SCHED_GSCALE 0
 #define N2GM_P1_ASCALE_TOKEN_MAJOR K0P6_MPS_ASCALE_TM
+#define N2GM_P1_SAVE_Z K0P6_M15_SAVE_Z
+#if K0P6_M15_SAVE_Z
+#define N2GM_P1_SAVEZ_PTR ((std::uint8_t*)k0p6_dread(k0p6_desc, 63))
+#define N2GM_P1_SAVEZ_DQ_PTR ((float*)k0p6_dread(k0p6_desc, 64))
+#endif
 #include "n2_phase1_gm_mps.cpp"
 #undef N2GM_P1_ASCALE_TOKEN_MAJOR
 #undef N2GM_P1_SCHED_GSCALE
+#if K0P6_M15_SAVE_Z
+#undef N2GM_P1_SAVEZ_DQ_PTR
+#undef N2GM_P1_SAVEZ_PTR
+#endif
+#undef N2GM_P1_SAVE_Z
 #undef N2GM_TASK_DONE_HOOK
 #undef N2_HOOK_CTX_ARG
 #undef N2_KERNELS_ONLY

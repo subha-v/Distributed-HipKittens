@@ -199,6 +199,15 @@ static_assert(N2GM_P1_SCHED_GSCALE >= 0 && N2GM_P1_SCHED_GSCALE <= 15,
 #ifndef N2GM_P1_ASCALE_TOKEN_MAJOR
 #define N2GM_P1_ASCALE_TOKEN_MAJOR 0
 #endif
+
+// T2B-DELTA: opt-in save of z = (gate, up) PRE-activation for the backward
+// megakernel (Zq [rowcap, 4096] fp8 + DQZ [rowcap, 32] f32, g-half cols
+// [0,2048), u-half [2048,4096) — phase-1b's read layout).  Default 0 keeps
+// this file's .text-identity claim intact; when enabled the includer must
+// also define N2GM_P1_SAVEZ_PTR / N2GM_P1_SAVEZ_DQ_PTR.
+#ifndef N2GM_P1_SAVE_Z
+#define N2GM_P1_SAVE_Z 0
+#endif
 static_assert(N2GM_P1_ASCALE_TOKEN_MAJOR == 0 ||
                   N2GM_P1_ASCALE_TOKEN_MAJOR == 1,
               "N2GM_P1_ASCALE_TOKEN_MAJOR is a bool: 0 = donor group-major");
@@ -707,6 +716,129 @@ N2_P1_QUAL void N2_P1_NAME(
         }
       }
     }
+#if N2GM_P1_SAVE_Z
+    // T2B-DELTA: persist z per (row, K128) with the epilogue's own amax
+    // machinery.  acc[sb][gu] is still live; a2_lds is reused sequentially
+    // per half (the barrier at each round's head orders the A2q store's LDS
+    // reads before the overwrite).  Same quant expression, same live-select,
+    // same coalesced store shape as the A2q path.
+    for (int gu = 0; gu < 2; ++gu) {
+      for (int i = tid; i < 2 * kMrows; i += kThreads) {
+        amax_lds[i / kMrows][i % kMrows] = 0.0f;
+      }
+      __syncthreads();
+#pragma unroll
+      for (int sb = 0; sb < kGM; ++sb) {
+        const int rbase = sb * kBlockM;
+        float lm[2][4];
+#pragma unroll
+        for (int m = 0; m < 2; ++m) {
+#pragma unroll
+          for (int t = 0; t < 4; ++t) lm[m][t] = 0.0f;
+        }
+#pragma unroll
+        for (int m = 0; m < 2; ++m) {
+#pragma unroll
+          for (int c = 0; c < kColTiles; ++c) {
+            const float* zf = accf(acc[sb][gu][m][c]);
+#pragma unroll
+            for (int t = 0; t < 4; ++t) {
+              const bool lv = tok_lds[rbase + 16 * m + 4 * q + t] < T;
+              lm[m][t] = fmaxf(lm[m][t], lv ? fabsf(zf[t]) : 0.0f);
+            }
+          }
+        }
+#pragma unroll
+        for (int m = 0; m < 2; ++m) {
+#pragma unroll
+          for (int t = 0; t < 4; ++t) {
+#pragma unroll
+            for (int mask = 1; mask < 16; mask <<= 1) {
+              lm[m][t] = fmaxf(lm[m][t], __shfl_xor(lm[m][t], mask, 64));
+            }
+          }
+        }
+        if (r == 0) {
+#pragma unroll
+          for (int m = 0; m < 2; ++m) {
+#pragma unroll
+            for (int t = 0; t < 4; ++t) {
+              atomicMax(reinterpret_cast<int*>(
+                            &amax_lds[j_w][rbase + 16 * m + 4 * q + t]),
+                        __float_as_int(lm[m][t]));
+            }
+          }
+        }
+      }
+      __syncthreads();
+#pragma unroll
+      for (int sb = 0; sb < kGM; ++sb) {
+        const int rbase = sb * kBlockM;
+#pragma unroll
+        for (int m = 0; m < 2; ++m) {
+          float dqz[4];
+#pragma unroll
+          for (int t = 0; t < 4; ++t) {
+            dqz[t] =
+                fmaxf(amax_lds[j_w][rbase + 16 * m + 4 * q + t], 1.0e-6f) /
+                448.0f;
+          }
+#pragma unroll
+          for (int c = 0; c < kColTiles; ++c) {
+            const float* zf = accf(acc[sb][gu][m][c]);
+#pragma unroll
+            for (int t = 0; t < 4; ++t) {
+              const bool lv = tok_lds[rbase + 16 * m + 4 * q + t] < T;
+              const float zv = lv ? zf[t] : 0.0f;
+              const float qv = fminf(fmaxf(zv / dqz[t], -448.0f), 448.0f);
+              a2_lds[rbase + 16 * m + 4 * q + t][kWaveCols * wv + 16 * c + r] =
+                  __hip_cvt_float_to_fp8(qv, __HIP_SATFINITE, __HIP_E4M3);
+            }
+          }
+        }
+      }
+      __syncthreads();
+      {
+        std::uint8_t* const zq_out = N2GM_P1_SAVEZ_PTR;
+        float* const dqz_out = N2GM_P1_SAVEZ_DQ_PTR;
+        const int cr = tid >> 3;
+        const int cc = tid & 7;
+#pragma unroll
+        for (int sb = 0; sb < kGM; ++sb) {
+          if (sb >= gcount) break;
+          const uint4 s0 = *reinterpret_cast<const uint4*>(
+              &a2_lds[sb * kBlockM + cr][32 * cc]);
+          const uint4 s1 = *reinterpret_cast<const uint4*>(
+              &a2_lds[sb * kBlockM + cr][32 * cc + 16]);
+          const std::size_t dst =
+              (static_cast<std::size_t>(b0 + sb) * kBlockM + cr) *
+                  (2 * static_cast<std::size_t>(kInter)) +
+              static_cast<std::size_t>(gu) * kInter + kChunkCols * g + 32 * cc;
+          *reinterpret_cast<uint4*>(zq_out + dst) = s0;
+          *reinterpret_cast<uint4*>(zq_out + dst + 16) = s1;
+        }
+        if (q == 0) {
+#pragma unroll
+          for (int sb = 0; sb < kGM; ++sb) {
+            if (sb >= gcount) break;
+            const int rbase = sb * kBlockM;
+#pragma unroll
+            for (int m = 0; m < 2; ++m) {
+#pragma unroll
+              for (int kb = 0; kb < 2; ++kb) {
+                dqz_out[(static_cast<std::size_t>(b0 + sb) * kBlockM + 16 * m +
+                         r) *
+                            (2 * kKGroups2) +
+                        gu * kKGroups2 + 2 * g + kb] =
+                    fmaxf(amax_lds[kb][rbase + 16 * m + r], 1.0e-6f) / 448.0f;
+              }
+            }
+          }
+        }
+      }
+      __syncthreads();
+    }
+#endif
     // MPS-DELTA (10): epilogue-done hook — after the A2q/DQ2 stores, before the
     // task-end __syncthreads(). NOT a VMEM drain: the stores above are still in
     // flight here, exactly as in the donor.
