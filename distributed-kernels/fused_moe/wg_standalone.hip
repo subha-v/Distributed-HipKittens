@@ -13,8 +13,10 @@ extern "C" __global__ __launch_bounds__(256, 1) void wg_standalone(
     const long long* desc, int* pperr, long long spin) {
   (void)pperr;
   (void)spin;
-  __shared__ __hip_bfloat16 ldsA[128 * production_fused_moe::n2::kWgLdsW];
-  __shared__ __hip_bfloat16 ldsB[128 * production_fused_moe::n2::kWgLdsW];
+  __shared__ __hip_bfloat16
+      ldsA[production_fused_moe::n2::kWgMT * production_fused_moe::n2::kWgLdsRow];
+  __shared__ __hip_bfloat16
+      ldsB[production_fused_moe::n2::kWgMT * production_fused_moe::n2::kWgLdsRow];
   __shared__ float ldsMeta[4 * 32];
   __shared__ int ldsRange[64];
   production_fused_moe::n2::n2p6t2b_wgrad_body(
