@@ -595,127 +595,6 @@ N2_P1_QUAL void N2_P1_NAME(
     // Outside the K-loop.
     N2GM_P1_KLOOP_EXIT_HOOK
 
-    // =======================================================================
-    // REGISTER SiLU + DYNAMIC per-(row, K128) amax + FP8 quant — per sub-block.
-    // amax_lds row index is the ABSOLUTE row within the tile (sb*32 + 16m+4q+t).
-    // =======================================================================
-#pragma unroll
-    for (int sb = 0; sb < kGM; ++sb) {
-      const int rbase = sb * kBlockM;
-      bool live[2][4];
-      float a2v[2][kColTiles][4];
-      float lmax[2][4];
-#pragma unroll
-      for (int m = 0; m < 2; ++m) {
-#pragma unroll
-        for (int t = 0; t < 4; ++t) {
-          live[m][t] = tok_lds[rbase + 16 * m + 4 * q + t] < T;
-          lmax[m][t] = 0.0f;
-        }
-      }
-#pragma unroll
-      for (int m = 0; m < 2; ++m) {
-#pragma unroll
-        for (int c = 0; c < kColTiles; ++c) {
-          const float* gf = accf(acc[sb][0][m][c]);
-          const float* uf = accf(acc[sb][1][m][c]);
-#pragma unroll
-          for (int t = 0; t < 4; ++t) {
-            const float gv = gf[t];
-            const float hv = (gv / (1.0f + __expf(-gv))) * uf[t];
-            const float h = live[m][t] ? hv : 0.0f;
-            a2v[m][c][t] = h;
-            lmax[m][t] = fmaxf(lmax[m][t], fabsf(h));
-          }
-        }
-      }
-#pragma unroll
-      for (int m = 0; m < 2; ++m) {
-#pragma unroll
-        for (int t = 0; t < 4; ++t) {
-#pragma unroll
-          for (int mask = 1; mask < 16; mask <<= 1) {
-            lmax[m][t] = fmaxf(lmax[m][t], __shfl_xor(lmax[m][t], mask, 64));
-          }
-        }
-      }
-      if (r == 0) {
-#pragma unroll
-        for (int m = 0; m < 2; ++m) {
-#pragma unroll
-          for (int t = 0; t < 4; ++t) {
-            atomicMax(reinterpret_cast<int*>(
-                          &amax_lds[j_w][rbase + 16 * m + 4 * q + t]),
-                      __float_as_int(lmax[m][t]));
-          }
-        }
-      }
-      __syncthreads();
-
-      // THE EPSILON IS NOT OPTIONAL (rank 2 has empty experts; 448/0 = NaN).
-#pragma unroll
-      for (int m = 0; m < 2; ++m) {
-        float dq[4];
-#pragma unroll
-        for (int t = 0; t < 4; ++t) {
-          dq[t] = fmaxf(amax_lds[j_w][rbase + 16 * m + 4 * q + t], 1.0e-6f) /
-                  448.0f;
-        }
-#pragma unroll
-        for (int c = 0; c < kColTiles; ++c) {
-#pragma unroll
-          for (int t = 0; t < 4; ++t) {
-            const float qv =
-                fminf(fmaxf(a2v[m][c][t] / dq[t], -448.0f), 448.0f);
-            a2_lds[rbase + 16 * m + 4 * q + t][kWaveCols * wv + 16 * c + r] =
-                __hip_cvt_float_to_fp8(qv, __HIP_SATFINITE, __HIP_E4M3);
-          }
-        }
-      }
-      __syncthreads();
-    }
-
-    // =======================================================================
-    // A2 -> GLOBAL, coalesced. Each of the 256 threads writes 32 B of one
-    // 32-block's tile; loop kGM sub-blocks. Pad sub-blocks (sb>=gcount) are NOT
-    // written — phase2 never reads them and A2q rows beyond the live region are
-    // out of every bounded descriptor.
-    // =======================================================================
-    {
-      const int cr = tid >> 3;   // row within a 32-block 0..31
-      const int cc = tid & 7;    // 32-B chunk 0..7
-#pragma unroll
-      for (int sb = 0; sb < kGM; ++sb) {
-        if (sb >= gcount) break;
-        const uint4 s0 = *reinterpret_cast<const uint4*>(
-            &a2_lds[sb * kBlockM + cr][32 * cc]);
-        const uint4 s1 = *reinterpret_cast<const uint4*>(
-            &a2_lds[sb * kBlockM + cr][32 * cc + 16]);
-        const std::size_t dst =
-            (static_cast<std::size_t>(b0 + sb) * kBlockM + cr) * kInter +
-            kChunkCols * g + 32 * cc;
-        *reinterpret_cast<uint4*>(A2q + dst) = s0;
-        *reinterpret_cast<uint4*>(A2q + dst + 16) = s1;
-      }
-    }
-    // DQ2[row, 2g+kb] — one lane per row writes (q==0), per live sub-block.
-    if (q == 0) {
-#pragma unroll
-      for (int sb = 0; sb < kGM; ++sb) {
-        if (sb >= gcount) break;
-        const int rbase = sb * kBlockM;
-#pragma unroll
-        for (int m = 0; m < 2; ++m) {
-#pragma unroll
-          for (int kb = 0; kb < 2; ++kb) {
-            DQ2[(static_cast<std::size_t>(b0 + sb) * kBlockM + 16 * m + r) *
-                    kKGroups2 +
-                2 * g + kb] =
-                fmaxf(amax_lds[kb][rbase + 16 * m + r], 1.0e-6f) / 448.0f;
-          }
-        }
-      }
-    }
 #if N2GM_P1_SAVE_Z
     // T2B-DELTA: persist z per (row, K128) with the epilogue's own amax
     // machinery.  acc[sb][gu] is still live; a2_lds is reused sequentially
@@ -839,6 +718,128 @@ N2_P1_QUAL void N2_P1_NAME(
       __syncthreads();
     }
 #endif
+
+    // =======================================================================
+    // REGISTER SiLU + DYNAMIC per-(row, K128) amax + FP8 quant — per sub-block.
+    // amax_lds row index is the ABSOLUTE row within the tile (sb*32 + 16m+4q+t).
+    // =======================================================================
+#pragma unroll
+    for (int sb = 0; sb < kGM; ++sb) {
+      const int rbase = sb * kBlockM;
+      bool live[2][4];
+      float a2v[2][kColTiles][4];
+      float lmax[2][4];
+#pragma unroll
+      for (int m = 0; m < 2; ++m) {
+#pragma unroll
+        for (int t = 0; t < 4; ++t) {
+          live[m][t] = tok_lds[rbase + 16 * m + 4 * q + t] < T;
+          lmax[m][t] = 0.0f;
+        }
+      }
+#pragma unroll
+      for (int m = 0; m < 2; ++m) {
+#pragma unroll
+        for (int c = 0; c < kColTiles; ++c) {
+          const float* gf = accf(acc[sb][0][m][c]);
+          const float* uf = accf(acc[sb][1][m][c]);
+#pragma unroll
+          for (int t = 0; t < 4; ++t) {
+            const float gv = gf[t];
+            const float hv = (gv / (1.0f + __expf(-gv))) * uf[t];
+            const float h = live[m][t] ? hv : 0.0f;
+            a2v[m][c][t] = h;
+            lmax[m][t] = fmaxf(lmax[m][t], fabsf(h));
+          }
+        }
+      }
+#pragma unroll
+      for (int m = 0; m < 2; ++m) {
+#pragma unroll
+        for (int t = 0; t < 4; ++t) {
+#pragma unroll
+          for (int mask = 1; mask < 16; mask <<= 1) {
+            lmax[m][t] = fmaxf(lmax[m][t], __shfl_xor(lmax[m][t], mask, 64));
+          }
+        }
+      }
+      if (r == 0) {
+#pragma unroll
+        for (int m = 0; m < 2; ++m) {
+#pragma unroll
+          for (int t = 0; t < 4; ++t) {
+            atomicMax(reinterpret_cast<int*>(
+                          &amax_lds[j_w][rbase + 16 * m + 4 * q + t]),
+                      __float_as_int(lmax[m][t]));
+          }
+        }
+      }
+      __syncthreads();
+
+      // THE EPSILON IS NOT OPTIONAL (rank 2 has empty experts; 448/0 = NaN).
+#pragma unroll
+      for (int m = 0; m < 2; ++m) {
+        float dq[4];
+#pragma unroll
+        for (int t = 0; t < 4; ++t) {
+          dq[t] = fmaxf(amax_lds[j_w][rbase + 16 * m + 4 * q + t], 1.0e-6f) /
+                  448.0f;
+        }
+#pragma unroll
+        for (int c = 0; c < kColTiles; ++c) {
+#pragma unroll
+          for (int t = 0; t < 4; ++t) {
+            const float qv =
+                fminf(fmaxf(a2v[m][c][t] / dq[t], -448.0f), 448.0f);
+            a2_lds[rbase + 16 * m + 4 * q + t][kWaveCols * wv + 16 * c + r] =
+                __hip_cvt_float_to_fp8(qv, __HIP_SATFINITE, __HIP_E4M3);
+          }
+        }
+      }
+      __syncthreads();
+    }
+
+    // =======================================================================
+    // A2 -> GLOBAL, coalesced. Each of the 256 threads writes 32 B of one
+    // 32-block's tile; loop kGM sub-blocks. Pad sub-blocks (sb>=gcount) are NOT
+    // written — phase2 never reads them and A2q rows beyond the live region are
+    // out of every bounded descriptor.
+    // =======================================================================
+    {
+      const int cr = tid >> 3;   // row within a 32-block 0..31
+      const int cc = tid & 7;    // 32-B chunk 0..7
+#pragma unroll
+      for (int sb = 0; sb < kGM; ++sb) {
+        if (sb >= gcount) break;
+        const uint4 s0 = *reinterpret_cast<const uint4*>(
+            &a2_lds[sb * kBlockM + cr][32 * cc]);
+        const uint4 s1 = *reinterpret_cast<const uint4*>(
+            &a2_lds[sb * kBlockM + cr][32 * cc + 16]);
+        const std::size_t dst =
+            (static_cast<std::size_t>(b0 + sb) * kBlockM + cr) * kInter +
+            kChunkCols * g + 32 * cc;
+        *reinterpret_cast<uint4*>(A2q + dst) = s0;
+        *reinterpret_cast<uint4*>(A2q + dst + 16) = s1;
+      }
+    }
+    // DQ2[row, 2g+kb] — one lane per row writes (q==0), per live sub-block.
+    if (q == 0) {
+#pragma unroll
+      for (int sb = 0; sb < kGM; ++sb) {
+        if (sb >= gcount) break;
+        const int rbase = sb * kBlockM;
+#pragma unroll
+        for (int m = 0; m < 2; ++m) {
+#pragma unroll
+          for (int kb = 0; kb < 2; ++kb) {
+            DQ2[(static_cast<std::size_t>(b0 + sb) * kBlockM + 16 * m + r) *
+                    kKGroups2 +
+                2 * g + kb] =
+                fmaxf(amax_lds[kb][rbase + 16 * m + r], 1.0e-6f) / 448.0f;
+          }
+        }
+      }
+    }
     // MPS-DELTA (10): epilogue-done hook — after the A2q/DQ2 stores, before the
     // task-end __syncthreads(). NOT a VMEM drain: the stores above are still in
     // flight here, exactly as in the donor.

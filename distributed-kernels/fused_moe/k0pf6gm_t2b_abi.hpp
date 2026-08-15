@@ -33,10 +33,10 @@
 //   M0's parity-zeroing remains verbatim.
 //
 // NEW SLOTS (63..):
-#define K0P6_D_T2B_ZQ 63        // fwd-saved Zq  [rowcap, 4096] fp8 (g|u)
-#define K0P6_D_T2B_DQZ 64       // fwd-saved DQZ [rowcap, 32] f32
-#define K0P6_D_T2B_ACTQ 65      // fwd-saved A2q [rowcap, 2048] fp8 (act(z))
-#define K0P6_D_T2B_ACTDQ 66     // fwd-saved DQ2 [rowcap, 16] f32
+#define K0P6_D_T2B_ZQ 63        // t2b-owned Zq [rowcap,4096] (M5.9b z-regen out)
+#define K0P6_D_T2B_DQZ 64       // t2b-owned DQZ [rowcap,32] (M5.9b out)
+#define K0P6_D_T2B_ACTQ 65      // W13 ORIGINAL [E,4096,7168] (z-regen input)
+#define K0P6_D_T2B_ACTDQ 66     // S13 ORIGINAL [E,32,56] (z-regen input)
 #define K0P6_D_T2B_XROWS 67     // fwd-saved a_dst (x rows) [T_loc_max, 7168] fp8
 #define K0P6_D_T2B_XSC 68       // fwd-saved sc_stage [T_loc_max, 56] f32
 #define K0P6_D_T2B_DW13 69      // dW13 accumulator [E, 4096, 7168] fp32|bf16

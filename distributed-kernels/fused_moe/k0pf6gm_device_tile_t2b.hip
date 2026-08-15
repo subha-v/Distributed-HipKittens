@@ -382,6 +382,17 @@ __device__ __forceinline__ void k0p6_m15_task_done_defer(
 
 // ---- N2 phase bodies ----------------------------------------------------------------------
 #define N2GM_G K0P6GM_G
+#define N2_P1Z_QUAL __device__ __forceinline__
+#define N2_P1Z_NAME n2p6t2b_phase1z_body
+#define N2_KERNELS_ONLY
+#define N2_HOOK_CTX_ARG , const long long* __restrict__ k0p6_desc
+#include "k0pf6gm_t2b_shared.hpp"
+#include "n2_phase1z_gm_t2b.cpp"
+#undef N2_HOOK_CTX_ARG
+#undef N2_KERNELS_ONLY
+#undef N2_P1Z_NAME
+#undef N2_P1Z_QUAL
+
 #define N2_P1B_QUAL __device__ __forceinline__
 #define N2_P1B_NAME n2p6t2b_phase1b_body
 #define N2_KERNELS_ONLY
@@ -1375,6 +1386,28 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
   return;
 #else
 // ================= M6: N2 phase1 (donor verbatim) =========================================
+  // ================= M5.9b: z regeneration (see n2_phase1z header) ========================
+  production_fused_moe::n2::n2p6t2b_phase1z_body(
+      (const std::uint8_t*)k0p6_dread(desc, K0P6_D_T2B_XROWS),
+      (const float*)k0p6_dread(desc, K0P6_D_T2B_XSC),
+      (const std::uint8_t*)k0p6_dread(desc, K0P6_D_T2B_ACTQ),   // = W13 orig
+      (const float*)k0p6_dread(desc, K0P6_D_T2B_ACTDQ),         // = S13 orig
+      (const int*)k0p6_dread(desc, K0P6_D_STI),
+      (const int*)k0p6_dread(desc, K0P6_D_SEI),
+      (const int*)k0p6_dread(desc, K0P6_D_NVI),
+      (std::uint8_t*)k0p6_dread(desc, K0P6_D_T2B_ZQ),
+      (float*)k0p6_dread(desc, K0P6_D_T2B_DQZ),
+      (const int*)k0p6_dread(desc, K0P6_D_TILE_DESC),
+      (int)((const int*)k0p6_dread(desc, K0P6_D_NUM_TILES))[0], desc);
+  // Zq must be complete before ANY CTA's phase-1b epilogue reads it.
+  {
+    unsigned int* gbar = (unsigned int*)k0p6_dread(desc, K0P6_D_GBAR);
+    const hkp::local_grid_epoch bar{gbar, pperr, spin_limit};
+    const hkp::fail_closed bar_err{pperr, 2097152};
+    hkp::grid_barrier(bar, tid, bar_err);
+    if (hk_moe::error_bit_set_agent(pperr, 2097152)) return;
+  }
+
   production_fused_moe::n2::n2p6t2b_phase1b_body(
       (const std::uint8_t*)k0p6_dread(desc, K0P6_D_A_DST),        // dY rows
       (const float*)k0p6_dread(desc, K0P6_D_SC_STAGE),            // dY scales
@@ -1382,8 +1415,6 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
       (const float*)k0p6_dread(desc, K0P6_D_S13),                 // = S2T
       (const std::uint8_t*)k0p6_dread(desc, K0P6_D_T2B_ZQ),
       (const float*)k0p6_dread(desc, K0P6_D_T2B_DQZ),
-      (const std::uint8_t*)k0p6_dread(desc, K0P6_D_T2B_ACTQ),
-      (const float*)k0p6_dread(desc, K0P6_D_T2B_ACTDQ),
       (const int*)k0p6_dread(desc, K0P6_D_STI),
       (const int*)k0p6_dread(desc, K0P6_D_SEI),
       (const int*)k0p6_dread(desc, K0P6_D_NVI),

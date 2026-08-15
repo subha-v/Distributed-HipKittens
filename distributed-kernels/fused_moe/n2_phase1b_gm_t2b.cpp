@@ -105,8 +105,6 @@ N2_P1B_QUAL void N2_P1B_NAME(
     const float* __restrict__ S2T,               // [32, 16, 56] f32
     const std::uint8_t* __restrict__ Zq,         // fwd-saved [rowcap, 4096] fp8
     const float* __restrict__ DQZ,               // fwd-saved [rowcap, 32] f32
-    const std::uint8_t* __restrict__ A2q,        // fwd-saved act(z) [rowcap,2048]
-    const float* __restrict__ DQ2,               // fwd-saved [rowcap, 16] f32
     const int* __restrict__ sorted_ids,          // SAVED plan: token|slot<<24
     const int* __restrict__ sorted_eid,          // SAVED plan
     const int* __restrict__ nvi,                 // SAVED plan: [padded_rows, T]
@@ -122,14 +120,7 @@ N2_P1B_QUAL void N2_P1B_NAME(
   constexpr int kGM = N2GM_G;
   constexpr int kMrows = kBlockM * kGM;
 
-  __shared__ int tok_lds[kMrows];
-  __shared__ int srow_lds[kMrows];                 // absolute sorted row ids
-  __shared__ float ascale_lds[kKGroupsB][kMrows];
-  __shared__ float b1s_lds[2][kKGroupsB];          // [n128 half][k128] (no gu)
-  __shared__ float amax_lds[2][kMrows];
-  __shared__ __align__(16) std::uint8_t a2_lds[kMrows][kA2StrideB];
-  __shared__ __align__(16)
-      std::uint8_t a_lds[2][kMrows][kAChunks][kAChunkBytes];
+  // shared arrays: the t2b namespace-scope overlay (k0pf6gm_t2b_shared.hpp)
 
   const int tid = static_cast<int>(threadIdx.x);
   const int lane = tid & 63;
@@ -172,20 +163,20 @@ N2_P1B_QUAL void N2_P1B_NAME(
     for (int i = tid; i < kMrows; i += kThreads) {
       const int lb32 = i >> 5;
       const int srow = (b0 + lb32) * kBlockM + (i & 31);
-      srow_lds[i] = srow;
-      tok_lds[i] = (lb32 < gcount)
+      t2bsh_srow_lds[i] = srow;
+      t2bsh_tok_lds[i] = (lb32 < gcount)
                        ? (sorted_ids[srow] & 0x00FFFFFF)
                        : T;
     }
     for (int i = tid; i < 2 * kMrows; i += kThreads) {
-      amax_lds[i / kMrows][i % kMrows] = 0.0f;
+      t2bsh_amax_lds[i / kMrows][i % kMrows] = 0.0f;
     }
     // One weight-scale set: S2T[e][n128][k128] for the two n128 halves this
     // chunk's 256 columns span (2g, 2g+1).
     if (tid < 2 * kKGroupsB) {
       const int k = tid % kKGroupsB;
       const int j = tid / kKGroupsB;   // n128 half 0/1
-      b1s_lds[j][k] = S2Te[(ew * kNGroupsW2T + 2 * g + j) * kKGroupsB + k];
+      t2bsh_b1s_lds[0][j][k] = S2Te[(ew * kNGroupsW2T + 2 * g + j) * kKGroupsB + k];
     }
     __syncthreads();
 
@@ -197,16 +188,16 @@ N2_P1B_QUAL void N2_P1B_NAME(
     for (int idx = tid; idx < kScaleQuads * kMrows; idx += kThreads) {
       const int i = idx % kMrows;
       const int c = idx / kMrows;
-      const int token = tok_lds[i];
+      const int token = t2bsh_tok_lds[i];
       float4 v = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
       if (token < T) {
         v = *reinterpret_cast<const float4*>(
             dY_scale + static_cast<std::size_t>(token) * kKGroupsB + 4 * c);
       }
-      ascale_lds[4 * c + 0][i] = v.x;
-      ascale_lds[4 * c + 1][i] = v.y;
-      ascale_lds[4 * c + 2][i] = v.z;
-      ascale_lds[4 * c + 3][i] = v.w;
+      t2bsh_ascale_lds[4 * c + 0][i] = v.x;
+      t2bsh_ascale_lds[4 * c + 1][i] = v.y;
+      t2bsh_ascale_lds[4 * c + 2][i] = v.z;
+      t2bsh_ascale_lds[4 * c + 3][i] = v.w;
     }
     __syncthreads();
 
@@ -214,7 +205,7 @@ N2_P1B_QUAL void N2_P1B_NAME(
 #pragma unroll
     for (int sb = 0; sb < kGM; ++sb) {
       a_voff0[sb] =
-          static_cast<std::uint32_t>(tok_lds[sb * kBlockM + a_row]) *
+          static_cast<std::uint32_t>(t2bsh_tok_lds[sb * kBlockM + a_row]) *
               static_cast<std::uint32_t>(kHidden) +
           static_cast<std::uint32_t>(a_chunk * kAChunkBytes);
     }
@@ -251,7 +242,7 @@ N2_P1B_QUAL void N2_P1B_NAME(
 #pragma unroll
       for (int sb = 0; sb < kGM; ++sb) {
         *reinterpret_cast<__uint128_t*>(
-            &a_lds[lb][sb * kBlockM + a_row][a_cp][0]) = aTmp[sb][buf];
+            &t2bsh_a_lds[lb][sb * kBlockM + a_row][a_cp][0]) = aTmp[sb][buf];
       }
     };
     auto read_a = [&](int lb) __attribute__((always_inline)) {
@@ -264,8 +255,8 @@ N2_P1B_QUAL void N2_P1B_NAME(
         for (int m = 0; m < 2; ++m) {
           const int row = sb * kBlockM + 16 * m + r;
           float4* d = reinterpret_cast<float4*>(&af[sb][m].tiles[0][0].data[0]);
-          d[0] = *reinterpret_cast<const float4*>(&a_lds[lb][row][cp0][0]);
-          d[1] = *reinterpret_cast<const float4*>(&a_lds[lb][row][cp1][0]);
+          d[0] = *reinterpret_cast<const float4*>(&t2bsh_a_lds[lb][row][cp0][0]);
+          d[1] = *reinterpret_cast<const float4*>(&t2bsh_a_lds[lb][row][cp1][0]);
         }
       }
     };
@@ -281,13 +272,13 @@ N2_P1B_QUAL void N2_P1B_NAME(
     };
 
     auto mfma_k = [&](int k, int buf) __attribute__((always_inline)) {
-      const float bs = b1s_lds[j_w][k];
+      const float bs = t2bsh_b1s_lds[0][j_w][k];
 #pragma unroll
       for (int sb = 0; sb < kGM; ++sb) {
         const float4 as0 =
-            *reinterpret_cast<const float4*>(&ascale_lds[k][sb * kBlockM + 4 * q]);
+            *reinterpret_cast<const float4*>(&t2bsh_ascale_lds[k][sb * kBlockM + 4 * q]);
         const float4 as1 = *reinterpret_cast<const float4*>(
-            &ascale_lds[k][sb * kBlockM + 16 + 4 * q]);
+            &t2bsh_ascale_lds[k][sb * kBlockM + 16 + 4 * q]);
 #pragma unroll
         for (int m = 0; m < 2; ++m) {
           const float4 as = (m == 0) ? as0 : as1;
@@ -353,7 +344,7 @@ N2_P1B_QUAL void N2_P1B_NAME(
     // Column identity: this lane's dH2 value (m,c,t) is intermediate index
     //   i = 256*g + 64*wv + 16*c + r      (in [0,2048))
     // for row 16*m + 4*q + t of the sub-block.  z_g = Zq[row][i],
-    // z_u = Zq[row][2048 + i]; act(z) = A2q[row][i].
+    // z_u = Zq[row][2048 + i]; act(z) = silu(z_g)*z_u, from Zq directly.
     // =======================================================================
 #pragma unroll
     for (int sb = 0; sb < kGM; ++sb) {
@@ -370,8 +361,8 @@ N2_P1B_QUAL void N2_P1B_NAME(
 #pragma unroll
         for (int t = 0; t < 4; ++t) {
           const int rr = rbase + 16 * m + 4 * q + t;
-          live[m][t] = tok_lds[rr] < T;
-          srow[m][t] = srow_lds[rr];
+          live[m][t] = t2bsh_tok_lds[rr] < T;
+          srow[m][t] = t2bsh_srow_lds[rr];
           dwacc[m][t] = 0.0f;
           lmax_g[m][t] = 0.0f;
           lmax_u[m][t] = 0.0f;
@@ -392,17 +383,14 @@ N2_P1B_QUAL void N2_P1B_NAME(
             const float zscale_g = DQZ[rr * kKGroupsDZ + (i_col >> 7)];
             const float zscale_u =
                 DQZ[rr * kKGroupsDZ + ((kInter + i_col) >> 7)];
-            const float ascale =
-                DQ2[rr * (kInter / 128) + (i_col >> 7)];
             const float gz =
                 k0p6t2b_fp8_to_f32(Zq[zbase + i_col]) * zscale_g;
             const float uz =
                 k0p6t2b_fp8_to_f32(Zq[zbase + kInter + i_col]) * zscale_u;
-            const float az =
-                k0p6t2b_fp8_to_f32(A2q[static_cast<std::size_t>(rr) * kInter +
-                                       i_col]) *
-                ascale;
             const float sig = 1.0f / (1.0f + __expf(-gz));
+            // act(z) recomputed from the z this epilogue already loads —
+            // the forward saves nothing beyond its natural outputs.
+            const float az = (gz * sig) * uz;
             const float dg = dh2 * uz * sig * (1.0f + gz * (1.0f - sig));
             const float du = dh2 * gz * sig;
             dzg[m][c][t] = dg;
@@ -436,7 +424,7 @@ N2_P1B_QUAL void N2_P1B_NAME(
         float (*lmax)[4] = (half == 0) ? lmax_g : lmax_u;
         // re-zero the shared amax accumulators for this half
         for (int i = tid; i < 2 * kMrows; i += kThreads) {
-          amax_lds[i / kMrows][i % kMrows] = 0.0f;
+          t2bsh_amax_lds[i / kMrows][i % kMrows] = 0.0f;
         }
         __syncthreads();
 #pragma unroll
@@ -455,7 +443,7 @@ N2_P1B_QUAL void N2_P1B_NAME(
 #pragma unroll
             for (int t = 0; t < 4; ++t) {
               atomicMax(reinterpret_cast<int*>(
-                            &amax_lds[j_w][rbase + 16 * m + 4 * q + t]),
+                            &t2bsh_amax_lds[j_w][rbase + 16 * m + 4 * q + t]),
                         __float_as_int(lmax[m][t]));
             }
           }
@@ -467,7 +455,7 @@ N2_P1B_QUAL void N2_P1B_NAME(
           float dq[4];
 #pragma unroll
           for (int t = 0; t < 4; ++t) {
-            dq[t] = fmaxf(amax_lds[j_w][rbase + 16 * m + 4 * q + t], 1.0e-6f) /
+            dq[t] = fmaxf(t2bsh_amax_lds[j_w][rbase + 16 * m + 4 * q + t], 1.0e-6f) /
                     448.0f;
           }
 #pragma unroll
@@ -476,7 +464,7 @@ N2_P1B_QUAL void N2_P1B_NAME(
             for (int t = 0; t < 4; ++t) {
               const float qv =
                   fminf(fmaxf(dzv[m][c][t] / dq[t], -448.0f), 448.0f);
-              a2_lds[rbase + 16 * m + 4 * q + t]
+              t2bsh_a2_lds[rbase + 16 * m + 4 * q + t]
                     [kWaveColsB * wv + 16 * c + r] =
                   __hip_cvt_float_to_fp8(qv, __HIP_SATFINITE, __HIP_E4M3);
             }
@@ -490,9 +478,9 @@ N2_P1B_QUAL void N2_P1B_NAME(
           const int cc = tid & 7;
           if ((rbase >> 5) < gcount) {
             const uint4 s0 = *reinterpret_cast<const uint4*>(
-                &a2_lds[rbase + cr][32 * cc]);
+                &t2bsh_a2_lds[rbase + cr][32 * cc]);
             const uint4 s1 = *reinterpret_cast<const uint4*>(
-                &a2_lds[rbase + cr][32 * cc + 16]);
+                &t2bsh_a2_lds[rbase + cr][32 * cc + 16]);
             const std::size_t dst =
                 (static_cast<std::size_t>(b0 + sb) * kBlockM + cr) * kDZCols +
                 static_cast<std::size_t>(half) * kInter + kChunkColsB * g +
@@ -509,7 +497,7 @@ N2_P1B_QUAL void N2_P1B_NAME(
               DQdZ[(static_cast<std::size_t>(b0 + sb) * kBlockM + 16 * m + r) *
                        kKGroupsDZ +
                    half * (kKGroupsDZ / 2) + 2 * g + kb] =
-                  fmaxf(amax_lds[kb][rbase + 16 * m + r], 1.0e-6f) / 448.0f;
+                  fmaxf(t2bsh_amax_lds[kb][rbase + 16 * m + r], 1.0e-6f) / 448.0f;
             }
           }
         }
