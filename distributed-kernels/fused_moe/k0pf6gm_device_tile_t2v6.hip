@@ -34,8 +34,11 @@
 // beyond one tile's tail.  Quotas ride the DWMODE descriptor word:
 //   bits [3:0]  mode: 0 = off (host wgrad), 1 = v4-compat post-M8 grid-stride
 //               overwrite, 2 = filler (cursors + windows + tail)
-//   bit  [4]    accumulate: bf16 read-add-write store (mb > 0; the host adds
-//               arenas into main_grad ONCE per layer per iteration)
+//   bits [7:4]  nmb (microbatches/iteration): accumulate is DERIVED in-kernel
+//               as (epoch-1) mod nmb != 0 — the first microbatch overwrites,
+//               the rest bf16-RMW accumulate, and the host patches NOTHING
+//               per launch (it adds arenas into main_grad once per layer per
+//               iteration); nmb <= 1 never accumulates (gate harnesses)
 //   bits [15:8]  window-A quota (tiles per service CTA, slab 0)
 //   bits [23:16] window-B quota (tiles per service CTA, slab 1 post-sweep)
 //   bits [31:24] window-C quota (tiles per CTA inside the M8 wait)
@@ -734,7 +737,15 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
   const int dwmode = (int)(dwword & 0xFu);
   (void)dwmode;
 #if K0P6_T2V6_FILLER
-  const bool dw_accumulate = ((dwword >> 4) & 1u) != 0u;
+  // accumulate is DERIVED, not host-patched: this layer's protocol instance
+  // launches exactly once per microbatch, so (epoch-1) mod nmb is the
+  // microbatch index — 0 overwrites (first mb of the iteration), the rest
+  // bf16-RMW accumulate.  nmb rides DWMODE bits [7:4]; nmb <= 1 (gates,
+  // single-mb harnesses) never accumulates.
+  const int dw_nmb = (int)((dwword >> 4) & 0xFu);
+  const bool dw_accumulate =
+      (dw_nmb > 1) &&
+      (((k0p6_epoch(desc) - 1ull) % (unsigned long long)dw_nmb) != 0ull);
   const int dw_quota_a = (int)((dwword >> 8) & 0xFFu);
   const int dw_quota_b = (int)((dwword >> 16) & 0xFFu);
   const int dw_quota_c = (int)((dwword >> 24) & 0xFFu);
