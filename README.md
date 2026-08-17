@@ -377,3 +377,17 @@ the AMD turbo grouped-GEMM production path), end-to-end 19,390 tok/s/GPU
 converging — and at matched fp8 precision, the production recipes diverge
 (NaN) where this stack's 128x128-blockscale contract trains.  Full results:
 amd-master `auto-gpu-kernel/k0_fused_moe/training_bench/T1_RESULTS.md`.
+
+## v6: wgrad-in-bubbles (branch `ablations`, 2026-08-17)
+
+`k0pf6gm_device_tile_t2v6.hip` — additive sibling of the T2B backward that
+executes the v2.2 wgrad tiles as FILLER inside the megakernel's own wait
+windows (service-CTA slab 0 / post-quota slab 1, and a poll-and-fill M8
+certificate wait on all 256 CTAs), driven by two device cursors that respect
+the readiness lattice (dW2 claimable from slab 0, dW13 from slab 1) with the
+M8.5 phase demoted to a cursor drain; quotas and the cross-microbatch
+accumulate ride a packed DWMODE word (accumulate derived in-kernel from the
+epoch counter).  A compile-gated PROF arm adds a monotonic per-wait-site
+idle-cycle ledger (descriptor slot 73) to size every bubble at training
+geometry.  The slice/accumulate plumbing (`tile_lo`/`tile_hi`/`accumulate`)
+landed in `n2_wgrad_gm_t2b.cpp` + `wg_standalone.hip` for exactly this.

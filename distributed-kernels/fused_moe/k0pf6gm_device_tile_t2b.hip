@@ -51,7 +51,7 @@
 #include "k0pf6gm_t2b_abi.hpp"
 
 // JIT-cache guard (same contract as the forward TU).
-#define K0P6_T2B_SRC_REV 3
+#define K0P6_T2B_SRC_REV 4
 
 // Compute phases off until the adapted GEMM bodies land; the transport
 // skeleton is independently launch-testable (pperr-clean dispatch+unpack).
@@ -1897,6 +1897,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
         (__hip_bfloat16*)k0p6_dread(desc, K0P6_D_T2B_DW13),
         (__hip_bfloat16*)k0p6_dread(desc, K0P6_D_T2B_DW2),
         (int)k0p6_dread(desc, K0P6_D_E), bid, nct,
+        /*tile_lo=*/0, /*tile_hi=*/0, /*accumulate=*/false,
         reinterpret_cast<__hip_bfloat16*>(
             &production_fused_moe::n2::t2bsh_a2_lds[0][0]),
         reinterpret_cast<__hip_bfloat16*>(

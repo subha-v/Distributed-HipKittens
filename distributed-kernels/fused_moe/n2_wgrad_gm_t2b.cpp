@@ -120,7 +120,7 @@ __device__ inline void k0p6wg_tile(
     const std::uint8_t* __restrict__ dyq, const float* __restrict__ dysc,
     const int* __restrict__ sti, const float* __restrict__ swt,
     int nrecv, int rowcap, int s, int t, int m0, int n0,
-    __hip_bfloat16* __restrict__ out, int out_ld,
+    __hip_bfloat16* __restrict__ out, int out_ld, bool accumulate,
     __hip_bfloat16* ldsA, __hip_bfloat16* ldsB, float* ldsMeta) {
   const int tid = static_cast<int>(threadIdx.x);
   const int lane = tid & 63;
@@ -292,6 +292,8 @@ __device__ inline void k0p6wg_tile(
   }
 
   // ---- store: lane holds D[m = 16*mi + 4*lq + i][n = n_wave + 16*ni + lr]
+  // accumulate=true sums across microbatches (bf16 RMW; the host adds into
+  // main_grad once per layer per iteration).
 #pragma unroll
   for (int mi = 0; mi < kWgMi; ++mi) {
 #pragma unroll
@@ -300,7 +302,10 @@ __device__ inline void k0p6wg_tile(
       for (int i = 0; i < 4; ++i) {
         const int m = m0 + 16 * mi + 4 * lq + i;
         const int n = n0 + n_wave + 16 * ni + lr;
-        out[(std::size_t)m * out_ld + n] = __float2bfloat16(acc[mi][ni][i]);
+        const std::size_t o = (std::size_t)m * out_ld + n;
+        float v = acc[mi][ni][i];
+        if (accumulate) v += __bfloat162float(out[o]);
+        out[o] = __float2bfloat16(v);
       }
     }
   }
@@ -317,7 +322,8 @@ __device__ inline void n2p6t2b_wgrad_body(
     const int* __restrict__ sti, const float* __restrict__ swt,
     const int* __restrict__ sei, const int* __restrict__ nvi,
     __hip_bfloat16* __restrict__ dw13, __hip_bfloat16* __restrict__ dw2,
-    int n_experts, int bid, int nct,
+    int n_experts, int bid, int nct, int tile_lo, int tile_hi,
+    bool accumulate,
     __hip_bfloat16* ldsA, __hip_bfloat16* ldsB, float* ldsMeta,
     int* ldsRange /* [n_experts][2] */) {
   const int tid = static_cast<int>(threadIdx.x);
@@ -343,7 +349,8 @@ __device__ inline void n2p6t2b_wgrad_body(
   constexpr int kT2 = (7168 / kWgMT) * kN2;
   const int per_e = kT13 + kT2;
   const int total = n_experts * per_e;
-  for (int tidx = bid; tidx < total; tidx += nct) {
+  const int hi = (tile_hi > 0 && tile_hi < total) ? tile_hi : total;
+  for (int tidx = tile_lo + bid; tidx < hi; tidx += nct) {
     const int e = tidx / per_e;
     const int u = tidx - e * per_e;
     const int s = ldsRange[2 * e + 0] * 32;
@@ -353,7 +360,7 @@ __device__ inline void n2p6t2b_wgrad_body(
       const int n0 = (u % kN13) * kWgNT;
       k0p6wg_tile<0>(dzq, dqdz, zq, dqz, xrows, xsc, dyq, dysc, sti, swt,
                      nrecv, padded, s, t, m0, n0,
-                     dw13 + (std::size_t)e * 4096 * 7168, 7168,
+                     dw13 + (std::size_t)e * 4096 * 7168, 7168, accumulate,
                      ldsA, ldsB, ldsMeta);
     } else {
       const int v = u - kT13;
@@ -361,10 +368,16 @@ __device__ inline void n2p6t2b_wgrad_body(
       const int n0 = (v % kN2) * kWgNT;
       k0p6wg_tile<1>(dzq, dqdz, zq, dqz, xrows, xsc, dyq, dysc, sti, swt,
                      nrecv, padded, s, t, m0, n0,
-                     dw2 + (std::size_t)e * 7168 * 2048, 2048,
+                     dw2 + (std::size_t)e * 7168 * 2048, 2048, accumulate,
                      ldsA, ldsB, ldsMeta);
     }
   }
+}
+
+// Slice-count helper for hosts: total tiles at the compiled shape.
+__device__ inline int n2p6t2b_wgrad_total_tiles(int n_experts) {
+  return n_experts *
+         ((4096 / kWgMT) * (7168 / kWgNT) + (7168 / kWgMT) * (2048 / kWgNT));
 }
 
 }  // namespace production_fused_moe::n2
