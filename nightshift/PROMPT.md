@@ -5,38 +5,49 @@ so its CLAUDE.md loads, then paste:
 
 ---
 
-You are the overnight orchestrator for my M15 prefill megakernel campaign.
-Read `CLAUDE.md` in this folder completely before doing anything — it carries
-the node access, the live queue state, the discovered traps, and your priority
-list. Work autonomously until morning; I am not watching.
+You are the overnight orchestrator for my M15 prefill megakernel. Read
+`CLAUDE.md` in this folder completely before doing anything — it carries the
+node access (we have EXCLUSIVE use of the node tonight), the banked state,
+the discovered traps, and your operating rules. Work autonomously until
+morning; I am not watching.
 
-Operating mode:
-- **Orchestrate Opus 5 subagents** for all substantive work: `model: opus`
-  with effort `medium` for recon, harvesting, cleanup, and doc work, and
-  effort `high` for kernel code, patch implementation, and every adversarial
-  verification. Use workflows (implement → adversarial verify → fix) for
-  anything that will be deployed to the GPU node; nothing touches the node
-  without a separate verifier subagent signing off — this rule already
-  prevented one 8-GPU hang tonight and caused another when skipped.
-- Also **relaunch and finish the cleanup agent** (priority 4 in CLAUDE.md):
-  an Opus subagent that deletes the obsolete pre-M23 serving numbers from
-  both repos, tombstones wholly-obsolete docs, finishes the methodology doc,
-  and commits+pushes. Reconcile with the partial work in checkpoint f4968a32.
-- Babysit the already-running node queue (campaign 4 RR, campaign 5 tri-arm),
-  harvest every result as order-balanced ratios with coverage receipts, then
-  execute the kernel-level decomposition runbook (`DECOMP_RUNBOOK.md`,
-  followed exactly — the pin trap and R0a arbiter are non-negotiable), with
-  the R6 fill/T-sweep ranked first among the new experiments.
-- The deliverable by morning: `nightshift/REPORT.md` — every campaign's
-  order-balanced table with full workload spec, the decomposition grid's
-  decision-table outcomes, which bottleneck mechanisms were confirmed or
-  refuted (fill/2.66x, transport run-correlation, fixed-cost duty, RR
-  placement value), the fill-aware optimization design's status, and a ranked
-  next-actions list. Append running notes to `nightshift/LOG.md` as you go;
-  commit and push after each meaningful landing (no co-author lines).
+Your mission is the optimization loop, not queue-tending:
 
-Budget honestly: prefer one decisive, receipted measurement over three noisy
-ones; kill and diagnose rather than retry blind; if the node becomes
-unreachable, keep doing local design/verification work and reconnect later.
+1. **Check the legacy node queue's progress and harvest whatever completed**
+   (order-balanced ratios + coverage receipts only). The queue was a fallback
+   for the case where you didn't exist — it is not the plan.
+2. **Attack the biggest recoverable cost first**: the fill problem (the mega
+   runs 4,096 padded rows carrying ~37.6% real tokens — 2.66× padding
+   multiplier — while its fixed costs don't scale down). Launch specialized
+   Opus 5 subagents (`model: opus`, effort `high` for kernel work, `medium`
+   for recon/analysis) in implement → adversarial-verify → fix workflows to
+   design and build the fill-aware kernel behind default-0 macros, gate it
+   through the MoK harness (mind the pin trap and the R0a ±1% arbiter), and
+   only then take the node.
+3. **When your first verified build is ready to measure, STOP the remaining
+   queued campaigns** (teardown commands in CLAUDE.md) and run your own
+   end-to-end serving measurements: the latest kernel vs the **GENUINE
+   production baseline** — the untouched vLLM image with shipped defaults
+   (`native` arm), NOT patched-stock. Report the three-way decomposition
+   (m15/native headline, m15/patched-stock kernel effect,
+   patched-stock/native integration effect) across the sweep matrix:
+   multiple batch sizes and concurrencies (c32p, c8, c16, c32, and c512p if
+   memory allows), order-balanced pairs, cooldowns, exact-token SHAs.
+4. **Then loop**: profile the new build (phase ledger, receipts, spin
+   probes), identify the next-biggest bottleneck, implement, verify, measure
+   e2e again. Keep iterating until morning.
+5. In parallel, **relaunch and finish the cleanup agent** (delete the
+   obsolete pre-M23 serving numbers in both repos, tombstones, finish the
+   methodology doc, commit+push; reconcile with checkpoint f4968a32).
+
+Deliverable by morning: `nightshift/REPORT.md` — every measurement as an
+order-balanced table with full workload spec and coverage receipts, the
+bottleneck mechanisms confirmed/refuted at each iteration, what each new
+kernel build changed and its measured effect vs native production, and a
+ranked next-actions list. Append running notes to `nightshift/LOG.md`;
+commit and push after each meaningful landing (no co-author lines). Prefer
+one decisive receipted measurement over three noisy ones; kill and diagnose
+rather than retry blind; if the node drops, keep doing local design and
+verification work and reconnect.
 
 ---
