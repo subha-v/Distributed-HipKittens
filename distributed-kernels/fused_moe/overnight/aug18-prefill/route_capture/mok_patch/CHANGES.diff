@@ -1,0 +1,818 @@
+# Captured-route replay: MoK harness patch (aug18-prefill)
+#
+# Generated with: diff -u <mirror original> <mok_patch copy>
+# Mirror originals = the node-side sources as deployed on 2026-08-17:
+#   amd-master/auto-gpu-kernel/k0_fused_moe/prefill_opt/host/e004pf_k0pf_ab.py
+#   amd-master/auto-gpu-kernel/k0_fused_moe/benchmarks/mok_synthetic_prefill/{synthetic_inputs.py,run_campaign.sh}
+# route_replay.py is NEW (diffed against /dev/null).
+#
+--- a/prefill_opt_host/e004pf_k0pf_ab.py
++++ b/prefill_opt_host/e004pf_k0pf_ab.py
+@@ -176,6 +176,54 @@
+     raise ValueError("K0_BENCHMARK_PROTOCOL must be graph or mok_eager")
+ if K0_BENCHMARK_PROTOCOL == "mok_eager" and K0_INPUT_MODE != "mok_synthetic":
+     raise ValueError("mok_eager protocol requires K0_INPUT_MODE=mok_synthetic")
++# ---- CAPTURED-ROUTE REPLAY (aug18-prefill).  K0_MOK_ROUTE_FILE names the .npz
++# (or the directory of them) the serving router-capture hook wrote; the harness
++# replays those REAL per-chunk routes verbatim, ONE PER TIMED ITERATION, instead
++# of drawing i.i.d. from an aggregate histogram.  K0_MOK_ROUTE_ORDER=captured
++# keeps the captured token order (run correlation intact); =shuffled permutes
++# token rows with a fixed seed, leaving the routed-row multiset -- and hence the
++# aggregate histogram -- bit-identical.  captured-vs-shuffled therefore isolates
++# run correlation from popularity, which no measurement of ours has ever done.
++# Same legality pattern as K0_MOK_ROUTE_HIST/K0_MOK_REP_EXPERTS: mok_synthetic
++# inputs only, and any second route source is a hard error rather than a silent
++# winner.
++K0_MOK_ROUTE_FILE = os.environ.get("K0_MOK_ROUTE_FILE", "").strip()
++K0_MOK_ROUTE_ORDER = os.environ.get("K0_MOK_ROUTE_ORDER", "captured").strip()
++K0_MOK_ROUTE_SEED = int(os.environ.get("K0_MOK_ROUTE_SEED", "1234"))
++K0_MOK_ROUTE_LAYERS = tuple(
++    x.strip() for x in os.environ.get("K0_MOK_ROUTE_LAYERS", "").split(",") if x.strip()
++)
++K0_MOK_ROUTE_MAX_CALLS = int(os.environ.get("K0_MOK_ROUTE_MAX_CALLS", "0"))
++# Lockstep is a DIAGNOSTIC arm, default off: it inserts a rank barrier between
++# timed iterations (outside every event window) so all ranks replay the same
++# captured call at the same time.  On it costs the loop's steady-state overlap;
++# off, ranks may drift a call apart, which mixes two real chunks and is the
++# honest default for a throughput number.
++K0_MOK_ROUTE_LOCKSTEP = os.environ.get("K0_MOK_ROUTE_LOCKSTEP", "0").strip() not in ("", "0")
++# Arms whose plan is rebuilt from the LIVE route on every call (host plan
++# kernels for production, in-kernel M3 for the megas).  Arms holding a plan
++# frozen at setup would silently mis-execute a swapped route, so replay refuses
++# them unless the operator explicitly overrides.
++_ROUTE_LIVE_ARMS = ("production", "pf6gm_mega", "pf6c_mega", "mps_mega")
++K0_MOK_ROUTE_ANY_ARM = os.environ.get("K0_MOK_ROUTE_ANY_ARM", "0").strip() not in ("", "0")
++if K0_MOK_ROUTE_ORDER not in ("captured", "shuffled"):
++    raise ValueError("K0_MOK_ROUTE_ORDER must be captured or shuffled")
++if K0_MOK_ROUTE_FILE:
++    if K0_INPUT_MODE != "mok_synthetic":
++        raise ValueError("K0_MOK_ROUTE_FILE requires K0_INPUT_MODE=mok_synthetic")
++    if K0_BENCHMARK_PROTOCOL != "mok_eager":
++        # The graph protocol gates every replay against a reference built from
++        # ONE route; cycling routes under it would fail those gates by design.
++        raise ValueError("K0_MOK_ROUTE_FILE requires K0_BENCHMARK_PROTOCOL=mok_eager")
++    if os.environ.get("K0_MOK_ROUTE_HIST", "").strip():
++        raise ValueError("K0_MOK_ROUTE_FILE cannot be combined with K0_MOK_ROUTE_HIST")
++    if K0_MOK_ROUTE_MAX_CALLS < 0:
++        raise ValueError("K0_MOK_ROUTE_MAX_CALLS must be nonnegative")
++# Replay state, populated in the mok_synthetic block when a route file is armed.
++_rr_ids = None      # [N,T,TOPK] device stack, harness dtype
++_rr_wgt = None
++_rr_n = 0
++_rr_meta = None
+ MOK_WARMUP_ITERS = int(os.environ.get("K0_MOK_WARMUP_ITERS", "500"))
+ MOK_TIMED_ITERS = int(os.environ.get("K0_MOK_TIMED_ITERS", "100"))
+ MOK_ABSOLUTE_TOLERANCE = float(
+@@ -1964,11 +2012,50 @@
+             os.environ.get("K0_MOK_WEIGHT_CHUNK_ELEMENTS", str(32 * 1024 * 1024))
+         ),
+         route_hist_path=os.environ.get("K0_MOK_ROUTE_HIST", "").strip() or None,
++        route_file=K0_MOK_ROUTE_FILE or None,
++        route_order=K0_MOK_ROUTE_ORDER,
++        route_seed=K0_MOK_ROUTE_SEED,
++        route_layers=K0_MOK_ROUTE_LAYERS,
++        route_max_calls=K0_MOK_ROUTE_MAX_CALLS,
+     )
+     _mok_inputs = generate_mok_synthetic_inputs(rank, dev, _mok_config)
+     hidden = _mok_inputs["hidden"]
+     topk_ids.copy_(_mok_inputs["topk_experts"])
+     topk_wgt.copy_(_mok_inputs["router_weights"])
++    if K0_MOK_ROUTE_FILE:
++        # Preload the whole captured stack onto the device ONCE, at setup: the
++        # per-iteration swap is then two D2D copies into the SAME symmetric
++        # route buffers the arms already read, issued between HIP events so no
++        # measured window ever contains them.  ~17 MB at 64 calls.
++        import route_replay as _route_replay   # same module synthetic_inputs used (lru-cached)
++        _rr_cap = _route_replay.load_for_config(_mok_config, rank)
++        # Every rank must cycle the SAME number of calls or the arms stop
++        # comparing like with like; ranks whose capture is short bound it.
++        _rr_cnt = torch.tensor([_rr_cap.calls], dtype=torch.int64, device=dev)
++        dist.all_reduce(_rr_cnt, op=dist.ReduceOp.MIN)
++        _rr_n = int(_rr_cnt.item())
++        if _rr_n < 1:
++            raise RuntimeError("captured-route replay needs at least one call on every rank")
++        _rr_ids = torch.from_numpy(_rr_cap.topk_ids[:_rr_n].copy()).to(
++            device=dev, dtype=topk_ids.dtype
++        )
++        _rr_wgt = torch.from_numpy(_rr_cap.topk_weights[:_rr_n].copy()).to(
++            device=dev, dtype=topk_wgt.dtype
++        )
++        _rr_meta = dict(_rr_cap.metadata)
++        _rr_meta["route_calls_replayed"] = _rr_n
++        _rr_meta["route_calls_local"] = _rr_cap.calls
++        _rr_meta["route_lockstep"] = bool(K0_MOK_ROUTE_LOCKSTEP)
++        if rank == 0:
++            print(
++                f"[ROUTE REPLAY] order={K0_MOK_ROUTE_ORDER} calls={_rr_n} "
++                f"file={_rr_meta['route_file']} "
++                f"max_rank_x_uniform p50={_rr_meta['route_skew']['max_rank_x_uniform_p50']:.3f} "
++                f"p95={_rr_meta['route_skew']['max_rank_x_uniform_p95']:.3f} "
++                f"agg={_rr_meta['route_skew']['max_rank_x_uniform_aggregate']:.3f} "
++                f"gini={_rr_meta['route_skew']['expert_gini_aggregate']:.4f}",
++                flush=True,
++            )
+ 
+     def _weight_per_128x128_quant(weight):
+         _e, _n, _k = weight.shape
+@@ -2279,6 +2366,30 @@
+     # Loading a second copy duplicated exactly 1.3125 GiB/rank and changed warm-cache addresses.
+     w1_b = w13.view(torch.uint8).view(torch.float8_e4m3fn).reshape(E, 2 * INTER, H)
+     w2_b = w2c.view(torch.uint8).view(torch.float8_e4m3fn).reshape(E, H, INTER)
++
++# ---- captured-route replay: the per-iteration swap ----
++# Inert (and never called) unless K0_MOK_ROUTE_FILE is armed.  The symmetric
++# route buffers ARE the live router outputs for every arm, so writing call k
++# into them in place is exactly the in-place route swap the k0d route-swap gate
++# already validates -- no graph addresses move, no allocation happens, and both
++# arms see the same route on the same iteration.
++_ROUTE_REPLAY_ARMED = bool(K0_MOK_ROUTE_FILE)
++
++def _route_replay_apply(i):
++    if not _ROUTE_REPLAY_ARMED:
++        return
++    k = i % _rr_n
++    topk_ids.copy_(_rr_ids[k])
++    topk_wgt.copy_(_rr_wgt[k])
++
++R["route_replay"] = (
++    dict(enabled=False)
++    if not _ROUTE_REPLAY_ARMED
++    else dict(enabled=True, order=K0_MOK_ROUTE_ORDER, seed=K0_MOK_ROUTE_SEED,
++              lockstep=bool(K0_MOK_ROUTE_LOCKSTEP), calls=_rr_n,
++              layers_filter=list(K0_MOK_ROUTE_LAYERS),
++              max_calls=K0_MOK_ROUTE_MAX_CALLS, **(_rr_meta or {}))
++)
+ R["weight_storage"] = dict(
+     shared_between_production_and_candidate=True,
+     w13_w1_same_ptr=bool(w13.data_ptr() == w1_b.data_ptr()),
+@@ -4036,6 +4147,17 @@
+ _SEL = _REQUESTED
+ ARMS = [(nm, _ALL[nm][0], _ALL[nm][1]) for nm in _SEL]
+ R["arms"] = [a[0] for a in ARMS]
++if _ROUTE_REPLAY_ARMED and not K0_MOK_ROUTE_ANY_ARM:
++    # A frozen-plan arm would keep executing the SETUP route's plan while the
++    # route buffers cycle, producing a fast, wrong, and completely plausible
++    # number. Refuse rather than measure it.
++    _rr_dead = [nm for nm in R["arms"] if nm not in _ROUTE_LIVE_ARMS]
++    if _rr_dead:
++        raise RuntimeError(
++            f"K0_MOK_ROUTE_FILE replays a route per iteration, but arms {_rr_dead} "
++            f"do not rebuild their plan from the live route; allowed={list(_ROUTE_LIVE_ARMS)} "
++            "(set K0_MOK_ROUTE_ANY_ARM=1 only if you have verified the arm)"
++        )
+ _CUSTOM_PLAN_ARMS = {"frozen_pull", "frozen_n2", "frozen_n2r",
+                      "pf_gather", "pf_combine", "pf_plan", "pf_full",
+                      "pf2_plan", "pf2_push", "pf2_full", "pf2_fused", "pf2_n2r",
+@@ -5289,6 +5411,10 @@
+             maxtok_prod=MAXTOK_PROD,
+             mok_warmup_iters=MOK_WARMUP_ITERS,
+             mok_timed_iters=MOK_TIMED_ITERS,
++            mok_route_file=K0_MOK_ROUTE_FILE or None,
++            mok_route_order=(K0_MOK_ROUTE_ORDER if _ROUTE_REPLAY_ARMED else None),
++            mok_route_calls=(_rr_n if _ROUTE_REPLAY_ARMED else 0),
++            mok_route_lockstep=(bool(K0_MOK_ROUTE_LOCKSTEP) if _ROUTE_REPLAY_ARMED else False),
+             mok_correctness_metric=(
+                 "global sum(abs(diff)) / global sum(abs(reference))"
+             ),
+@@ -5512,7 +5638,11 @@
+         pperr.zero_()
+         torch.cuda.synchronize()
+         hbarrier()
+-        for _ in range(MOK_WARMUP_ITERS):
++        for _w in range(MOK_WARMUP_ITERS):
++            # Warm on the SAME captured cycle the timed loop will run, so the
++            # steady state being measured is the replayed one, not route 0's.
++            if _ROUTE_REPLAY_ARMED:
++                _route_replay_apply(_w)
+             body(sp())
+         torch.cuda.synchronize()
+         dist.barrier()
+@@ -5521,7 +5651,15 @@
+             (torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True))
+             for _ in range(MOK_TIMED_ITERS)
+         ]
+-        for start, end in events:
++        for _i, (start, end) in enumerate(events):
++            # Every arm restarts the cycle at call 0, so arm k's iteration i
++            # runs the same real chunk on every arm and the A/B is paired.
++            # The swap is issued BEFORE start.record() and therefore outside
++            # every measured window.
++            if _ROUTE_REPLAY_ARMED:
++                _route_replay_apply(_i)
++                if K0_MOK_ROUTE_LOCKSTEP:
++                    dist.barrier()
+             start.record()
+             body(sp())
+             end.record()
+@@ -5533,6 +5671,20 @@
+             dtype=np.float64,
+         )
+         aligned_us = _mok_rank_max(local_us)
++        # CAPTURED-ROUTE REPLAY: the timed loop leaves the LAST cycled route
++        # resident, but `ref` was produced from captured call 0 outside timing
++        # and every gate below compares against it. Restore call 0 and run one
++        # untimed epoch so the gated bytes belong to the reference route. This
++        # is strictly after the rank-max all-reduce, so it cannot touch a
++        # measurement, and it runs for EVERY arm (production included, whose
++        # output buffer the poison epoch below never refreshes).
++        if _ROUTE_REPLAY_ARMED:
++            _route_replay_apply(0)
++            torch.cuda.synchronize()
++            hbarrier()
++            body(sp())
++            torch.cuda.synchronize()
++            hbarrier()
+         # exp_32 P3: the timed loop leaves cand_out holding 600 epochs of
+         # accumulated writes, so a row a LATE epoch failed to write still reads
+         # an earlier epoch's bit-identical correct answer and the gates below
+--- a/mok_synthetic_prefill/synthetic_inputs.py
++++ b/mok_synthetic_prefill/synthetic_inputs.py
+@@ -12,7 +12,9 @@
+ 
+ import torch
+ 
++import route_replay
+ 
++
+ @dataclass(frozen=True)
+ class MoKSyntheticConfig:
+     world_size: int = 8
+@@ -30,6 +32,21 @@
+     # the i.i.d.-normal balanced default.  Relative paths resolve against this
+     # module's directory so the same value works on host and in-container.
+     route_hist_path: str | None = None
++    # Optional CAPTURED-ROUTE replay: path to a .npz (or a directory of them)
++    # written by the serving router-capture hook.  When set, the route is not
++    # sampled at all -- captured call 0 becomes the setup route (and therefore
++    # the reference route), and the harness replays the whole captured stack
++    # one call per timed iteration.  route_order selects "captured" (verbatim,
++    # run correlation intact) or "shuffled" (token rows permuted with
++    # route_seed, identical routed-row multiset, correlation destroyed): the
++    # popularity-vs-run-correlation separator.  Mutually exclusive with
++    # route_hist_path -- both define the route, and silently letting one win
++    # is how a replay campaign measures the wrong thing.
++    route_file: str | None = None
++    route_order: str = "captured"
++    route_seed: int = 1234
++    route_layers: tuple[str, ...] = ()
++    route_max_calls: int = 0
+ 
+     @property
+     def local_experts(self) -> int:
+@@ -51,6 +68,16 @@
+             raise ValueError("hidden and intermediate dimensions must be multiples of 128")
+         if self.weight_chunk_elements <= 0:
+             raise ValueError("weight_chunk_elements must be positive")
++        if self.route_file and self.route_hist_path:
++            raise ValueError(
++                "route_file and route_hist_path both define the route; pick one"
++            )
++        if self.route_order not in route_replay.ORDERS:
++            raise ValueError(
++                f"route_order must be one of {route_replay.ORDERS}, got {self.route_order!r}"
++            )
++        if self.route_max_calls < 0:
++            raise ValueError("route_max_calls must be nonnegative")
+         _ = self.local_experts
+ 
+ 
+@@ -147,7 +174,30 @@
+ 
+     generator = torch.Generator(device=device).manual_seed(config.seed_base + rank)
+     route_hist_metadata: dict[str, Any] = {}
+-    if config.route_hist_path:
++    if config.route_file:
++        # CAPTURED-ROUTE REPLAY.  Draw and DISCARD the default logits first so
++        # the generator stream -- and therefore `hidden` and every weight
++        # tensor below -- stays byte-identical to the balanced arm: balanced,
++        # captured and shuffled then differ ONLY in routing, which is the
++        # whole point of the comparison.
++        _ = torch.randn(
++            config.tokens_per_rank,
++            config.num_experts,
++            generator=generator,
++            device=device,
++        )
++        capture = route_replay.load_for_config(config, rank)
++        # Call 0 is the SETUP route: the reference output is produced from it
++        # outside timing, so every correctness gate is anchored to a real
++        # captured chunk and the timed loop restores it before gating.
++        topk_experts = torch.from_numpy(capture.topk_ids[0].copy()).to(
++            device=device, dtype=torch.int64
++        )
++        router_weights = torch.from_numpy(capture.topk_weights[0].copy()).to(
++            device=device, dtype=torch.float32
++        )
++        route_hist_metadata = dict(capture.metadata)
++    elif config.route_hist_path:
+         probs, route_hist_metadata = _load_route_hist(
+             config.route_hist_path, config.num_experts
+         )
+@@ -175,9 +225,10 @@
+             generator=generator,
+             device=device,
+         )
+-    topk_values, topk_experts = torch.topk(router_logits, config.topk, dim=1)
+-    router_weights = torch.softmax(topk_values.float(), dim=-1)
+-    del router_logits, topk_values
++    if not config.route_file:
++        topk_values, topk_experts = torch.topk(router_logits, config.topk, dim=1)
++        router_weights = torch.softmax(topk_values.float(), dim=-1)
++        del router_logits, topk_values
+ 
+     hidden = torch.randn(
+         config.tokens_per_rank,
+@@ -200,7 +251,11 @@
+             "hidden_shape": list(hidden.shape),
+             "expert_ids_dtype": str(topk_experts.dtype),
+             "router_weights_dtype": str(router_weights.dtype),
+-            "route_family": "measured_hist" if config.route_hist_path else "iid_normal",
++            "route_family": (
++                f"captured_replay:{config.route_order}"
++                if config.route_file
++                else ("measured_hist" if config.route_hist_path else "iid_normal")
++            ),
+         }
+     )
+     if route_hist_metadata:
+--- a/mok_synthetic_prefill/run_campaign.sh
++++ b/mok_synthetic_prefill/run_campaign.sh
+@@ -16,6 +16,24 @@
+ arm_csv="${K0_MOK_ARMS:-production,pf4h}"
+ IFS=',' read -r -a base_arms <<< "${arm_csv}"
+ 
++# CAPTURED-ROUTE REPLAY: K0_MOK_ROUTE_HOST_DIR is the host directory holding the
++# routes_rank*_pid*.npz the serving capture hook wrote.  It is bind-mounted
++# read-only at /routes, and K0_MOK_ROUTE_FILE (below) is expected to point
++# inside it -- /routes by itself is the normal value, since the loader picks
++# each rank's own file out of a directory.
++route_mount=()
++if [[ -n "${K0_MOK_ROUTE_HOST_DIR:-}" ]]; then
++  if [[ ! -d "${K0_MOK_ROUTE_HOST_DIR}" ]]; then
++    echo "K0_MOK_ROUTE_HOST_DIR is not a directory: ${K0_MOK_ROUTE_HOST_DIR}" >&2
++    exit 4
++  fi
++  route_mount=(-v "${K0_MOK_ROUTE_HOST_DIR}:/routes:ro")
++fi
++if [[ -n "${K0_MOK_ROUTE_FILE:-}" && -n "${K0_MOK_ROUTE_HIST:-}" ]]; then
++  echo "K0_MOK_ROUTE_FILE and K0_MOK_ROUTE_HIST both define the route; pick one" >&2
++  exit 4
++fi
++
+ if [[ ! -f "${K0_ROOT}/CLAUDE.md" ]]; then
+   echo "k0 root not found at ${K0_ROOT}" >&2
+   exit 2
+@@ -138,6 +156,14 @@
+       -e "K0_PF6GM_G=${K0_PF6GM_G:-3}" \
+       -e "K0_MPS_CFG=${K0_MPS_CFG:-}" \
+       -e "K0_MOK_ROUTE_HIST=${K0_MOK_ROUTE_HIST:-}" \
++      -e "K0_MOK_ROUTE_FILE=${K0_MOK_ROUTE_FILE:-}" \
++      -e "K0_MOK_ROUTE_ORDER=${K0_MOK_ROUTE_ORDER:-captured}" \
++      -e "K0_MOK_ROUTE_SEED=${K0_MOK_ROUTE_SEED:-1234}" \
++      -e "K0_MOK_ROUTE_LAYERS=${K0_MOK_ROUTE_LAYERS:-}" \
++      -e "K0_MOK_ROUTE_MAX_CALLS=${K0_MOK_ROUTE_MAX_CALLS:-0}" \
++      -e "K0_MOK_ROUTE_LOCKSTEP=${K0_MOK_ROUTE_LOCKSTEP:-0}" \
++      -e "K0_MOK_ROUTE_ANY_ARM=${K0_MOK_ROUTE_ANY_ARM:-0}" \
++      ${route_mount[@]+"${route_mount[@]}"} \
+       -e "K0_MOK_REP_EXPERTS=${K0_MOK_REP_EXPERTS:-}" \
+       -e "K0_MOK_REP_THRESHOLD=${K0_MOK_REP_THRESHOLD:-0}" \
+       -e "K0_MOK_M20=${K0_MOK_M20:-}" \
+--- a/mok_synthetic_prefill/route_replay.py
++++ b/mok_synthetic_prefill/route_replay.py
+@@ -0,0 +1,436 @@
++#!/usr/bin/env python3
++"""Captured-route replay for the MoK synthetic prefill benchmark.
++
++Consumes the .npz files written by the serving router-capture hook
++(skewhook_v2/sitecustomize.py) and hands the harness a stack of REAL
++per-chunk routes, replayed VERBATIM one per timed iteration.
++
++Why this exists.  Every kernel-level MoK number so far replays either a
++balanced i.i.d. route or an aggregate 256-bin popularity histogram
++(K0_MOK_ROUTE_HIST, Gumbel-top-k).  Both fix only the MARGINAL expert
++popularity and draw each token independently.  Real chunks are
++run-correlated: adjacent tokens of a prompt route alike, so a contiguous
++4096-row chunk concentrates destinations well beyond the aggregate, and
++wall-time is convex in that concentration.  That is the standing (never
++measured) explanation for serving regressions the aggregate replay failed to
++predict.  Replay here is exact, so the question becomes measurable.
++
++Two orders, one multiset -- the separator:
++  captured  rows exactly as the router emitted them (position => prompt =>
++            run correlation intact; a chunk is what the kernel really saw)
++  shuffled  rows permuted with a fixed seed.  The multiset of routed rows
++            (hence every expert count, every destination-rank total, the
++            whole aggregate histogram) is IDENTICAL; only the token ORDER
++            changes, which is exactly the within-chunk correlation.
++A captured-vs-shuffled delta is caused by run correlation and nothing else.
++
++File contract (written by the hook; see CAPTURE_KEYS):
++  format_version int32   1
++  topk_ids       [N,tokens,topk] uint8    (256 experts fit a byte)
++  topk_weights   [N,tokens,topk] float16
++  layers         [N] unicode              router key per captured call
++  call_index     [N] int32                that layer's own call index
++  seq            [N] int32                capture order within the rank
++  tokens, topk, num_experts, rank, pid    int32 scalars
++  captured_utc   unicode scalar
++
++CLI:
++  python3 route_replay.py --file <npz|dir> [--rank 0] [--order shuffled]
++  python3 route_replay.py --selftest
++"""
++
++from __future__ import annotations
++
++import functools
++import glob
++import hashlib
++import os
++from dataclasses import dataclass
++from typing import Any
++
++import numpy as np
++
++CAPTURE_FORMAT_VERSION = 1
++CAPTURE_KEYS = (
++    "format_version",
++    "topk_ids",
++    "topk_weights",
++    "layers",
++    "call_index",
++    "seq",
++    "tokens",
++    "topk",
++    "num_experts",
++    "rank",
++    "pid",
++    "captured_utc",
++)
++ORDERS = ("captured", "shuffled")
++
++
++@dataclass(frozen=True)
++class RouteCapture:
++    """A rank's replayable route stack.  Immutable; arrays are read-only."""
++
++    topk_ids: np.ndarray       # [N, tokens, topk] int32
++    topk_weights: np.ndarray   # [N, tokens, topk] float32
++    layers: tuple[str, ...]
++    call_index: tuple[int, ...]
++    order: str
++    seed: int
++    metadata: dict[str, Any]
++
++    @property
++    def calls(self) -> int:
++        return int(self.topk_ids.shape[0])
++
++
++def write_capture_npz(
++    path: str,
++    topk_ids: np.ndarray,
++    topk_weights: np.ndarray,
++    layers,
++    call_index=None,
++    *,
++    num_experts: int = 256,
++    rank: int = 0,
++    pid: int = 0,
++    captured_utc: str = "19700101T000000Z",
++) -> str:
++    """Write one capture file in the EXACT hook format (test + tooling path).
++
++    The serving hook cannot import this module (it runs as sitecustomize
++    inside vLLM workers, before anything of ours is importable), so it holds
++    its own copy of these keys.  test_route_loader.py builds its fixtures
++    through THIS function and asserts the key set, which is what keeps the two
++    writers from drifting apart.
++    """
++
++    ids = np.ascontiguousarray(topk_ids).astype(np.uint8)
++    wgt = np.ascontiguousarray(topk_weights).astype(np.float16)
++    if ids.ndim != 3 or wgt.shape != ids.shape:
++        raise ValueError(f"capture arrays must be [N,tokens,topk]; got {ids.shape} / {wgt.shape}")
++    n = ids.shape[0]
++    lay = np.array([str(x) for x in layers], dtype="U32")
++    if lay.shape != (n,):
++        raise ValueError(f"layers must hold {n} entries, got {lay.shape}")
++    if call_index is None:
++        call_index = np.arange(n, dtype=np.int32)
++    cidx = np.asarray(call_index, dtype=np.int32)
++    if cidx.shape != (n,):
++        raise ValueError(f"call_index must hold {n} entries, got {cidx.shape}")
++    payload = dict(
++        format_version=np.int32(CAPTURE_FORMAT_VERSION),
++        topk_ids=ids,
++        topk_weights=wgt,
++        layers=lay,
++        call_index=cidx,
++        seq=np.arange(n, dtype=np.int32),
++        tokens=np.int32(ids.shape[1]),
++        topk=np.int32(ids.shape[2]),
++        num_experts=np.int32(num_experts),
++        rank=np.int32(rank),
++        pid=np.int32(pid),
++        captured_utc=np.array(captured_utc, dtype="U32"),
++    )
++    tmp = path + ".tmp.npz"
++    with open(tmp, "wb") as handle:
++        np.savez(handle, **payload)
++    os.replace(tmp, path)
++    return path
++
++
++def resolve_capture_path(path: str, rank: int) -> str:
++    """Resolve K0_MOK_ROUTE_FILE to ONE file for this rank.
++
++    A file is used as given.  A directory is searched for this rank's own
++    capture (routes_rank<rank>_pid*.npz) so every rank replays the routes IT
++    produced in serving, preserving the joint per-step load across ranks; when
++    a rank has several (one per PID incarnation) the largest capture wins,
++    ties broken by name so all ranks are deterministic.  A directory holding
++    no file for this rank falls back to the rank-th file in sorted order,
++    which keeps a partial capture usable and is recorded in the metadata.
++    """
++
++    if os.path.isfile(path):
++        return path
++    if not os.path.isdir(path):
++        raise FileNotFoundError(f"route capture path not found: {path!r}")
++    own = sorted(glob.glob(os.path.join(path, f"routes_rank{rank}_pid*.npz")))
++    if own:
++        return max(own, key=lambda p: (os.path.getsize(p), p))
++    every = sorted(glob.glob(os.path.join(path, "routes_rank*_pid*.npz")))
++    if not every:
++        raise FileNotFoundError(
++            f"no routes_rank*_pid*.npz under {path!r} (did the capture pass run?)"
++        )
++    return every[rank % len(every)]
++
++
++def _sha256_file(path: str) -> str:
++    digest = hashlib.sha256()
++    with open(path, "rb") as handle:
++        for block in iter(lambda: handle.read(1 << 20), b""):
++            digest.update(block)
++    return digest.hexdigest()
++
++
++def multiset_digest(ids: np.ndarray) -> str:
++    """Order-independent digest of the routed-row multiset of a call stack.
++
++    Sorts the (topk-sorted) rows of every call, so it is invariant under the
++    token permutation the shuffled order applies and sensitive to any change
++    of WHICH rows are present.  The captured/shuffled pair must agree on it --
++    that equality is the proof that the arms differ only in correlation.
++    """
++
++    ids = np.asarray(ids, dtype=np.int32)
++    flat = ids.reshape(ids.shape[0], ids.shape[1], -1)
++    rows = np.sort(flat, axis=2)
++    order = np.lexsort(tuple(rows[:, :, c] for c in range(rows.shape[2] - 1, -1, -1)))
++    sorted_rows = np.take_along_axis(rows, order[:, :, None], axis=1)
++    return hashlib.sha256(np.ascontiguousarray(sorted_rows).tobytes(order="C")).hexdigest()
++
++
++def _permutation(seed: int, call: int, tokens: int) -> np.ndarray:
++    """Fixed-seed row permutation: reproducible for (seed, call) forever."""
++
++    return np.random.default_rng([int(seed), int(call)]).permutation(tokens)
++
++
++def _skew_stats(ids: np.ndarray, world_size: int, num_experts: int) -> dict[str, Any]:
++    """Per-call destination-rank concentration -- the quantity that is convex.
++
++    max_rank_x_uniform = (rows landing on the busiest destination rank) /
++    (fair share).  The aggregate histogram fixes its MEAN; the tail is what
++    the kernel actually pays, and reporting p50/p95/max here is what makes a
++    captured-vs-shuffled result interpretable without re-deriving it.
++    """
++
++    local = num_experts // world_size
++    dest = (ids.astype(np.int64) // local).reshape(ids.shape[0], -1)
++    per_call = np.zeros((ids.shape[0], world_size), dtype=np.int64)
++    for r in range(world_size):
++        per_call[:, r] = (dest == r).sum(axis=1)
++    total = per_call.sum(axis=1, keepdims=True).clip(min=1)
++    share = per_call / total
++    ratio = share.max(axis=1) * world_size
++    agg = per_call.sum(axis=0)
++    agg_ratio = float(agg.max()) / float(max(agg.sum(), 1)) * world_size
++    counts = np.bincount(ids.reshape(-1).astype(np.int64), minlength=num_experts)
++    srt = np.sort(counts.astype(np.float64))
++    n = srt.size
++    total_c = srt.sum() or 1.0
++    gini = float((2.0 * np.sum((np.arange(1, n + 1)) * srt)) / (n * total_c) - (n + 1) / n)
++    return {
++        "max_rank_x_uniform_p50": float(np.percentile(ratio, 50)),
++        "max_rank_x_uniform_p95": float(np.percentile(ratio, 95)),
++        "max_rank_x_uniform_max": float(ratio.max()),
++        "max_rank_x_uniform_aggregate": agg_ratio,
++        "expert_gini_aggregate": gini,
++        "top1_expert_x_uniform": float(counts.max()) / float(max(counts.sum(), 1)) * num_experts,
++        "experts_used": int((counts > 0).sum()),
++    }
++
++
++@functools.lru_cache(maxsize=8)
++def load_capture(
++    path: str,
++    rank: int,
++    tokens: int,
++    topk: int,
++    num_experts: int,
++    world_size: int,
++    order: str = "captured",
++    seed: int = 1234,
++    layers: tuple[str, ...] | None = None,
++    max_calls: int = 0,
++) -> RouteCapture:
++    """Load, validate and (optionally) reorder one rank's captured routes.
++
++    Cached: the harness and synthetic_inputs both need the same stack (call 0
++    seeds the setup route and the reference; the whole stack drives the timed
++    loop) and must not disagree about it.
++    """
++
++    if order not in ORDERS:
++        raise ValueError(f"route order {order!r} must be one of {ORDERS}")
++    resolved = resolve_capture_path(path, rank)
++    with np.load(resolved, allow_pickle=False) as blob:
++        present = set(blob.files)
++        missing = [k for k in CAPTURE_KEYS if k not in present]
++        if missing:
++            raise ValueError(f"{resolved}: capture is missing {missing}")
++        version = int(blob["format_version"])
++        if version != CAPTURE_FORMAT_VERSION:
++            raise ValueError(
++                f"{resolved}: capture format v{version}, this loader speaks "
++                f"v{CAPTURE_FORMAT_VERSION}"
++            )
++        raw_ids = np.asarray(blob["topk_ids"])
++        raw_wgt = np.asarray(blob["topk_weights"])
++        file_layers = [str(x) for x in blob["layers"].tolist()]
++        file_calls = [int(x) for x in blob["call_index"].tolist()]
++        file_tokens = int(blob["tokens"])
++        file_topk = int(blob["topk"])
++        file_experts = int(blob["num_experts"])
++        file_rank = int(blob["rank"])
++        captured_utc = str(blob["captured_utc"])
++    if raw_ids.ndim != 3 or raw_ids.shape[1:] != (tokens, topk):
++        raise ValueError(
++            f"{resolved}: topk_ids is {raw_ids.shape}, harness needs [N,{tokens},{topk}]"
++        )
++    if raw_wgt.shape != raw_ids.shape:
++        raise ValueError(
++            f"{resolved}: topk_weights {raw_wgt.shape} != topk_ids {raw_ids.shape}"
++        )
++    if (file_tokens, file_topk, file_experts) != (tokens, topk, num_experts):
++        raise ValueError(
++            f"{resolved}: capture is (tokens={file_tokens}, topk={file_topk}, "
++            f"experts={file_experts}); harness is ({tokens}, {topk}, {num_experts})"
++        )
++    if len(file_layers) != raw_ids.shape[0] or len(file_calls) != raw_ids.shape[0]:
++        raise ValueError(f"{resolved}: layers/call_index length disagrees with topk_ids")
++
++    keep = list(range(raw_ids.shape[0]))
++    if layers:
++        wanted = set(layers)
++        keep = [i for i in keep if file_layers[i] in wanted]
++        if not keep:
++            raise ValueError(
++                f"{resolved}: no captured call matches layers={sorted(wanted)}; "
++                f"file holds {sorted(set(file_layers))}"
++            )
++    if max_calls and len(keep) > max_calls:
++        keep = keep[:max_calls]
++
++    ids = raw_ids[keep].astype(np.int32)
++    wgt = raw_wgt[keep].astype(np.float32)
++    if ids.min() < 0 or ids.max() >= num_experts:
++        raise ValueError(
++            f"{resolved}: expert ids out of range [0,{num_experts}): "
++            f"[{int(ids.min())},{int(ids.max())}]"
++        )
++    captured_digest = multiset_digest(ids)
++    if order == "shuffled":
++        # Permute TOKEN ROWS only.  Every row travels intact, so the multiset
++        # of routed rows -- and therefore the whole aggregate histogram -- is
++        # bit-identical; what dies is the correlation between neighbouring
++        # rows, i.e. the concentration inside a contiguous chunk.
++        for j in range(ids.shape[0]):
++            # Key on the file's own capture index, not the per-layer call
++            # index: every captured call is the FIRST call of its layer, so
++            # call_index is 0 for all of them and would give one shared
++            # permutation.  keep[j] is unique and stable under layer filtering.
++            perm = _permutation(seed, int(keep[j]), tokens)
++            ids[j] = ids[j][perm]
++            wgt[j] = wgt[j][perm]
++        if multiset_digest(ids) != captured_digest:
++            raise AssertionError("shuffled order changed the routed-row multiset")
++
++    ids.setflags(write=False)
++    wgt.setflags(write=False)
++    metadata = {
++        "route_file_arg": path,
++        "route_file": os.path.abspath(resolved),
++        "route_file_sha256": _sha256_file(resolved),
++        "route_file_rank": file_rank,
++        "route_file_is_own_rank": file_rank == rank,
++        "route_format_version": version,
++        "route_captured_utc": captured_utc,
++        "route_order": order,
++        "route_seed": int(seed),
++        "route_calls": int(ids.shape[0]),
++        "route_calls_in_file": int(raw_ids.shape[0]),
++        "route_layers": [file_layers[i] for i in keep],
++        "route_call_index": [file_calls[i] for i in keep],
++        "route_multiset_sha256": captured_digest,
++        "route_ids_sha256": hashlib.sha256(
++            np.ascontiguousarray(ids).tobytes(order="C")
++        ).hexdigest(),
++        "route_skew": _skew_stats(ids, world_size, num_experts),
++    }
++    return RouteCapture(
++        topk_ids=ids,
++        topk_weights=wgt,
++        layers=tuple(file_layers[i] for i in keep),
++        call_index=tuple(file_calls[i] for i in keep),
++        order=order,
++        seed=int(seed),
++        metadata=metadata,
++    )
++
++
++def load_for_config(config, rank: int) -> RouteCapture:
++    """Load through a MoKSyntheticConfig (duck-typed: no import cycle)."""
++
++    return load_capture(
++        path=config.route_file,
++        rank=int(rank),
++        tokens=int(config.tokens_per_rank),
++        topk=int(config.topk),
++        num_experts=int(config.num_experts),
++        world_size=int(config.world_size),
++        order=str(config.route_order),
++        seed=int(config.route_seed),
++        layers=tuple(config.route_layers) if config.route_layers else None,
++        max_calls=int(config.route_max_calls),
++    )
++
++
++def _selftest() -> int:
++    import tempfile
++
++    rng = np.random.default_rng(7)
++    with tempfile.TemporaryDirectory() as tmp:
++        n, tokens, topk, experts = 4, 64, 8, 256
++        ids = np.stack(
++            [
++                np.stack([rng.choice(experts, size=topk, replace=False) for _ in range(tokens)])
++                for _ in range(n)
++            ]
++        )
++        wgt = rng.random((n, tokens, topk), dtype=np.float32)
++        path = os.path.join(tmp, "routes_rank0_pid1.npz")
++        write_capture_npz(path, ids, wgt, [f"router{i:03d}" for i in range(n)])
++        a = load_capture(path, 0, tokens, topk, experts, 8, "captured", 1234)
++        b = load_capture(path, 0, tokens, topk, experts, 8, "shuffled", 1234)
++        assert a.calls == n and b.calls == n
++        assert a.metadata["route_multiset_sha256"] == b.metadata["route_multiset_sha256"]
++        assert not np.array_equal(a.topk_ids, b.topk_ids)
++        print("route_replay selftest OK")
++    return 0
++
++
++def main() -> int:
++    import argparse
++    import json
++
++    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
++    parser.add_argument("--file", help="capture .npz or a directory of them")
++    parser.add_argument("--rank", type=int, default=0)
++    parser.add_argument("--tokens", type=int, default=4096)
++    parser.add_argument("--topk", type=int, default=8)
++    parser.add_argument("--experts", type=int, default=256)
++    parser.add_argument("--world", type=int, default=8)
++    parser.add_argument("--order", default="captured", choices=list(ORDERS))
++    parser.add_argument("--seed", type=int, default=1234)
++    parser.add_argument("--layers", default="")
++    parser.add_argument("--max-calls", type=int, default=0)
++    parser.add_argument("--selftest", action="store_true")
++    args = parser.parse_args()
++    if args.selftest:
++        return _selftest()
++    if not args.file:
++        parser.error("--file is required unless --selftest")
++    layers = tuple(x.strip() for x in args.layers.split(",") if x.strip()) or None
++    capture = load_capture(
++        args.file, args.rank, args.tokens, args.topk, args.experts, args.world,
++        args.order, args.seed, layers, args.max_calls,
++    )
++    print(json.dumps(capture.metadata, indent=2, sort_keys=True))
++    return 0
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())

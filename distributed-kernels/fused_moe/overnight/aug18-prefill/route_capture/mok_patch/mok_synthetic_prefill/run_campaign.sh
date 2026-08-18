@@ -16,6 +16,24 @@ lock_dir="${K0_MOK_LOCK_DIR:-/tmp/k0_mok_synthetic_gpu_lock}"
 arm_csv="${K0_MOK_ARMS:-production,pf4h}"
 IFS=',' read -r -a base_arms <<< "${arm_csv}"
 
+# CAPTURED-ROUTE REPLAY: K0_MOK_ROUTE_HOST_DIR is the host directory holding the
+# routes_rank*_pid*.npz the serving capture hook wrote.  It is bind-mounted
+# read-only at /routes, and K0_MOK_ROUTE_FILE (below) is expected to point
+# inside it -- /routes by itself is the normal value, since the loader picks
+# each rank's own file out of a directory.
+route_mount=()
+if [[ -n "${K0_MOK_ROUTE_HOST_DIR:-}" ]]; then
+  if [[ ! -d "${K0_MOK_ROUTE_HOST_DIR}" ]]; then
+    echo "K0_MOK_ROUTE_HOST_DIR is not a directory: ${K0_MOK_ROUTE_HOST_DIR}" >&2
+    exit 4
+  fi
+  route_mount=(-v "${K0_MOK_ROUTE_HOST_DIR}:/routes:ro")
+fi
+if [[ -n "${K0_MOK_ROUTE_FILE:-}" && -n "${K0_MOK_ROUTE_HIST:-}" ]]; then
+  echo "K0_MOK_ROUTE_FILE and K0_MOK_ROUTE_HIST both define the route; pick one" >&2
+  exit 4
+fi
+
 if [[ ! -f "${K0_ROOT}/CLAUDE.md" ]]; then
   echo "k0 root not found at ${K0_ROOT}" >&2
   exit 2
@@ -138,6 +156,14 @@ for run in $(seq 1 "${run_count}"); do
       -e "K0_PF6GM_G=${K0_PF6GM_G:-3}" \
       -e "K0_MPS_CFG=${K0_MPS_CFG:-}" \
       -e "K0_MOK_ROUTE_HIST=${K0_MOK_ROUTE_HIST:-}" \
+      -e "K0_MOK_ROUTE_FILE=${K0_MOK_ROUTE_FILE:-}" \
+      -e "K0_MOK_ROUTE_ORDER=${K0_MOK_ROUTE_ORDER:-captured}" \
+      -e "K0_MOK_ROUTE_SEED=${K0_MOK_ROUTE_SEED:-1234}" \
+      -e "K0_MOK_ROUTE_LAYERS=${K0_MOK_ROUTE_LAYERS:-}" \
+      -e "K0_MOK_ROUTE_MAX_CALLS=${K0_MOK_ROUTE_MAX_CALLS:-0}" \
+      -e "K0_MOK_ROUTE_LOCKSTEP=${K0_MOK_ROUTE_LOCKSTEP:-0}" \
+      -e "K0_MOK_ROUTE_ANY_ARM=${K0_MOK_ROUTE_ANY_ARM:-0}" \
+      ${route_mount[@]+"${route_mount[@]}"} \
       -e "K0_MOK_REP_EXPERTS=${K0_MOK_REP_EXPERTS:-}" \
       -e "K0_MOK_REP_THRESHOLD=${K0_MOK_REP_THRESHOLD:-0}" \
       -e "K0_MOK_M20=${K0_MOK_M20:-}" \

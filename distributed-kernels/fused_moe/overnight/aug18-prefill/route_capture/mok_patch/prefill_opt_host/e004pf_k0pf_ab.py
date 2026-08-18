@@ -176,6 +176,54 @@ if K0_BENCHMARK_PROTOCOL not in ("graph", "mok_eager"):
     raise ValueError("K0_BENCHMARK_PROTOCOL must be graph or mok_eager")
 if K0_BENCHMARK_PROTOCOL == "mok_eager" and K0_INPUT_MODE != "mok_synthetic":
     raise ValueError("mok_eager protocol requires K0_INPUT_MODE=mok_synthetic")
+# ---- CAPTURED-ROUTE REPLAY (aug18-prefill).  K0_MOK_ROUTE_FILE names the .npz
+# (or the directory of them) the serving router-capture hook wrote; the harness
+# replays those REAL per-chunk routes verbatim, ONE PER TIMED ITERATION, instead
+# of drawing i.i.d. from an aggregate histogram.  K0_MOK_ROUTE_ORDER=captured
+# keeps the captured token order (run correlation intact); =shuffled permutes
+# token rows with a fixed seed, leaving the routed-row multiset -- and hence the
+# aggregate histogram -- bit-identical.  captured-vs-shuffled therefore isolates
+# run correlation from popularity, which no measurement of ours has ever done.
+# Same legality pattern as K0_MOK_ROUTE_HIST/K0_MOK_REP_EXPERTS: mok_synthetic
+# inputs only, and any second route source is a hard error rather than a silent
+# winner.
+K0_MOK_ROUTE_FILE = os.environ.get("K0_MOK_ROUTE_FILE", "").strip()
+K0_MOK_ROUTE_ORDER = os.environ.get("K0_MOK_ROUTE_ORDER", "captured").strip()
+K0_MOK_ROUTE_SEED = int(os.environ.get("K0_MOK_ROUTE_SEED", "1234"))
+K0_MOK_ROUTE_LAYERS = tuple(
+    x.strip() for x in os.environ.get("K0_MOK_ROUTE_LAYERS", "").split(",") if x.strip()
+)
+K0_MOK_ROUTE_MAX_CALLS = int(os.environ.get("K0_MOK_ROUTE_MAX_CALLS", "0"))
+# Lockstep is a DIAGNOSTIC arm, default off: it inserts a rank barrier between
+# timed iterations (outside every event window) so all ranks replay the same
+# captured call at the same time.  On it costs the loop's steady-state overlap;
+# off, ranks may drift a call apart, which mixes two real chunks and is the
+# honest default for a throughput number.
+K0_MOK_ROUTE_LOCKSTEP = os.environ.get("K0_MOK_ROUTE_LOCKSTEP", "0").strip() not in ("", "0")
+# Arms whose plan is rebuilt from the LIVE route on every call (host plan
+# kernels for production, in-kernel M3 for the megas).  Arms holding a plan
+# frozen at setup would silently mis-execute a swapped route, so replay refuses
+# them unless the operator explicitly overrides.
+_ROUTE_LIVE_ARMS = ("production", "pf6gm_mega", "pf6c_mega", "mps_mega")
+K0_MOK_ROUTE_ANY_ARM = os.environ.get("K0_MOK_ROUTE_ANY_ARM", "0").strip() not in ("", "0")
+if K0_MOK_ROUTE_ORDER not in ("captured", "shuffled"):
+    raise ValueError("K0_MOK_ROUTE_ORDER must be captured or shuffled")
+if K0_MOK_ROUTE_FILE:
+    if K0_INPUT_MODE != "mok_synthetic":
+        raise ValueError("K0_MOK_ROUTE_FILE requires K0_INPUT_MODE=mok_synthetic")
+    if K0_BENCHMARK_PROTOCOL != "mok_eager":
+        # The graph protocol gates every replay against a reference built from
+        # ONE route; cycling routes under it would fail those gates by design.
+        raise ValueError("K0_MOK_ROUTE_FILE requires K0_BENCHMARK_PROTOCOL=mok_eager")
+    if os.environ.get("K0_MOK_ROUTE_HIST", "").strip():
+        raise ValueError("K0_MOK_ROUTE_FILE cannot be combined with K0_MOK_ROUTE_HIST")
+    if K0_MOK_ROUTE_MAX_CALLS < 0:
+        raise ValueError("K0_MOK_ROUTE_MAX_CALLS must be nonnegative")
+# Replay state, populated in the mok_synthetic block when a route file is armed.
+_rr_ids = None      # [N,T,TOPK] device stack, harness dtype
+_rr_wgt = None
+_rr_n = 0
+_rr_meta = None
 MOK_WARMUP_ITERS = int(os.environ.get("K0_MOK_WARMUP_ITERS", "500"))
 MOK_TIMED_ITERS = int(os.environ.get("K0_MOK_TIMED_ITERS", "100"))
 MOK_ABSOLUTE_TOLERANCE = float(
@@ -1964,11 +2012,50 @@ if K0_INPUT_MODE == "mok_synthetic":
             os.environ.get("K0_MOK_WEIGHT_CHUNK_ELEMENTS", str(32 * 1024 * 1024))
         ),
         route_hist_path=os.environ.get("K0_MOK_ROUTE_HIST", "").strip() or None,
+        route_file=K0_MOK_ROUTE_FILE or None,
+        route_order=K0_MOK_ROUTE_ORDER,
+        route_seed=K0_MOK_ROUTE_SEED,
+        route_layers=K0_MOK_ROUTE_LAYERS,
+        route_max_calls=K0_MOK_ROUTE_MAX_CALLS,
     )
     _mok_inputs = generate_mok_synthetic_inputs(rank, dev, _mok_config)
     hidden = _mok_inputs["hidden"]
     topk_ids.copy_(_mok_inputs["topk_experts"])
     topk_wgt.copy_(_mok_inputs["router_weights"])
+    if K0_MOK_ROUTE_FILE:
+        # Preload the whole captured stack onto the device ONCE, at setup: the
+        # per-iteration swap is then two D2D copies into the SAME symmetric
+        # route buffers the arms already read, issued between HIP events so no
+        # measured window ever contains them.  ~17 MB at 64 calls.
+        import route_replay as _route_replay   # same module synthetic_inputs used (lru-cached)
+        _rr_cap = _route_replay.load_for_config(_mok_config, rank)
+        # Every rank must cycle the SAME number of calls or the arms stop
+        # comparing like with like; ranks whose capture is short bound it.
+        _rr_cnt = torch.tensor([_rr_cap.calls], dtype=torch.int64, device=dev)
+        dist.all_reduce(_rr_cnt, op=dist.ReduceOp.MIN)
+        _rr_n = int(_rr_cnt.item())
+        if _rr_n < 1:
+            raise RuntimeError("captured-route replay needs at least one call on every rank")
+        _rr_ids = torch.from_numpy(_rr_cap.topk_ids[:_rr_n].copy()).to(
+            device=dev, dtype=topk_ids.dtype
+        )
+        _rr_wgt = torch.from_numpy(_rr_cap.topk_weights[:_rr_n].copy()).to(
+            device=dev, dtype=topk_wgt.dtype
+        )
+        _rr_meta = dict(_rr_cap.metadata)
+        _rr_meta["route_calls_replayed"] = _rr_n
+        _rr_meta["route_calls_local"] = _rr_cap.calls
+        _rr_meta["route_lockstep"] = bool(K0_MOK_ROUTE_LOCKSTEP)
+        if rank == 0:
+            print(
+                f"[ROUTE REPLAY] order={K0_MOK_ROUTE_ORDER} calls={_rr_n} "
+                f"file={_rr_meta['route_file']} "
+                f"max_rank_x_uniform p50={_rr_meta['route_skew']['max_rank_x_uniform_p50']:.3f} "
+                f"p95={_rr_meta['route_skew']['max_rank_x_uniform_p95']:.3f} "
+                f"agg={_rr_meta['route_skew']['max_rank_x_uniform_aggregate']:.3f} "
+                f"gini={_rr_meta['route_skew']['expert_gini_aggregate']:.4f}",
+                flush=True,
+            )
 
     def _weight_per_128x128_quant(weight):
         _e, _n, _k = weight.shape
@@ -2279,6 +2366,30 @@ else:
     # Loading a second copy duplicated exactly 1.3125 GiB/rank and changed warm-cache addresses.
     w1_b = w13.view(torch.uint8).view(torch.float8_e4m3fn).reshape(E, 2 * INTER, H)
     w2_b = w2c.view(torch.uint8).view(torch.float8_e4m3fn).reshape(E, H, INTER)
+
+# ---- captured-route replay: the per-iteration swap ----
+# Inert (and never called) unless K0_MOK_ROUTE_FILE is armed.  The symmetric
+# route buffers ARE the live router outputs for every arm, so writing call k
+# into them in place is exactly the in-place route swap the k0d route-swap gate
+# already validates -- no graph addresses move, no allocation happens, and both
+# arms see the same route on the same iteration.
+_ROUTE_REPLAY_ARMED = bool(K0_MOK_ROUTE_FILE)
+
+def _route_replay_apply(i):
+    if not _ROUTE_REPLAY_ARMED:
+        return
+    k = i % _rr_n
+    topk_ids.copy_(_rr_ids[k])
+    topk_wgt.copy_(_rr_wgt[k])
+
+R["route_replay"] = (
+    dict(enabled=False)
+    if not _ROUTE_REPLAY_ARMED
+    else dict(enabled=True, order=K0_MOK_ROUTE_ORDER, seed=K0_MOK_ROUTE_SEED,
+              lockstep=bool(K0_MOK_ROUTE_LOCKSTEP), calls=_rr_n,
+              layers_filter=list(K0_MOK_ROUTE_LAYERS),
+              max_calls=K0_MOK_ROUTE_MAX_CALLS, **(_rr_meta or {}))
+)
 R["weight_storage"] = dict(
     shared_between_production_and_candidate=True,
     w13_w1_same_ptr=bool(w13.data_ptr() == w1_b.data_ptr()),
@@ -4036,6 +4147,17 @@ if _UNKNOWN:
 _SEL = _REQUESTED
 ARMS = [(nm, _ALL[nm][0], _ALL[nm][1]) for nm in _SEL]
 R["arms"] = [a[0] for a in ARMS]
+if _ROUTE_REPLAY_ARMED and not K0_MOK_ROUTE_ANY_ARM:
+    # A frozen-plan arm would keep executing the SETUP route's plan while the
+    # route buffers cycle, producing a fast, wrong, and completely plausible
+    # number. Refuse rather than measure it.
+    _rr_dead = [nm for nm in R["arms"] if nm not in _ROUTE_LIVE_ARMS]
+    if _rr_dead:
+        raise RuntimeError(
+            f"K0_MOK_ROUTE_FILE replays a route per iteration, but arms {_rr_dead} "
+            f"do not rebuild their plan from the live route; allowed={list(_ROUTE_LIVE_ARMS)} "
+            "(set K0_MOK_ROUTE_ANY_ARM=1 only if you have verified the arm)"
+        )
 _CUSTOM_PLAN_ARMS = {"frozen_pull", "frozen_n2", "frozen_n2r",
                      "pf_gather", "pf_combine", "pf_plan", "pf_full",
                      "pf2_plan", "pf2_push", "pf2_full", "pf2_fused", "pf2_n2r",
@@ -5289,6 +5411,10 @@ if K0_BENCHMARK_PROTOCOL == "mok_eager":
             maxtok_prod=MAXTOK_PROD,
             mok_warmup_iters=MOK_WARMUP_ITERS,
             mok_timed_iters=MOK_TIMED_ITERS,
+            mok_route_file=K0_MOK_ROUTE_FILE or None,
+            mok_route_order=(K0_MOK_ROUTE_ORDER if _ROUTE_REPLAY_ARMED else None),
+            mok_route_calls=(_rr_n if _ROUTE_REPLAY_ARMED else 0),
+            mok_route_lockstep=(bool(K0_MOK_ROUTE_LOCKSTEP) if _ROUTE_REPLAY_ARMED else False),
             mok_correctness_metric=(
                 "global sum(abs(diff)) / global sum(abs(reference))"
             ),
@@ -5512,7 +5638,11 @@ if K0_BENCHMARK_PROTOCOL == "mok_eager":
         pperr.zero_()
         torch.cuda.synchronize()
         hbarrier()
-        for _ in range(MOK_WARMUP_ITERS):
+        for _w in range(MOK_WARMUP_ITERS):
+            # Warm on the SAME captured cycle the timed loop will run, so the
+            # steady state being measured is the replayed one, not route 0's.
+            if _ROUTE_REPLAY_ARMED:
+                _route_replay_apply(_w)
             body(sp())
         torch.cuda.synchronize()
         dist.barrier()
@@ -5521,7 +5651,15 @@ if K0_BENCHMARK_PROTOCOL == "mok_eager":
             (torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True))
             for _ in range(MOK_TIMED_ITERS)
         ]
-        for start, end in events:
+        for _i, (start, end) in enumerate(events):
+            # Every arm restarts the cycle at call 0, so arm k's iteration i
+            # runs the same real chunk on every arm and the A/B is paired.
+            # The swap is issued BEFORE start.record() and therefore outside
+            # every measured window.
+            if _ROUTE_REPLAY_ARMED:
+                _route_replay_apply(_i)
+                if K0_MOK_ROUTE_LOCKSTEP:
+                    dist.barrier()
             start.record()
             body(sp())
             end.record()
@@ -5533,6 +5671,20 @@ if K0_BENCHMARK_PROTOCOL == "mok_eager":
             dtype=np.float64,
         )
         aligned_us = _mok_rank_max(local_us)
+        # CAPTURED-ROUTE REPLAY: the timed loop leaves the LAST cycled route
+        # resident, but `ref` was produced from captured call 0 outside timing
+        # and every gate below compares against it. Restore call 0 and run one
+        # untimed epoch so the gated bytes belong to the reference route. This
+        # is strictly after the rank-max all-reduce, so it cannot touch a
+        # measurement, and it runs for EVERY arm (production included, whose
+        # output buffer the poison epoch below never refreshes).
+        if _ROUTE_REPLAY_ARMED:
+            _route_replay_apply(0)
+            torch.cuda.synchronize()
+            hbarrier()
+            body(sp())
+            torch.cuda.synchronize()
+            hbarrier()
         # exp_32 P3: the timed loop leaves cand_out holding 600 epochs of
         # accumulated writes, so a row a LATE epoch failed to write still reads
         # an earlier epoch's bit-identical correct answer and the gates below

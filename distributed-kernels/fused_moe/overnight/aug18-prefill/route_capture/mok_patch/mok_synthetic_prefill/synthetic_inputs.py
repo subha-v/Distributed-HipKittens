@@ -12,6 +12,8 @@ from typing import Any
 
 import torch
 
+import route_replay
+
 
 @dataclass(frozen=True)
 class MoKSyntheticConfig:
@@ -30,6 +32,21 @@ class MoKSyntheticConfig:
     # the i.i.d.-normal balanced default.  Relative paths resolve against this
     # module's directory so the same value works on host and in-container.
     route_hist_path: str | None = None
+    # Optional CAPTURED-ROUTE replay: path to a .npz (or a directory of them)
+    # written by the serving router-capture hook.  When set, the route is not
+    # sampled at all -- captured call 0 becomes the setup route (and therefore
+    # the reference route), and the harness replays the whole captured stack
+    # one call per timed iteration.  route_order selects "captured" (verbatim,
+    # run correlation intact) or "shuffled" (token rows permuted with
+    # route_seed, identical routed-row multiset, correlation destroyed): the
+    # popularity-vs-run-correlation separator.  Mutually exclusive with
+    # route_hist_path -- both define the route, and silently letting one win
+    # is how a replay campaign measures the wrong thing.
+    route_file: str | None = None
+    route_order: str = "captured"
+    route_seed: int = 1234
+    route_layers: tuple[str, ...] = ()
+    route_max_calls: int = 0
 
     @property
     def local_experts(self) -> int:
@@ -51,6 +68,16 @@ class MoKSyntheticConfig:
             raise ValueError("hidden and intermediate dimensions must be multiples of 128")
         if self.weight_chunk_elements <= 0:
             raise ValueError("weight_chunk_elements must be positive")
+        if self.route_file and self.route_hist_path:
+            raise ValueError(
+                "route_file and route_hist_path both define the route; pick one"
+            )
+        if self.route_order not in route_replay.ORDERS:
+            raise ValueError(
+                f"route_order must be one of {route_replay.ORDERS}, got {self.route_order!r}"
+            )
+        if self.route_max_calls < 0:
+            raise ValueError("route_max_calls must be nonnegative")
         _ = self.local_experts
 
 
@@ -147,7 +174,30 @@ def generate_router_and_hidden(
 
     generator = torch.Generator(device=device).manual_seed(config.seed_base + rank)
     route_hist_metadata: dict[str, Any] = {}
-    if config.route_hist_path:
+    if config.route_file:
+        # CAPTURED-ROUTE REPLAY.  Draw and DISCARD the default logits first so
+        # the generator stream -- and therefore `hidden` and every weight
+        # tensor below -- stays byte-identical to the balanced arm: balanced,
+        # captured and shuffled then differ ONLY in routing, which is the
+        # whole point of the comparison.
+        _ = torch.randn(
+            config.tokens_per_rank,
+            config.num_experts,
+            generator=generator,
+            device=device,
+        )
+        capture = route_replay.load_for_config(config, rank)
+        # Call 0 is the SETUP route: the reference output is produced from it
+        # outside timing, so every correctness gate is anchored to a real
+        # captured chunk and the timed loop restores it before gating.
+        topk_experts = torch.from_numpy(capture.topk_ids[0].copy()).to(
+            device=device, dtype=torch.int64
+        )
+        router_weights = torch.from_numpy(capture.topk_weights[0].copy()).to(
+            device=device, dtype=torch.float32
+        )
+        route_hist_metadata = dict(capture.metadata)
+    elif config.route_hist_path:
         probs, route_hist_metadata = _load_route_hist(
             config.route_hist_path, config.num_experts
         )
@@ -175,9 +225,10 @@ def generate_router_and_hidden(
             generator=generator,
             device=device,
         )
-    topk_values, topk_experts = torch.topk(router_logits, config.topk, dim=1)
-    router_weights = torch.softmax(topk_values.float(), dim=-1)
-    del router_logits, topk_values
+    if not config.route_file:
+        topk_values, topk_experts = torch.topk(router_logits, config.topk, dim=1)
+        router_weights = torch.softmax(topk_values.float(), dim=-1)
+        del router_logits, topk_values
 
     hidden = torch.randn(
         config.tokens_per_rank,
@@ -200,7 +251,11 @@ def generate_router_and_hidden(
             "hidden_shape": list(hidden.shape),
             "expert_ids_dtype": str(topk_experts.dtype),
             "router_weights_dtype": str(router_weights.dtype),
-            "route_family": "measured_hist" if config.route_hist_path else "iid_normal",
+            "route_family": (
+                f"captured_replay:{config.route_order}"
+                if config.route_file
+                else ("measured_hist" if config.route_hist_path else "iid_normal")
+            ),
         }
     )
     if route_hist_metadata:
