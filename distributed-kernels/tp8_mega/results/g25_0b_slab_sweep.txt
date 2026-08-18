@@ -1,0 +1,24 @@
+=== slab-granularity sweep Tue Aug 18 07:39:10 PM UTC 2026 ===
+CDAR_BENCH transport=towers depth=4 bps=2 tokens=16384 slab_rows=128 slabs=128 iters=7
+  wall_us median=2025.0 min=1999.7 max=2112.4
+  logical_AR_bytes=234881024 effective_AR_GBps=116.0 (per-iter incl. memset+launch)
+  certified=128/128(x last iter) gather_timeouts=0 mag_timeouts=0 verify_errors=0
+CDAR_BENCH_PASS
+CDAR_BENCH transport=towers depth=4 bps=2 tokens=16384 slab_rows=256 slabs=64 iters=7
+  wall_us median=2004.2 min=1991.4 max=2051.9
+  logical_AR_bytes=234881024 effective_AR_GBps=117.2 (per-iter incl. memset+launch)
+  certified=64/64(x last iter) gather_timeouts=0 mag_timeouts=0 verify_errors=0
+CDAR_BENCH_PASS
+CDAR_BENCH transport=towers depth=4 bps=2 tokens=16384 slab_rows=512 slabs=32 iters=7
+  wall_us median=2513.9 min=2507.7 max=2535.2
+  logical_AR_bytes=234881024 effective_AR_GBps=93.4 (per-iter incl. memset+launch)
+  certified=32/32(x last iter) gather_timeouts=0 mag_timeouts=0 verify_errors=0
+CDAR_BENCH_PASS
+CDAR_BENCH transport=towers depth=4 bps=2 tokens=16384 slab_rows=1024 slabs=16 iters=7
+  wall_us median=4243.2 min=4229.6 max=4328.2
+  logical_AR_bytes=234881024 effective_AR_GBps=55.4 (per-iter incl. memset+launch)
+  certified=16/16(x last iter) gather_timeouts=0 mag_timeouts=0 verify_errors=0
+CDAR_BENCH_PASS
+=== rccl reference ===
+rccl-tests not found on node; RCCL reference skipped
+=== done Tue Aug 18 07:39:13 PM UTC 2026 ===
