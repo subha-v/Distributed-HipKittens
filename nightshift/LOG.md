@@ -237,6 +237,148 @@ tgen-retrieve -> deploy+receipt-grep -> B0 -> B1 -> M24 MoK -> B2 (runs past
 morning if needed, REPORT.md from completed pairs ~07:30).
 REPORT.md drafting starts NOW (node-independent).
 
+## 10:05 PDT (17:05 UTC) — NODE BACK; e2e campaign launched (operator go)
+Node reachable again at 17:02 UTC (~8h outage). Operator instruction: test
+the best kernel vs real production. Best SERVABLE kernel = current M15
+(M24 is implemented but ungated and has no serving plumbing — its e2e is the
+next iteration; the operator's "how much better" answer tonight comes from
+campaign v5.1). Launched e2e-campaign-launch (wf_1e0adfb4-f84), three
+sequential agents:
+1. node-prep: reboot/GPU/foreign-proc check, retrieve stranded tgen T-sweep,
+   deploy campaign_v5 (sha-verified), verify RAGGED_SEAL_RECEIPT parse
+   format + settle the /8 peer-count question from m23_patch.py source,
+   dependency checklist. Halts campaign on blockers.
+2. m24-buildgate (CPU-only): compile matrix + instruction-identity gate vs
+   a776ac75, receipt committed as m24_build_gate.txt.
+3. campaign-runner: B0 calibration (m15 + native_tuned_tp, flag-rejection
+   fallbacks) -> B1 accuracy gate (c1det/c8det; within-class FAIL = no
+   accuracy-validated claim, campaign continues loudly marked) -> B2
+   headline matrix sized by the decision rules (3-arm 6-pair if it closes,
+   else 2-arm cut), launched detached; runner returns with run info.
+M24 MoK GPU gates (R0a ratchet/R0b, F.3 ladder w/ TGRAIN=8 + ZERO_PAD
+regressor) run AFTER B2 releases the GPUs. Monitor for B2 pair progress to
+be armed when the runner reports the log path.
+
+## 10:20 PDT — operator: TP8 overlap research + high-concurrency B3 ordered
+Operator asks: (1) TP8+EP changes the comm picture (our kernels tuned for
+DP8/EP8) — research novel comm/comp overlap strategies for that config;
+(2) test our best kernel in its OWN topology (DP8/EP8) at HIGH concurrency
+vs production — the parallelism-matched fair fight (AMD recommends DP8+EP
+at >=512 conc).
+Actions:
+- Launched tp8-overlap-strategies (wf_83f8ee32): 3 research lenses
+  (industry/literature: async-TP, Flux, Comet, DeepEP, TE userbuffers;
+  ROCm-stack primitives: MORI internals, AITER, RCCL/SymmetricMemory-on-ROCm,
+  xGMI facts; our assets + TP8 c32p comm cost model) -> synthesis into
+  TP8_OVERLAP_STRATEGIES.md (ranked, Amdahl-ceilinged, falsified-catalogue
+  collision table, staged prototype plan) -> 2-lens adversarial verify ->
+  revise+commit.
+- B3 QUEUED behind B2's GPUs: arms {m15, native_tuned_dp}, cells c512p
+  (+c512 if cheap), single-arm memory smoke first (c512p never run; one
+  B4096 graph per server), then pairs (multiple of arm count) sized by
+  measured cell runtime. M24 MoK GPU gates move behind B3.
+GPU queue: B0/B1/B2 (running, wf_1e0adfb4 resumed) -> B3 -> M24 MoK gates.
+
+## 10:40 PDT — DIRECT DRIVE: B0 launched by orchestrator (operator override)
+Operator: API 529s killing subagents, drive the node directly, wants the e2e
+result ASAP. Campaign workflow abandoned (not resumed — single driver rule).
+Done directly:
+- Node verified: up 19d (no reboot — outage was ssh/network layer), GPUs
+  idle, only gpuagent on KFD.
+- campaign_v5 deployed to ~/campaign_v5/ — sha256 verified byte-identical
+  (wrapper 0a8a1eec…, client v3 184cb809…, analyzer fcb945fa…), bash -n +
+  py_compile clean, PACKET/N2/M15_SOURCES/DHK_ROOT(m20pkt packaging) paths OK,
+  QSL pkl present (146MB).
+- AUDIT GATES CLOSED FROM SOURCE: m23_patch.py shows in_bucket_sum_orig +=
+  sum(m23_orig_counts) => peer-summed => /8 convention CORRECT (37.6%/2.66x
+  now fully sourced, no residual assumption). v5 sed parse matches the
+  printf format.
+- B0 LAUNCHED 17:35 UTC: RUN_TAG=b0v5, arms {m15, native_tuned_tp}, c32p,
+  --pairs 1, ALLOW_UNBALANCED_PAIRS=1 (calibration only), EPLB_PREWARM=0,
+  PROMPT_SOURCE=qsl, env from camp5 block w/ CLIENT=v3. PID 1256996, log
+  ~/campaign_v5/logs/b0.log, persistent Monitor armed (b1fg97e80).
+  Note: the wrapper's PAIRS-multiple warning prints even when overridden —
+  it proceeded (exit only fires with ALLOW=0).
+Sequencing: M24 build-gate compiles deferred to the B1 window (keep B0's S
+and throughput calibration free of CPU contention). Then B2 (sized by B0
+decision rules), then B3 high-conc {m15, native_tuned_dp}, then M24 MoK.
+
+## 10:55 PDT — B0 DONE (calibration): tuned-native TP8 beats current m15 at c32p
+B0 (n=1/arm, UNBALANCED, calibration-grade, never a headline):
+- m15 (DP8/EP8): 20,372 input tok/s, TTFT p50 2445ms / p99 4364ms, S=279s,
+  seal 98%, RECEIPT_GATE=PASS. (Above camp3's 19,277 with prefix cache OFF.)
+- native_tuned_tp (untouched image, AMD TP8+EP): 25,844 input tok/s (+27%),
+  TTFT p50 1339ms / p99 5682ms, S=283s, ZERO flag rejections on 0.25.1.
+Reading: the DP dummy-step tax (~56% of steps) is plausibly the whole gap —
+vindicates M24 (recover it in DP: modeled m15/0.72 ~ 28.3k would BEAT 25.8k)
+and M25 (move to TP8 + hide its ARs). AMD's TP8 rec holds even at prefill.
+OPEN_LOOP_BASE_RATE for future o-cells = 4.97 req/s (min of ceilings).
+
+## 11:00 PDT — operator: B3 high-conc NEXT (presentation today); B1/B2 held
+B1/B2 chain was prepared but operator rejected launch in favor of B3 now.
+B3-cal LAUNCHED (PID 1518198, RUN_TAG=b3cal): arms {m15, native_tuned_dp}
+(AMD's own >=512-conc rec — the parallelism-matched fight), cell c512p
+(conc 512, 2048 prompts, ISL 4096 — FIRST EVER RUN, memory watch on),
+1 pair unbalanced, m15 first. ETA: m15 number ~20 min, both ~40 min.
+Directional/n=1 labeling REQUIRED in any presentation per protocol.
+Monitor bhnjls5jn armed. B1 (accuracy gate) + B2 (6-pair c32p+o90p matrix)
+queued for after B3, pending operator.
+
+## 11:05 PDT — M25 kernel work: primitive layer landed (2c797d79)
+Per operator direction (direct work, subagents 529-blocked): extracted the
+K2/K3/K4 primitives from proven kernel code into the distributed layer:
+credit.cuh (throttle_vmcnt<D> + throttled_accumulate_bf162/store_packet16,
+carrying the exp_24 spill-catastrophe contract + exp_38 ISA-gate rule),
+order.cuh (consumer_major, owner_major_staggered ring inducer,
+source_interleaved), slab.cuh (certify_slab one-textual-copy multicast +
+bounded_wait_slab_into), counter.cuh + counted_arrive_dynamic_into (runtime
+fan-in, empty-key completer rule — the M24 lesson). Umbrella updated.
+Host parse (C++20) + gfx950 hipcc device compile clean: 0 spills, 0 scratch.
+ISA literal check (vmcnt(4)/pk_add in disassembly) pending — the
+--cuda-device-only .o isn't objdump-readable; switch to -S next pass.
+Next kernel steps: CDAR adapter (ERS+MAG composition), G25-0b microbench
+harness, then the M25 skeleton per M25_TP8_MEGA_DESIGN.md §7.
+
+## 11:55 PDT (18:55 UTC) — B3 COMPLETE: m15 BEATS AMD's DP production config
+c512p (conc 512, ISL 4096, 2048 QSL prompts), single pair, m15 first:
+- m15 (DP8/EP8): 42,788 input tok/s, TTFT p50 43.2s/p99 47.9s, seal 100%
+  (299/299 in-bucket), uniform_rescued 6/300 (2% dummies, fill ~98.5%),
+  0 failed.
+- native_tuned_dp (untouched image, AMD >=512-conc rec): 39,474 tok/s,
+  TTFT p50 28.9s/p99 52.8s, 0 failed, RECEIPT_GATE=PASS (authenticity
+  receipts captured).
+=> +8.4% m15 vs genuine tuned production — FIRST genuine-native win ever.
+LABEL: directional, n=1 pair, m15 position-1; the ±18% position effect
+exceeds the delta, so NOT quotable as balanced evidence yet. Reverse-order
+pair (b3rev, waiter PID 1668099) queued behind the G25-0b CDAR bench (which
+auto-started 18:55 after driver exit). Mechanism data: high-conc DP runs at
+~98.5% fill (vs 37.6% @c32p) — dummy-tax regime split confirmed end-to-end.
+Also banked earlier this hour: CDAR adapter + G25-0b bench committed
+(1e4068df, 836da2b3); primitives 2c797d79; M25 design 435ad753;
+TP8 sources doc'd for operator presentation (AMD ai-ecosystem vllm-v1 guide:
+TP8+EP <=128 conc, DP8+EP >=512, +16-47% claim, 128-512 gap undocumented).
+
+## 12:10 PDT — G25-0b COMPLETE: K1 = store-towers; K4 flat in pure transport
+Sweep (results in tp8_mega/results/, all configs CDAR_BENCH_PASS, zero
+verify errors across every run):
+- v0: atomic 41.1 / towers 22.4 GB/s effective AR @235MB (diagnosed:
+  half-idle grid, serialized slabs, scalar single-block reduce).
+- v1: depth {4,8,16,32} FLAT everywhere => vmcnt depth only matters under
+  MFMA co-residency (K4 is workload-dependent — knob-table update).
+  bps 1->2 = +64%; 2->4 flat. Atomic caps ~67 GB/s (dword issue rate).
+  TOWERS + parallel vectorized reduce = 93.6 GB/s (4.2x v0) => K1 DECISION:
+  store-towers + owner reduce for ERS on gfx950.
+- Amdahl closes: native TP8 exposes ~2.8ms/layer of ring-AR (~28% of its
+  ~10ms/layer at c32p — confirms the 25-35% estimate); CDAR standalone
+  ~5ms/boundary-pair but chunk-signaled => hides under ~7ms GEMM. Remaining
+  go/no-go: co-residency degradation (bench v2 w/ MFMA body) + same-node
+  RCCL reference.
+Ops note: fell into the pkill trap myself (bracketed pattern matched a
+LATER literal in the same command line — heredoc text); recovered by
+PID-kill; lesson: never combine pkill with any command naming the pattern.
+Operator order swap honored: sweep ran first (fired automatically when the
+b3rev driver died); reverse pair b3rev2 now running on GPUs.
+
 Plan: on recon report, decide queue-kill timing (mid-flight arm finishes, then
 teardown once first verified fill-aware build is ready — or earlier if the queue
 tail is low-value vs getting R6/T-sweep evidence). Wave 2 = implementation

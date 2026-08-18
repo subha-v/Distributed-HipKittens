@@ -1,0 +1,38 @@
+=== G25-0b CDAR bench matrix Tue Aug 18 06:57:00 PM UTC 2026 ===
+--- tokens=16384 slab_rows=512 transport=atomic ---
+CDAR_BENCH transport=atomic tokens=16384 slab_rows=512 slabs=32 iters=7
+  wall_us median=5721.0 min=5695.2 max=5768.7
+  logical_AR_bytes=234881024 effective_AR_GBps=41.1 (per-iter incl. memset+launch)
+  certified=32/32(x last iter) gather_timeouts=0 mag_timeouts=0 verify_errors=0
+CDAR_BENCH_PASS
+--- tokens=16384 slab_rows=512 transport=towers ---
+CDAR_BENCH transport=towers tokens=16384 slab_rows=512 slabs=32 iters=7
+  wall_us median=10462.7 min=10446.1 max=10570.2
+  logical_AR_bytes=234881024 effective_AR_GBps=22.4 (per-iter incl. memset+launch)
+  certified=32/32(x last iter) gather_timeouts=0 mag_timeouts=0 verify_errors=0
+CDAR_BENCH_PASS
+--- tokens=4096 slab_rows=512 transport=atomic ---
+CDAR_BENCH transport=atomic tokens=4096 slab_rows=512 slabs=8 iters=7
+  wall_us median=5621.7 min=5594.5 max=5647.7
+  logical_AR_bytes=58720256 effective_AR_GBps=10.4 (per-iter incl. memset+launch)
+  certified=8/8(x last iter) gather_timeouts=0 mag_timeouts=0 verify_errors=0
+CDAR_BENCH_PASS
+--- tokens=4096 slab_rows=512 transport=towers ---
+CDAR_BENCH transport=towers tokens=4096 slab_rows=512 slabs=8 iters=7
+  wall_us median=6939.8 min=6910.7 max=6993.1
+  logical_AR_bytes=58720256 effective_AR_GBps=8.5 (per-iter incl. memset+launch)
+  certified=8/8(x last iter) gather_timeouts=0 mag_timeouts=0 verify_errors=0
+CDAR_BENCH_PASS
+--- tokens=256 slab_rows=64 transport=atomic ---
+CDAR_BENCH transport=atomic tokens=256 slab_rows=64 slabs=4 iters=7
+  wall_us median=801.0 min=797.2 max=817.8
+  logical_AR_bytes=3670016 effective_AR_GBps=4.6 (per-iter incl. memset+launch)
+  certified=4/4(x last iter) gather_timeouts=0 mag_timeouts=0 verify_errors=0
+CDAR_BENCH_PASS
+--- tokens=256 slab_rows=64 transport=towers ---
+CDAR_BENCH transport=towers tokens=256 slab_rows=64 slabs=4 iters=7
+  wall_us median=1016.9 min=1005.7 max=1050.8
+  logical_AR_bytes=3670016 effective_AR_GBps=3.6 (per-iter incl. memset+launch)
+  certified=4/4(x last iter) gather_timeouts=0 mag_timeouts=0 verify_errors=0
+CDAR_BENCH_PASS
+=== done Tue Aug 18 06:57:04 PM UTC 2026 ===

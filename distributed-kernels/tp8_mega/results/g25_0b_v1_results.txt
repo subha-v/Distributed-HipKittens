@@ -1,0 +1,77 @@
+=== G25-0b v1 sweep Tue Aug 18 07:04:18 PM UTC 2026 ===
+CDAR_BENCH transport=atomic depth=4 bps=1 tokens=16384 slab_rows=512 slabs=32 iters=7
+  wall_us median=5731.5 min=5721.9 max=5777.9
+  logical_AR_bytes=234881024 effective_AR_GBps=41.0 (per-iter incl. memset+launch)
+  certified=32/32(x last iter) gather_timeouts=0 mag_timeouts=0 verify_errors=0
+CDAR_BENCH_PASS
+CDAR_BENCH transport=atomic depth=4 bps=2 tokens=16384 slab_rows=512 slabs=32 iters=7
+  wall_us median=3502.7 min=3474.9 max=3559.8
+  logical_AR_bytes=234881024 effective_AR_GBps=67.1 (per-iter incl. memset+launch)
+  certified=32/32(x last iter) gather_timeouts=0 mag_timeouts=0 verify_errors=0
+CDAR_BENCH_PASS
+CDAR_BENCH transport=atomic depth=4 bps=4 tokens=16384 slab_rows=512 slabs=32 iters=7
+  wall_us median=3518.2 min=3507.3 max=3557.1
+  logical_AR_bytes=234881024 effective_AR_GBps=66.8 (per-iter incl. memset+launch)
+  certified=32/32(x last iter) gather_timeouts=0 mag_timeouts=0 verify_errors=0
+CDAR_BENCH_PASS
+CDAR_BENCH transport=atomic depth=8 bps=1 tokens=16384 slab_rows=512 slabs=32 iters=7
+  wall_us median=5728.8 min=5702.8 max=5746.0
+  logical_AR_bytes=234881024 effective_AR_GBps=41.0 (per-iter incl. memset+launch)
+  certified=32/32(x last iter) gather_timeouts=0 mag_timeouts=0 verify_errors=0
+CDAR_BENCH_PASS
+CDAR_BENCH transport=atomic depth=8 bps=2 tokens=16384 slab_rows=512 slabs=32 iters=7
+  wall_us median=3499.7 min=3485.5 max=3606.3
+  logical_AR_bytes=234881024 effective_AR_GBps=67.1 (per-iter incl. memset+launch)
+  certified=32/32(x last iter) gather_timeouts=0 mag_timeouts=0 verify_errors=0
+CDAR_BENCH_PASS
+CDAR_BENCH transport=atomic depth=8 bps=4 tokens=16384 slab_rows=512 slabs=32 iters=7
+  wall_us median=3508.6 min=3506.9 max=3535.2
+  logical_AR_bytes=234881024 effective_AR_GBps=66.9 (per-iter incl. memset+launch)
+  certified=32/32(x last iter) gather_timeouts=0 mag_timeouts=0 verify_errors=0
+CDAR_BENCH_PASS
+CDAR_BENCH transport=atomic depth=16 bps=1 tokens=16384 slab_rows=512 slabs=32 iters=7
+  wall_us median=5737.8 min=5709.2 max=5746.9
+  logical_AR_bytes=234881024 effective_AR_GBps=40.9 (per-iter incl. memset+launch)
+  certified=32/32(x last iter) gather_timeouts=0 mag_timeouts=0 verify_errors=0
+CDAR_BENCH_PASS
+CDAR_BENCH transport=atomic depth=16 bps=2 tokens=16384 slab_rows=512 slabs=32 iters=7
+  wall_us median=3507.8 min=3481.0 max=3520.1
+  logical_AR_bytes=234881024 effective_AR_GBps=67.0 (per-iter incl. memset+launch)
+  certified=32/32(x last iter) gather_timeouts=0 mag_timeouts=0 verify_errors=0
+CDAR_BENCH_PASS
+CDAR_BENCH transport=atomic depth=16 bps=4 tokens=16384 slab_rows=512 slabs=32 iters=7
+  wall_us median=3524.6 min=3506.4 max=3534.3
+  logical_AR_bytes=234881024 effective_AR_GBps=66.6 (per-iter incl. memset+launch)
+  certified=32/32(x last iter) gather_timeouts=0 mag_timeouts=0 verify_errors=0
+CDAR_BENCH_PASS
+CDAR_BENCH transport=atomic depth=32 bps=1 tokens=16384 slab_rows=512 slabs=32 iters=7
+  wall_us median=5741.9 min=5688.4 max=5772.2
+  logical_AR_bytes=234881024 effective_AR_GBps=40.9 (per-iter incl. memset+launch)
+  certified=32/32(x last iter) gather_timeouts=0 mag_timeouts=0 verify_errors=0
+CDAR_BENCH_PASS
+CDAR_BENCH transport=atomic depth=32 bps=2 tokens=16384 slab_rows=512 slabs=32 iters=7
+  wall_us median=3518.6 min=3484.7 max=3660.4
+  logical_AR_bytes=234881024 effective_AR_GBps=66.8 (per-iter incl. memset+launch)
+  certified=32/32(x last iter) gather_timeouts=0 mag_timeouts=0 verify_errors=0
+CDAR_BENCH_PASS
+CDAR_BENCH transport=atomic depth=32 bps=4 tokens=16384 slab_rows=512 slabs=32 iters=7
+  wall_us median=3531.0 min=3505.0 max=3545.8
+  logical_AR_bytes=234881024 effective_AR_GBps=66.5 (per-iter incl. memset+launch)
+  certified=32/32(x last iter) gather_timeouts=0 mag_timeouts=0 verify_errors=0
+CDAR_BENCH_PASS
+CDAR_BENCH transport=towers depth=4 bps=2 tokens=16384 slab_rows=512 slabs=32 iters=7
+  wall_us median=2508.3 min=2504.4 max=2530.8
+  logical_AR_bytes=234881024 effective_AR_GBps=93.6 (per-iter incl. memset+launch)
+  certified=32/32(x last iter) gather_timeouts=0 mag_timeouts=0 verify_errors=0
+CDAR_BENCH_PASS
+CDAR_BENCH transport=towers depth=16 bps=2 tokens=16384 slab_rows=512 slabs=32 iters=7
+  wall_us median=2515.9 min=2508.7 max=2542.5
+  logical_AR_bytes=234881024 effective_AR_GBps=93.4 (per-iter incl. memset+launch)
+  certified=32/32(x last iter) gather_timeouts=0 mag_timeouts=0 verify_errors=0
+CDAR_BENCH_PASS
+CDAR_BENCH transport=towers depth=32 bps=2 tokens=16384 slab_rows=512 slabs=32 iters=7
+  wall_us median=2518.3 min=2500.7 max=2540.3
+  logical_AR_bytes=234881024 effective_AR_GBps=93.3 (per-iter incl. memset+launch)
+  certified=32/32(x last iter) gather_timeouts=0 mag_timeouts=0 verify_errors=0
+CDAR_BENCH_PASS
+=== done Tue Aug 18 07:04:30 PM UTC 2026 ===
