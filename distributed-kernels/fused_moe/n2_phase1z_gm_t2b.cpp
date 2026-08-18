@@ -418,6 +418,14 @@ N2_P1Z_QUAL void N2_P1Z_NAME(
       }
       __syncthreads();
     }
+#ifdef N2GM_P1Z_TASK_DONE_HOOK
+    // T3 seam: fires once per completed (tile, g) task, after BOTH gu
+    // halves' Zq/DQZ stores.  The hook text is responsible for store
+    // visibility (vmcnt drain + CTA barrier) before any signal — the
+    // k0p6_m15_task_flush_defer discipline.  Default-empty: the t2b
+    // build's text is unchanged.
+    N2GM_P1Z_TASK_DONE_HOOK
+#endif
   }
 }
 
