@@ -77,7 +77,7 @@
 #include "k0pf6gm_t2b_abi.hpp"
 
 // JIT-cache guard (own lineage; bump on any change to this TU).
-#define K0P6_T2V6_SRC_REV 1
+#define K0P6_T2V6_SRC_REV 2
 
 // ---- v6 compile arms ----------------------------------------------------------------------
 // PROF: the bubble ledger (slot 73 required nonzero).  FILLER: the wgrad
@@ -521,7 +521,8 @@ struct fill_ctx {
 };
 
 __device__ __forceinline__ void bind_ctx(const long long* desc,
-                                         fill_ctx& c, bool accumulate) {
+                                         fill_ctx& c, bool accumulate,
+                                         int em) {
   c.dzq = (const std::uint8_t*)k0p6_dread(desc, K0P6_D_A2Q);
   c.dqdz = (const float*)k0p6_dread(desc, K0P6_D_DQ2);
   c.zq = (const std::uint8_t*)k0p6_dread(desc, K0P6_D_T2B_ZQ);
@@ -536,7 +537,14 @@ __device__ __forceinline__ void bind_ctx(const long long* desc,
   c.nvi = (const int*)k0p6_dread(desc, K0P6_D_NVI);
   c.dw13 = (__hip_bfloat16*)k0p6_dread(desc, K0P6_D_T2B_DW13);
   c.dw2 = (__hip_bfloat16*)k0p6_dread(desc, K0P6_D_T2B_DW2);
-  c.n_experts = (int)k0p6_dread(desc, K0P6_D_E);
+  // The in-kernel PARTITION: cursors/tail cover experts [0, n_experts)
+  // only; the host's side-stream slice drains the rest (flat tidx
+  // [em*per_e, total) via the wgrad body's own tile_lo).  em == 0 or
+  // >= E means everything is in-kernel.
+  {
+    const int e_all = (int)k0p6_dread(desc, K0P6_D_E);
+    c.n_experts = (em > 0 && em < e_all) ? em : e_all;
+  }
   c.accumulate = accumulate;
   std::uint32_t* st = (std::uint32_t*)k0p6_dread(desc, K0P6_D_MPS_STATE);
   c.cur_dw2 = st + 4;
@@ -748,7 +756,14 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
       (((k0p6_epoch(desc) - 1ull) % (unsigned long long)dw_nmb) != 0ull);
   const int dw_quota_a = (int)((dwword >> 8) & 0xFFu);
   const int dw_quota_b = (int)((dwword >> 16) & 0xFFu);
-  const int dw_quota_c = (int)((dwword >> 24) & 0xFFu);
+  // [31:24] = E_m, the expert-space partition: experts [0, E_m) drain
+  // IN-KERNEL (windows + tail); experts [E_m, E) belong to the host's
+  // side-stream slice launch (small-grid wg_standalone over flat tidx
+  // [E_m*per_e, total)), which hides under the non-MoE region the way the
+  // bmm arm proved.  0 => everything in-kernel.  The M8-wait window quota
+  // is self-limiting (certificate arrival ends it), so it is a constant.
+  const int dw_em = (int)((dwword >> 24) & 0xFFu);
+  const int dw_quota_c = 32;
 #endif
 #if K0P6_T2V6_PROF
   std::uint64_t* t2v6_prof =
@@ -1324,7 +1339,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
                              if (tid == 0) t2v6_tf =
                                  hk_moe::mps::realtime_now();)
               t2v6::fill_ctx wgc;
-              t2v6::bind_ctx(desc, wgc, dw_accumulate);
+              t2v6::bind_ctx(desc, wgc, dw_accumulate, dw_em);
               const int ran = t2v6::window(wgc, q, slab == 1);
               T2V6_PROF_ONLY(if (tid == 0 && ran > 0) {
                 atomicAdd((unsigned long long*)(t2v6_prof +
@@ -1411,7 +1426,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
 #if K0P6_T2V6_FILLER
     if (dwmode >= 2 && dw_quota_c > 0) {
       t2v6::fill_ctx wgc;
-      t2v6::bind_ctx(desc, wgc, dw_accumulate);
+      t2v6::bind_ctx(desc, wgc, dw_accumulate, dw_em);
       int claimed8 = 0;
       while (claimed8 < dw_quota_c) {
         if (tid == 0) {
@@ -1556,7 +1571,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
     T2V6_PROF_ONLY(std::uint64_t t2v6_tt = 0;
                    if (tid == 0) t2v6_tt = hk_moe::mps::realtime_now();)
     t2v6::fill_ctx wgc;
-    t2v6::bind_ctx(desc, wgc, dw_accumulate);
+    t2v6::bind_ctx(desc, wgc, dw_accumulate, dw_em);
     ensure_ranges(wgc);
     int drained = 0;
     while (true) {
