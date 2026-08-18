@@ -17,10 +17,22 @@ puts BEFORE any node time, because it is what proves hazards H1 (the
 uniform-decode rank) and H2 (the step where no DP padding happened) are handled
 -- a non-unanimous seal is a collective deadlock, not a wrong answer.
 
-GATES (exit non-zero if either fails, per design 8.3 L0 / 8.2):
+-- and hazard H3, the one an adversarial review found missing: a rank inside
+``execute_dummy_batch`` (the DP engine's idle-lockstep path) reaches the same
+all-reduce as its peers but can never seal, so it must contribute a readiness
+bit of 0 and make the whole group refuse.
 
-    sealed == in_bucket                on every rank
-    refused_not_unanimous == 0         on every rank
+GATES (exit non-zero if any fails, per design 8.3 L0 / 8.2):
+
+    G1  sealed == in_bucket - in_bucket_dummy_peer   on every rank
+    G2  refused_not_unanimous == 0                   on every rank
+    G3  eager_b4096 == eager_b4096_dummy_peer        on every rank
+    G4  no step where the eight ranks disagree about sealing
+        (replay_step raises AssertionError the instant they do)
+
+G1/G3 subtract the H3 class explicitly rather than tolerating it: those steps
+are a *correct group-wide refusal*, reported on their own line, and G4 admits
+no exceptions at all.
 
 TRACE FORMAT -- one JSON object per line, one line per model step:
 
@@ -41,6 +53,14 @@ TRACE FORMAT -- one JSON object per line, one line per model step:
     num_active_loras           optional int   (default 0)
     ready                      optional bool  (default true) -- whether this
                                rank's PF4H activation file has latched yet
+    dummy_run                  optional bool  (default false) -- this rank ran
+                               execute_dummy_batch for this step instead of
+                               execute_model (the DP idle-lockstep path).  Such
+                               a rank contributes a readiness bit of 0, so the
+                               whole group refuses the seal (hazard H3 / R2).
+                               A real trace shows it as a rank whose original
+                               count is 1 on a step where the engine reported
+                               no scheduled work for it.
 
   Convenience: a line may instead be a bare list of ints, taken as the
   per-rank ``num_tokens`` with everything else defaulted:
@@ -66,6 +86,15 @@ HOW TO PRODUCE A REAL TRACE ON THE NODE
     ``m23_orig_counts`` is already the all-reduced 8-vector of *original*
     counts, so ONE rank's log is enough: grep the lines, take the vector as
     the ``ranks`` list.  ``--from-m23-trace`` parses exactly that grep output.
+
+    CAVEAT: that vector cannot distinguish a rank running a 1-token decode from
+    a rank running ``execute_dummy_batch`` -- both contribute an original count
+    of 1.  ``--from-m23-trace`` therefore models every rank as serving, which
+    makes it OPTIMISTIC about coverage (it cannot invent H3 steps) but never
+    optimistic about safety (the seal is refused for the whole group either way,
+    and gate G4 is unaffected).  To measure H3 on the node, read
+    ``refused_peer_not_ready`` from RAGGED_SEAL_RECEIPT after warmup, or log the
+    dummy-batch calls directly and set ``"dummy_run": true`` in a JSONL trace.
 """
 
 from __future__ import annotations
@@ -110,6 +139,18 @@ class RankStep:
     has_lora: bool = False
     num_active_loras: int = 0
     ready: bool = True
+    # This rank executed ``execute_dummy_batch`` for this step instead of
+    # ``execute_model`` -- the DP engine's idle-lockstep path (v1/engine/core.py
+    # busy loop -> gpu_worker.execute_dummy_batch ->
+    # _dummy_run(uniform_decode_query_len, uniform_decode=True)).  It reaches
+    # the SAME all-reduce as its peers, but it passes the force_* overrides, so
+    # it is not a serving step: it can never seal, is never mode-rescued, and
+    # (this is the whole point) must contribute a readiness bit of 0 so the
+    # group refuses in lockstep rather than splitting.
+    dummy_run: bool = False
+
+    def is_serving(self) -> bool:
+        return not self.dummy_run
 
     def is_uniform_decode(self, uniform_decode_query_len: int = 1) -> bool:
         """GMR._is_uniform_decode (GMR:3820-3839)."""
@@ -138,6 +179,12 @@ class Config:
     full_decode_graphs: bool = True
     m23: bool = True
     uniform_rescue: bool = True
+    # REGRESSION SWITCH -- reproduces the pre-fix defect (M23_IMPL_NOTES 3b/F1):
+    # a readiness bit that ignores the call context, so a rank inside
+    # execute_dummy_batch contributes 1 while still being unable to seal.  With
+    # this on, replay_step must raise "SPLIT SEAL" on the first H3 step.  Never
+    # set it outside the test that proves the harness can see the bug.
+    readiness_ignores_call_context: bool = False
 
 
 # --------------------------------------------------------------------------
@@ -229,7 +276,13 @@ class Counters:
     sealed_ragged: int = 0
     refused_not_unanimous: int = 0
     refused_not_ready: int = 0
+    # this rank was ready but the GROUP was not (an unlatched peer, or a peer
+    # inside execute_dummy_batch) -- probe P7
+    refused_peer_not_ready: int = 0
+    # the H3 class: in-bucket steps lost because >=1 peer ran a dummy batch
+    in_bucket_dummy_peer: int = 0
     eager_b4096: int = 0
+    eager_b4096_dummy_peer: int = 0
     uniform_rescued: int = 0
     piecewise_steps: int = 0
     tok: int = 0
@@ -248,6 +301,10 @@ class StepResult:
     # H2: at least one rank sat at a padded 4096 while the group did not.
     h2: bool = False
     h2_blocker_tokens: tuple[int, ...] = ()
+    # H3: the group was in the padded B4096 bucket but >=1 rank was inside
+    # execute_dummy_batch, so the readiness bit refuses the seal for everybody.
+    dummy_peer: bool = False
+    dummy_ranks: tuple[int, ...] = ()
 
 
 def replay_step(
@@ -282,9 +339,14 @@ def replay_step(
     orig_counts = tuple(r.num_tokens for r in ranks)    # DPU:161
 
     # ---- readiness bit (row 4 of the all-reduce; design 4.3) -------------
+    # Every LOCAL term of the seal rides this bit, INCLUDING the call context:
+    # a rank inside execute_dummy_batch contributes 0 (risk R2).
     if m23 and cfg.m23 and cfg.graph_target == "pf4h" and cfg.dp_size == 8:
         ready_all = all(
-            r.ready and not r.has_lora and r.num_active_loras == 0
+            r.ready
+            and (r.is_serving() or cfg.readiness_ignores_call_context)
+            and not r.has_lora
+            and r.num_active_loras == 0
             for r in ranks
         )
     else:
@@ -327,20 +389,35 @@ def replay_step(
             for i in range(n)
             if local_modes[i] == NONE
         )
+    # H3: at least one rank is in execute_dummy_batch while the group is in the
+    # padded B4096 bucket.  M23 must refuse the seal on ALL ranks (risk R2).
+    dummy_ranks = tuple(i for i in range(n) if ranks[i].dummy_run)
+    out.dummy_peer = bool(dummy_ranks) and group_b4096
+    out.dummy_ranks = dummy_ranks
+
     for i in range(n):
         c = counters[i]
         mode = modes[i]
         desc = descs[i]
-        c.steps += 1
-        c.tok += ranks[i].num_tokens
+        serving = ranks[i].is_serving()
+        # GMR gates every counter on m23_serving, so a _dummy_run contributes
+        # nothing to this rank's receipt.
+        if serving:
+            c.steps += 1
+            c.tok += ranks[i].num_tokens
 
         if m23_active:
-            sealed = ragged_seal
+            # installed: `elif m23_serving: pf4h_exact_b4096 = pf4h_ragged_seal`
+            # -- a _dummy_run falls to the pre-M23 branch, where
+            # `pf4h_graph_target is not None` (it defaults to False, not None)
+            # forces pf4h_exact_b4096 = False.
+            sealed = bool(ragged_seal and serving)
         else:
             # the pre-M23 exact gate (GMR:3947-3971)
             sealed = (
                 cfg.integration_mode in ("full", "m15")
                 and cfg.dp_size == 8
+                and serving
                 and not uds[i]
                 and not ranks[i].has_lora
                 and desc.num_tokens == 4096
@@ -352,6 +429,10 @@ def replay_step(
         rescued = False
         if (
             b4096_unanimous
+            # the mode override is gated on m23_serving: rewriting the mode
+            # inside a _dummy_run would trip its own
+            # `assert cudagraph_runtime_mode == _cudagraph_mode`.
+            and serving
             and mode != PIECEWISE
             and (ragged_seal or cfg.uniform_rescue)
         ):
@@ -372,17 +453,23 @@ def replay_step(
                 "(risk R3 -- this would trip M15-DESC-012 mid-serve)"
             )
 
-        if group_b4096:
+        if serving and group_b4096:
             c.in_bucket += 1
             c.in_bucket_tok += ranks[i].num_tokens
             if m23_active and not ready_all:
                 c.refused_not_ready += 1
+                if ranks[i].ready and not ranks[i].has_lora:
+                    c.refused_peer_not_ready += 1
+                if dummy_ranks:
+                    c.in_bucket_dummy_peer += 1
             if mode == NONE:
                 c.eager_b4096 += 1
-        elif desc.num_tokens == 4096:
+                if dummy_ranks and m23_active:
+                    c.eager_b4096_dummy_peer += 1
+        elif serving and desc.num_tokens == 4096:
             c.refused_not_unanimous += 1
             c.h2_min_local_tok = min(c.h2_min_local_tok, min(orig_counts))
-        if rescued and mode == PIECEWISE:
+        if serving and rescued and mode == PIECEWISE:
             c.uniform_rescued += 1
         if sealed:
             c.sealed += 1
@@ -390,11 +477,22 @@ def replay_step(
                 c.sealed_exact += 1
             else:
                 c.sealed_ragged += 1
-        if mode == PIECEWISE:
+        if serving and mode == PIECEWISE:
             c.piecewise_steps += 1
 
         out.modes.append(mode)
         out.sealed.append(sealed)
+
+    # THE safety property.  A seal is a collective decision: either all eight
+    # ranks replay the megakernel graph or none do.  Anything else is a split
+    # collective -- seven ranks spinning to M15_SPIN_LIMIT and fail-closing
+    # while the eighth's Mori all2all waits on peers that never dispatch.
+    if len(set(out.sealed)) != 1:
+        raise AssertionError(
+            "SPLIT SEAL: ranks disagree about sealing this step "
+            f"(sealed={out.sealed}, dummy_ranks={dummy_ranks}, "
+            f"orig={orig_counts}) -- risk R2, a collective deadlock"
+        )
     return out
 
 
@@ -404,13 +502,17 @@ def replay(
     """Returns (per-rank counters, H2 diagnostics)."""
     disp = Dispatcher(cfg)
     counters = [Counters() for _ in range(cfg.dp_size)]
-    diag = {"h2_steps": 0, "h2_blockers": {}}
+    diag = {"h2_steps": 0, "h2_blockers": {}, "h3_steps": 0, "dummy_steps": 0}
     for ranks in trace:
         res = replay_step(ranks, cfg, disp, m23=m23, counters=counters)
         if res.h2:
             diag["h2_steps"] += 1
             for tok in res.h2_blocker_tokens:
                 diag["h2_blockers"][tok] = diag["h2_blockers"].get(tok, 0) + 1
+        if res.dummy_ranks:
+            diag["dummy_steps"] += 1
+        if res.dummy_peer:
+            diag["h3_steps"] += 1
     return counters, diag
 
 
@@ -447,6 +549,7 @@ def parse_trace(path: str, dp_size: int) -> list[list[RankStep]]:
                         has_lora=bool(r.get("has_lora", False)),
                         num_active_loras=int(r.get("num_active_loras", 0)),
                         ready=bool(r.get("ready", True)),
+                        dummy_run=bool(r.get("dummy_run", False)),
                     )
                     for r in rows
                 ]
@@ -470,7 +573,9 @@ def parse_m23_trace(path: str, dp_size: int) -> list[list[RankStep]]:
     return trace
 
 
-def synthesize(steps: int, dp_size: int, seed: int = 0) -> list[list[RankStep]]:
+def synthesize(
+    steps: int, dp_size: int, seed: int = 0, dummy_peer_rate: float = 0.0
+) -> list[list[RankStep]]:
     """A c32p-shaped trace: ~38% in-bucket, mostly ragged, some decode ranks.
 
     Chunked prefill at max_num_batched_tokens=4096 with prefix caching gives a
@@ -511,6 +616,17 @@ def synthesize(steps: int, dp_size: int, seed: int = 0) -> list[list[RankStep]]:
                         max_num_scheduled_tokens=1,
                     )
                 )
+        # H3: with probability ``dummy_peer_rate`` one rank of a heavy step had
+        # nothing scheduled and ran execute_dummy_batch instead (default 0.0,
+        # so the reference synthetic trace is unchanged).
+        if heavy and dummy_peer_rate > 0.0 and rng.random() < dummy_peer_rate:
+            idx = rng.randrange(dp_size)
+            ranks[idx] = RankStep(
+                num_tokens=1,
+                num_reqs=1,
+                max_num_scheduled_tokens=1,
+                dummy_run=True,
+            )
         trace.append(ranks)
     return trace
 
@@ -532,6 +648,7 @@ def dump_trace(trace: list[list[RankStep]], path: str) -> None:
                                     if r.max_num_scheduled_tokens is not None
                                     else r.num_tokens
                                 ),
+                                "dummy_run": r.dummy_run,
                             }
                             for r in ranks
                         ],
@@ -569,7 +686,10 @@ def report(
         ("  sealed_ragged", "sealed_ragged"),
         ("refused_not_unanimous", "refused_not_unanimous"),
         ("refused_not_ready", "refused_not_ready"),
+        ("  ...peer not ready", "refused_peer_not_ready"),
+        ("  ...peer in dummy run", "in_bucket_dummy_peer"),
         ("eager_b4096", "eager_b4096"),
+        ("  ...peer in dummy run", "eager_b4096_dummy_peer"),
         ("uniform_rescued", "uniform_rescued"),
         ("piecewise_steps", "piecewise_steps"),
     ):
@@ -592,6 +712,16 @@ def report(
             "(cudagraph_dispatcher:204-212,\n"
             "    design 7.3) -- pre-existing, identical in both arms.\n"
             f"    blocking rank token counts (count): {blockers}"
+        )
+    if diag.get("h3_steps"):
+        print(
+            f"  H3 diagnostic: {diag['h3_steps']} in-bucket step(s) had >=1 rank\n"
+            "    inside execute_dummy_batch (the DP engine's idle-lockstep\n"
+            "    path, v1/engine/core.py -> gpu_worker.execute_dummy_batch ->\n"
+            "    _dummy_run(uniform_decode=True)).  That rank cannot seal, so\n"
+            "    its readiness bit is 0 and the WHOLE GROUP refuses -- coverage\n"
+            "    lost, collective intact (risk R2).  A seal here would be a\n"
+            "    split collective, not a slow step."
         )
     if per_rank:
         for i, c in enumerate(counters):
@@ -621,6 +751,13 @@ def main(argv=None) -> int:
     ap.add_argument("--integration-mode", default="m15")
     ap.add_argument("--max-capture-size", type=int, default=DEFAULT_MAX_CAPTURE_SIZE)
     ap.add_argument("--no-uniform-rescue", action="store_true")
+    ap.add_argument(
+        "--dummy-peer-rate",
+        type=float,
+        default=0.0,
+        help="synthetic traces only: fraction of in-bucket steps where one "
+        "rank ran execute_dummy_batch (hazard H3)",
+    )
     ap.add_argument("--per-rank", action="store_true")
     ap.add_argument(
         "--no-gate",
@@ -630,7 +767,12 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
 
     if args.emit_synthetic:
-        dump_trace(synthesize(args.steps, args.dp_size, args.seed), args.emit_synthetic)
+        dump_trace(
+            synthesize(
+                args.steps, args.dp_size, args.seed, args.dummy_peer_rate
+            ),
+            args.emit_synthetic,
+        )
         print(f"wrote {args.steps} steps to {args.emit_synthetic}")
         return 0
 
@@ -644,8 +786,13 @@ def main(argv=None) -> int:
         trace = parse_m23_trace(args.from_m23_trace, args.dp_size)
         source = args.from_m23_trace
     else:
-        trace = synthesize(args.steps, args.dp_size, args.seed)
-        source = f"synthetic(steps={args.steps}, seed={args.seed})"
+        trace = synthesize(
+            args.steps, args.dp_size, args.seed, args.dummy_peer_rate
+        )
+        source = (
+            f"synthetic(steps={args.steps}, seed={args.seed}, "
+            f"dummy_peer_rate={args.dummy_peer_rate})"
+        )
 
     if not trace:
         print(f"no steps parsed from {source}", file=sys.stderr)
@@ -684,12 +831,20 @@ def main(argv=None) -> int:
 
     print("\n=== L0 gates (design 8.3) ===")
     ok = True
-    new_counters, _ = new_result
+    new_counters, new_diag = new_result
+    # H3 (a peer inside execute_dummy_batch) is a step class M23 must REFUSE in
+    # lockstep, so it is excluded from the coverage gates by an explicit,
+    # separately-reported term -- never by relaxing them.  Gate G4 below is the
+    # invariant that matters most and it admits no exceptions at all.
     for i, c in enumerate(new_counters):
-        if c.sealed != c.in_bucket:
+        expect_sealed = c.in_bucket - c.in_bucket_dummy_peer
+        if c.sealed != expect_sealed:
             ok = False
             print(
-                f"  FAIL rank {i}: sealed={c.sealed} != in_bucket={c.in_bucket}"
+                f"  FAIL rank {i}: sealed={c.sealed} != in_bucket - "
+                f"dummy_peer={expect_sealed} "
+                f"(in_bucket={c.in_bucket}, "
+                f"in_bucket_dummy_peer={c.in_bucket_dummy_peer})"
             )
         if c.refused_not_unanimous:
             ok = False
@@ -698,12 +853,29 @@ def main(argv=None) -> int:
                 f"{c.refused_not_unanimous} (expected 0; H2 class -- see the "
                 "H2 diagnostic above)"
             )
-        if c.eager_b4096:
+        if c.eager_b4096 != c.eager_b4096_dummy_peer:
             ok = False
-            print(f"  FAIL rank {i}: eager_b4096={c.eager_b4096} (expected 0)")
+            print(
+                f"  FAIL rank {i}: eager_b4096={c.eager_b4096} "
+                f"(expected {c.eager_b4096_dummy_peer}, i.e. H3 steps only)"
+            )
     if ok:
-        print("  PASS  sealed == in_bucket, refused_not_unanimous == 0, "
-              "eager_b4096 == 0 on every rank")
+        print("  PASS  G1 sealed == in_bucket - in_bucket_dummy_peer")
+        print("  PASS  G2 refused_not_unanimous == 0")
+        print("  PASS  G3 eager_b4096 == eager_b4096_dummy_peer")
+    # G4: no step split the group.  replay_step raises AssertionError the
+    # instant ranks disagree, so reaching here proves it over the whole trace.
+    print(
+        "  PASS  G4 no split seal on any of "
+        f"{len(trace)} steps (every step's seal decision was unanimous "
+        "across all 8 ranks)"
+    )
+    if new_diag.get("h3_steps"):
+        print(
+            f"  NOTE  {new_diag['h3_steps']} in-bucket step(s) excluded from G1/G3"
+            " as H3 (a peer was in execute_dummy_batch); "
+            f"{new_diag['dummy_steps']} dummy-batch step(s) in the trace overall."
+        )
     return 0 if (ok or args.no_gate) else 1
 
 

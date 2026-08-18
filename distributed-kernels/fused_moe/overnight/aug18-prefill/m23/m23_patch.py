@@ -22,10 +22,18 @@ WHAT IT DOES  (design: M23_RAGGED_SEAL_DESIGN.md section 8, edits E1-E7, E10)
                        as purely ADDITIVE keyword arguments (every existing
                        caller keeps its current return arity).
   E3     GMR           ``_pf4h_m23_ragged_enabled`` + ``_pf4h_local_readiness``.
+                       The readiness bit carries EVERY local term of the seal,
+                       INCLUDING this call's context: a rank inside
+                       ``execute_dummy_batch`` / ``_dummy_run`` contributes 0,
+                       because it can never seal itself and a 1 there would let
+                       its seven peers replay the megakernel graph while it ran
+                       stock Mori+AITER eagerly -- a split collective (risk R2).
   E4     GMR           replace the all-ranks-exactly-4096 seal with the
                        DP-unanimous ``b4096_unanimous`` / ``pf4h_ragged_seal``
-                       predicate, add the uniform-decode mode override, and
-                       assert ``sealed => PIECEWISE`` (risk R3).
+                       predicate (NO local term: serving-ness reaches the seal
+                       only through the all-reduced readiness bit), add the
+                       uniform-decode mode override, and assert
+                       ``sealed => PIECEWISE`` (risk R3).
   E5     GMR           per-step RAGGED_SEAL_RECEIPT counters (design 8.2).
   E6     shim          activation blocker PF4H-FULL-020 refusing
                        VLLM_MOE_SKIP_PADDING (the megakernel has no -1
@@ -51,7 +59,7 @@ risk R6) -- re-baseline before comparing.
 Idempotent (marker ``PF4H_M23_RAGGED_SEAL_V1``); fatal on any anchor mismatch.
 """
 
-import os.path
+import os
 import sys
 
 MARK = "PF4H_M23_RAGGED_SEAL_V1"
@@ -118,8 +126,29 @@ def _apply(path, label, edits, *, required=True):
             file=sys.stderr,
         )
         return 1
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(src)
+    # Atomic install: write a sibling temp file, fsync it, then rename over the
+    # target.  A truncate-in-place write that is killed mid-flight would leave a
+    # half-written file that still contains MARK, so a rerun would print
+    # "already applied" and the server would die on a SyntaxError instead of
+    # being re-patched.  os.replace() within the same directory is atomic, so
+    # the file is either wholly pre-patch or wholly post-patch.
+    tmp_path = path + ".m23tmp"
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            f.write(src)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, path)
+    except OSError as exc:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        print(
+            f"m23_patch: FATAL {label} could not be written: {exc}",
+            file=sys.stderr,
+        )
+        return 1
     print(f"m23_patch: applied {MARK} to {label}")
     return 0
 
@@ -405,15 +434,43 @@ GMR_R_HELPER = (
     "        *,\n"
     "        has_lora: bool,\n"
     "        pf4h_graph_target: bool | None,\n"
+    "        force_uniform_decode: bool | None,\n"
+    "        force_num_active_loras: int | None,\n"
     "    ) -> bool:\n"
     '        """' + MARK + ": this rank's contribution to the DP readiness bit.\n"
     "\n"
     "        Must be computable BEFORE the all-reduce, and must fold in every\n"
     "        LOCAL term that could otherwise split the seal decision across\n"
-    "        ranks (design section 4.3).  The activation-file latch is now\n"
-    "        polled every step until it latches -- one os.path.isfile per step\n"
-    "        per rank -- which is what removes the split-brain window.\n"
+    "        ranks (design section 4.1/4.3, risk R2).\n"
+    "\n"
+    "        THE CALL CONTEXT IS ONE OF THOSE TERMS.  The first three conjuncts\n"
+    "        below are byte-identical to ``m23_serving``'s, and they have to be:\n"
+    "        the DP engine's idle-lockstep path (v1/engine/core.py's busy loop ->\n"
+    "        gpu_worker.execute_dummy_batch -> _dummy_run(uniform_decode=True))\n"
+    "        drives a rank with no scheduled work through THIS SAME all-reduce\n"
+    "        while its seven peers are inside execute_model.  Such a rank can\n"
+    "        never seal -- it takes the pre-M23 branch and ends at\n"
+    "        CUDAGraphMode.NONE -- so if it contributed a readiness bit of 1 the\n"
+    "        other seven would seal and replay the PF4H megakernel graph while it\n"
+    "        ran stock Mori+AITER eagerly at 4096 padded tokens.  That is a SPLIT\n"
+    "        COLLECTIVE: the seven spin to M15_SPIN_LIMIT and fail closed, the\n"
+    "        eighth's all2all waits on peers that never dispatch.  Contributing 0\n"
+    "        makes the whole group refuse in lockstep, and the refusal shows up as\n"
+    "        refused_not_ready in RAGGED_SEAL_RECEIPT (probe P7).\n"
+    "\n"
+    "        The activation-file latch is polled every step until it latches --\n"
+    "        one os.path.isfile per step per rank -- which is what removes the\n"
+    "        split-brain window.\n"
     '        """\n'
+    "        if (\n"
+    "            pf4h_graph_target is not None\n"
+    "            or force_uniform_decode is not None\n"
+    "            or force_num_active_loras is not None\n"
+    "        ):\n"
+    "            # Not a serving step: the capture drive, or any _dummy_run\n"
+    "            # (warmup, capture, profile, or the DP idle-lockstep dummy\n"
+    "            # batch).  Every one of them passes the force_* overrides.\n"
+    "            return False\n"
     "        if not self._pf4h_m23_ragged_enabled():\n"
     "            return False\n"
     '        if os.environ.get("VLLM_PF4H_B4096_GRAPH_TARGET") != "pf4h":\n'
@@ -425,9 +482,6 @@ GMR_R_HELPER = (
     "            # design section 3.6: the megakernel has no -1 expert-id\n"
     "            # sentinel, so padded rows must never be masked to -1.\n"
     "            return False\n"
-    "        if pf4h_graph_target:\n"
-    "            # Capture drive: the activation sentinel does not exist yet.\n"
-    "            return True\n"
     "        return self._pf4h_graph_operator_enabled()\n"
     "\n"
     + GMR_A_HELPER
@@ -464,11 +518,16 @@ GMR_R_DP = (
     "        original_num_tokens_across_dp = None\n"
     "        # " + MARK + ": the readiness bit must be computable BEFORE the\n"
     "        # all-reduce so it can ride row 4 of the existing staging tensor.\n"
+    "        # It carries EVERY local term of the seal decision, including this\n"
+    "        # call's context -- see _pf4h_local_readiness for why a _dummy_run\n"
+    "        # rank contributing 1 would split the collective (risk R2).\n"
     "        synced_cudagraph_mode = cudagraph_mode.value\n"
     "        pf4h_ready_all = False\n"
     "        pf4h_local_ready = self._pf4h_local_readiness(\n"
     "            has_lora=has_lora,\n"
     "            pf4h_graph_target=pf4h_graph_target,\n"
+    "            force_uniform_decode=force_uniform_decode,\n"
+    "            force_num_active_loras=force_num_active_loras,\n"
     "        )\n"
     "        if self.vllm_config.parallel_config.data_parallel_size > 1:\n"
     "            (\n"
@@ -519,6 +578,13 @@ GMR_R_PREDICATE = (
     "        # passes the force_* overrides) keep the pre-M23 exact behaviour, so\n"
     "        # capture stays exact-4096 on all ranks (design section 4.4 row 6)\n"
     "        # and _dummy_run's cudagraph_runtime_mode assertion cannot trip.\n"
+    "        #\n"
+    "        # m23_serving is a LOCAL property, so it must never appear in the\n"
+    "        # seal predicate (risk R2).  Serving-ness reaches the seal only\n"
+    "        # through the all-reduced readiness bit, which _pf4h_local_readiness\n"
+    "        # zeroes for exactly these same call contexts.  Below, m23_serving\n"
+    "        # therefore gates only branch selection, the mode rescue, the R3\n"
+    "        # assertion and the counters -- never pf4h_ragged_seal.\n"
     "        m23_serving = (\n"
     "            pf4h_graph_target is None\n"
     "            and force_uniform_decode is None\n"
@@ -532,19 +598,28 @@ GMR_R_PREDICATE = (
     "            )\n"
     "        m23_exact = m23_orig_counts == (4096,) * 8\n"
     "        m23_local_b4096 = batch_descriptor.num_tokens == 4096\n"
-    "        # Every term below is DP-unanimous by construction: should_ubatch is\n"
-    "        # torch.all() over the all-reduce, synced_cudagraph_mode is the min\n"
-    "        # across ranks, and num_tokens_across_dp is [max]*8 whenever that\n"
-    "        # synced mode is not NONE (dp_utils._post_process_dp_padding).\n"
-    "        # Requiring PIECEWISE is what kills hazard H2: it proves DP padding\n"
-    "        # actually happened, so all(==4096) is a statement about the GROUP.\n"
+    "        # Every term below is DP-unanimous by construction:\n"
+    "        # _pf4h_m23_ragged_enabled() is env x env x dp_size (identical on\n"
+    "        # every rank of the deployment), should_ubatch is torch.all() over\n"
+    "        # the all-reduce, synced_cudagraph_mode is the min across ranks, and\n"
+    "        # num_tokens_across_dp is [max]*8 whenever that synced mode is not\n"
+    "        # NONE (dp_utils._post_process_dp_padding).  Requiring PIECEWISE is\n"
+    "        # what kills hazard H2: it proves DP padding actually happened, so\n"
+    "        # all(==4096) is a statement about the GROUP.  Note the deliberate\n"
+    "        # absence of m23_serving: a rank in _dummy_run computes the same\n"
+    "        # b4096_unanimous its peers do, and it is its readiness bit -- not\n"
+    "        # this boolean -- that refuses the seal for everybody.\n"
     "        b4096_unanimous = bool(\n"
-    "            m23_serving\n"
+    "            self._pf4h_m23_ragged_enabled()\n"
     "            and not should_ubatch\n"
     "            and synced_cudagraph_mode == CUDAGraphMode.PIECEWISE.value\n"
     "            and num_tokens_across_dp is not None\n"
     "            and all(int(v) == 4096 for v in num_tokens_across_dp.tolist())\n"
     "        )\n"
+    "        # pf4h_ready_all is torch.all() over row 4 of the same all-reduce,\n"
+    "        # so pf4h_ragged_seal is identical on all eight ranks.  It also\n"
+    "        # implies m23_serving on every rank: a rank that is not serving\n"
+    "        # contributes 0, which drives pf4h_ready_all False group-wide.\n"
     "        pf4h_ragged_seal = bool(b4096_unanimous and pf4h_ready_all)\n"
     "        m23_uniform_rescued = False\n"
     "\n"
@@ -590,8 +665,18 @@ GMR_R_RESCUE = (
     "        # the A/B stays fair (risk R6) -- RE-BASELINE before comparing.  It\n"
     "        # is forced whenever the step actually sealed, because a sealed step\n"
     "        # that ran eagerly would trip M15-DESC-012 mid-serve (risk R3).\n"
+    "        #\n"
+    "        # Gated on m23_serving so it can never rewrite the mode inside a\n"
+    "        # _dummy_run, where _dummy_run's own\n"
+    "        # `assert cudagraph_runtime_mode == _cudagraph_mode` would trip.  A\n"
+    "        # non-unanimous RESCUE is harmless (it only picks stock-graph replay\n"
+    "        # over eager, which is exactly today's behaviour on that rank); a\n"
+    "        # non-unanimous SEAL is not, and the seal is not gated here.  Risk\n"
+    "        # R3 still holds: pf4h_ragged_seal implies every rank contributed a\n"
+    "        # readiness bit of 1, which implies m23_serving on every rank.\n"
     "        if (\n"
     "            b4096_unanimous\n"
+    "            and m23_serving\n"
     "            and cudagraph_mode != CUDAGraphMode.PIECEWISE\n"
     "            and (\n"
     "                pf4h_ragged_seal\n"
@@ -641,6 +726,7 @@ GMR_R_RECEIPT = (
     '                    "steps": 0, "in_bucket": 0, "sealed": 0,\n'
     '                    "sealed_exact": 0, "sealed_ragged": 0,\n'
     '                    "refused_not_unanimous": 0, "refused_not_ready": 0,\n'
+    '                    "refused_peer_not_ready": 0,\n'
     '                    "eager_b4096": 0, "uniform_rescued": 0,\n'
     '                    "min_orig": 1 << 30, "max_orig": 0, "sum_orig": 0,\n'
     '                    "in_bucket_sum_orig": 0,\n'
@@ -681,6 +767,15 @@ GMR_R_RECEIPT = (
     '                _m23["in_bucket_sum_orig"] += int(sum(m23_orig_counts))\n'
     "                if not pf4h_ready_all:\n"
     '                    _m23["refused_not_ready"] += 1\n'
+    "                    if pf4h_local_ready:\n"
+    "                        # This rank was ready, so the refusal came from a\n"
+    "                        # PEER: either its activation file has not latched\n"
+    "                        # yet, or it is inside execute_dummy_batch for this\n"
+    "                        # step (the DP idle-lockstep path).  Both are\n"
+    "                        # correct group-wide refusals; the second is the\n"
+    "                        # class that would be a split collective if the\n"
+    "                        # readiness bit ignored the call context.\n"
+    '                        _m23["refused_peer_not_ready"] += 1\n'
     "                if cudagraph_mode == CUDAGraphMode.NONE:\n"
     '                    _m23["eager_b4096"] += 1\n'
     "            elif m23_local_b4096:\n"
@@ -700,13 +795,15 @@ GMR_R_RECEIPT = (
     '                    "RAGGED_SEAL_RECEIPT rank=%d steps=%d in_bucket=%d "\n'
     '                    "sealed=%d sealed_ragged=%d sealed_exact=%d "\n'
     '                    "refused_not_unanimous=%d refused_not_ready=%d "\n'
+    '                    "refused_peer_not_ready=%d "\n'
     '                    "eager_b4096=%d uniform_rescued=%d min_orig=%d "\n'
     '                    "max_orig=%d sum_orig=%d in_bucket_sum_orig=%d",\n'
     "                    self.parallel_config.data_parallel_rank,\n"
     '                    _m23["steps"], _m23["in_bucket"], _m23["sealed"],\n'
     '                    _m23["sealed_ragged"], _m23["sealed_exact"],\n'
     '                    _m23["refused_not_unanimous"],\n'
-    '                    _m23["refused_not_ready"], _m23["eager_b4096"],\n'
+    '                    _m23["refused_not_ready"],\n'
+    '                    _m23["refused_peer_not_ready"], _m23["eager_b4096"],\n'
     '                    _m23["uniform_rescued"], _m23["min_orig"],\n'
     '                    _m23["max_orig"], _m23["sum_orig"],\n'
     '                    _m23["in_bucket_sum_orig"],\n'

@@ -60,35 +60,164 @@ in `contracts.py`, and `k0pf6gm_device_tile_m15.hip`.
 ## 3. The new predicate as installed
 
 ```python
-m23_serving = (
-    pf4h_graph_target is None            # not the capture drive
-    and force_uniform_decode is None     # not a _dummy_run
-    and force_num_active_loras is None
-    and self._pf4h_m23_ragged_enabled()  # env + mode + dp8
-)
+# --- the bit that rides row 4 of the existing all-reduce -------------------
+def _pf4h_local_readiness(self, *, has_lora, pf4h_graph_target,
+                          force_uniform_decode, force_num_active_loras):
+    if (pf4h_graph_target is not None            # not the capture drive
+            or force_uniform_decode is not None  # not ANY _dummy_run
+            or force_num_active_loras is not None):
+        return False
+    if not self._pf4h_m23_ragged_enabled():                 return False
+    if os.environ.get("VLLM_PF4H_B4096_GRAPH_TARGET") != "pf4h": return False
+    if has_lora or self.vllm_config.lora_config is not None:     return False
+    if envs.VLLM_MOE_SKIP_PADDING:                               return False
+    return self._pf4h_graph_operator_enabled()
+
+# --- the seal: all-reduced / deployment-global data ONLY -------------------
 b4096_unanimous = bool(
-    m23_serving
+    self._pf4h_m23_ragged_enabled()                          # env x env x dp8
     and not should_ubatch                                    # all-reduced
     and synced_cudagraph_mode == CUDAGraphMode.PIECEWISE.value  # min over ranks
     and num_tokens_across_dp is not None
     and all(int(v) == 4096 for v in num_tokens_across_dp.tolist())  # [max]*8
 )
 pf4h_ragged_seal = bool(b4096_unanimous and pf4h_ready_all)  # row 4, all-reduced
+
+# --- a LOCAL term, used for everything EXCEPT the seal ---------------------
+m23_serving = (
+    pf4h_graph_target is None
+    and force_uniform_decode is None
+    and force_num_active_loras is None
+    and self._pf4h_m23_ragged_enabled()
+)
 ```
 
-Every term is DP-unanimous by construction (design §4.1/§4.2). No local term
-survives: `uniform_decode` is gone, `has_lora` and the `os.path.isfile`
-activation latch are folded into the readiness bit that rides the existing
-all-reduce.
+Every term of the seal is DP-unanimous by construction (design §4.1/§4.2). No
+local term survives: `uniform_decode` is gone; `has_lora`, the `os.path.isfile`
+activation latch **and the call context** are folded into the readiness bit that
+rides the existing all-reduce. `m23_serving` is a per-rank property, so it gates
+only branch selection, the mode rescue, the R3 assertion and the counters —
+never `pf4h_ragged_seal`.
+
+Two invariants worth stating because the rest of the design leans on them:
+
+* **`pf4h_ragged_seal ⇒ m23_serving` on every rank.** A rank that is not serving
+  contributes 0, which drives `pf4h_ready_all` False group-wide. So gating the
+  rescue on `m23_serving` cannot break risk R3 (`sealed ⇒ PIECEWISE`).
+* **A non-unanimous *rescue* is harmless; a non-unanimous *seal* is not.** The
+  rescue only chooses stock-graph replay over eager — exactly today's behaviour
+  on that rank — and it participates in the same Mori all2all either way.
 
 `original_num_tokens_across_dp` is kept but **demoted to telemetry**
 (`sealed_exact` / `min_orig` / `max_orig` / `sum_orig`).
 
 ---
 
+## 3b. Review findings fixed (2026-08-17, adversarial round 2)
+
+Two independent reviews found the same latent split-collective, plus a durability
+edge and a coverage gap. All are fixed; nothing was relaxed to make them go away.
+
+**F1 / F2 — SEAL UNANIMITY BREAK on the DP idle-lockstep path (risk R2, the
+critical one).** The DP engine runs `execute_dummy_batch()` on any rank that had
+nothing scheduled while the group is running
+(`v1/engine/core.py:1952-1956` → `v1/worker/gpu_worker.py:1101-1103` →
+`_dummy_run(uniform_decode_query_len, uniform_decode=True)`), and that rank goes
+through **the same `_determine_batch_execution_and_padding` and the same
+all-reduce** as its seven busy peers (`gpu_model_runner.py:5938-5959`). At c32p
+(32 concurrent requests over 8 DP ranks) this is routine, not exotic.
+
+The first implementation had two halves of the decision disagreeing about what a
+serving step is:
+
+* `_pf4h_local_readiness` did **not** look at the call context. `_dummy_run`
+  declares `pf4h_graph_target: bool = False` (`gpu_model_runner.py:5839`), which
+  is falsy but **not `None`**, so `if pf4h_graph_target:` was false and the
+  helper fell through to `return self._pf4h_graph_operator_enabled()` → **True**
+  once latched. The idle rank contributed a readiness bit of **1**.
+* `m23_serving` (and therefore `b4096_unanimous`) *did* require
+  `force_uniform_decode is None and force_num_active_loras is None`, which
+  `_dummy_run` always sets.
+
+Consequence on a step where rank 5 is idle: its 1-token uniform dispatch returns
+FULL, so `synced_cudagraph_mode = min(2,1,…) = PIECEWISE`, `should_dp_pad` is
+True and `num_tokens_across_dp` becomes `[4096]*8`. The seven serving ranks saw
+`b4096_unanimous = True`, `pf4h_ready_all = True` → **sealed** → PF4H graph
+replay. Rank 5 saw `m23_serving = False` → pre-M23 branch →
+`pf4h_exact_b4096 = pf4h_graph_target = False` → the PF4H-only NONE fallback →
+a full eager 4096-token forward on stock Mori+AITER. Seven ranks in
+`k0pf6gm_m15_mega` spinning to `M15_SPIN_LIMIT` and fail-closing with `pperr`;
+one rank's Mori all2all waiting on peers that never dispatch. **Server hang.**
+Worse, the R3 assertion and the `eager_b4096` counter are both gated on
+`m23_serving`, so neither fires on the offending rank — `RAGGED_SEAL_RECEIPT`
+would have reported a green `sealed == in_bucket, eager_b4096 == 0` while the
+group was split. Pre-M23 this class was structurally impossible, because the
+idle rank's *original* count of 1 broke `(4096,)*8` for everybody: **M23
+introduced it**, and deviation D4 as first written is what introduced it.
+
+Fix, in three parts:
+
+1. `_pf4h_local_readiness` now takes `force_uniform_decode` and
+   `force_num_active_loras` and returns **False** unless
+   `pf4h_graph_target is None and force_uniform_decode is None and
+   force_num_active_loras is None` — byte-identical to `m23_serving`'s call-context
+   conjuncts. A dummy-batch rank contributes 0, so the whole group refuses in
+   lockstep and the refusal is recorded as `refused_not_ready` (probe P7). The
+   old `if pf4h_graph_target: return True` capture short-circuit is deleted: it
+   is unreachable now, and the capture drive seals through its own branch anyway.
+2. `m23_serving` is **removed from `b4096_unanimous`**. The seal is now built
+   from all-reduced / deployment-global data only, which is what §4.1 demands;
+   serving-ness reaches it exclusively through the readiness bit. (§4.1's earlier
+   claim in these notes that "every term is DP-unanimous by construction" was
+   factually wrong before this change; it is true now.)
+3. The **rescue** keeps an explicit `and m23_serving` — that is where the
+   `_dummy_run` exclusion actually belongs, because rewriting the mode inside a
+   `_dummy_run` would trip its own
+   `assert cudagraph_runtime_mode == _cudagraph_mode`
+   (`gpu_model_runner.py:5966-5970`). A non-unanimous rescue is safe (see §3);
+   a non-unanimous seal is not, and the seal is no longer gated there.
+
+New telemetry: `refused_peer_not_ready` — in-bucket steps where **this** rank was
+ready but the group was not, i.e. the refusal came from a peer (unlatched
+activation *or* a dummy batch). That is the counter that makes this class
+visible in production instead of silent.
+
+**F3 — missing coverage for exactly that decision-table row.** Neither harness
+could express it: `test_m23_patch.py` only ever exercised `_dummy_run` as the
+*local* rank, and `offline_dispatcher_replay.py` modelled all 8 ranks as
+`execute_model` ranks. Added:
+
+* `test_dummy_peer_group()` plus a `decide_group()` helper that models row 4 of
+  the all-reduce for real — each rank's own `_pf4h_local_readiness` ANDed across
+  the group — and asserts the pf4h arm refuses unanimously, all eight ranks
+  agree on the mode, the seven serving ranks record
+  `refused_peer_not_ready`, the stock arm behaves the same minus the seal, and
+  (positive control) an all-serving group still seals. Plus three direct
+  assertions that `_pf4h_local_readiness` returns False for a `_dummy_run` and
+  for the capture drive, and True only for a real `execute_model` step.
+* `RankStep.dummy_run` in the L0 replay, modelling hazard **H3**: the rank
+  contributes readiness 0, can never seal, is never mode-rescued, and increments
+  no counters (GMR gates them on `m23_serving`). New counters
+  `refused_peer_not_ready`, `in_bucket_dummy_peer`, `eager_b4096_dummy_peer`, a
+  `--dummy-peer-rate` synthetic knob (default `0.0`, so the reference trace is
+  unchanged), an H3 diagnostic block, and — the important one — **gate G4**:
+  `replay_step` raises `AssertionError("SPLIT SEAL: …")` the instant the eight
+  ranks disagree about sealing a step. G1/G3 subtract the H3 class by an
+  explicit, separately-reported term rather than tolerating it.
+
+**F4 — non-atomic install (durability).** `_apply` truncated the target in
+place, so a kill mid-write could leave a half-written file that still contained
+`PF4H_M23_RAGGED_SEAL_V1`; a rerun would print "already applied" and the server
+would die on a `SyntaxError`. It now writes `<path>.m23tmp`, `fsync`s it, and
+`os.replace()`s over the target — atomic within the directory, so the file is
+either wholly pre-patch or wholly post-patch. (`coverage_patch.py` has the same
+edge; it is not in this change's scope, but it is worth the same three lines.)
+
+---
+
 ## 4. Deviations from the design (and why)
 
-Four, all deliberate, none changing the design's semantics.
+Five, all deliberate, none changing the design's semantics.
 
 **D1 — E8 and E9 are out of scope for an in-container patcher.**
 `apply.py`, `tests/`, `m15_pin/`, `README.md`, `m18_replication.py` are *not*
@@ -122,16 +251,33 @@ downstream. Minimal-risk choice: keep the four existing syncs and add
 `_post_process_pf4h_ready` as a fifth read of 8 int32. Take the hoist as a
 separate, separately-validated change if it ever matters.
 
-**D4 — the M23 path is additionally gated on "not a `_dummy_run`".** The design
-only excludes the capture drive (`pf4h_graph_target is not None`). But
-`_dummy_run` also calls `_determine_batch_execution_and_padding` with
-`pf4h_graph_target=None` **and** asserts
-`cudagraph_runtime_mode == _cudagraph_mode` immediately afterwards — so a mode
-override during warmup would crash the server before it ever serves. `_dummy_run`
-is the only caller that passes the `force_*` overrides, so
-`force_uniform_decode is None and force_num_active_loras is None` identifies the
-real `execute_model` path exactly. This *strengthens* §4.4 row 6 ("capture stays
-exact-4096 on all ranks — unchanged").
+**D4 — "not a `_dummy_run`" is part of the READINESS BIT, not of the predicate.**
+The design's §4.3 helper only excludes the capture drive, and does it with
+`if pf4h_graph_target: return True` — which, because `_dummy_run`'s parameter
+defaults to `False` rather than `None`, lets an idle DP rank contribute a
+readiness bit of 1 while being unable to seal itself. That is the split
+collective written out in §3b/F1. `_dummy_run` is the only caller that passes the
+`force_*` overrides, so
+`pf4h_graph_target is None and force_uniform_decode is None and
+force_num_active_loras is None` identifies the real `execute_model` path exactly
+— and that test now appears in **both** halves of the decision: in
+`_pf4h_local_readiness` (so the group refuses in lockstep) and in `m23_serving`
+(so branch selection, the rescue, the assert and the counters stay off the dummy
+path). It *strengthens* §4.4 row 6 ("capture stays exact-4096 on all ranks —
+unchanged") and it is what keeps `_dummy_run`'s
+`assert cudagraph_runtime_mode == _cudagraph_mode` unreachable.
+
+**Design erratum.** §4.3's `_pf4h_local_readiness` listing and §4.2's
+`b4096_unanimous` are, as printed in the design, mutually inconsistent about what
+a serving step is; §10/R2 correctly calls the resulting split "Critical" but the
+code in §4.3 realises it. The design doc is left byte-unchanged (its line numbers
+are cited throughout this file and by two reviews); the correction lives here and
+in the source comments.
+
+**D5 — the install is atomic (`tmp` + `fsync` + `os.replace`).** Not in the
+design, which says nothing about write durability. See §3b/F4: an interrupted
+truncate-in-place write would leave a marker inside a broken file, and marker
+idempotency would then refuse to repair it.
 
 ### Choices made where the design offered options
 
@@ -203,20 +349,35 @@ Emitted every 100 serving steps per rank, at `logger.info`:
 
 ```
 RAGGED_SEAL_RECEIPT rank=%d steps=%d in_bucket=%d sealed=%d sealed_ragged=%d
-  sealed_exact=%d refused_not_unanimous=%d refused_not_ready=%d eager_b4096=%d
-  uniform_rescued=%d min_orig=%d max_orig=%d sum_orig=%d in_bucket_sum_orig=%d
+  sealed_exact=%d refused_not_unanimous=%d refused_not_ready=%d
+  refused_peer_not_ready=%d eager_b4096=%d uniform_rescued=%d min_orig=%d
+  max_orig=%d sum_orig=%d in_bucket_sum_orig=%d
 ```
 
-`uniform_rescued` (probe P6) and `in_bucket_sum_orig` (probe P1's numerator;
-`sum_orig` is its denominator) are additions to the design's §8.2 field list;
-everything else is verbatim. `min_orig` reads `1073741824` if no DP vector was
-ever seen.  A `RAGGED_SEAL_RECEIPT_FINAL rank=N k=v ...` line is also registered
-via `atexit` (guarded by a bare `try/except`, because logging handlers may be
-closed at interpreter teardown) so the last partial 100-step window is never
-lost.
+`uniform_rescued` (probe P6), `in_bucket_sum_orig` (probe P1's numerator;
+`sum_orig` is its denominator) and `refused_peer_not_ready` are additions to the
+design's §8.2 field list; everything else is verbatim. `min_orig` reads
+`1073741824` if no DP vector was ever seen.  A
+`RAGGED_SEAL_RECEIPT_FINAL rank=N k=v ...` line is also registered via `atexit`
+(guarded by a bare `try/except`, because logging handlers may be closed at
+interpreter teardown) so the last partial 100-step window is never lost.
+
+`refused_peer_not_ready` splits `refused_not_ready` into "my own activation file
+has not latched" versus "a **peer** refused" — the peer case being either an
+unlatched peer (transient, probe P7) or a peer inside `execute_dummy_batch` (the
+H3 class, §3b/F1: permanent-ish coverage loss, and the class that *would* have
+been a split collective). A steady non-zero `refused_peer_not_ready` long after
+warmup means H3, and its size is the honest ceiling on achievable coverage.
 
 **Success criterion (design §8.2): `sealed == in_bucket` and `eager_b4096 == 0`
-on every rank.**
+on every rank — reading `in_bucket` net of the H3 class.** With one rank
+idling in `execute_dummy_batch`, the group *correctly* refuses; that step counts
+in `in_bucket`, in `refused_not_ready`/`refused_peer_not_ready`, and (on the
+pf4h arm) in `eager_b4096`. So the exact criterion is
+`sealed == in_bucket − refused_peer_not_ready_due_to_H3` and
+`eager_b4096 == that same H3 count`. **A `sealed` count that exceeds
+`in_bucket − refused_not_ready` would be the split — that is the number to
+watch.**
 
 The pre-existing `M15_COVERAGE` line is untouched and still emits, so camp3's
 validity gate (`b4096_steps ≈ in_bucket ≈ 230/600`) keeps working: `b4096_steps`
@@ -288,8 +449,17 @@ logger.info("M23_TRACE rank=%d step=%d n_orig=%s",
             _m23["steps"], list(m23_orig_counts))
 ```
 
-**Gates:** `sealed == in_bucket`, `refused_not_unanimous == 0`,
-`eager_b4096 == 0` on every rank. Exit code 1 if any fails.
+**Gates** (exit code 1 if any of G1–G3 fails; G4 raises immediately):
+
+| | Gate | Why it is stated this way |
+|---|---|---|
+| **G1** | `sealed == in_bucket - in_bucket_dummy_peer` | H3 steps (a peer inside `execute_dummy_batch`) are a *correct* group-wide refusal; they are subtracted by an explicit, separately-printed term, never tolerated |
+| **G2** | `refused_not_unanimous == 0` | the H2 class |
+| **G3** | `eager_b4096 == eager_b4096_dummy_peer` | nothing runs eager except H3 |
+| **G4** | no step where the eight ranks disagree about sealing | `replay_step` raises `AssertionError("SPLIT SEAL: …")` on the spot; **no exceptions, ever** — this is the collective-deadlock property |
+
+Feed a trace's H3 rows in with `"dummy_run": true` on the idle rank (or
+`--dummy-peer-rate` for a synthetic trace).
 
 > On the *synthetic* trace `refused_not_unanimous` is deliberately non-zero and
 > the harness prints an H2 diagnostic explaining why: a rank with a small
@@ -312,6 +482,15 @@ Reference output on the built-in synthetic trace (600 steps, seed 0):
 — i.e. it reproduces both design findings at once: the ~50× coverage gap **and**
 the "unsealed in-bucket steps run eagerly, not on the stock graph" finding.
 
+With `--dummy-peer-rate 0.2` on the same trace (600 steps, seed 0): 39 in-bucket
+steps become H3, `sealed/rank` drops 211 → 160, `refused_peer_not_ready` and
+`eager_b4096` both read 34/rank, **G1/G3 still pass** (34 == 34) and **G4 passes
+on all 600 steps** — i.e. the group refuses in lockstep instead of splitting.
+The counterfactual is a test, not a claim: `Config(readiness_ignores_call_context
+=True)` reproduces the pre-fix readiness bit exactly (context ignored, so the
+dummy rank contributes 1) and `replay_step` raises `SPLIT SEAL` on the first H3
+step — proof the harness can now see the bug it previously could not express.
+
 ### L1 — coverage wiring, activation withheld (no hang risk)
 
 One c32p run, `graph_target=pf4h`, **do not create the activation file**.
@@ -319,16 +498,28 @@ One c32p run, `graph_target=pf4h`, **do not create the activation file**.
 grep -o 'RAGGED_SEAL_RECEIPT.*' server*.log | tail -8
 ```
 **Gate:** `in_bucket ≈ 230` per rank, `refused_not_ready == in_bucket`,
-`sealed == 0`, `eager_b4096 == 0` (the rescue still runs), no `pperr`.
+`sealed == 0`, no `pperr`.
+
+Note `eager_b4096 == in_bucket` here and that is **correct, not a failure**: a
+PF4H-only server has no ordinary `regular_b4096` key, so an unsealed in-bucket
+step ends at `CUDAGraphMode.NONE` (the pre-existing fallback the rescue runs
+*into*, `gpu_model_runner.py:3973-3981`). `eager_b4096 == 0` is an L2 gate, once
+the seal succeeds. On a **stock**-target run the same counters read
+`refused_not_ready == in_bucket` (readiness is target-gated off) while
+`eager_b4096 == 0`, because there the rescue lands on a registered key.
+
 Also confirms probe **P7**: `refused_not_ready` must stop increasing once the
-sentinel appears.
+sentinel appears; anything that keeps increasing after warmup is
+`refused_peer_not_ready`, i.e. the H3 class.
 
 ### L2 — mega live, the coverage claim
 
 Same run with `/tmp/vllm-pf4h-enable` present.
-**Gates:** `sealed == in_bucket` on all 8 ranks, `sealed_ragged ≈ 0.98 ×
-in_bucket`, `eager_b4096 == 0`, zero `pperr`, no `M15-DESC-012` /
-`M15-STATE-*` / `PF4H-*` blockers in the log. Diff the
+**Gates:** `sealed == in_bucket - refused_peer_not_ready` on all 8 ranks (equal
+to `in_bucket` if no rank ever idled), `sealed_ragged ≈ 0.98 × in_bucket`,
+`eager_b4096 == refused_peer_not_ready`, zero `pperr`, no `M15-DESC-012` /
+`M15-STATE-*` / `PF4H-*` blockers in the log. **`sealed` must never exceed
+`in_bucket - refused_not_ready` — that inequality is the split (§3b/F1).** Diff the
 `attest_descriptor_words` receipt against a pre-M23 run — it must be
 byte-identical (risk R8).
 
@@ -367,11 +558,21 @@ can verify the candidate arm was actually exercised.
 | **P4** non-finite padded rows | `torch.isfinite(hidden_states[n_orig:]).all()` on a debug step, **both arms** |
 | **P5** stock dispatches padded rows | log `dispatch_recv_token_num.sum().item()` next to `a1.shape[0]` at MORI:97 — must not scale with `n_orig` |
 | **P6** H1/H2 frequency | `uniform_rescued` and `refused_not_unanimous` in the receipt |
-| **P7** activation-latch unanimity | `refused_not_ready` reaches a fixed value early and never increases |
+| **P7** activation-latch unanimity | `refused_not_ready` reaches a fixed value early and never increases; anything that keeps growing is `refused_peer_not_ready` = the H3 class (a peer in `execute_dummy_batch`), which is the real ceiling on coverage |
+
+> **P2 gap, carried forward.** `DescriptorSlot.SPIN_DBG` (slot 52) is declared
+> (`m15_contracts.py:136`, buffer at `:869-871`) and written by the kernel
+> (KERNEL:1238), but **nothing in the shim reads it** — `grep` finds zero
+> readers. L3 as written therefore cannot be executed today; a ~15-line readout
+> next to the existing receipt plumbing in `m15_runtime.py` is a prerequisite for
+> the L5 blocking gate. Deliberately **not** added here: `m15_runtime.py` is on
+> the design's explicit "not changed" list (§8.1) and this patcher's scope is the
+> seal, not the megakernel runtime. The cross-rank skew half of the mitigation
+> *is* live (`min_orig`/`max_orig`/`sum_orig` in the receipt).
 
 ---
 
-## 10. Test coverage (`test_m23_patch.py`, 140 checks, CPU only)
+## 10. Test coverage (`test_m23_patch.py`, 179 checks, CPU only)
 
 1. `coverage_patch.main()` then `m23_patch.main()` on byte-copies of the
    deployed mirror; every anchor matches exactly once.
@@ -382,20 +583,32 @@ can verify the candidate arm was actually exercised.
    touch `weights.py`.
 4. Idempotency: re-running both patchers changes zero bytes.
 5. Chain order: m23-before-coverage exits non-zero **and writes nothing**;
-   a plain (non-PF4H) tree exits 0 as a no-op; a mangled anchor is fatal.
+   a plain (non-PF4H) tree exits 0 as a no-op; a mangled anchor is fatal; the
+   install goes through `tmp` + `os.replace` and leaves no `.m23tmp` behind.
 6. The predicate over the design's decision table: exact-4096, ragged in-bucket,
    `VLLM_PF4H_M23_RAGGED=0`, H1 on both arms, rescue ablation (and its override
    for sealed steps), H2, sub-4096 buckets, ubatching, LoRA (flag and config),
    `VLLM_MOE_SKIP_PADDING`, one cold peer, unlatched local activation, capture
-   drive (stamp + refusal + stock target), `_dummy_run`, `dp_size != 8`.
-7. The predicate replica is pinned to the installed source: 17 GMR fragments and
-   4 dp_utils fragments must appear verbatim.
-8. Scope: every new GMR branch is gated on `m23_serving`.
+   drive (stamp + refusal + stock target), `_dummy_run`, `dp_size != 8`, and
+   the readiness bit contributed by each call context (serving → 1, `_dummy_run`
+   → 0, capture drive → 0).
+6b. **Whole-group** decisions with a real modelled all-reduce (`decide_group`):
+   the DP idle-lockstep dummy-batch peer on both arms (nobody seals, all eight
+   ranks agree on the mode, the dummy rank is not rescued, the seven serving
+   ranks record `refused_peer_not_ready`), an unlatched peer, and an all-serving
+   positive control that does seal.
+7. The predicate replica is pinned to the installed source: 23 GMR fragments and
+   4 dp_utils fragments verbatim, **plus two negative assertions** — the
+   `b4096_unanimous` expression contains no `m23_serving`, and
+   `_pf4h_local_readiness` contains no unconditional `return True`.
+8. Scope: every new GMR branch is gated on `m23_serving`; the env gate appears in
+   all three places it must (readiness, `m23_serving`, `b4096_unanimous`).
 9. The patched `dp_utils.py` **executes** under CPU torch: `_run_ar` stages a
    `(5, 8)` tensor and carries the bit on row 4 (and defaults it to 0 for
    unpatched callers); the reducer tolerates a legacy 4-row tensor; DP padding /
    min-mode still behave; and all three caller arities (3-, 4-, 5-tuple, plus
    both `dp_size == 1` early exits) are exercised — `forward_context.py:304` and
    the two spec-decode callers are unchanged.
-10. The L0 harness agrees with the predicate replica on the same table, and its
-    CLI runs end-to-end.
+10. The L0 harness agrees with the predicate replica on the same table
+    (including the new H3 row), its gates pass on a dummy-peer-heavy synthetic
+    trace, no `SPLIT SEAL` is ever raised, and its CLI runs end-to-end.

@@ -431,3 +431,43 @@ in-bucket step in a PF4H-target server runs with **no cudagraph at all**, and a
 rank whose local batch looks like a uniform decode runs the whole model eagerly
 at 4096 padded tokens in *both* arms.  Top risk is the fail-closed
 `M15_SPIN_LIMIT` against ragged cross-rank arrival skew.  No code changed.
+
+## M23 implementation + adversarial-review fix (branch `ablations`, 2026-08-18)
+
+`distributed-kernels/fused_moe/overnight/aug18-prefill/m23/` — the design landed
+as a post-apply, **in-container** patcher (`m23_patch.py`, marker
+`PF4H_M23_RAGGED_SEAL_V1`, chained strictly after `coverage_patch.py` and fatal
+if the order is inverted), plus CPU tests (`test_m23_patch.py`, 179 checks that
+run the real patch chain against byte-copies of the deployed vLLM mirror) and the
+L0 offline dispatcher replay (`offline_dispatcher_replay.py`).  Implementation
+notes and the full deviation list: `m23/M23_IMPL_NOTES.md`.
+
+Two adversarial reviews then found a **split-collective the fix itself
+introduced**, and it is fixed here.  vLLM's DP engine runs `execute_dummy_batch()`
+on any rank that had nothing scheduled while the group is running, and that rank
+goes through the *same* `_determine_batch_execution_and_padding` and the *same*
+all-reduce as its busy peers.  The first implementation's readiness bit ignored
+the call context — `_dummy_run`'s `pf4h_graph_target` defaults to `False`, not
+`None`, so the idle rank contributed a readiness bit of **1** while the seal
+predicate's own `m23_serving` term (which it did check) meant that same rank
+could never seal.  Result on a routine c32p step: seven ranks seal and replay the
+megakernel graph, the eighth runs stock Mori+AITER eagerly — seven ranks spin to
+`M15_SPIN_LIMIT` and fail closed, the eighth's all2all hangs, and every counter
+reports green because the R3 assert and `eager_b4096` are gated on the same local
+term.  Pre-M23 this was structurally impossible (the idle rank's original count
+of 1 broke the `(4096,)*8` gate for everybody).
+
+The fix: serving-ness now reaches the seal **only** through the all-reduced
+readiness bit (a `_dummy_run` or capture-drive rank contributes 0, so the whole
+group refuses in lockstep and records `refused_peer_not_ready`), `m23_serving` is
+removed from `b4096_unanimous` so the predicate really is built from all-reduced
+data only, and the local term survives just where a per-rank decision is safe —
+the uniform-decode mode rescue.  Coverage for the row: a whole-group predicate
+test with a real modelled all-reduce, an H3 (`dummy_run`) class in the L0 replay
+with a new gate **G4** that raises `SPLIT SEAL` the instant the eight ranks
+disagree, and a regression switch that reproduces the pre-fix readiness bit and
+proves G4 catches it.  The patcher also installs atomically now
+(`tmp` + `fsync` + `os.replace`), so an interrupted write cannot leave a marker
+inside a truncated file.  Still open: `DescriptorSlot.SPIN_DBG` has no reader
+anywhere in the shim, so probe P2 (the blocking gate for the throughput A/B)
+cannot be executed as written.

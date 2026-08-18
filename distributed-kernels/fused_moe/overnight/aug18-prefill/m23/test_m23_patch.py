@@ -265,6 +265,18 @@ def test_chain_order(tmp: Path) -> None:
     rc = bind_m23(broken).main()
     check(rc != 0, f"a mangled dp_utils anchor is fatal (got {rc})")
 
+    # the install must be atomic: a kill mid-write must never leave a truncated
+    # file that still carries the marker (a rerun would then print "already
+    # applied" and the server would die on a SyntaxError).
+    src = M23_PATCH_SRC.read_text()
+    check("os.replace(tmp_path, path)" in src, "m23_patch installs via os.replace")
+    check(
+        'tmp_path = path + ".m23tmp"' in src,
+        "m23_patch stages the new bytes in a sibling temp file",
+    )
+    leftovers = sorted(str(p) for p in tmp.rglob("*.m23tmp"))
+    check(not leftovers, f"no .m23tmp files survive a run (found {leftovers})")
+
 
 # --------------------------------------------------------------------------
 # 6  the new seal predicate
@@ -306,7 +318,23 @@ class PredicateModel:
             return False
         return self.operator_latched
 
-    def _pf4h_local_readiness(self, *, has_lora, pf4h_graph_target):
+    def _pf4h_local_readiness(
+        self,
+        *,
+        has_lora,
+        pf4h_graph_target,
+        force_uniform_decode,
+        force_num_active_loras,
+    ):
+        # The call context is part of the bit: a rank in _dummy_run (including
+        # the DP idle-lockstep execute_dummy_batch) can never seal, so it must
+        # not let its peers seal either (risk R2).
+        if (
+            pf4h_graph_target is not None
+            or force_uniform_decode is not None
+            or force_num_active_loras is not None
+        ):
+            return False
         if not self._pf4h_m23_ragged_enabled():
             return False
         if self.env.get("VLLM_PF4H_B4096_GRAPH_TARGET") != "pf4h":
@@ -315,8 +343,6 @@ class PredicateModel:
             return False
         if self.env.get("VLLM_MOE_SKIP_PADDING", "0") not in ("", "0"):
             return False
-        if pf4h_graph_target:
-            return True
         return self._pf4h_graph_operator_enabled()
 
     # ---- E4 -----------------------------------------------------------
@@ -354,7 +380,10 @@ class PredicateModel:
             pf4h_exact = tuple(original_counts) == (4096,) * 8
 
         local_ready = self._pf4h_local_readiness(
-            has_lora=has_lora, pf4h_graph_target=pf4h_graph_target
+            has_lora=has_lora,
+            pf4h_graph_target=pf4h_graph_target,
+            force_uniform_decode=force_uniform_decode,
+            force_num_active_loras=force_num_active_loras,
         )
         pf4h_ready_all = bool(local_ready and peer_ready)
 
@@ -366,8 +395,10 @@ class PredicateModel:
         )
         m23_orig = tuple(int(v) for v in (original_counts or ()))
         m23_exact = m23_orig == (4096,) * 8
+        # NOTE: no m23_serving here -- it is a LOCAL term and the seal must be
+        # built only from all-reduced / deployment-global data (risk R2).
         b4096_unanimous = bool(
-            m23_serving
+            self._pf4h_m23_ragged_enabled()
             and not should_ubatch
             and synced_cudagraph_mode == self.PIECEWISE
             and num_tokens_across_dp is not None
@@ -389,6 +420,7 @@ class PredicateModel:
 
         if (
             b4096_unanimous
+            and m23_serving
             and cudagraph_mode != self.PIECEWISE
             and (
                 pf4h_ragged_seal
@@ -415,7 +447,46 @@ class PredicateModel:
             "sealed_exact": pf4h_exact and m23_exact,
             "sealed_ragged": pf4h_exact and not m23_exact,
             "ready_all": pf4h_ready_all,
+            "local_ready": local_ready,
+            "m23_serving": m23_serving,
+            "refused_not_ready": bool(b4096_unanimous and not pf4h_ready_all),
+            "refused_peer_not_ready": bool(
+                b4096_unanimous and not pf4h_ready_all and local_ready
+            ),
         }
+
+
+def decide_group(rank_calls, **shared):
+    """Run ``decide`` for a whole DP group with a real readiness all-reduce.
+
+    ``rank_calls`` is a list of per-rank kwarg dicts (each may carry its own
+    ``model``).  Row 4 of the all-reduce is modelled exactly: each rank's
+    contribution is its own ``_pf4h_local_readiness``, and ``pf4h_ready_all``
+    is the AND over the group -- which is how a single non-serving rank has to
+    be able to veto the seal for everybody.
+    """
+    contributions = []
+    for call in rank_calls:
+        kwargs = {**shared, **call}
+        model = kwargs.pop("model")
+        contributions.append(
+            model._pf4h_local_readiness(
+                has_lora=kwargs.get("has_lora", False),
+                pf4h_graph_target=kwargs.get("pf4h_graph_target"),
+                force_uniform_decode=kwargs.get("force_uniform_decode"),
+                force_num_active_loras=kwargs.get("force_num_active_loras"),
+            )
+        )
+    out = []
+    for i, call in enumerate(rank_calls):
+        kwargs = {**shared, **call}
+        model = kwargs.pop("model")
+        # every OTHER rank's contribution
+        kwargs["peer_ready"] = all(
+            c for j, c in enumerate(contributions) if j != i
+        )
+        out.append(model.decide(**kwargs))
+    return out
 
 
 PF4H_ENV = {
@@ -602,6 +673,38 @@ def test_predicate() -> None:
     check(not sealed, "a single not-ready peer refuses the seal on every rank")
     check(f["b4096_unanimous"] and not f["ready_all"], "... counted refused_not_ready")
 
+    # -- a _dummy_run call contributes readiness 0 (risk R2, the split) -----
+    check(
+        m._pf4h_local_readiness(
+            has_lora=False,
+            pf4h_graph_target=False,
+            force_uniform_decode=True,
+            force_num_active_loras=0,
+        )
+        is False,
+        "a _dummy_run rank contributes readiness 0 (never 1)",
+    )
+    check(
+        m._pf4h_local_readiness(
+            has_lora=False,
+            pf4h_graph_target=True,
+            force_uniform_decode=False,
+            force_num_active_loras=0,
+        )
+        is False,
+        "the capture drive contributes readiness 0",
+    )
+    check(
+        m._pf4h_local_readiness(
+            has_lora=False,
+            pf4h_graph_target=None,
+            force_uniform_decode=None,
+            force_num_active_loras=None,
+        )
+        is True,
+        "a real execute_model step contributes readiness 1 once latched",
+    )
+
     # -- this rank's own latch not yet set ---------------------------------
     nl = P(dict(PF4H_ENV), operator_latched=False)
     mode, sealed, f = nl.decide(
@@ -622,7 +725,14 @@ def test_predicate() -> None:
         original_counts=EXACT,
         pf4h_graph_target=True,
     )
-    check(sealed and not f["b4096_unanimous"], "capture drive stamps, bypassing M23")
+    # b4096_unanimous is a pure statement about the all-reduced group, so it
+    # may well be true here; what matters is that the capture drive is NOT a
+    # serving step, so nothing M23 owns (rescue, counters, seal branch) fires.
+    check(
+        sealed and not f["m23_serving"] and not f["local_ready"],
+        "capture drive stamps, bypassing M23",
+    )
+    check(mode == P.PIECEWISE, "capture drive keeps its dispatched mode")
     raised = False
     try:
         m.decide(
@@ -658,9 +768,10 @@ def test_predicate() -> None:
         force_num_active_loras=0,
     )
     check(
-        not sealed and not f["b4096_unanimous"],
+        not sealed and not f["m23_serving"] and not f["local_ready"],
         "a _dummy_run (force_* set) never takes the M23 path",
     )
+    check(mode == P.NONE, "a _dummy_run is not mode-rescued on the pf4h arm")
     mode, sealed, f = m.decide(
         local_mode=P.PIECEWISE,
         descriptor_tokens=4096,
@@ -686,6 +797,124 @@ def test_predicate() -> None:
     check(not sealed, "dp_size != 8 never seals")
 
 
+def test_dummy_peer_group() -> None:
+    """The decision-table row the adversarial review found missing.
+
+    The DP engine's idle-lockstep path (v1/engine/core.py's busy loop ->
+    gpu_worker.execute_dummy_batch -> _dummy_run(uniform_decode_query_len,
+    uniform_decode=True)) puts ONE rank in a dummy batch while its seven peers
+    run execute_model.  That rank reaches the same all-reduce with
+    cudagraph_runtime_mode=None (so force_eager is False), its 1-token uniform
+    dispatch returns FULL, the synced mode is therefore PIECEWISE, DP padding
+    lifts everybody to 4096 -- and the seven peers see a perfectly unanimous
+    B4096 bucket.  It can never seal itself (its call context takes the pre-M23
+    branch and it ends at CUDAGraphMode.NONE), so if it contributed a readiness
+    bit of 1 the group would SPLIT: seven ranks replaying the megakernel graph,
+    one running stock Mori+AITER eagerly -> M15_SPIN_LIMIT fail-close on seven
+    and a hung all2all on the eighth.
+    """
+    print("\n[6b] the DP idle-lockstep dummy-batch peer (risk R2)")
+    P = PredicateModel
+
+    def group(env, *, dummy_rank=7):
+        m = P(dict(env))
+        calls = []
+        orig = [4096, 3300, 4096, 2048, 4096, 4096, 700, 4096]
+        orig[dummy_rank] = 1
+        for i in range(8):
+            if i == dummy_rank:
+                calls.append(
+                    dict(
+                        model=m,
+                        # _dummy_run's own defaults / arguments, verbatim:
+                        pf4h_graph_target=False,   # the _dummy_run default
+                        force_uniform_decode=True,
+                        force_num_active_loras=0,
+                        uniform_decode=True,
+                        # post-DP re-dispatch of a uniform batch at 4096 falls
+                        # through DISP's B4096 branch and returns NONE
+                        local_mode=P.NONE,
+                    )
+                )
+            else:
+                calls.append(dict(model=m, local_mode=P.PIECEWISE))
+        return orig, decide_group(
+            calls,
+            descriptor_tokens=4096,
+            synced_cudagraph_mode=P.PIECEWISE,
+            num_tokens_across_dp=PADDED8,
+            original_counts=tuple(orig),
+        )
+
+    orig, res = group(PF4H_ENV)
+    sealed = [r[1] for r in res]
+    modes = [r[0] for r in res]
+    flags = [r[2] for r in res]
+    check(not any(sealed), "pf4h arm: NO rank seals when a peer is in a dummy run")
+    check(len(set(sealed)) == 1, "pf4h arm: the seal decision is unanimous")
+    check(len(set(modes)) == 1 and modes[0] == P.NONE,
+          f"pf4h arm: all eight ranks agree on the mode (got {modes})")
+    check(
+        all(f["b4096_unanimous"] for f in flags),
+        "the step is still counted in_bucket on every rank (P7 denominator)",
+    )
+    check(
+        all(f["refused_not_ready"] for f in flags),
+        "every rank records refused_not_ready",
+    )
+    check(
+        sum(f["refused_peer_not_ready"] for f in flags) == 7,
+        "the seven serving ranks attribute the refusal to a peer",
+    )
+    check(
+        not flags[7]["m23_serving"] and not flags[7]["local_ready"],
+        "the dummy rank is neither serving nor ready",
+    )
+
+    # the same row on the stock arm: nobody seals, the dummy rank is not
+    # rescued (that would fight _dummy_run's cudagraph_runtime_mode assert),
+    # the serving ranks behave exactly as they do today.
+    orig, res = group(STOCK_ENV)
+    sealed = [r[1] for r in res]
+    modes = [r[0] for r in res]
+    check(not any(sealed), "stock arm: nobody seals either")
+    check(
+        modes[7] == P.NONE and all(mo == P.PIECEWISE for mo in modes[:7]),
+        f"stock arm: the dummy rank is NOT mode-rescued (got {modes})",
+    )
+
+    # positive control: with all eight ranks in execute_model the same shape
+    # seals on every rank.
+    m = P(dict(PF4H_ENV))
+    res = decide_group(
+        [dict(model=m, local_mode=P.PIECEWISE) for _ in range(8)],
+        descriptor_tokens=4096,
+        synced_cudagraph_mode=P.PIECEWISE,
+        num_tokens_across_dp=PADDED8,
+        original_counts=RAGGED,
+    )
+    check(
+        all(r[1] for r in res) and all(r[0] == P.PIECEWISE for r in res),
+        "positive control: all-serving ranks seal unanimously under PIECEWISE",
+    )
+
+    # and one rank whose activation file has not latched still vetoes for all
+    cold = P(dict(PF4H_ENV), operator_latched=False)
+    warm = P(dict(PF4H_ENV))
+    res = decide_group(
+        [dict(model=warm, local_mode=P.PIECEWISE) for _ in range(7)]
+        + [dict(model=cold, local_mode=P.PIECEWISE)],
+        descriptor_tokens=4096,
+        synced_cudagraph_mode=P.PIECEWISE,
+        num_tokens_across_dp=PADDED8,
+        original_counts=RAGGED,
+    )
+    check(
+        not any(r[1] for r in res),
+        "an unlatched peer vetoes the seal for the whole group (P7)",
+    )
+
+
 def test_predicate_matches_source(files: dict[str, Path]) -> None:
     """The replica above is only evidence if it mirrors the installed text."""
     print("\n[7] the replica tracks the patched source")
@@ -698,19 +927,48 @@ def test_predicate_matches_source(files: dict[str, Path]) -> None:
         "return self._pf4h_graph_operator_enabled()",
         "and force_uniform_decode is None",
         "and force_num_active_loras is None",
+        # the readiness bit itself must reject every non-serving call context
+        "            pf4h_graph_target is not None\n"
+        "            or force_uniform_decode is not None\n"
+        "            or force_num_active_loras is not None\n",
+        "        force_uniform_decode: bool | None,\n"
+        "        force_num_active_loras: int | None,\n",
+        "            force_uniform_decode=force_uniform_decode,\n"
+        "            force_num_active_loras=force_num_active_loras,\n",
+        # ... and the seal must be built from all-reduced data only
+        "        b4096_unanimous = bool(\n"
+        "            self._pf4h_m23_ragged_enabled()\n"
+        "            and not should_ubatch\n",
         "and synced_cudagraph_mode == CUDAGraphMode.PIECEWISE.value",
         "and all(int(v) == 4096 for v in num_tokens_across_dp.tolist())",
         "pf4h_ragged_seal = bool(b4096_unanimous and pf4h_ready_all)",
         "            pf4h_exact_b4096 = pf4h_ragged_seal",
+        "            b4096_unanimous\n            and m23_serving\n",
         "            and cudagraph_mode != CUDAGraphMode.PIECEWISE",
         'os.environ.get("VLLM_PF4H_B4096_UNIFORM_RESCUE", "1")',
         "batch_descriptor = BatchDescriptor(num_tokens=4096)",
         "assert cudagraph_mode == CUDAGraphMode.PIECEWISE, (",
         "pf4h_ready=pf4h_local_ready,",
         "return_pf4h_ready=True,",
+        '_m23["refused_peer_not_ready"] += 1',
     )
     for frag in required:
-        check(frag in gmr, f"source contains: {frag[:58]}")
+        check(frag in gmr, f"source contains: {frag[:58]!r}")
+
+    # the fixed defect, stated as a negative: m23_serving is a LOCAL term and
+    # must not appear anywhere in the seal predicate (risk R2).
+    seal_block = gmr.split("b4096_unanimous = bool(", 1)[1].split(")\n", 1)[0]
+    check(
+        "m23_serving" not in seal_block,
+        "b4096_unanimous contains no local term (m23_serving absent)",
+    )
+    readiness_block = gmr.split("def _pf4h_local_readiness(", 1)[1].split(
+        "\n    def ", 1
+    )[0]
+    check(
+        "return True" not in readiness_block,
+        "readiness has no unconditional True (the capture short-circuit is gone)",
+    )
 
     dpu = files["v1/worker/dp_utils.py"].read_text()
     for frag in (
@@ -743,6 +1001,10 @@ def test_no_behaviour_change_off_path(files: dict[str, Path]) -> None:
     check(
         gmr.count("and self._pf4h_m23_ragged_enabled()") == 1,
         "m23_serving folds in the env gate",
+    )
+    check(
+        gmr.count("self._pf4h_m23_ragged_enabled()") == 3,
+        "the env gate also guards readiness and b4096_unanimous",
     )
     check("elif m23_serving:" in gmr, "the seal override is gated on m23_serving")
     check("if m23_serving and pf4h_exact_b4096:" in gmr, "the R3 assert is gated")
@@ -1005,6 +1267,72 @@ def test_offline_replay() -> None:
         "H2 shows up as refused_not_unanimous",
     )
 
+    # H3: one rank inside execute_dummy_batch while the other seven serve.
+    # This is the row the adversarial review found missing from the L0 model.
+    h3_ranks = step([4096, 1, 4096, 4096, 4096, 4096, 4096, 4096], uniform_idx=(1,))
+    h3_ranks[1].dummy_run = True
+    hc3, hd3 = rp.replay([h3_ranks], cfg, m23=True)
+    check(
+        all(c.sealed == 0 for c in hc3),
+        "H3: a peer in execute_dummy_batch refuses the seal for the group",
+    )
+    check(hd3["h3_steps"] == 1, "the replay reports the H3 step")
+    check(
+        sum(c.in_bucket for c in hc3) == 7,
+        "H3: only the seven SERVING ranks count the step (counters are "
+        "gated on m23_serving)",
+    )
+    check(
+        all(c.in_bucket_dummy_peer == c.in_bucket for c in hc3),
+        "H3: the whole in-bucket loss is attributed to the dummy peer",
+    )
+    check(
+        sum(c.refused_peer_not_ready for c in hc3) == 7,
+        "H3: the seven serving ranks attribute the refusal to a peer (P7)",
+    )
+    check(
+        all(c.uniform_rescued == 0 for c in hc3),
+        "H3: the dummy rank is never mode-rescued",
+    )
+    # the counterfactual: with the PRE-FIX readiness bit (one that ignores the
+    # call context, so the dummy rank contributes 1) the very same step splits
+    # the group -- and the harness now says so instead of reporting green.
+    split_seen = ""
+    try:
+        rp.replay(
+            [h3_ranks],
+            rp.Config(graph_target="pf4h", readiness_ignores_call_context=True),
+            m23=True,
+        )
+    except AssertionError as exc:
+        split_seen = str(exc)
+    check(
+        "SPLIT SEAL" in split_seen,
+        f"pre-fix readiness is caught as a SPLIT SEAL (got {split_seen[:60]!r})",
+    )
+
+    # ... and the gates must PASS on it, because refusing is the right answer
+    proc_h3 = subprocess.run(
+        [
+            sys.executable, str(rp_path), "--synthetic", "--steps", "200",
+            "--dummy-peer-rate", "0.25",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    check(
+        "H3 diagnostic" in proc_h3.stdout,
+        "CLI reports the H3 class when dummy peers are present",
+    )
+    check(
+        "PASS  G4" in proc_h3.stdout,
+        "CLI reports the no-split-seal gate G4",
+    )
+    check(
+        "SPLIT SEAL" not in proc_h3.stdout + proc_h3.stderr,
+        "no split seal on a trace full of dummy peers",
+    )
+
     # end-to-end CLI, including the L0 gate exit code
     proc = subprocess.run(
         [sys.executable, str(rp_path), "--synthetic", "--steps", "120"],
@@ -1036,6 +1364,7 @@ def main() -> int:
         files = test_chain_applies(tmp / "chain")
         test_chain_order(tmp)
         test_predicate()
+        test_dummy_peer_group()
         test_predicate_matches_source(files)
         test_no_behaviour_change_off_path(files)
         test_dp_utils_executes(files)
