@@ -244,3 +244,59 @@ workflow (implement → adversarial verify → fix, compile-only on node while G
 busy). Wave 3 = MoK gate (R0a then fill sweep). Wave 4 = e2e campaign vs GENUINE
 native baseline, three-way decomposition, cells c32p + c8/c16/c32 (+c512p if
 memory), fairness-audit agent before any quoted claim.
+
+## 06:00 PDT — G7 (TGRAIN) + G0b-local (bimodal fill); REPORT r2
+G7 DISCHARGED, laptop-only (commit 9ce36341): hkp::csr_scan_block256 and
+hkp::pull_src_fill are correct for every T in [0, T_cap] — no alignment
+requirement; only precondition is blockDim.x==256, already structural via
+__launch_bounds__(256,1). T_eff=0 safe at all FIVE M24 substitution sites, so
+§F.4's N=0 ladder point is interpretable and resolves to the UNCLAMPED branch
+(<300us, ratio <0.04); clamped branch struck, §H.4 clamp right released.
+Min safe TGRAIN = 1; SHIP 8 (-DK0P6_M24_TGRAIN=8) as cosmetic margin (<=7
+phantom rows of ~1539, <0.5%, keeps T_eff*896*16 128B-aligned). At grain 8 the
+round-up penalty ~1.00 => TGRAIN column moot, raw-fill table is operative.
+TWO GATE-PLAN CHANGES: (a) ZERO_PAD write volume (T_cap-N)*H*2B is ANTI-
+correlated with N (58.7MB/layer at N=0) — an affine fit of step time vs N
+absorbs it as spurious negative slope and BIASES phi; F.3 needs a ZERO_PAD-only
+calibration arm (FILL=1,NULLWORK=1,NORIG_CONST=0) or the byte term as a FIXED
+regressor, else N=0 is an upper bound on fixed cost, not the fixed cost.
+(b) the KERNEL:713-727 release fence is correctness-load-bearing for the CSR
+sentinel specifically (divergent T => stale pull_ptr[T] => arbitrary fanout =>
+SILENT wrong output). Recommended fanout clamp to [0,world] at KERNEL:1108
+converts that class to bounded/detected — NOT implemented tonight, filed as
+next-iteration hardening.
+
+G0b-LOCAL (corpus surrogate, commit 619b6308): 512 rank-calls (8 workers x 64
+B4096, routecap1 c32p). Fill is BIMODAL, not centred: 31% dummy / ~60%
+completely full / ~10% genuinely partial. Mean fill 0.69. Aggregate padding
+1.19x pre-M24 -> 1.01x post (residual = pure 256-tile quantization). Modeled
+MoE-region rho @ phi=0.9: tier-1-only 0.719 (1.39x) BEATS full M24 0.730
+(1.37x) => under this distribution TIER 1 CAPTURES THE WHOLE MODELED WIN
+(~+11-17% e2e at the 40-54% MoE fraction); tier 2 recovers only the ~10%
+partial calls and the tile clamp eats most of that. Complexity budget belongs
+in tier 1. CAVEAT: rank-call granularity — a step-level tier-1 skip needs ALL 8
+ranks dummy, so these tier-1 numbers OVERSTATE; the corpus has no step key, so
+this is the first thing to verify on the node.
+
+CONTRADICTION (now the top open question): the banked serving receipt says
+37.6% fill / 2.66x padding; the corpus says mean fill 0.69 / 1.19x. Both cannot
+be true. Suspected cause = the corpus's first-64-calls capture bias — the dummy
+RATE cross-validates (31% corpus vs ~34% uniform_rescued in whole-run
+receipts), but nothing cross-validates the non-dummy FILL SHAPE, which is
+exactly where they diverge. Alternatives: receipt averages over unsealed/decode
+steps too; or receipt counts prompt tokens while routed rows include per-expert
+replication. NEITHER 2.66x NOR 1.19x may be quoted as "the" padding multiplier;
+the M24 win estimate stays WITHDRAWN. Direction matters: if 37.6% is right
+tier 2 is valuable, if the corpus is right tier 2 is nearly worthless.
+NEW #1 NODE ACTION: extract the whole-run n_orig/fill histogram from
+RAGGED_SEAL_RECEIPT lines in banked server.logs (camp3 pairs + routecap runs) —
+same files as the receipt-printf-format grep, one pass. It decides tier-2 value
+and the real expected win.
+
+REPORT.md revised r1 -> r2: exec-summary goal state (modeled win now
+distribution-dependent, +11-17% under the corpus view, higher under the 37.6%
+receipt view, unresolved), §2 rows M10 (G7, analysis) + M11 (G0b-local,
+MODELED not measured), §4 G7 + G0b-local + a called-out CONTRADICTION box,
+§7 new #1 node action (receipts histogram) + TGRAIN=8 on all gate arms +
+ZERO_PAD calibration on the F.3 ladder + fanout-clamp hardening in the
+following-iteration list.

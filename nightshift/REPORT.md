@@ -1,4 +1,4 @@
-# Nightshift REPORT — 2026-08-18 overnight (draft r1, written 04:50–05:10 PDT)
+# Nightshift REPORT — 2026-08-18 overnight (draft r2, written 04:50–06:00 PDT)
 
 Status: **campaign not run.** The GPU node has refused ssh since ~09:00 UTC
 (~02:00 PDT) and was still refusing at write time. Everything below is either
@@ -34,9 +34,16 @@ to building the kernel that could plausibly clear the bar. What it produced:
    0.75187, and the M15 chassis was proven **not T-parametric**, which voids
    the cheap R6 fill experiment and re-routes all fill evidence through M24.
 
-State of the 20–30 % goal, stated honestly: the fill mechanism's own
-post-review cost model predicts **+16 % to +31 % vs rescued/patched-stock at
-c32p, central ≈ +22 %, and UNKNOWN vs native production**. The design
+State of the 20–30 % goal, stated honestly: **the modeled win is now
+distribution-dependent and unresolved.** The fill mechanism's post-review cost
+model predicted +16 % to +31 % vs rescued/patched-stock at c32p (central
+≈ +22 %, UNKNOWN vs native) at the receipt's 37.6 % fill — but tonight's
+G0b-local (§2 M11, §4) finds the corpus fill distribution is **bimodal** with
+mean fill 0.69 and only **1.19×** aggregate padding, which models to
+**+11–17 % e2e**, essentially all of it captured by tier 1 alone. The
+37.6 %-receipt view and the corpus view **contradict each other** and the M24
+win estimate stays **WITHDRAWN** until a whole-run `n_orig` histogram from seal
+receipts settles it (§7 item 1). The design
 explicitly says M24 alone is not a safe promise for 20–30 % and promotes the
 κ = 1.192 step-count composition defect to a co-equal work item. The hybrid
 caveat is unchanged and applies to every framing of the goal: **the mega
@@ -61,6 +68,8 @@ rig, never an e2e headline; **CORPUS** = offline analysis of captured routes.
 | M7 | T=4096 phase ledger: plan 372.29 µs, M6 2,454.95 µs, M7 2,201.61 µs, combine 213.93 µs, m2_to_end 5,242.78 µs; `[MPS SPIN] chunk_poll fail_max=0` | KERNEL | n/a | as M4, timestamps=1, 1 run, rank-0-only final-soak-epoch semantics | — | diagnostic; shape matches banked exp_33. fail_max=0 ⇒ no transport degradation at 100 % fill |
 | M8 | **31 % of sealed calls are 100 % dummy work**; real-row max-rank-load p50 **2.61×** / p90 3.35×; consecutive-row expert overlap 57.0 % vs 55.7 % shuffled (**1.3 pt**) | CORPUS | n/a | 512 calls × [4096,8] across 8 workers, routecap1 capture (m15+M23 server, c32p), first 64 B4096 calls/worker | matches whole-run receipts' `uniform_rescued` ≈ 34 % | the 31 % is a **routing-homogeneity proxy, not an `n_orig` measurement** (early-run capture bias; direct measurement deferred to G0b) |
 | M9 | **NO e2e ratio vs native production exists — tonight or ever.** camp5_native never ran; v4's "native" arm was config-mirrored (§6) | — | — | — | — | **stated, not measured** |
+| M10 | **G7 — T-generality**: `hkp::csr_scan_block256` and `hkp::pull_src_fill` are correct for every `T ∈ [0, T_cap]`; minimum safe `K0P6_M24_TGRAIN = 1`, ship **8** (`-DK0P6_M24_TGRAIN=8`); `T_eff = 0` safe at all five substitution sites; §F.4's N=0 point resolves to the **unclamped** branch | ANALYSIS (local, no node) | n/a | source proof over `amd-master/.../hkp/hkp_sort.hpp` + `k0pf6gm_device_tile_m15.hip` post-M24 line map | n/a — static proof, not a run | **valid as a correctness argument**, commit `9ce36341`. Not a performance number. Also finds: `ZERO_PAD` write volume is **anti-correlated with N**, so the φ fit needs a calibration arm or a fixed regressor |
+| M11 | **G0b-local (corpus surrogate)** — fill is **bimodal**: 31 % dummy calls / ~60 % completely full / ~10 % genuinely partial; mean fill **0.69**; aggregate padding **1.19× pre-M24 → 1.01× post**. Modeled MoE-region ρ @ φ=0.9: **tier-1-only 0.719 (1.39×) beats full M24 0.730 (1.37×)** ⇒ under this distribution **tier 1 captures the entire modeled win** (~**+11–17 % e2e** at the 40–54 % MoE fraction) | CORPUS → **MODEL** | n/a | 512 rank-calls (8 workers × 64 B4096 calls), routecap1 capture at c32p; `ρ = (1−φ) + φ·T_eff/4096` averaged over the empirical distribution, φ **assumed** 0.80/0.90 | n/a | **NOT A MEASUREMENT.** Modeled, kernel-region-only, φ unmeasured. Carries **first-64-calls capture bias** (dummy *rate* cross-validates at 31 % vs ~34 % receipts; the non-dummy **fill shape** does not) and **rank-call, not step, granularity** — a step-level tier-1 skip needs ALL 8 ranks dummy, so tier-1 numbers **overstate**. Commit `619b6308` |
 
 ### Retractions issued tonight
 
@@ -153,6 +162,65 @@ Falsification thresholds, valid only after arm E re-sweeps C × flush_rows:
 predicted N=1792 → ~2,830 µs, ratio ≈ 0.367; ≥ 0.55 ⇒ fixed-cost fraction
 ≥ 0.30, far above the ledger, re-derive §A; ≈ 0.75 ⇒ the T_eff plumbing is
 inert; < 0.30 ⇒ suspect the arm computed nothing.
+
+**G7 — T-generality resolved (M10, commit `9ce36341`, laptop-only).** Both
+helper primitives (`hkp::csr_scan_block256`, `hkp::pull_src_fill`) are correct
+for **every** `T ∈ [0, T_cap]` with no alignment requirement; the only
+precondition is `blockDim.x == 256`, already structural via
+`__launch_bounds__(256,1)`. **`T_eff = 0` is safe at all five substitution
+sites**, so §F.4's N=0 ladder point is interpretable and resolves to the
+**unclamped** branch (< 300 µs, ratio < 0.04); the clamped branch is struck and
+§H.4's reserved right to clamp `T_eff` to a `TGRAIN` minimum is released.
+Minimum safe `TGRAIN` is **1**; ship **8** (`-DK0P6_M24_TGRAIN=8`) as cosmetic
+margin — ≤ 7 phantom rows out of ~1,539 (< 0.5 %, inside noise) while keeping
+`T_eff·896·16` 128-byte aligned for the `ZERO_PAD` sweep. At grain 8 the
+round-up penalty is ≈ 1.00, which moots the TGRAIN column and makes the raw-fill
+table operative rather than the optimistic bound.
+Two consequences for the gate plan: (a) **`ZERO_PAD` write volume is
+anti-correlated with N** — the sweep writes `(T_cap − N)·H·2 B` (58.7 MB/layer
+at N=0, zero at N=T_cap), so an affine fit of step time vs N absorbs it as a
+spurious negative slope and **biases φ**; the F.3 ladder needs either a
+`ZERO_PAD`-only calibration arm or the byte term held as a **fixed** regressor,
+otherwise the N=0 point is an *upper bound* on fixed cost, not the fixed cost.
+(b) The release fence at `KERNEL:713-727` is **correctness-load-bearing for the
+CSR sentinel** specifically (divergent `T` between the scanning CTA and a
+combine CTA ⇒ stale `pull_ptr[T]` ⇒ arbitrary fanout ⇒ *silent* wrong output).
+G7 recommends a cheap fanout clamp to `[0, world]` at `KERNEL:1108` converting
+that class from silent corruption to bounded/detected. **Not implemented
+tonight — listed as next-iteration hardening** (§7).
+
+**G0b-local — the fill distribution is BIMODAL, not centred (M11, commit
+`619b6308`).** Over the 512-rank-call route corpus: **31 % dummy** calls,
+**~60 % completely full**, only **~10 % genuinely partially filled**; mean fill
+**0.69**; aggregate padding **1.19× pre-M24 → 1.01× post** (the residual is pure
+256-tile quantization). Modeled MoE-region ρ at φ=0.9: **tier-1-only 0.719
+(1.39×) vs full M24 0.730 (1.37×)** — i.e. under this distribution **tier 1
+captures the whole modeled win**, and tier 2's row-granular plumbing recovers
+only the ~10 % partial calls, most of which the tile clamp eats. That is
+**~+11–17 % e2e** at the measured 40–54 % MoE fraction — a kernel-region model,
+never a serving result. It also **over-states tier 1**: a serving step is 8
+coupled rank-calls, so a step-level skip requires **ALL 8 ranks dummy**, and the
+corpus carries no step key to check that locally. If this shape holds, the
+complexity budget belongs in tier 1 (a cheap collective planner predicate), not
+tier 2.
+
+> ### ⚠ CONTRADICTION — the two fill numbers cannot both be true
+> The banked serving receipt says **37.6 % fill / 2.66× padding**
+> (~1,539 real tokens/rank/step of 4,096). The route corpus says **mean fill
+> 0.69 / 1.19× aggregate padding**, with non-dummy calls near-completely full.
+> These describe the same quantity and disagree by more than a factor of two.
+> Suspected cause: the corpus's **first-64-calls capture bias** — the dummy
+> *rate* cross-validates (31 % corpus vs ~34 % `uniform_rescued` in whole-run
+> receipts), but nothing cross-validates the **non-dummy fill shape**, which is
+> exactly where the two views diverge. Alternative reconciliations: the receipt
+> averages over all steps including unsealed/decode ones while the corpus is
+> sealed B4096 calls only; or the receipt counts prompt tokens while routed rows
+> include per-expert replication.
+> **Neither 2.66× nor 1.19× may be quoted as "the" padding multiplier, and the
+> M24 win estimate stays WITHDRAWN** pending a whole-run `n_orig` histogram
+> extracted from `RAGGED_SEAL_RECEIPT` lines in banked `server.log`s (node
+> work, §7 item 1). The direction matters: **if 37.6 % is right, tier 2 is
+> valuable; if the corpus is right, tier 2 is nearly worthless.**
 
 **Four corrections that changed the plan tonight:**
 
@@ -272,19 +340,26 @@ tamper-refusal / inertness). **None of it says anything about codegen.**
 
 **On node return, in this exact order:**
 
-1. **Retrieve the stranded tgen sweep** (`~/nightshift_r6/tgen_t*_0818T0845/
+1. **Reconcile the fill contradiction (§4) — cheap, and it re-prices M24.**
+   Extract the **whole-run `n_orig` / fill histogram** from the
+   `RAGGED_SEAL_RECEIPT` lines in the banked `server.log`s (camp3 pairs +
+   routecap runs). This is the real G0b: it decides whether tier 2 is worth
+   building at all and sets the true expected win (37.6 %-receipt view vs the
+   corpus's 1.19× view). Pair it with the receipt-printf-format grep already
+   needed in item 3 — same files, one pass.
+2. **Retrieve the stranded tgen sweep** (`~/nightshift_r6/tgen_t*_0818T0845/
    summary.json`, ~2 min). Free data, closes the r(T) question for the tgen body.
-2. **Deploy campaign_v5** (staging commands in `tasks/wp5jobxxv.output`), and
+3. **Deploy campaign_v5** (staging commands in `tasks/wp5jobxxv.output`), and
    **grep a banked server.log for the exact `RAGGED_SEAL_RECEIPT` printf
    format** — the analyzer's `sealed=`/`in_bucket=` parse was never verified
    against the node, and a separator mismatch VOIDs every arm (fail-closed).
    Also confirm the `apply.py` head and the QSL pickle path.
-3. **M24 CPU-side gates, in parallel with GPU work** (hipcc is CPU-only):
+4. **M24 CPU-side gates, in parallel with GPU work** (hipcc is CPU-only):
    `m24_compile_check.sh` (all 12 configurations incl. the 8 that must
    `#error`; the fill build must show `ScratchSize 0`), then
    `PRE_REF=a776ac75 m24_build_gate.sh` — resource tuple **and** normalised
    disassembly **and** `.text` sha256 all identical, or nothing below runs.
-4. **B0 — calibration.** `{m15, native_tuned_tp}` × c32p × 1 pair,
+5. **B0 — calibration.** `{m15, native_tuned_tp}` × c32p × 1 pair,
    `ALLOW_UNBALANCED_PAIRS=1` (analyzer stamps the root "no claim"),
    ~0.66–0.76 h. Yields startup time S per arm family, each family's ceiling,
    a live seal-coverage check, and the first exercise of AMD's tuned flags on
@@ -295,10 +370,10 @@ tamper-refusal / inertness). **None of it says anything about codegen.**
    `native_tuned_tp` < 8k tok/s at c32p → re-price B2 first. A rejected
    startup flag → drop only that flag and record the deviation; two or more →
    fall back to `native_default` as the baseline and say so.
-5. **B1 — accuracy gate BEFORE the matrix.** `{m15, stock, native_tuned_tp}`,
+6. **B1 — accuracy gate BEFORE the matrix.** `{m15, stock, native_tuned_tp}`,
    `--pairs 0 --accuracy-pass`, cells c1det + c8det. `stock` is mandatory: it
    is m15's only numerics-class peer. A within-class FAIL voids the night's claim.
-6. **M24 MoK gates** (~1–1.5 h GPU, after B1): P2 harness patches (M24 host
+7. **M24 MoK gates** (~1–1.5 h GPU, after B1): P2 harness patches (M24 host
    plumbing is done and tested; **G9 parts 1–3 are not**, and block arms A–D);
    P3 G0a envelope; **R0a** (must reproduce 0.7556 ± 1 % with `K0_M24_FILL`
    unset — doubles as the zero-change ratchet); **R0b**, the inert-arm arbiter
@@ -306,18 +381,33 @@ tamper-refusal / inertness). **None of it says anything about codegen.**
    cross-pin resource-tuple equality check); arm E (C × flush_rows re-sweep)
    **before** reading any ladder number; then the F.3 ladder and mandatory
    arm D. Stop rules + pin discipline: `wff3mewsd.output .final.mok_sequence`.
-7. **B2 — the headline matrix.** `{m15, stock, native_tuned_tp}` × c32p ×
+   **Build every gate arm with `-DK0P6_M24_TGRAIN=8` per G7** (§4) — 256 is
+   now known to be unnecessary de-risking and it distorts the effective-fill
+   arithmetic.
+   **F.3 ladder — `ZERO_PAD` calibration is mandatory before φ is read.** The
+   sweep's `(T_cap − N)·H·2 B` write volume is anti-correlated with N (G7 §6.2),
+   so either add a `ZERO_PAD`-only calibration arm (`FILL=1, NULLWORK=1,
+   NORIG_CONST=0`, time the sweep alone) or fit with that byte term as a
+   **fixed** regressor. Without it the N=0 point is an upper bound on fixed
+   cost, not the fixed cost, and arm B's φ interval is uninterpretable.
+8. **B2 — the headline matrix.** `{m15, stock, native_tuned_tp}` × c32p ×
    **6 pairs** (rotation-balanced; 5 is not a multiple of 3 and is refused).
    ~5.8–6.7 h; may run past morning. Ratios are valid per completed pair.
-8. **Fairness-audit subagent with veto** on the campaign's numbers, before
+9. **Fairness-audit subagent with veto** on the campaign's numbers, before
    anything is written down as a claim.
 
 **Following iteration (not tonight's window):**
 
 * M24 serving plumbing **G13a–G15**, then an M24-enabled m15 serving arm.
 * F.3-informed tuning: fill-aware `C` (it is runtime config
-  `reserved_comm_ctas`, not compile-time 28 — no recompile needed), TGRAIN
-  after G7.
+  `reserved_comm_ctas`, not compile-time 28 — no recompile needed); TGRAIN is
+  settled by G7 at 8.
+* **Fanout clamp hardening (G7 §4/§6.3, NOT implemented tonight):** clamp
+  `fanout` to `[0, world]` at `KERNEL:1108` (or raise a distinct `pperr` bit),
+  converting the stale-CSR-sentinel failure class from **silent wrong output**
+  to bounded/detected; one `v_med3`-class op per token, cost to be measured not
+  asserted. Also record the `KERNEL:713-727` release fence as a named build-gate
+  assertion, since it is correctness-load-bearing for the sentinel.
 * **RR placement arm** (`rr_patch.py`, already implemented and verified) —
   attacks the measured 2.61× real-row skew directly.
 * Open-loop depth (o75p/o50p) and the **c512p** cell, where DP8+EP is finally
