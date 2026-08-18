@@ -1,6 +1,7 @@
 # Serving benchmark methodology (fused-MoE megakernel arms)
 
-**Status:** normative as of 2026-08-18. Supersedes all prior serving A/B practice.
+**Status:** normative as of 2026-08-18 (rev 2, post-camp3). Supersedes all prior
+serving A/B practice.
 **Scope:** end-to-end vLLM **serving** claims for the fused-MoE megakernel arms
 (PF4H / m15 / m18 / m19 / m20 and successors). **Out of scope:** kernel-level MoK
 harness ratios, GEMM microbenchmarks, and training (Primus/Megatron) tok/s/GPU —
@@ -72,7 +73,15 @@ Measured consequence on the identical c32p cell:
 |---|---:|---|
 | historical stock baselines (pre-M23) | 9,600–12,700 | depressed by H1/H2; the band every obsolete delta was taken against |
 | **rescued stock (production-configured, M23 chain)** | **20,918** | n=1; the only valid baseline |
-| **m15 + M23 (first honest megakernel number)** | **19,277** | n=1; ~8% below rescued stock, **cross-pair** |
+| **m15 + M23 (first honest megakernel number)** | **19,277** | n=1; ~8% below rescued stock, **cross-pair** — superseded, see below |
+
+Superseded by the first *order-balanced* result (camp3, 2026-08-18, cell c32p,
+n=2 pairs, arm order reversed on the even pair, 99% seal coverage):
+**m15 19,277 / 17,900 tok/s vs patched-stock 15,611 / 20,589 tok/s → m15
++2.7 % to +5.2 % within-pair against patched-stock.** Note what that ratio is:
+it is the *kernel-effect* leg of §2.5, **not** a claim against genuine
+production. The two arms' raw numbers also show the ±18 % position effect
+directly — which is why single arms are never evidence.
 
 The stock baseline itself roughly **doubled**. Every pre-2026-08-18 serving delta was
 therefore taken against a broken control with a doubly-handicapped candidate, in both
@@ -108,7 +117,12 @@ apply.py  →  coverage_patch.py  →  m23_patch.py  →  vllm serve
 Order is load-bearing (`m23_patch.py` exits 1 if `PF4H_COVERAGE_PATCH_V1` is absent
 from a PF4H-patched `gpu_model_runner.py`). The chain must be identical in the
 candidate arm **and** the stock arm — the rescue is what makes the baseline honest, so
-an unpatched stock arm is not a valid control.
+an unpatched stock arm is not a valid *patched-stock* control.
+
+Scope note: (a) governs the candidate arm and the **patched-stock** diagnostic arm.
+The **native** arm of (c) carries no chain at all — that is its definition — and is
+therefore exempt from (a) and from the coverage requirement (b), which cannot apply
+to a server that has no megakernel.
 
 ### (b) Every megakernel claim quotes its coverage receipt
 
@@ -117,18 +131,64 @@ Any serving claim for a megakernel arm **must** quote that arm's
 coverage receipt is invalid** — that is precisely the omission that let the historical
 arms report a kernel they were not running.
 
-### (c) The only valid baseline is rescued-stock
+### (c) The headline baseline is GENUINE NATIVE production
 
-Production-configured stock, uniform-decode rescue active, patch chain identical to
-the candidate's (arm-symmetric). Comparisons against a pre-M23 stock number, or
-against a stock arm without the rescue, are void by construction.
+There are two distinct baselines and they are **not** interchangeable.
 
-### (d) Drift budget: ≥5 order-balanced pairs
+**Native production — the only baseline a "we beat production" headline may use.**
+Defined by absence, and verified from evidence rather than intent:
 
-Stock run-to-run drift is **±15% at n=1** on this cell. A quotable delta therefore
-needs **≥5 order-balanced pairs** (alternate which arm runs first; report the pair
-distribution, not just the mean). Single pairs may be reported only as explicitly
-labelled n=1 observations, never as a delta claim.
+* the **untouched `vllm/vllm-openai-rocm:v0.25.1` image**, pulled digest recorded;
+* **shipped defaults** — the vendor's recommended DeepSeek-R1 deployment for this
+  node (TP1/DP8/EP8, AITER + MORI enabled as the image ships them), same
+  `--gpu-memory-utilization` and scheduler flags as our arm;
+* **no `VLLM_PF4H_*` environment variables** anywhere in `docker inspect` or the
+  server's config dump;
+* **no patch chain at all** — none of `apply.py`, `coverage_patch.py`,
+  `m23_patch.py`, `rr_patch.py`, and none of their markers
+  (`PF4H_INTEGRATION_PATCH_V3_M15`, `PF4H_COVERAGE_PATCH_V1`,
+  `PF4H_M23_RAGGED_SEAL_V1`, `PF4H_RR_*`) present in the running tree.
+
+Wrapper v4's `native` arm implements exactly this. Anything else is not production.
+
+**Patched-stock — a diagnostic control only.** Production ops running *inside our
+integration container*: full patch chain, uniform-decode rescue active, stock
+B4096 graph, our runtime footprint. It isolates the kernel substitution, but it
+inherits every change our integration makes, so it **may never be quoted as
+"production"**. Doing so was one of this project's actual past failures.
+
+Comparisons against a pre-M23 stock number, or against a stock arm without the
+uniform-decode rescue, are void by construction.
+
+### (c2) Report the three-way decomposition
+
+Whenever all three arms are available, quote all three ratios — a single ratio
+hides which effect is being claimed:
+
+| ratio | name | what it measures |
+|---|---|---|
+| **m15 / native** | **the headline** | the only number that answers "is this faster than production?" |
+| m15 / patched-stock | kernel effect | the megakernel substitution alone, integration held constant |
+| patched-stock / native | integration effect | what our container/patches cost or gain independent of the kernel |
+
+The headline is not derivable from the other two "well enough"; measure it.
+
+### (d) Drift budget, order balance, and run hygiene
+
+* Measured drift: **±15% day-to-day** at n=1 and **±18% per arm from position**
+  (which arm runs first inside a pair). **Single arms are never evidence, and
+  cross-pair ratios are never evidence.**
+* **Order-balanced pairs only.** Both arms inside one pair; reverse arm order on
+  even-numbered pairs. Report `n`, every pair's ratio, and the spread across
+  pairs — never only the mean. A quotable *delta* wants **≥5 pairs**; smaller n
+  may be reported with the spread shown and the claim sized to it (camp3's
+  +2.7–5.2 % at n=2 is quoted as a range, not a point estimate).
+* **`ARM_COOLDOWN=240`** (seconds) between arms, symmetric — the position effect
+  is largely thermal/cache. Wrapper v3/v4 set this; a run without it is not
+  order-balanced in any meaningful sense.
+* **Fresh server per arm.** No arm inherits another's prefix cache, allocator
+  state, or captured graphs. One B4096 graph per server (memory headroom).
+* Warmup, seeds, client, and cell spec identical across arms.
 
 ### (e) Exact-token SHA identity across arms
 
@@ -188,6 +248,10 @@ Related receipts that must also be reported when non-zero: `in_bucket_dummy_peer
 
 ## 4. Worked example of a compliant quote
 
+*(This example predates the native-baseline rule of §(c): it quotes only the
+`m15 / patched-stock` **kernel-effect** leg, and labels it as such. A compliant
+headline additionally carries the `m15 / native` ratio and the §5 sign-off.)*
+
 > **m15 + M23 vs rescued stock, c32p, 2026-08-18.**
 > Workload: c32p cell, concurrency 32, 1024 MLPerf QSL prompts, ISL 4096, OSL 8;
 > metric = aggregate node **input** tok/s over the full run.
@@ -197,7 +261,8 @@ Related receipts that must also be reported when non-zero: `in_bucket_dummy_peer
 > `sealed_ragged` 224, `sealed_exact` 4, `eager_b4096` **0**, `refused_not_unanimous` 0,
 > token-weighted coverage ~95%.
 > Accuracy: generated token-id SHA identical across arms (`temperature=0`, same seed).
-> Result: **19,277 tok/s candidate vs 20,918 tok/s rescued stock**, −7.8%.
+> Result (kernel-effect leg only): **19,277 tok/s candidate vs 20,918 tok/s
+> rescued stock**, −7.8%.
 > **n=1 each, cross-pair — NOT a quotable delta** (protocol (d) requires ≥5
 > order-balanced pairs against ±15% stock drift). Reported as two reference points.
 > Residual asymmetry (g): ~3% of steps had an idle rank, on which the candidate ran
@@ -210,15 +275,72 @@ reference points. The delta claim waits for the five pairs.
 
 ---
 
-## 5. Checklist (paste into any serving result doc)
+## 5. The fairness audit (mandatory before any "beats production" claim)
+
+Protocol compliance is necessary but not sufficient. **No claim of the form "our
+kernel is better than production" ships without a written sign-off from a
+dedicated adversarial fairness auditor** — an independent reviewer (in the
+overnight loop, a separate Opus subagent at high effort) prompted to *prove the
+comparison unfair*, re-run for **every new kernel build and every campaign** whose
+numbers are to be quoted. It holds veto power. Its checklist, and the actual past
+failure each item exists to prevent:
+
+1. **Baseline authenticity.** The production arm is the genuinely untouched image
+   at shipped defaults — verified from *evidence*, not intent: image digest,
+   `docker inspect` env (no `VLLM_PF4H_*`), the server.log config dump, and the
+   absence of every patch marker (`PF4H_INTEGRATION_PATCH_V3_M15`,
+   `PF4H_COVERAGE_PATCH_V1`, `PF4H_M23_RAGGED_SEAL_V1`, `PF4H_RR_*`).
+   *Past sin: quoting patched-stock as "production".*
+2. **Baseline not sandbagged.** Production gets its best shipped config — AITER +
+   MORI env present, same gpu-mem-util and scheduler flags as our arm; any
+   deviation from the vendor's recommended deployment documented and justified.
+   *Past sin: none yet — keep it that way.*
+3. **Candidate actually ran.** Coverage receipts (`RAGGED_SEAL_RECEIPT
+   sealed/in_bucket`) prove the megakernel executed the traffic.
+   *Past sin: the mega was inert on ~98 % of heavy steps in every pre-M23 A/B,
+   while the candidate arm additionally ran de-graphed — a doubly fake candidate.*
+4. **Identical workload.** Exact-token prompt SHA match across arms; same cell
+   spec, seeds, client, warmup; prefix-cache and thermal asymmetries neutralized
+   with symmetric cooldowns. *Past sin: prewarm/cache asymmetry; ±18 % position.*
+5. **Statistical validity.** Order-balanced pairs only; `n` stated; the spread
+   across pairs shown; the claim sized against measured drift (±15 % day,
+   ±18 % position). Single arms and cross-pair ratios are never evidence.
+   *Past sin: n=1 headlines (+39.8 %, −19.6 %), later voided.*
+6. **Accuracy parity.** Outputs validated — exact-token SHA where applicable,
+   otherwise the MoK relative-error policy or an explicit accuracy A/B. A faster
+   wrong kernel is not a win. *Past sin: `SAME OUTPUTS: False` left unresolved.*
+7. **Replay/proxy honesty.** Kernel-level rigs (MoK, histogram replay) are never
+   quoted as end-to-end; captured-route and **fill** regimes are labeled — banked
+   kernel numbers are 100 %-fill, serving runs at ~37.6 % fill (2.66× padding
+   multiplier). *Past sin: i.i.d. replay standing in for real routing.*
+8. **Claim wording matches measurement.** Which cells, which regime; the hybrid
+   caveat stated (the mega inverts below ~1,600–1,800 tokens/rank, so small-batch
+   cells are expected losses — report them, never hide them); memory and
+   replication costs priced in. *Past sin: 41 GB replica caches framed as a
+   kernel win.*
+
+Any result doc quoting a headline carries a `FAIRNESS_AUDIT` section per claim:
+verdict, items checked with evidence pointers, residual caveats.
+
+---
+
+## 6. Checklist (paste into any serving result doc)
 
 ```
-[ ] (a) both arms: apply.py → coverage_patch.py → m23_patch.py, identical chain
+[ ] (a) candidate + patched-stock: apply.py → coverage_patch.py → m23_patch.py,
+        identical chain; native arm carries no chain and no PF4H env
 [ ] (b) RAGGED_SEAL_RECEIPT quoted: sealed/in_bucket = ___/___  (___%)
 [ ] (b) eager_b4096 == 0 on every rank
-[ ] (c) baseline is rescued-stock, production-configured, arm-symmetric
-[ ] (d) ≥5 order-balanced pairs (or number explicitly labelled n=1 reference point)
+[ ] (c) headline baseline is GENUINE NATIVE (untouched v0.25.1 image, shipped
+        defaults, no PF4H env, no patch markers) — evidence pointers recorded
+[ ] (c2) three-way decomposition reported: m15/native · m15/patched-stock ·
+        patched-stock/native
+[ ] (d) order-balanced pairs, n = ___, per-pair spread shown, ARM_COOLDOWN=240,
+        fresh server per arm; no single-arm or cross-pair ratio quoted
 [ ] (e) generated token-id SHA identical across arms
 [ ] (f) cell / concurrency / prompts / ISL / OSL / metric definition all stated
 [ ] (g) refused_peer_not_ready + eager_b4096 dummy-rank asymmetry reported
+[ ] (h) fill regime labeled (serving ~37.6% fill vs 100%-fill kernel rigs)
+[ ] (i) FAIRNESS_AUDIT sign-off attached (§5, all 8 items) — required for any
+        "beats production" claim
 ```

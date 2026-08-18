@@ -157,14 +157,38 @@ from this repo's docs rather than restated; `git log` preserves them.
 skew-replay, the M18/M19/M20 replication ratios above, and all training
 numbers never went through the seal.
 
+**First valid order-balanced result (camp3, 2026-08-18).** Two order-balanced
+pairs on the same c32p cell (arm order reversed on the even pair,
+`ARM_COOLDOWN=240`, fresh server per arm, 99% seal coverage) give
+m15 **19,277 / 17,900** tok/s against patched-stock **15,611 / 20,589** tok/s —
+**m15 +2.7% to +5.2% within-pair**. That ratio is the *kernel-effect* leg only;
+it is **not** a claim against genuine production, and the raw arm numbers show
+the ±18% position effect that makes single arms worthless as evidence.
+
 New serving claims must satisfy
-[the serving benchmark methodology](docs/distributed/SERVING_BENCHMARK_METHODOLOGY.md):
-the M23 patch chain in both arms, a `RAGGED_SEAL_RECEIPT` coverage quote with
-every megakernel number, rescued-stock as the only valid baseline, ≥5
-order-balanced pairs, exact-token SHA identity, a full workload spec, and the
-known residual dummy-rank asymmetry reported alongside. Design and
-implementation: `overnight/aug18-prefill/M23_RAGGED_SEAL_DESIGN.md` and
+[the serving benchmark methodology](docs/distributed/SERVING_BENCHMARK_METHODOLOGY.md),
+revised 2026-08-18 (rev 2) to add: the **genuine-native** baseline definition
+(untouched `vllm/vllm-openai-rocm:v0.25.1`, shipped defaults, no `VLLM_PF4H_*`
+env, no patch markers) as the only baseline a "beats production" headline may
+use, with patched-stock demoted to a diagnostic control; the **three-way
+decomposition** (`m15/native` headline · `m15/patched-stock` kernel effect ·
+`patched-stock/native` integration effect); order-balanced pairs with
+`ARM_COOLDOWN=240`, a fresh server per arm, and the measured drift bounds
+(±15% day, ±18% position — single arms and cross-pair ratios are never
+evidence); `RAGGED_SEAL_RECEIPT sealed/in_bucket` coverage as a validity
+*requirement* for every megakernel number; exact-token SHA identity; a full
+workload spec; the residual dummy-rank asymmetry; and an **8-point adversarial
+fairness audit** that must sign off, with veto power, on any claim of beating
+production. Design and implementation:
+`overnight/aug18-prefill/M23_RAGGED_SEAL_DESIGN.md` and
 `overnight/aug18-prefill/m23/M23_IMPL_NOTES.md`.
+
+The retirement pass was completed on 2026-08-18 across both repos (this one and
+`amd-master`): remaining pre-M23 serving deltas were deleted in place, docs
+whose entire subject was a void campaign were tombstoned in the lead, and the
+methodology document above was finished. Raw JSON/artifacts, receipts and
+`SHA256SUMS` were left untouched — they remain valid records of what the machine
+did; only their interpretation as an arm comparison is void.
 
 Latest additions to the device primitive layer and the fused-MoE port
 (`distributed-kernels/fused_moe/`):
