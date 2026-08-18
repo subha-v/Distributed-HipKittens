@@ -109,6 +109,16 @@ Verified in this repo: `ablations-m15:…_mps.hip:10` and
 Running with the default `~/Distributed-HipKittens` measures a different kernel
 and every ratio is void.
 
+**⛔ THE PIN TRAP IS ALREADY REALIZED IN THE BANKED ARCHIVE (found 2026-08-18).**
+`~/k0-mok-synthetic-results/t2048_m15_bal_0814T1937` and
+`t1024_m15_bal_0814T1937` record `pf6mps.source_sha256 = 20b8c6bb…` — the
+**DHK-tgen** body — **not** the M15 chassis sha `935f555e…` that produced the
+0.7556 anchor. Despite their `_m15_` names their ratios (**0.8912 @ T=2048,
+1.1051 @ T=1024**) are tgen-body numbers, and there is no same-pin T=4096
+anchor to normalize them against. **They MUST NOT be quoted as M15 fill or
+T-scaling results.** Check `pf6mps.source_sha256` in a rank JSON before quoting
+any archived MoK ratio. See §10 amendment (d).
+
 **⚠ GAP / correction to `ROUTE_REPLAY_PLAN.md:245`:** that line tells you to
 grep `k0pf6gm_device_tile_m15.hip` in `~/DHK-m17` to confirm RR is on. On the
 m17 branch that file still shows `#define K0P6_M15_SCATTER_RR 0` (it is the
@@ -129,6 +139,13 @@ export MPSCFG="C=28,g=353,mode=12,flush_rows=16"
 
 If R0a's balanced ratio does not land within ±1 % of 0.7556, stop and sweep
 C ∈ {24, 28} before interpreting anything downstream.
+
+> **RE-ANCHORED 2026-08-18 → 0.75187** (median of 5 order-balanced runs;
+> per-run 0.75008 / 0.75054 / 0.75321 / 0.75187 / 0.75292), i.e. **−0.49 % vs
+> the banked 0.7556** — inside the ±1 % band, so the ratchet holds. Pin
+> `DHK-m15`, body sha `935f555e…`; logs
+> `node:~/nightshift_r6/r0a_balanced_0818T0830/`. Use **0.75187** as the
+> in-session anchor. See §10 amendment (a).
 
 **⚠ GAP:** exp_33's banked phase ledger (plan 372.79 / M6 2,453.30 / M7
 2,701.84 / combine 324.21 µs) is **balanced-route, C=16, old mps ratchet** —
@@ -428,6 +445,10 @@ export K0_MOK_ARMS=production,mps_mega
 export K0_PF6GM_G=3                 # HARD REQUIREMENT: e004pf_k0pf_ab.py:346-350 raises
                                     # "mps_mega requires its paired pf6gm_mega
                                     #  reference at G=3" if this is not 3.
+                                    # NOTE 2026-08-18: the requirement applies to
+                                    # NEWER host code only — under pre-M20 host
+                                    # code the var is INERT (rank JSONs record
+                                    # "pf6gm_g": null). See §10 amendment (f).
 export MPSCFG="C=28,g=353,mode=12,flush_rows=16"    # see §1.2
 export K0_MOK_ROUTE_HOST_DIR=~/eplb_campaign/routes # bind-mounted read-only at /routes
 export K0_MOK_OUTPUT_ROOT=/home/subvadla/k0-mok-synthetic-results
@@ -457,11 +478,22 @@ env -u K0_MOK_ROUTE_FILE -u K0_MOK_ROUTE_HIST \
 ```
 
 **Expect** `candidate_ratios["mps_mega"]["p50"] ≈ 0.7556` (M15 ≈ 5,823 µs).
+**Re-anchored 2026-08-18: 0.75187** (median of 5 order-balanced runs, −0.49 %
+vs banked; pin `DHK-m15`, body sha `935f555e…`) — see §10 amendment (a).
 Out of band ⇒ wrong pin, wrong C, or a non-inert route patch. **Stop and fix.**
 
 ---
 
 ### R6 — the FILL sweep (**the mechanism nobody has measured; run second**)
+
+> **⛔ CORRECTED 2026-08-18 — R6 AS WRITTEN IS WRONG TWICE OVER.** (i) It is a
+> **batch-size sweep, not a fill sweep**: `run_campaign.sh` derives
+> `K0_MAXTOK=K0_MAXTOK_PROD=K0_T`, so capacity shrinks along with the rows and
+> fill stays at 100 %. The fill experiment is the **M24 `NORIG_CONST` ladder at
+> fixed capacity 4096** (`FILL_AWARE_DESIGN.md` §F). (ii) It is **unrunnable on
+> the M15 chassis**: at T=2048/1024 the `mps_mega` arm FAILS the MoK
+> correctness gate. Read §10 amendments (b) and (c) before running anything
+> below.
 
 Tests **(e)** and **(c)** directly, needs **no capture**, and is therefore the
 one arm that still delivers if Phase A fails. Serving runs the mega on 4,096
@@ -483,7 +515,11 @@ done
 ```
 
 `run_campaign.sh` derives `K0_MAXTOK=K0_MAXTOK_PROD=K0_T` (lines 143-144), so
-both arms genuinely shrink; `K0_PADMAX=263136` stays generous. **⚠ GAP:** no
+both arms genuinely shrink; ~~`K0_PADMAX=263136` stays generous~~ — **FALSE,
+corrected 2026-08-18: `k0_n2` control-buffer capacity scales with T
+(`cap = 64*T + 8216`), so PADMAX must be set to `64*T + 992` per arm
+(132064 @ T=2048, 66528 @ T=1024; verified against the aug14 rank JSONs). See
+§10 amendment (b).** **⚠ GAP:** no
 banked evidence that `K0_T != 4096` passes the MoK gates — hence the 1-run
 smoke. If it fails, capture the failure mode; a `T`-parametric harness is then a
 named work item, and it is a cheap one.
@@ -542,6 +578,11 @@ corrections, all verified in the deployed host source:
    it. **⚠ GAP / work item:** all-reducing the 8 u64 stamps and writing them into
    every rank JSON is a ~15-line host change and would make (b) directly
    measurable. It does not exist.
+2b. **Ledger bug (found 2026-08-18):** `[MPS TS DELTA] servicedrain` prints a
+   garbage **negative** number whenever the DRAIN stamp is never written — the
+   host subtracts a 0-initialized stamp from an absolute tick. Ignore that
+   field; `plan` / `M6` / `M7` / `combine` are self-consistent. See §10
+   amendment (e).
 3. The stamps are running device **maxes that are never reset**, sampled after
    the **600-epoch soak** — they describe the *final soak epoch*, not a timed
    iteration (`phase_stamps.json:92`). Under route replay the soak runs
@@ -751,3 +792,69 @@ is not a result). From any rank JSON: `route_replay.route_multiset_sha256`,
 600-epoch soak `pperr`. From the run logs: every `[MPS TS*]` and `[MPS SPIN]`
 line. Label every number **kernel-region, one MoE layer, mok_eager, T as stated,
 captured-route corpus = N layers of M real chunks** — never as a serving claim.
+
+---
+
+## 10. 2026-08-18 nightshift amendments
+
+Corrections found while executing this runbook on the node the night of
+2026-08-18. Where a claim above was wrong it has also been struck/annotated in
+place with a pointer here.
+
+**(a) R0a RE-ANCHORED.** Balanced control re-run on pin `DHK-m15` (body sha
+`935f555e…`), 5 order-balanced runs: per-run ratios
+**0.75008 / 0.75054 / 0.75321 / 0.75187 / 0.75292**, **median 0.75187**. That is
+**−0.49 % vs the banked 0.7556** — within the ±1 % ratchet band, so the pin and
+the patch chain are validated. Logs:
+`node:~/nightshift_r6/r0a_balanced_0818T0830/`. Quote **0.75187** in-session.
+
+**(b) `K0_PADMAX=263136` is NOT "generous" — it is T-dependent.** The `k0_n2`
+control-buffer capacity scales with T: **`cap = 64*T + 8216`**, and the harness
+requires **`K0_PADMAX = 64*T + 992`**. Correct values, verified against the
+aug14 rank JSONs: **132064 @ T=2048**, **66528 @ T=1024** (the runbook's fixed
+263136 corresponds to T=4096 only). Any T-varying run that leaves PADMAX fixed
+is misconfigured.
+
+**(c) R6 SCOPE CORRECTIONS — two independent problems.**
+
+*(c-i) R6 is a BATCH-SIZE sweep, not a fill sweep.* `run_campaign.sh` derives
+`K0_MAXTOK=K0_MAXTOK_PROD=K0_T` (lines 143-144), so lowering T shrinks the
+**capacity** together with the rows; both arms stay at 100 % fill and the
+padding multiplier never moves. R6 therefore cannot test mechanism (e) at all.
+The real fill experiment is the **M24 `NORIG_CONST` ladder: hold capacity at
+4096 and vary the number of real rows** — see `FILL_AWARE_DESIGN.md` §F.
+
+*(c-ii) R6 is UNRUNNABLE on the M15 chassis regardless.* At T=2048 and T=1024
+the `mps_mega` arm **fails the MoK correctness gate**: rel err **0.874205**
+(T=2048) and **0.838890** (T=1024), max_abs **1.81 / 1.72**, while the
+`production` arm passes at **~0.0058** in the very same runs. The M15 chassis is
+**not T-parametric** (slab / certification sizing is not derived from T, and
+there is no literal 4096 in the body to grep for). *Control:* the **DHK-tgen**
+body (sha `20b8c6bb…`) passes at T=2048 in the identical tree and env
+(rel err **0.008288**, ratio **0.8959**), proving the failure is
+**body-specific**, not a harness or environment fault. Making the M15 chassis
+T-parametric is a named work item; until it lands, do not spend node time on R6.
+
+**(d) THE PIN TRAP IS REALIZED IN THE BANKED ARCHIVE.** The archived runs
+`~/k0-mok-synthetic-results/t2048_m15_bal_0814T1937` and
+`t1024_m15_bal_0814T1937` carry `pf6mps.source_sha256 = 20b8c6bb…`
+(**DHK-tgen**), not the M15 chassis sha `935f555e…` behind the 0.7556 anchor.
+Their ratios — **0.8912 @ T=2048**, **1.1051 @ T=1024** — are tgen-body numbers
+with **no same-pin T=4096 anchor**, so they are not even internally
+normalizable. **They must never be quoted as M15 fill or T-scaling evidence**
+(the apparent "ratio climbs as T falls" story rests entirely on them). Always
+read `pf6mps.source_sha256` out of a rank JSON before quoting an archived MoK
+ratio. Mirrored into §1.1.
+
+**(e) Phase-ledger bug.** `[MPS TS DELTA] servicedrain` prints a garbage
+negative value when the DRAIN stamp is never written: the host subtracts a
+0-initialized stamp from an absolute tick. The `plan`, `M6`, `M7` and `combine`
+deltas are self-consistent and usable; ignore `servicedrain` until the stamp is
+written unconditionally.
+
+**(f) `K0_PF6GM_G=3` is inert under pre-M20 host code.** Rank JSONs from
+pre-M20 host builds record `"pf6gm_g": null` — the variable is never consumed
+and the documented "HARD REQUIREMENT" raise does not exist there. The
+requirement applies to **newer host code only**; on an older host, setting it
+neither helps nor protects you, and its absence in an archived config is not
+evidence of a misconfigured run.
