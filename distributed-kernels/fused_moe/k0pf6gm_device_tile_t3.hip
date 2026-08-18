@@ -244,12 +244,15 @@ __device__ __forceinline__ int k0p6t3_claim(unsigned int* cursor, int space,
   return got;
 }
 
-// Bounded relaxed-spin on a release-published u32 flag (z_done cells).
+// Bounded RELAXED spin on a release-published u32 flag; ONE acquire on
+// success (mode-14 law: an acquire-agent load emits buffer_inv — a
+// spinning CTA with acquire loads invalidates the whole L2 every
+// iteration and destroys every other CTA's working set).
 __device__ __forceinline__ bool k0p6t3_poll_flag(const unsigned int* cell,
                                                  long long spin_limit,
                                                  int* pperr, int bit) {
   long long spins = 0;
-  while (__hip_atomic_load(cell, __ATOMIC_ACQUIRE,
+  while (__hip_atomic_load(cell, __ATOMIC_RELAXED,
                            __HIP_MEMORY_SCOPE_AGENT) == 0u) {
     if (++spins > spin_limit) {
       atomicOr(pperr, bit);
@@ -257,16 +260,17 @@ __device__ __forceinline__ bool k0p6t3_poll_flag(const unsigned int* cell,
     }
     __builtin_amdgcn_s_sleep(2);
   }
+  hk_moe::acquire_payload_agent();
   return true;
 }
 
-// Bounded spin until counter >= target (unpack_done cells).
+// Bounded RELAXED spin until counter >= target; one acquire on success.
 __device__ __forceinline__ bool k0p6t3_poll_count(const unsigned int* cell,
                                                   unsigned int target,
                                                   long long spin_limit,
                                                   int* pperr, int bit) {
   long long spins = 0;
-  while (__hip_atomic_load(cell, __ATOMIC_ACQUIRE,
+  while (__hip_atomic_load(cell, __ATOMIC_RELAXED,
                            __HIP_MEMORY_SCOPE_AGENT) < target) {
     if (++spins > spin_limit) {
       atomicOr(pperr, bit);
@@ -274,6 +278,7 @@ __device__ __forceinline__ bool k0p6t3_poll_count(const unsigned int* cell,
     }
     __builtin_amdgcn_s_sleep(2);
   }
+  hk_moe::acquire_payload_agent();
   return true;
 }
 
@@ -946,6 +951,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
     const int nchunks = K0P6C_NCHUNK_MAX;
     const int nsub = K0P6_CHUNK / 64;
     const int g = lane >> 3, j = lane & 7;
+    bool t3_acq = false;
     while (true) {
       const int t = k0p6t3_claim(ctrs + K0P6_T3_CTR_UNPK_CUR,
                                  world * nchunks * nsub, claim_cell, tid);
@@ -966,7 +972,10 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
       const int chunk_fill = s_fill[0];
       __syncthreads();
       if (chunk_fill < 0) return;  // fail-closed: pperr already set
-      hk_moe::acquire_payload_system();
+      if (!t3_acq) {
+        hk_moe::acquire_payload_system();
+        t3_acq = true;
+      }
       const int sub0 = sub * 64;
       int sub_fill = chunk_fill - sub0;
       if (sub_fill < 0) sub_fill = 0;
