@@ -347,3 +347,28 @@ conclusions summarized here; receipt re-verification queued on the node.
 DOCS: REPORT.md r2 -> r3 (R4 discharged, R7 added, §4 box RESOLVED, §7 item 1
 replaced by the two gates, §6 security note); m24/G0B_LOCAL_FILL_HISTOGRAM.md
 gains a dated CORRECTION header above the preserved original.
+
+## ~07:30 PDT — M24 gate: dummy steps are rank-synchronous (capture window)
+
+RESULT: the rank-synchrony gate (§7 item 1b) is RESOLVED FOR THE CAPTURE
+WINDOW. An analysis subagent re-ran the routecap1 corpus (8 workers x 64
+B4096 calls) with the g0b dummy classifier reused verbatim: the per-index
+dummy count c[i] is bimodal on {0, 8} for all 64 indices — 100% of indices,
+against a 5% expectation under independent per-rank dummies — with pairwise
+agreement and Cohen kappa 1.000 across all 28 worker pairs and an identical
+31.2% dummy rate at every one of the 8 workers. Index alignment, the
+assumption the corpus cannot supply directly, is validated by a sharp lag-0
+peak in cross-rank n_real correlation (r = +0.996 vs ~0.65 one call away).
+CONSEQUENCE: a tier-1 whole-step skip carries 1:1 from rank-calls to steps
+with no synchrony discount — the blocking worry that tier-1 numbers overstate
+because a step-level skip needs all 8 ranks dummy is not realized in the data.
+CAVEAT: the window's dummies are entirely ramp-in (idx 0-13) and drain-out
+(idx 58-63) blocks; zero mid-run dummies appear, so the residual node-side
+check is narrowed to whether the whole-run ~56% mid-run dummy steps carry the
+same signature — a per-step n_orig cross-rank grep of the receipts. DESIGN
+RULE UNCHANGED: the skip remains a collective decision (a lone disagreeing
+rank entering the slab rendezvous hangs 8 GPUs); local n_orig == 0 is a
+proposal only, never the commitment. Source: m24/DUMMY_SYNCHRONY.md
+(commit 2ba124c8). DOCS: REPORT.md r3 -> r4 (M12 row added to the §2
+measurements table, §4 contradiction box and §7 item 1b marked
+RESOLVED-FOR-CAPTURE-WINDOW).

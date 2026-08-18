@@ -92,6 +92,7 @@ rig, never an e2e headline; **CORPUS** = offline analysis of captured routes.
 | M9 | **NO e2e ratio vs native production exists — tonight or ever.** camp5_native never ran; v4's "native" arm was config-mirrored (§6) | — | — | — | — | **stated, not measured** |
 | M10 | **G7 — T-generality**: `hkp::csr_scan_block256` and `hkp::pull_src_fill` are correct for every `T ∈ [0, T_cap]`; minimum safe `K0P6_M24_TGRAIN = 1`, ship **8** (`-DK0P6_M24_TGRAIN=8`); `T_eff = 0` safe at all five substitution sites; §F.4's N=0 point resolves to the **unclamped** branch | ANALYSIS (local, no node) | n/a | source proof over `amd-master/.../hkp/hkp_sort.hpp` + `k0pf6gm_device_tile_m15.hip` post-M24 line map | n/a — static proof, not a run | **valid as a correctness argument**, commit `9ce36341`. Not a performance number. Also finds: `ZERO_PAD` write volume is **anti-correlated with N**, so the φ fit needs a calibration arm or a fixed regressor |
 | M11 | **G0b-local (corpus surrogate)** — fill is **bimodal**: 31 % dummy calls / ~60 % completely full / ~10 % genuinely partial; mean fill **0.69**; aggregate padding **1.19× pre-M24 → 1.01× post**. Modeled MoE-region ρ @ φ=0.9: **tier-1-only 0.719 (1.39×) beats full M24 0.730 (1.37×)** ⇒ under this distribution **tier 1 captures the entire modeled win** (~**+11–17 % e2e** at the 40–54 % MoE fraction) | CORPUS → **MODEL** | n/a | 512 rank-calls (8 workers × 64 B4096 calls), routecap1 capture at c32p; `ρ = (1−φ) + φ·T_eff/4096` averaged over the empirical distribution, φ **assumed** 0.80/0.90 | n/a | **NOT A MEASUREMENT.** Modeled, kernel-region-only, φ unmeasured. Carries **first-64-calls capture bias** (dummy *rate* cross-validates at 31 % vs ~34 % receipts; the non-dummy **fill shape** does not) and **rank-call, not step, granularity** — a step-level tier-1 skip needs ALL 8 ranks dummy, so tier-1 numbers **overstate**. Commit `619b6308` |
+| M12 | **M24 dummy-step rank-synchrony — SYNCHRONOUS.** Per-index dummy count `c[i]` is bimodal on **{0, 8}** for all 64 indices (**100 %** of indices vs a **5 %** independent-rank expectation), pairwise agreement/kappa **1.000** over all 28 worker pairs, and all 8 workers show an identical **31.2 %** dummy rate. Index alignment independently validated by a sharp lag-0 cross-rank `n_real` correlation peak (**r = +0.996** vs ~0.65 at ±1). **Consequence: a tier-1 whole-step skip carries 1:1 from rank-calls to steps with NO synchrony discount** | ANALYSIS (corpus-based, local; no node) | n/a | same 512 rank-calls (8 workers × 64 B4096 calls) as M8/M11, routecap1 capture at c32p; `dummy_synchrony.py`, classifier reused verbatim from `g0b_local_fill.py` | n/a — analysis, not a run | **valid for the capture window only.** Commit `2ba124c8`. **Caveat: the window's dummies are entirely ramp-in (idx 0–13) and drain-out (idx 58–63) blocks — zero mid-run dummy calls appear**, so the whole-run ~56 % mid-run dummy steps are not directly covered. Design rule unchanged: the skip remains a **collective** decision; local `n_orig == 0` is a proposal, never the commitment |
 
 ### Retractions issued tonight
 
@@ -412,9 +413,16 @@ tier 2.
 > steps — materially LARGER than the 31 % G0b modeled** — and tier 2 stays
 > the weaker tier. The two decisive gates that remain are (1) the
 > `RAGGED_SEAL_RECEIPT` **printf grep** on the node, to confirm the `/8`
-> peer-summing convention, and (2) **dummy-step rank-synchrony**: a
-> step-level tier-1 skip requires all 8 ranks dummy, and
-> `uniform_rescued` 139/142 across ranks is suggestive, not proof.
+> peer-summing convention, and (2) **dummy-step rank-synchrony** —
+> now **RESOLVED FOR THE CAPTURE WINDOW** (M12, commit `2ba124c8`): dummy
+> calls are perfectly rank-synchronous (`c[i]` in {0, 8} for all 64 indices,
+> 100 % vs 5 % under independence; cross-rank `n_real` r = +0.996 at lag 0;
+> all 8 workers at an identical 31.2 % dummy rate), so a tier-1 whole-step
+> skip carries **1:1 with no synchrony discount**. The residual node-side
+> check is narrowed to: do the whole-run ~56 % **mid-run** dummies (the
+> window holds only ramp/drain blocks) behave the same — a per-step
+> `n_orig` cross-rank grep. Design rule unchanged: the skip stays a
+> **collective** decision; local `n_orig == 0` is a proposal only.
 > Source: provenance reconstruction, held locally; conclusions summarized
 > here; receipt re-verification queued on the node.
 
@@ -574,11 +582,16 @@ tamper-refusal / inertness). **None of it says anything about codegen.**
    convention** behind `Σ(in_bucket_sum_orig)/Σ(in_bucket)/8`. This is the one
    unverified assumption under the 37.6 % figure, and it is the same pass as
    the separator-format check in item 3 — do them together.
-   **(1b) Dummy-step rank-synchrony** — a step-level tier-1 skip fires only if
-   **all 8 ranks** are dummy on the same step. Establish synchrony from the
-   receipts plus a step-keyed capture (the corpus has no step key;
-   `uniform_rescued` 139/142 across ranks is suggestive, not proof). This
-   sets how much of the ~56 % dummy-step rate tier 1 can actually claim.
+   **(1b) Dummy-step rank-synchrony — RESOLVED FOR THE CAPTURE WINDOW**
+   (M12, `2ba124c8`): dummy calls are perfectly rank-synchronous — `c[i]` in
+   {0, 8} for all 64 indices (100 % vs 5 % under independence), cross-rank
+   `n_real` r = +0.996 at lag 0, all 8 workers at an identical 31.2 % dummy
+   rate — so the tier-1 whole-step skip carries **1:1 with no synchrony
+   discount**. What remains on the node is narrower: the window contains only
+   ramp-in/drain-out dummy blocks, so confirm the whole-run ~56 % **mid-run**
+   dummy steps behave the same, via a per-step `n_orig` cross-rank grep of the
+   receipts. Design rule unchanged: the skip is a **collective** decision;
+   local `n_orig == 0` is a proposal only, never the commitment.
 2. **Retrieve the stranded tgen sweep** (`~/nightshift_r6/tgen_t*_0818T0845/
    summary.json`, ~2 min). Free data, closes the r(T) question for the tgen body.
 3. **Deploy campaign_v5** (staging commands in `tasks/wp5jobxxv.output`), and
