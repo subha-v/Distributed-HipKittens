@@ -89,4 +89,56 @@ KITTENS_DISTRIBUTED_DEVICE_INLINE void counted_arrive_release_into(
     if (result.last) thread_release<PublicationScope>();
 }
 
+/**
+ * Runtime-target fan-in: one arrival against a per-key, per-epoch target that
+ * is not known at compile time and may differ between keys and epochs.
+ *
+ * This is the primitive the fused-MoE adapter open-codes ~524,000 times per
+ * rank per epoch (irregular routing fan-in), and the ERS owner-side arrival
+ * count in the M25 TP8 design (contributors per slab = the number of expert
+ * ranks that served it, plus the shared expert).
+ *
+ * CONTRACT — how it differs from counted_arrive_into():
+ *  - `expected` is THIS epoch's target for THIS cell. Because the target
+ *    varies, the cumulative quotient/remainder identity is unavailable: the
+ *    cell must be ZERO at epoch start and is consumed by exactly one
+ *    completion. Reuse goes through the caller's lifetime protocol
+ *    (lifetime.cuh slot retirement decides when the address may be re-zeroed
+ *    and re-armed) — this pairing is what makes a dynamic target safe at all.
+ *  - The producer calls this from one elected thread after its payload
+ *    release, exactly as counted_arrive_into().
+ *  - `expected == 0` (a key with no producers this epoch) reports
+ *    last = false and must be completed by the ARMING agent instead (it
+ *    certifies the empty region itself): a zero-target cell can never
+ *    self-complete, and giving emptiness a completer is the M24 lesson —
+ *    a dummy participant still publishes what peers count on.
+ *
+ * The RMW is agent-scope acq_rel like the fixed-target form; cross-agent
+ * publication still requires the release variant or an explicit
+ * thread_release<system>() on the last arriver.
+ */
+KITTENS_DISTRIBUTED_DEVICE_INLINE void counted_arrive_dynamic_into(
+        std::uint32_t* epoch_counter, std::uint32_t expected,
+        counted_arrival& result) {
+    if (expected == 0u) {
+        result = {0u, 0u, 0u, false};
+        return;
+    }
+    const std::uint32_t previous =
+        detail::fetch_add_acq_rel<memory_scope::agent>(epoch_counter, 1u);
+    result.previous = previous;
+    result.epoch = 1u;
+    result.ordinal = previous;
+    result.last = previous + 1u == expected;
+}
+
+/** Dynamic-target arrival plus last-arriver selected-scope release. */
+template<memory_scope PublicationScope = memory_scope::system>
+KITTENS_DISTRIBUTED_DEVICE_INLINE void counted_arrive_dynamic_release_into(
+        std::uint32_t* epoch_counter, std::uint32_t expected,
+        counted_arrival& result) {
+    counted_arrive_dynamic_into(epoch_counter, expected, result);
+    if (result.last) thread_release<PublicationScope>();
+}
+
 } // namespace kittens::distributed

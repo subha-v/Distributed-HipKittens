@@ -7,8 +7,11 @@
 
 #include "peer.cuh"
 #include "packet.cuh"
+#include "credit.cuh"
+#include "order.cuh"
 #include "sync.cuh"
 #include "completion.cuh"
+#include "slab.cuh"
 #include "counter.cuh"
 #include "lifetime.cuh"
 #include "roles.cuh"
