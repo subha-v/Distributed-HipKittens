@@ -1,10 +1,17 @@
-# Nightshift REPORT — 2026-08-18 overnight (draft r2, written 04:50–06:00 PDT)
+# Nightshift REPORT — 2026-08-18 overnight (draft r3, written 04:50–07:00 PDT)
 
 > **Fairness-audited.** This draft was reviewed by the mandatory adversarial
 > fairness-audit subagent; wording was downgraded in place on 8 items and three
 > retractions (R4–R6) were added. The signed per-item verdict, the licensing
 > statement, and the preconditions for any future "beats production" claim are
 > in **§3.4**. Read §3.4 before quoting anything from this file.
+>
+> **r3 (07:00 PDT):** the fill provenance was recovered and reconciled —
+> **R4 is DISCHARGED** (37.6 % / 2.66× is sourced and reproduced, with
+> qualifiers), **R7 withdraws the corpus 1.19×** as an arithmetic artifact,
+> the §4 contradiction box is **RESOLVED**, and §6 records a **security
+> incident** (a provenance file quoting prior-session transcript records was
+> committed and removed; history decision pending).
 
 Status: **campaign not run.** The GPU node has refused ssh since ~09:00 UTC
 (~02:00 PDT) and was still refusing at write time. Everything below is either
@@ -98,15 +105,32 @@ rig, never an e2e headline; **CORPUS** = offline analysis of captured routes.
   **+2.70 % mean / +3.61 % geomean at n=2** and is directional only.
   **The string "+2.7–5.2 %" is retired everywhere and must not reappear**,
   including in framings that compare it to vendor-published ranges.
-* **R4 (added by the fairness audit). The "37.6 % fill / 2.66× padding"
-  premise is SUSPENDED, not merely contested.** It is the stated basis of
-  Priority 1 in `nightshift/CLAUDE.md` and of §A.4's `f = 0.376`, yet no
-  document in this session — this report included — cites the receipt field,
-  run, or arithmetic that produced "~1,539 real tokens/rank/step". The only
-  receipt actually quoted tonight (M2) carries `min_orig=1 max_orig=4096` and
-  does not settle it. Until the §7-item-1 histogram lands, **2.66× may not be
-  used as a premise, a design input, or a justification for tier 2** — the
-  same prohibition the contradiction box places on 1.19×.
+* **R4 — DISCHARGED (r3).** R4 suspended "37.6 % fill / ~1,539 real
+  tokens/rank/step / 2.66× padding" as un-sourced. The provenance has since
+  been recovered: the figure derives from the **M23PAIR2 P1 m15 c32p
+  `RAGGED_SEAL_RECEIPT` lines**, as
+  `Σ(in_bucket_sum_orig) / Σ(in_bucket) / 8 ≈ 1,541 / 4,096`. It reproduces
+  to **3 s.f.** (ranks 0 and 7 agree to 0.04 %) and is corroborated by an
+  **independent stock-arm check at 43.3 % fill / 2.31×**. The suspension is
+  lifted; **2.66× may again be used as a design premise**, but only with these
+  qualifiers attached: (a) it is per-rank per **IN-BUCKET step**, not per
+  "sealed" step (the earlier wording was wrong, ≤1 % numerically);
+  (b) **whole-run** aggregate; (c) it **includes ~56 % DP-dummy /
+  `uniform_rescued` steps** at `n_orig ≈ 1` — it is not the non-dummy fill;
+  (d) **token rows, not top-8-expanded rows**; (e) **n = 1 arm**; (f) the
+  **`/8` peer-count convention is assumed**, with two strong indirect proofs
+  but the receipt printf never read — a grep on the node closes it (§7).
+  Source: provenance reconstruction, held locally; conclusions summarized
+  here; receipt re-verification queued on the node.
+* **R7 (new, r3). The corpus-derived aggregate padding multiplier "1.19×" is
+  WITHDRAWN as an arithmetic artifact.** `g0b_local_fill.py:89` filters
+  `n_real > 0`, silently dropping the **91 zero-fill calls**; the honest
+  all-512-rank-call aggregate is **1.446×**. The string "1.19×" must not
+  reappear as the corpus padding multiplier. The corpus's **shape** findings
+  (bimodal distribution, non-dummy calls ~0.91 full, tier-2 row plumbing weak,
+  tier-1-dominant) are unaffected and in fact strengthen. Source: provenance
+  reconstruction, held locally; conclusions summarized here; receipt
+  re-verification queued on the node.
 * **R5 (added by the fairness audit).** Commit `4a5d87d7`'s message and the
   matching `CORPUS_FINDINGS.md` framing say "**31 % of sealed steps** are
   100 % fake work". The measurement is over **rank-calls**, not steps, and a
@@ -365,31 +389,34 @@ corpus carries no step key to check that locally. If this shape holds, the
 complexity budget belongs in tier 1 (a cheap collective planner predicate), not
 tier 2.
 
-> ### ⚠ CONTRADICTION — the two fill numbers cannot both be true
+> ### ✅ RESOLVED (r3) — the two fill numbers were never in conflict
 > The banked serving receipt says **37.6 % fill / 2.66× padding**
-> (~1,539 real tokens/rank/step of 4,096). The route corpus says **mean fill
+> (~1,539 real tokens/rank/step of 4,096). The route corpus said **mean fill
 > 0.69 / 1.19× aggregate padding**, with non-dummy calls near-completely full.
-> These describe the same quantity and disagree by more than a factor of two.
-> **Neither side is preferred here, and both carry an unaudited defect.**
-> *Corpus side:* the **first-64-calls capture bias** — the dummy *rate*
-> cross-validates (31 % corpus vs ~34 % `uniform_rescued` in whole-run
-> receipts), but nothing cross-validates the **non-dummy fill shape**, which is
-> exactly where the two views diverge; it is also rank-call, not step,
-> granularity. *Receipt side (added by the fairness audit, and equally
-> disqualifying):* **the 37.6 % / ~1,539 figure has no provenance in this
-> session at all** — no document cites which receipt field, which run, or what
-> arithmetic produced it, and the one receipt actually quoted tonight (M2)
-> reports only `min_orig=1 max_orig=4096`. An un-sourced number is not the
-> stronger side of a contradiction merely because it is older (R4).
-> Alternative reconciliations: the receipt
-> averages over all steps including unsealed/decode ones while the corpus is
-> sealed B4096 calls only; or the receipt counts prompt tokens while routed rows
-> include per-expert replication.
-> **Neither 2.66× nor 1.19× may be quoted as "the" padding multiplier, and the
-> M24 win estimate stays WITHDRAWN** pending a whole-run `n_orig` histogram
-> extracted from `RAGGED_SEAL_RECEIPT` lines in banked `server.log`s (node
-> work, §7 item 1). The direction matters: **if 37.6 % is right, tier 2 is
-> valuable; if the corpus is right, tier 2 is nearly worthless.**
+> Both sides have now been repaired and they reconcile.
+> **The corpus was right about SHAPE; the receipt was right about RATE.**
+> *Corpus repair:* the 1.19× was an artifact of an `n_real > 0` filter that
+> dropped the 91 zero-fill calls (**R7**); the honest all-512 aggregate is
+> **1.446×**, and non-dummy calls are ~**0.91** full — the shape conclusions
+> (bimodal, tier-2 row plumbing weak, tier-1-dominant) stand and strengthen.
+> *Receipt repair:* its provenance is now sourced and reproduced (**R4
+> discharged**) with the in-bucket / whole-run / n=1 / `/8`-convention
+> qualifiers recorded there.
+> *Residual gap = the dummy-step RATE, not the fill shape.* The corpus window
+> (first 64 calls) is the **ramp phase** and sees **31 %** dummy calls; the
+> whole-run receipt rate is **~56 %**. Composing the two
+> (0.442 × 0.9146 ≈ 0.404 vs the receipt's 0.376) closes ~86 % of the gap,
+> with the residual inside the known capture bias; an independent
+> all-tokens/padded-rows cross-check lands at 40.3 % vs the predicted 40.4 %.
+> **Consequence for the plan:** **tier 1 now targets ~56 % of in-bucket
+> steps — materially LARGER than the 31 % G0b modeled** — and tier 2 stays
+> the weaker tier. The two decisive gates that remain are (1) the
+> `RAGGED_SEAL_RECEIPT` **printf grep** on the node, to confirm the `/8`
+> peer-summing convention, and (2) **dummy-step rank-synchrony**: a
+> step-level tier-1 skip requires all 8 ranks dummy, and
+> `uniform_rescued` 139/142 across ranks is suggestive, not proof.
+> Source: provenance reconstruction, held locally; conclusions summarized
+> here; receipt re-verification queued on the node.
 
 **Four corrections that changed the plan tonight:**
 
@@ -517,6 +544,21 @@ tamper-refusal / inertness). **None of it says anything about codegen.**
     `~/eplb_campaign/`; copies exist only under
     `~/pf4h_vllm_20260729/*/shim/pf4h_integration/`. Confirm the patch-chain
     head before any integration build.
+11. **Security note — provenance file flagged and removed; history decision
+    pending.** A subagent committed
+    `distributed-kernels/fused_moe/overnight/aug18-prefill/m24/FILL_PROVENANCE.md`
+    to this public repo in commit **`1629fa41`**. It quoted **prior-session
+    transcript records verbatim**, was flagged by the security layer, and was
+    **removed from the repo tip in `24b441a8`**. The git **history still
+    contains `1629fa41`**, so the operator must decide between a **history
+    rewrite (force-push)** and **accepting it as-is** — the content is the
+    project's own benchmark analysis and contains **no credentials and no
+    personal data**, so acceptance is defensible; only the transcript-quoting
+    convention is at issue. The sanitized conclusions (which is all this
+    report relies on) live in the session scratchpad file
+    `FILL_PROVENANCE_SANITIZED_LOCAL.md`: provenance reconstruction, held
+    locally; conclusions summarized here; receipt re-verification queued on
+    the node.
 
 ---
 
@@ -524,13 +566,19 @@ tamper-refusal / inertness). **None of it says anything about codegen.**
 
 **On node return, in this exact order:**
 
-1. **Reconcile the fill contradiction (§4) — cheap, and it re-prices M24.**
-   Extract the **whole-run `n_orig` / fill histogram** from the
-   `RAGGED_SEAL_RECEIPT` lines in the banked `server.log`s (camp3 pairs +
-   routecap runs). This is the real G0b: it decides whether tier 2 is worth
-   building at all and sets the true expected win (37.6 %-receipt view vs the
-   corpus's 1.19× view). Pair it with the receipt-printf-format grep already
-   needed in item 3 — same files, one pass.
+1. **Close the two remaining fill gates (§4) — cheap, and they price M24.**
+   The contradiction is RESOLVED (R4 discharged, R7 withdraws 1.19×), leaving
+   two decisive checks:
+   **(1a) Receipt printf grep** — grep a banked `server.log` for the exact
+   `RAGGED_SEAL_RECEIPT` printf format and confirm the **`/8` peer-summing
+   convention** behind `Σ(in_bucket_sum_orig)/Σ(in_bucket)/8`. This is the one
+   unverified assumption under the 37.6 % figure, and it is the same pass as
+   the separator-format check in item 3 — do them together.
+   **(1b) Dummy-step rank-synchrony** — a step-level tier-1 skip fires only if
+   **all 8 ranks** are dummy on the same step. Establish synchrony from the
+   receipts plus a step-keyed capture (the corpus has no step key;
+   `uniform_rescued` 139/142 across ranks is suggestive, not proof). This
+   sets how much of the ~56 % dummy-step rate tier 1 can actually claim.
 2. **Retrieve the stranded tgen sweep** (`~/nightshift_r6/tgen_t*_0818T0845/
    summary.json`, ~2 min). Free data, closes the r(T) question for the tgen body.
 3. **Deploy campaign_v5** (staging commands in `tasks/wp5jobxxv.output`), and

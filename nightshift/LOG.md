@@ -300,3 +300,50 @@ MODELED not measured), §4 G7 + G0b-local + a called-out CONTRADICTION box,
 §7 new #1 node action (receipts histogram) + TGRAIN=8 on all gate arms +
 ZERO_PAD calibration on the F.3 ladder + fanout-clamp hardening in the
 following-iteration list.
+
+## 07:00 PDT — fairness audit signed; fill provenance recovered + reconciled; security flag
+
+FAIRNESS AUDIT SIGNED (f1fe630a, report r2): adversarial Opus auditor returned
+5 PASS-WITH-EDITS / 8 items edited in place / 0 headline claims licensed. No
+"beats production" claim ships from this session; §3.4 carries the signed
+per-item verdict and the preconditions for any future one.
+
+PROVENANCE RECOVERED AND RECONCILED. The 37.6% fill / ~1,539 real
+tokens/rank/step / 2.66x padding figure has a verified primary source: the
+M23PAIR2 P1 m15 c32p RAGGED_SEAL_RECEIPT lines, via
+Sum(in_bucket_sum_orig)/Sum(in_bucket)/8 ~= 1,541/4096. Reproduces to 3 s.f.
+(ranks 0 and 7 agree to 0.04%), plus an independent stock-arm cross-check at
+43.3% fill / 2.31x. R4 is therefore DISCHARGED — 2.66x is usable as a design
+premise again, but only with its qualifiers: per-rank per IN-BUCKET step (not
+"sealed"), whole-run, includes ~56% DP-dummy/uniform_rescued steps, token rows
+(not top-8 expanded), n=1 arm, and the /8 peer-count convention still assumed
+pending a receipt-printf grep on the node.
+
+CORPUS 1.19x WITHDRAWN (new retraction R7): g0b_local_fill.py:89 filters
+n_real>0 and silently drops the 91 zero-fill calls; the honest all-512
+aggregate is 1.446x. Shape conclusions (bimodal, non-dummy ~0.91 full, tier-2
+weak, tier-1-dominant) STAND and strengthen.
+
+CONTRADICTION RESOLVED. Corpus was right about SHAPE, receipt about RATE: the
+corpus window (first 64 calls) is the ramp phase at 31% dummy calls; the
+whole-run receipt rate is ~56%. 0.442 x 0.9146 ~= 0.404 vs receipt 0.376 closes
+~86% of the gap, residual inside the known capture bias. CONSEQUENCE: tier 1
+now targets ~56% of in-bucket steps — LARGER than G0b modeled (31%) — and tier
+2 stays the weaker tier. The two decisive gates that remain: (a) the
+RAGGED_SEAL_RECEIPT printf grep confirming /8 peer-summing; (b) dummy-step
+RANK-SYNCHRONY (a step-level tier-1 skip needs all 8 ranks dummy;
+uniform_rescued 139/142 across ranks is suggestive, not proof).
+
+SECURITY FLAG. A subagent committed m24/FILL_PROVENANCE.md to this public repo
+(1629fa41) quoting prior-session transcript records verbatim; the security
+layer flagged it and it was REMOVED from the repo tip in 24b441a8. The git
+HISTORY still contains 1629fa41 — operator decision pending between a history
+rewrite (force-push) and accepting it as-is (content is the project's own
+benchmark analysis; no credentials, no personal data). Sanitized conclusions
+are held in the session scratchpad as FILL_PROVENANCE_SANITIZED_LOCAL.md;
+everything above is sourced from it. Provenance reconstruction, held locally;
+conclusions summarized here; receipt re-verification queued on the node.
+
+DOCS: REPORT.md r2 -> r3 (R4 discharged, R7 added, §4 box RESOLVED, §7 item 1
+replaced by the two gates, §6 security note); m24/G0B_LOCAL_FILL_HISTOGRAM.md
+gains a dated CORRECTION header above the preserved original.

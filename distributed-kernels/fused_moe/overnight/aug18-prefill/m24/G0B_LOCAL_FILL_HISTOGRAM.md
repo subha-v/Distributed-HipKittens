@@ -1,3 +1,40 @@
+> ## ⚠ CORRECTION — 2026-08-18 07:00 PDT (read before anything below)
+>
+> Two numbers in this document are **wrong**. The document is preserved
+> unedited below for the record; these corrections supersede it.
+>
+> 1. **The "1.19× aggregate padding multiplier" is WITHDRAWN — arithmetic
+>    artifact.** `g0b_local_fill.py:89` filters `n_real > 0`, which silently
+>    drops the **91 zero-fill (fully dummy) calls** from the aggregate. The
+>    honest **all-512-rank-call aggregate is 1.446×**, not 1.19×. Every
+>    downstream use of 1.19× (including as "the" corpus padding multiplier
+>    against the serving receipt's 2.66×) is void.
+> 2. **The 31 % dummy rate is a RAMP-PHASE rate, not the whole-run rate.**
+>    The corpus window is the first 64 B4096 calls per worker. The whole-run
+>    rate, read from the `RAGGED_SEAL_RECEIPT` lines, is **~56 % of in-bucket
+>    steps**. Tier 1 therefore targets **~56 %** of in-bucket steps — nearly
+>    double what this document modeled.
+>
+> **What STANDS, and is strengthened:** every **shape** conclusion — the
+> distribution is **bimodal**; **non-dummy calls are ~0.91 full**; **tier-2
+> row plumbing is weak** (there is little partial-fill work to recover); and
+> the model is **tier-1-dominant**. With the corrected dummy rate, tier 1's
+> advantage over tier 2 is *larger*, not smaller.
+>
+> **Reconciliation with the serving receipt (no contradiction remains):** the
+> corpus was right about shape, the receipt right about rate; composing them
+> (0.442 × 0.9146 ≈ 0.404 vs the receipt's 0.376) closes ~86 % of the apparent
+> gap, the residual sitting inside the known capture bias.
+>
+> **Open gates:** (a) a `RAGGED_SEAL_RECEIPT` **printf grep** on the node to
+> confirm the `/8` peer-summing convention; (b) **dummy-step rank-synchrony**
+> — a step-level tier-1 skip requires all 8 ranks dummy on the same step.
+>
+> Source: provenance reconstruction, held locally; conclusions summarized
+> here; receipt re-verification queued on the node.
+
+---
+
 # G0b (local surrogate): per-call real-row distribution and the M24 cost model
 
 Status: **partial discharge of G0b**. FILL_AWARE_DESIGN.md rev 3 §A.4.3
