@@ -391,3 +391,19 @@ epoch counter).  A compile-gated PROF arm adds a monotonic per-wait-site
 idle-cycle ledger (descriptor slot 73) to size every bubble at training
 geometry.  The slice/accumulate plumbing (`tile_lo`/`tile_hi`/`accumulate`)
 landed in `n2_wgrad_gm_t2b.cpp` + `wg_standalone.hip` for exactly this.
+
+## fp8-on-wire combine design (branch `ablations`, 2026-08-18)
+
+`distributed-kernels/fused_moe/overnight/aug18-prefill/FP8_WIRE_DESIGN.md` —
+design record for fp8 e4m3 combine payloads plus source-side pre-reduce in the
+M15 prefill megakernel.  Establishes that the byte lever is reachable only on
+top of the staged arm (`K0P6_M15_STAGED`): gfx950 has no fp8 remote RMW, so the
+transport becomes local bf16 fold + posted fp8 stores + owner-side
+dequant-reduce in M8 (2.931x fewer remote bytes; row 14,336 B -> 7,392 B with
+56 inline fp32 group scales).  Includes measured paired-build evidence that the
+staged arm's M7 epilogue is instruction-identical to the shipped ratchet (282
+`pk_add_bf16` / 96 `vmcnt(4)` / 180 `v_mfma`), so the format change costs the
+epilogue nothing — and a P0 finding that `K0P6_M15_STAGED=1` currently emits 96
+scratch reloads and 97 `s_waitcnt vmcnt(0)` beside the remote atomic (the
+exp_24 pathology with exp_38's throttle-annihilation consequence), which blocks
+any A/B of the arm until cleared.  No kernel code changed.
