@@ -407,3 +407,27 @@ epilogue nothing — and a P0 finding that `K0P6_M15_STAGED=1` currently emits 9
 scratch reloads and 97 `s_waitcnt vmcnt(0)` beside the remote atomic (the
 exp_24 pathology with exp_38's throttle-annihilation consequence), which blocks
 any A/B of the arm until cleared.  No kernel code changed.
+
+## M23 "ragged seal" design (branch `ablations`, 2026-08-18)
+
+`distributed-kernels/fused_moe/overnight/aug18-prefill/M23_RAGGED_SEAL_DESIGN.md` —
+serving-integration design record for the highest-priority coverage fix.  New
+per-step instrumentation showed the `k0pf6gm_m15_mega` graph is nearly inert in
+real serving: the seal fires only when all eight DP ranks have *exactly* 4096
+pre-padding tokens, which is ~2% of the ~230 in-bucket steps per c32p run, while
+production's stock B4096 graph runs all 230.  The doc establishes with file:line
+evidence that stock vLLM **dispatches every padded row** through Mori+AITER
+(`is_padding` is None on the V1 runner, `VLLM_MOE_SKIP_PADDING` defaults off), so
+parity needs **no megakernel change and no shim math change** — the megakernel's
+`T` is a launch constant and its capacities are already sized `world x T`.  M23
+is therefore a pure seal relaxation: a DP-unanimous predicate built only from
+all-reduced data (padded counts, synced cudagraph mode, plus a new readiness row
+folded into the existing 4x8 all-reduce), a mode override so a uniform-decode
+rank cannot split the collective, and real coverage counters
+(`RAGGED_SEAL_RECEIPT`) replacing the one-shot receipt latches.  Projected
+coverage 2% -> 100% of in-bucket steps (0.77% -> 38.3% of all steps, ~50x).
+Also records two findings that invalidate every prior serving A/B: an unsealed
+in-bucket step in a PF4H-target server runs with **no cudagraph at all**, and a
+rank whose local batch looks like a uniform decode runs the whole model eagerly
+at 4096 padded tokens in *both* arms.  Top risk is the fail-closed
+`M15_SPIN_LIMIT` against ragged cross-rank arrival skew.  No code changed.
