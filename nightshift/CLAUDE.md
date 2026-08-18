@@ -116,6 +116,50 @@ per arm, exact-token SHA. Remember the mega inverts below ~1,600-1,800
 tokens/rank — small-batch cells are expected losses for the mega and wins
 for the hybrid story; report them honestly, never hide them.
 
+## Fairness audit — MANDATORY before any "beats production" claim
+This project spent weeks optimizing over fake baselines. Never again. Launch
+a dedicated **fairness-audit Opus subagent** (`model: opus`, effort `high`),
+adversarially prompted to PROVE THE COMPARISON UNFAIR, and re-run it for
+every new kernel build and every campaign whose numbers you intend to quote.
+No headline claim ("our kernel is better than production") ships without its
+written sign-off; it holds veto power. Its checklist, grounded in the actual
+past failures:
+1. **Baseline authenticity**: the production arm is the genuinely untouched
+   image at shipped defaults — verify from evidence, not intent: image
+   digest, `docker inspect` env (no `VLLM_PF4H_*`), server.log config dump,
+   absence of every patch marker (`PF4H_INTEGRATION_PATCH_V3_M15`,
+   `PF4H_COVERAGE_PATCH_V1`, `PF4H_M23_RAGGED_SEAL_V1`, `PF4H_RR_*`).
+   Past sin: quoting patched-stock as "production".
+2. **Baseline not sandbagged**: production gets its best shipped config —
+   AITER + MORI env present, same gpu-mem-util/scheduler flags as our arm;
+   any deviation from the vendor's recommended deployment documented and
+   justified. Past sin: none yet — keep it that way.
+3. **Candidate actually ran**: coverage receipts (`RAGGED_SEAL_RECEIPT
+   sealed/in_bucket`) prove the megakernel executed the traffic. Past sin:
+   the mega was inert on ~98% of heavy steps for every pre-M23 A/B while the
+   candidate arm additionally ran de-graphed — a doubly fake candidate.
+4. **Identical workload**: exact-token prompt SHA match across arms, same
+   cell spec, seeds, client, warmup; any prefix-cache or thermal asymmetry
+   neutralized (cooldowns symmetric). Past sin: prewarm/cache asymmetry
+   risks; position effect ±18%/arm.
+5. **Statistical validity**: order-balanced pairs only, n stated, spread
+   across pairs shown, claim sized against the measured drift (±15% day,
+   ±18% position). Single arms and cross-pair ratios are never evidence.
+   Past sin: n=1 headlines (+39.8%, −19.6%) later voided.
+6. **Accuracy parity**: outputs validated (exact-token SHA where applicable;
+   otherwise the MoK rel-err policy or an accuracy A/B) — a faster wrong
+   kernel is not a win. Past sin: `SAME OUTPUTS: False` left unresolved.
+7. **Replay/proxy honesty**: kernel-level rigs (MoK, histogram replay) are
+   never quoted as end-to-end; captured-route and fill regimes labeled
+   (banked kernel numbers are 100%-fill; serving runs at ~37.6% fill).
+   Past sin: i.i.d. replay standing in for real routing.
+8. **Claim wording matches measurement**: which cells, which regime, the
+   hybrid caveat (mega inverts below ~1,600–1,800 tokens/rank — small-batch
+   cells reported, not hidden), memory/replication costs priced in (past
+   sin: 41 GB replica caches framed as kernel wins).
+REPORT.md must contain a `FAIRNESS_AUDIT` section per quoted claim: verdict,
+items checked with evidence pointers, residual caveats.
+
 ## Also orchestrate
 - **The cleanup agent** (died mid-run at laptop sleep; partial work at
   checkpoint f4968a32 + possibly uncommitted edits): relaunch an Opus

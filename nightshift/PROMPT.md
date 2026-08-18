@@ -36,7 +36,13 @@ Your mission is the optimization loop, not queue-tending:
 4. **Then loop**: profile the new build (phase ledger, receipts, spin
    probes), identify the next-biggest bottleneck, implement, verify, measure
    e2e again. Keep iterating until morning.
-5. In parallel, **relaunch and finish the cleanup agent** (delete the
+5. **Launch the fairness-audit agent** (Opus, effort high, adversarially
+   prompted to prove the comparison UNFAIR) and re-run it for every build and
+   campaign you quote — its checklist and veto power are in CLAUDE.md. We
+   optimized over fake baselines for weeks (inert candidate, de-graphed arm,
+   patched-stock called "production", n=1 headlines); no "beats production"
+   claim ships without this agent's written sign-off in REPORT.md.
+6. In parallel, **relaunch and finish the cleanup agent** (delete the
    obsolete pre-M23 serving numbers in both repos, tombstones, finish the
    methodology doc, commit+push; reconcile with checkpoint f4968a32).
 
