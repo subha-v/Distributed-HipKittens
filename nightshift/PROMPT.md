@@ -23,6 +23,20 @@ dispatch the next wave. If you catch yourself burning context on mechanical
 work, stop and delegate it. Keep your own turns short and your context lean
 so you last the whole night.
 
+The goal is to **beat genuine production by at least 20–30% end-to-end on
+prefill workloads**. That target exceeds what the MoE region alone can give
+(Amdahl at the ~40–54% MoE fraction), so I am open to overlapping
+communication/computation in other areas too — shared-expert filler,
+cross-layer/epoch pipelining, dispatch-compute overlap inside the kernel.
+Make the megakernel as hardware-efficient as possible: fine-grained
+readiness **signaling instead of barriers** wherever a consumer can proceed
+on partial input (the doctrine, banked laws, and falsified-pattern
+catalogue are in CLAUDE.md — hide rendezvous inside work, never expose
+them). You may search the web and spawn researcher Opus subagents to study
+prior art (DeepEP/MoonEP, MORI source, persistent-megakernel literature,
+CDNA4 ISA) — their reports come back compact and cited, folded into design
+docs rather than your own context.
+
 Your mission is the optimization loop, not queue-tending:
 
 1. **Check the legacy node queue's progress and harvest whatever completed**

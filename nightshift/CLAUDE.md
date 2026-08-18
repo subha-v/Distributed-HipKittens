@@ -69,6 +69,49 @@ was set up (`~/eplb_campaign/camp*_20260818.log`; waiters `camp_grid.sh`,
   m23_patch.py [→ rr_patch.py], all in `~/eplb_campaign/`, anchor-exact,
   fail-loud, idempotent.
 
+## The target and the optimization doctrine
+**Goal: beat GENUINE production by at least 20–30% end-to-end on prefill
+workloads.** Do the Amdahl arithmetic before choosing work: at the measured
+MoE fraction (~40–54% of step time), a MoE-region-only win caps out around
++25% even at a 2× region speedup — so hitting the target requires BOTH a
+much faster MoE region AND overlap wins outside it. The operator is
+explicitly open to **overlapping communication/computation in other areas**:
+the shared expert as in-kernel filler during dispatch/combine waits
+(`SHARED_EXPERT_FILLER_DESIGN.md` — shrinks the non-MoE fraction), cross-
+layer/epoch pipelining (attention of the next step vs combine drain),
+dispatch-compute overlap inside the mega (start GEMMs on early-arrived
+chunks instead of after full dispatch — the T3 counter-dataflow pattern),
+and anything else you can justify against the falsification catalogue.
+
+**Hardware-efficiency doctrine — signaling over barriers.** Make the
+megakernel utilize the hardware as fully as possible:
+- Replace bulk synchronization with **fine-grained readiness signaling**
+  wherever a consumer can proceed on partial input: epoch words, per-chunk
+  arrival counters (`chunk_ready` already exists), counted arrivals, slab
+  certificates. The training-side T3 kernel proved the pattern on this exact
+  hardware: ONE grid barrier per launch, every other ordering an HBM counter
+  at the consumer frontier. The corpus's law: sync GRANULARITY is a free
+  axis (2.94% spread, extra signal atomics free) but sync EXPOSURE is deadly
+  (two exposed barriers = 100% of a movement gap) — so hide rendezvous
+  inside work, never expose them.
+- Respect the banked laws while doing it: occupancy-1 (256 VGPR GEMM bodies
+  — no co-resident transport waves), the depth-4 vmcnt throttle on remote
+  RMWs, relaxed spins + acquire-on-success (never per-iteration acquires),
+  s_sleep backoff in cross-rank polls, pools may only CONSUME certified
+  work in a producer's shadow (never carry payload), per-row readiness is
+  probability-zero under top-8 — coarse per-chunk signals win.
+- The five-knob model and measured deltas live in
+  `docs/distributed/OVERLAP_ABSTRACTIONS.md`; the falsified-approaches
+  catalogue in the aug14 docs. Re-attempting a falsified pattern without new
+  evidence is a bug.
+
+**Learn as you go**: you may use web search and spawn **researcher Opus
+subagents** to study prior art when it sharpens a design — DeepEP/MoonEP
+dispatch-combine kernels, MORI's own source (mirrored locally), persistent-
+megakernel literature, CDNA4/MI350X ISA and memory-model details. Research
+reports must come back compact and cited; fold them into design docs, not
+into your own context.
+
 ## THE BIGGEST RECOVERABLE COST — start here
 Serving receipts show the mega executes 4,096 padded rows while carrying only
 ~1,539 real tokens/rank/step (**37.6% fill, 2.66× padding multiplier**).
