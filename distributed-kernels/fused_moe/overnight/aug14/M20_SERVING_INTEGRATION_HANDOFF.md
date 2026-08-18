@@ -2,9 +2,19 @@
 
 **Mission:** integrate the M20 kernel (replica cache + per-chunk adaptive
 routing) into real DeepSeek-R1 vLLM serving and produce ONE receipt-gated
-stock-vs-m20 pair on realistic MLPerf prompts (c32p cell), meeting or
-beating M19's +39.8% end-to-end without its 41 GB memory cost.  This packet
-is self-contained.
+stock-vs-m20 pair on realistic MLPerf prompts (c32p cell), at a fraction of
+M19's 41 GB memory cost.  This packet is self-contained.
+
+> **Note (2026-08-18):** the end-to-end serving targets this packet was
+> originally written against were removed as obsolete — the megakernel's
+> activation seal fired on only ~2% of padded-4096 heavy steps, the candidate
+> arm ran with no cudagraph on the rest, and both arms' baselines were
+> depressed by a uniform-decode rank running eagerly. The integration
+> mechanics, ground truth, and gotchas below are unaffected and still current.
+> Any new pair must satisfy
+> `../../../../docs/distributed/SERVING_BENCHMARK_METHODOLOGY.md` (M23 patch
+> chain in both arms, `RAGGED_SEAL_RECEIPT` coverage quoted, rescued-stock
+> baseline, ≥5 order-balanced pairs).
 
 ## 1. What M20 is (one paragraph)
 
@@ -41,8 +51,8 @@ skew; 0.823x balanced at theta=64** (theta above the uniform count returns
   no-op on an empty table.
 - **Serving shim** (amd-master, remote `github`): branch
   `vllm-integration-m18`, worktree `~/amd-master-m15pkt`.  Already contains
-  the FULL m15/m18/m19 serving integration (all receipts-gated, validated
-  in pairs #1–#3): `shim/pf4h_integration/{m18_replication.py,
+  the FULL m15/m18/m19 serving integration (all receipts-gated):
+  `shim/pf4h_integration/{m18_replication.py,
   m15_runtime.py, m15_contracts.py, m15_kernargs.py, m15_sources.py,
   weights.py, apply.py, m15_pin/}` + campaign arms in
   `benchmarks/2026-08-12_m15_campaign/run_m15_campaign.sh`.  m19's serving
@@ -137,10 +147,13 @@ skew; 0.823x balanced at theta=64** (theta above the uniform count returns
 
 ## 5. The bar
 
-Pair #3 (M19, theta=64, per-layer sets): **+39.8% input throughput,
-TTFT p99 −32.2%** vs stock on 1,024 real MLPerf prompts.  M20 should match
-or beat it (same routing machinery, minus the per-layer 1.2 ms decision
-tax x 58 layers ≈ 70 ms/step ≈ +6–8% expected) at a fraction of the
-memory.  Discipline: stock control first, receipts before activation,
-every number from an artifact, commit and push as you go (no force-push,
-no co-author lines).
+M20 carries M19's routing machinery minus the per-layer 1.2 ms in-kernel
+decision tax (× 58 layers ≈ 70 ms/step) at a small fraction of the memory, so
+it should beat M19 structurally at equal coverage.  The end-to-end bar M19
+originally set was retired on 2026-08-18 as obsolete (see the note under
+**Mission** at the top of this packet);
+a new bar has to be re-measured under
+`../../../../docs/distributed/SERVING_BENCHMARK_METHODOLOGY.md`.  Discipline:
+stock control first, receipts before activation, coverage receipt with every
+mega number, every number from an artifact, commit and push as you go (no
+force-push, no co-author lines).

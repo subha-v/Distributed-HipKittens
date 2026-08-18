@@ -98,63 +98,25 @@ MLPerf-text-specific and partially warmup-diluted).
 - Kernel commits: `ablations` 0f9676ce, `ablations-m18` 92440297;
   node worktree `~/DHK-m18`.
 
-## Serving pair #1 (2026-08-14, `vllm-integration-m18` @ 72591acd) — NEGATIVE
+## Serving pairs — REMOVED (obsolete serving methodology, 2026-08-18)
 
-The integration itself worked first try: env-gated on the m15 mode
-(`VLLM_PF4H_M18_REP_EXPERTS`), owner-broadcast replica weights behind `[:E]`
-views, 64-word descriptor, all receipts 8/8 including
-`M18_REPLICATION_RECEIPT`, 1024/1024 completed both arms
-(`~/20260814_m15_campaign_m18pair1b/`).  The performance did NOT transfer:
+This document's three end-to-end serving pairs (aggregate-static −5.7%,
+per-layer-static +11.3%, M19 per-chunk-adaptive +39.8%) were removed on
+2026-08-18. Per-step instrumentation showed the megakernel's activation seal
+fired on only ~2% of the padded-4096 heavy steps, so the candidate arms ran
+production kernels for ~98% of the heavy MoE work; the candidate arms also ran
+with no cudagraph at all on the unsealed steps; and both arms' baselines were
+depressed by a uniform-decode rank running the whole model eagerly. The deltas
+measured a broken control against a doubly-handicapped candidate.
 
-| metric | stock | m18 (top-16) | delta |
-|---|---:|---:|---:|
-| input tok/s | 12,562.5 | 11,842.2 | **−5.7%** |
-| TTFT p50 / p99 | 3,089 / 5,430 ms | 3,523 / 6,469 ms | +14% / +19% |
-| TPOT p50 | 1,072 ms | 1,098 ms | +2.4% |
+Historical content: `git log --follow -- <this path>`.
+Correction and the new protocol:
+`../../../../docs/distributed/SERVING_BENCHMARK_METHODOLOGY.md`,
+`../aug18-prefill/M23_RAGGED_SEAL_DESIGN.md`.
 
-Two suspects, in order:
-
-1. **Aggregate-vs-per-chunk statistics (prime).**  The MoK replay samples
-   every batch from the aggregate histogram — constant 58.7% replica-set
-   coverage, zero variance.  Real chunks are document slices: mean coverage
-   is still 58.7%, but chunks whose hot experts fall outside the static set
-   pay the full skew penalty PLUS the replication carry cost, and chunk
-   wall-time is convex in skew.  The per-call instrument (skew hook @
-   72591acd: per-call coverage + max-rank-load histograms) measures exactly
-   this distribution; decision pending its first pass (`m18diag`).
-2. **KV pool (secondary).**  +41 GB replica weights at
-   `--gpu-memory-utilization 0.70` halved available KV (68.8 → ~31 GiB,
-   max concurrency 64× → 29×).  Arithmetic says 32 concurrent 4k requests
-   need ~5 GB so this should not bind, but it is a confound to remove
-   (smaller nrep, or a higher utilization for both arms) before any rerun.
-
-If the per-call distribution shows high coverage variance, the static set is
-structurally insufficient for serving and the design moves to per-chunk
-replica selection (device-side planning prologue, MoonEP-style) or
-layer/chunk-adaptive tables.  The kernel-level result stands as measured —
-the open question is the routing statistics serving actually presents.
-
-## Serving pairs #2 and #3 (2026-08-14, later session) — THE WINS
-
-The diag pass measured the per-call distributions (n=90,050): static-set
-coverage bimodal (p5=1%, p75+=77%), per-call max rank load median 5.15x /
-p95 6.25x, and even ideal static redistribution leaves p95 at 3.05x.  Both
-fixes were built and paired the same day (identical rig as pair #1):
-
-| pair | candidate | tok/s vs stock | TTFT p50 / p99 | E2E p99 |
-|---|---|---:|---|---:|
-| #2 | M18, PER-LAYER top-16 sets (58 distinct) | **+11.3%** | −9.8% / −7.1% | −12.3% |
-| #3 | **M19: per-layer sets + per-chunk adaptive (theta=64)** | **+39.8%** | −23.1% / −32.2% | −24.2% |
-
-(#2: 11,339.5 vs 10,186.0 tok/s; #3: 13,395.4 vs 9,581.3 tok/s; 1024/1024
-both arms both pairs; all receipts 8/8.)  The day's arc: aggregate-static
-−5.7% → per-layer-static +11.3% → per-chunk-adaptive +39.8%, each step
-aimed at exactly what the previous measurement exposed.  Tails improved
-more than medians in #3 — the hot-rank overhang signature.
-
-Caveats held open: n=1 pair each; stock drifted downward across the day's
-pairs (12.6k → 10.2k → 9.6k tok/s — node state; the paired design absorbs
-it, but ≥5 order-balanced pairs remain mandatory); M19 output accuracy is
-being verified (harness reference-match gates GREEN on first campaigns;
-MLPerf AccuracyOnly A/B pending).  M19 design + kernel: `M19_DESIGN.md`,
-`ablations` @ 0430aeb7, serving `vllm-integration-m18` @ c1b76022.
+**Everything above this line is kernel-level (MoK harness) and is unaffected.**
+So is the per-call routing diagnostic that motivated M19, which was a
+histogram measurement rather than an arm comparison: over n=90,050 router
+calls, static-set coverage is bimodal (p5=1%, p75+=77%), per-call max rank
+load is median 5.15× / p95 6.25×, and even ideal static redistribution leaves
+p95 at 3.05×. M19 design + kernel: `M19_DESIGN.md`, `ablations` @ 0430aeb7.

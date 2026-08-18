@@ -1,55 +1,59 @@
-# Why the MoK win didn't transfer, and where the overlap program goes (2026-08-14 ~23:00 UTC)
+# Where the overlap program goes (2026-08-14 ~23:00 UTC)
 
-Decision record following the m20 serving pair (−19.6%, receipts green; see
-M20_SERVING_RESULTS.md), a source-level study of MORI-EP (ROCm/mori) and
-MoonEP (MoonshotAI), and new evidence pulled from the banked artifacts.
+Decision record following a source-level study of MORI-EP (ROCm/mori) and
+MoonEP (MoonshotAI), plus evidence pulled from the banked artifacts.
 
-## 1. The paradox, resolved
+> **Note (2026-08-18):** this record originally opened with a §1 that resolved
+> "why the MoK win didn't transfer to serving" using the 2026-08-14 serving
+> pairs. That section was removed: the pairs were invalid. The megakernel's
+> activation seal fired on only ~2% of padded-4096 heavy steps, so the
+> candidate arms ran production kernels for ~98% of the heavy MoE work; the
+> candidate arms also ran with no cudagraph on the unsealed steps; and both
+> arms' baselines were depressed by a uniform-decode rank running the whole
+> model eagerly. There was no measured transfer failure to explain — the
+> transfer was never tested. Historical content in `git log`; correction in
+> `../aug18-prefill/M23_RAGGED_SEAL_DESIGN.md` and the protocol in
+> `../../../../docs/distributed/SERVING_BENCHMARK_METHODOLOGY.md`.
+> §§2–3 below (the source-level system study and the program) are unaffected.
 
-"We have kernels that fix imbalance; production has none; why do we lose?"
+## 1. Structural claims that survive the retraction
 
-**(a) In the m20 config we mostly didn't deploy the imbalance fix.** 12/58
-layers had the replica cache; 46 ran the plain fused mega. The arm was
-mostly a fusion-only arm under production routing.
+These do not depend on any arm comparison:
 
-**(b) Skew's cost is compute concentration, not communication.** At the
+**(a) Skew's cost is compute concentration, not communication.** At the
 measured ~5.5x receive skew, the critical path is the hot rank's GEMM;
 comm is a minor term on that path. Comm/compute overlap (fusion's whole
 dividend) can only hide comm — under skew there is almost nothing left to
 hide, the fused design's fixed costs (rendezvous, planner width, polling)
-remain, and replication is the only lever that moves the actual bottleneck
-(it relocates compute). That is why m19 = fusion+replication-everywhere won
-+39.8% and fusion-alone cannot win the skewed regime.
+remain, and replication is the lever that moves the actual bottleneck
+(it relocates compute).
 
-**(c) Why fusion-alone is WORSE than production in serving when the
-aggregate-skew replay said 0.85x — evidence, not vibes:**
-- The real per-chunk max-rank-load distribution is TIGHT (n=90,050 calls:
-  p50 5.15x, p99 6.35x, max 6.55x). It is NOT a fat tail of extreme
-  chunks; the typical real chunk is close to the replay's aggregate skew.
-  So the divergence is not skew MAGNITUDE — it is chunk STRUCTURE.
-- i.i.d. histogram replay draws each token independently → destinations
-  interleave by chance. Real routing is run-correlated (top-10 token types
-  carry 26.4% of traffic; same-prompt tokens route alike) → consecutive
-  tokens target the same expert/rank. MORI's own intranode source
-  documents the consequence on this exact fabric: consecutive
-  same-destination traffic drives only 2–3 of the 7 xGMI links (their fix,
-  LDS round-robin interleave, measured 822→497.7 µs, 65%), and tight poll
-  loops livelock the fabric (they insert s_sleep backoff). Our M7
-  remote-RMW combine and LL128 dispatch are exactly the transports that
-  degrade under run-concentrated destinations; the i.i.d. replay
-  structurally cannot show this.
-- The captured-route replay that would have caught it (M19_DESIGN's
-  validation contract) WAS NEVER RUN — all 74 MoK result dirs are agg/bal.
-- Serving measurement floor: stock self-varied 9.6k–12.7k tok/s across one
-  day (±15%); the m15-vs-stock synthetic (balanced) pair measured FLAT
-  (10,702 → 10,627), i.e. even the real 1.32x balanced kernel win is
-  invisible at n=1 through the serving stack (MoE ≈ 40–54% of step; gate
-  self-test double-traffic; eligibility gating). Only 4x-class MoE effects
-  (m19) clear the serving noise floor at n=1.
+**(b) The real per-chunk max-rank-load distribution is TIGHT** (n=90,050
+calls: p50 5.15x, p99 6.35x, max 6.55x). It is NOT a fat tail of extreme
+chunks; the typical real chunk is close to the replay's aggregate skew. Any
+divergence between replay and reality is chunk STRUCTURE, not skew MAGNITUDE.
+
+**(c) i.i.d. histogram replay cannot model run-correlated routing.** It draws
+each token independently → destinations interleave by chance. Real routing is
+run-correlated (top-10 token types carry 26.4% of traffic; same-prompt tokens
+route alike) → consecutive tokens target the same expert/rank. MORI's own
+intranode source documents the consequence on this exact fabric: consecutive
+same-destination traffic drives only 2–3 of the 7 xGMI links (their fix, LDS
+round-robin interleave, measured 822→497.7 µs, 65%), and tight poll loops
+livelock the fabric (they insert s_sleep backoff). Our M7 remote-RMW combine
+and LL128 dispatch are exactly the transports that would degrade under
+run-concentrated destinations; the i.i.d. replay structurally cannot show it.
+
+**(d) The captured-route replay that would settle (c)** (M19_DESIGN's
+validation contract) WAS NEVER RUN — all 74 MoK result dirs are agg/bal.
+
+**(e) Serving measurement floor: stock self-varies ±15% at n=1.** This is the
+drift budget codified as protocol rule (d) in the methodology doc and is why
+no single pair is a quotable delta.
 
 **Per-router-call check:** inter-router-call gaps in the m15pair1 skew
 dumps are statistically identical between arms (p50 23.12 vs 23.13 ms), so
-the shim adds no host-side drag; the effects are device-side.
+the shim adds no host-side drag; any effects are device-side.
 
 ## 2. What the systems we studied actually do (source-level)
 
@@ -87,9 +91,9 @@ the leakage failure their dispatcher stage forbids.
 **Track A — close serving honestly (cheap, do first):**
 1. EPLB baseline pair: stock vs stock + `--enable-eplb`
    `num_redundant_experts=128` (= 48 slots/GPU, the same budget as our
-   EL=48). If EPLB recovers most of +39.8%, the serving story for our
-   kernel shrinks and we must say so; either way it is the mandatory
-   baseline for any claim.
+   EL=48). If EPLB recovers most of whatever replication buys us, the serving
+   story for our kernel shrinks and we must say so; either way it is a
+   mandatory baseline for any claim.
 2. Captured-route replay (the never-run decisive experiment): dump raw
    topk_ids via the skew hook, replay real chunks through
    m15/m18/production in MoK; separately, a run-structure A/B (sorted vs
@@ -98,8 +102,8 @@ the leakage failure their dispatcher stage forbids.
 3. m20 fix if we still want the serving arm: per-chunk dispatch portfolio
    at the DECIN seam (chunk stats are already computed pre-launch): route
    each chunk → replicated-mega / plain-mega / STOCK production path;
-   uncached layers default to stock. Any claim: ≥5 order-balanced pairs
-   (protocol doc; stock variance demands it).
+   uncached layers default to stock. Any claim must satisfy
+   `../../../../docs/distributed/SERVING_BENCHMARK_METHODOLOGY.md` in full.
 
 **Track B — the successor kernel's overlap surfaces (ranked):**
 1. **Shared-expert as filler compute**: DeepSeek's shared expert (~1/8 of

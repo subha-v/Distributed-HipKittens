@@ -11,8 +11,8 @@
    p75+ saturated at 77%); raw per-call max rank load median 5.15×, p95
    6.25×; even under ideal static redistribution the tail stays fat (p95
    3.05×, p99 3.65×).  Chunk wall-time is convex in skew, so the tail
-   dominates: serving pair #1 with a static aggregate set lost 5.7%
-   end-to-end while the aggregate-histogram harness predicted a 4× win.
+   dominates, and a static aggregate set is priced against the chunks it
+   cannot help.
 3. **Replication carries a cost when it does not pay**: +3.9% at balanced
    routing (nrep=8) from planner width and fragmented replica blocks.  A
    chunk whose hot experts miss the replica set pays this on top of its
@@ -55,7 +55,8 @@ the kernel already holds.
 (no fragmented blocks, no carry) + ~tens of µs of pre-pass.  Hot chunk →
 full source-local replication for precisely the experts that are hot NOW,
 bounded by the layer's set (which the per-layer statistics say covers
-mean 69% / min 54%).  The convex tail term that killed pair #1 is capped.
+mean 69% / min 54%).  The convex tail term that a static aggregate set pays
+is capped.
 
 ## Validation contract (MoK-Updated)
 

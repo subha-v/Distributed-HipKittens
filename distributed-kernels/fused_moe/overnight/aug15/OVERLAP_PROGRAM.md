@@ -47,8 +47,9 @@ Offline all-layer replica frontier from the banked aggregate histograms
 Implication for M22: top-4-all-layers HALVES the skew damage (5.05→3.23)
 rather than eliminating it; the e2e estimate at f≈0.45 lands in the
 +25-30% class IF per-chunk coverage holds — and that is the open risk: the
-aggregate frontier cannot price the coverage bimodality that killed pair
-#1.  **Raw captured routes (the never-run M19 replay contract) are a hard
+aggregate frontier cannot price the per-chunk coverage bimodality (p5=1%,
+p75+=77%) that a static replica set runs into.  **Raw captured routes (the
+never-run M19 replay contract) are a hard
 prerequisite for the serving M22 build** — the capture hook exists
 (M15_SKEW_CAPTURE_LAYERS), it was simply never exercised.  K=6/K=8
 (14-19 GiB) buy real headroom if the KV budget tolerates them; the
@@ -95,9 +96,13 @@ ms/iter step.
 
 Serving M22 (when a node window opens): (0) raw-route capture + captured
 replay of production/m15/m19 — the transfer mystery must close first;
-(1) EPLB baseline pair; (2) M20-with-stock-fallback (the quick likely-
-positive: cached layers m20, uncached PRODUCTION — the lever the -19.6%
-pair identified); (3) uniform-K sweep K in {4,6,8} all-layer kernel with
+(1) EPLB baseline pair; (2) M20-with-stock-fallback (cached layers m20,
+uncached PRODUCTION); (3) uniform-K sweep K in {4,6,8} all-layer kernel with
 DECIN precompute + the T2-built role scheduler; (4) portfolio dispatcher
-(CAKE-style, per-chunk stats already precomputed).  Every stage: >=5
-order-balanced pairs + accuracy A/B; production+EPLB always in the table.
+(CAKE-style, per-chunk stats already precomputed).  Every stage must satisfy
+`../../../../docs/distributed/SERVING_BENCHMARK_METHODOLOGY.md` — M23 patch
+chain in both arms, `RAGGED_SEAL_RECEIPT` coverage quoted with every mega
+number, rescued-stock baseline, >=5 order-balanced pairs, accuracy A/B;
+production+EPLB always in the table.  (Note 2026-08-18: the pre-M23 serving
+pairs this map was drawn against were retired as obsolete — the seal fired on
+~2% of heavy steps and both arms' baselines were depressed.)

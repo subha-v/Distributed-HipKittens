@@ -8,7 +8,6 @@ overlaps weight movement with compute ACROSS LAYERS.
 
 ## Measured motivations
 
-- M19 pair #3: +39.8% end-to-end serving — the routing model is right.
 - M19's memory: +41 GB/rank halved the serving KV pool (68.8 → 31 GiB).
   Not viable at production concurrency / long context.  (MoonEP's slot-pool
   memory model is the fix; its per-step global planner is NOT taken — our

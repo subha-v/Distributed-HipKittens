@@ -13,44 +13,38 @@ transcript is needed.
 M15 (`k0pf6gm_m15_mega`, C=28, mode 12, depth-4 throttle) is **25% faster than
 production in the MoK kernel harness** at T=4096 (5,822.0 µs = 0.7544×, 13+
 green campaigns). Tonight it was integrated into real DeepSeek-R1 vLLM serving
-and produced its first attested paired benchmark on **real MLPerf text**. The
-result: **throughput parity (−0.70%), slightly better medians (TPOT p50
-−2.5%, E2EL p50 −1.1%), and clearly worse tails (TTFT p99 +5.7%, E2EL p99
-+7.0%)**. The working hypothesis — supported but NOT yet proven — is that M15
-is tuned for the balanced routing of the MoK harness and degrades on the
-slowest rank under real expert-popularity skew, which is exactly where p99
-lives. The instrument that would prove it (per-rank expert histograms +
-timing) failed three times for three different reasons and is one small fix
-away from working. That is where work paused.
+on **real MLPerf text**. The working hypothesis for this packet — supported but
+NOT yet proven — is that M15 is tuned for the balanced routing of the MoK
+harness and degrades on the slowest rank under real expert-popularity skew. The
+instrument that would prove it (per-rank expert histograms + timing) failed
+three times for three different reasons and is one small fix away from working.
+That is where work paused.
+
+> **Note (2026-08-18):** this packet's original §2.1 banked an end-to-end
+> stock-vs-M15 serving pair. It was removed as obsolete: the megakernel's
+> activation seal fired on only ~2% of padded-4096 heavy steps (so the candidate
+> arm ran production kernels for ~98% of the heavy MoE work), the candidate arm
+> ran with no cudagraph on the unsealed steps, and both arms' baselines were
+> depressed by a uniform-decode rank running the whole model eagerly. See
+> `../../../../docs/distributed/SERVING_BENCHMARK_METHODOLOGY.md` and
+> `../aug18-prefill/M23_RAGGED_SEAL_DESIGN.md`; historical content in `git log`.
+> The kernel-level and skew-measurement content below is unaffected.
 
 ## 2. What is banked and trustworthy (do not re-run)
 
-### 2.1 The serving pair (the performance record)
+### 2.1 Serving-pair record — removed, see the note in §1
 
-Cell `c32p`: 1,024 prompts, ISL exactly 4096 (chunked prefill ⇒ every request
-hits the exact-B4096 activation), OSL 8, concurrency 32, real MLPerf R1 QSL
-text (concatenated — no real sample reaches 4096 alone). DeepSeek-R1-0528,
+Cell `c32p` (the rig itself, still the reference cell): 1,024 prompts, ISL
+exactly 4096 (chunked prefill), OSL 8, concurrency 32, real MLPerf R1 QSL text
+(concatenated — no real sample reaches 4096 alone). DeepSeek-R1-0528,
 TP=1 / DP=8 / EP, `--all2all-backend mori_high_throughput`, image
-`vllm/vllm-openai-rocm:v0.25.1`, identical prompt SHAs both arms,
-stock-then-M15 order, fresh server each arm.
+`vllm/vllm-openai-rocm:v0.25.1`, identical prompt SHAs both arms, fresh server
+each arm. M15 activation was receipt-proven (7/7 receipt types × 8 ranks,
+`M15_SELECTION_RECEIPT` = 464 = 58 routed layers × 8 ranks; `M15_PPERR = 0`) —
+but activation receipts only prove the kernel *loaded*, not that the seal let it
+*run*, which is exactly the gap M23 closes with `RAGGED_SEAL_RECEIPT`.
 
-| metric | stock | M15 | delta |
-|---|---:|---:|---:|
-| input tok/s | 10,681.1 | 10,606.1 | −0.70% |
-| TTFT p50 | 3,902.5 ms | 3,913.8 ms | +0.29% |
-| TTFT p99 | 6,543.0 ms | 6,913.9 ms | **+5.67%** |
-| TPOT p50 | 1,251.1 ms | 1,219.6 ms | **−2.51% (M15 better)** |
-| E2EL p50 | 12,404.0 ms | 12,272.3 ms | −1.06% (M15 better) |
-| E2EL p99 | 16,241.7 ms | 17,370.0 ms | **+6.95%** |
-
-1024/1024 completed both arms, 0 failures. **n=1 pair** — the −0.7%
-throughput is inside single-sample noise; the p99 deltas are larger and more
-likely real but still unreplicated. M15 activation is proven, not assumed:
-7/7 receipt types × 8 ranks (`M15_SELECTION_RECEIPT` = 464 = 58 routed layers
-× 8 ranks; symmetric-offset, heap-descriptor, G-stack, graph-commit, operator
-gate, activation), `M15_PPERR = 0`.
-
-Caveat on record: `SAME OUTPUTS: False` — expected under a different
+Caveat that still stands: `SAME OUTPUTS: False` — expected under a different
 accumulation order + greedy decode, but M15's end-to-end accuracy vs stock is
 **unverified**. An MLPerf accuracy-checker run on M15 outputs is required
 before any "correct and fast" claim.
@@ -124,9 +118,9 @@ routed rows each):
   the tail, not the mean.
 
 Read: the workload IS expert-skewed, EP mean load balances out, and the
-per-step tail varies wildly — consistent with the pair's p99-only
-regression. One pass, stock arm only, **a lead, not a conclusion**. The m15
-arm and full-cell coverage are the remaining measurement.
+per-step tail varies wildly. One pass, stock arm only, **a lead, not a
+conclusion**. The m15 arm and full-cell coverage are the remaining
+measurement.
 
 Final integration-branch state: **pushed through `e346f8b4`**
 (`subha-v/amd-master`, `vllm-integration-m15`). Read handoff **§0a** first —
@@ -195,7 +189,7 @@ Phase B — attribute the tail (pick what the histograms justify):
 
 Phase C — close the loop at kernel speed (this is the optimization path):
 5. **Replay the measured expert histogram in the MoK harness via
-   `K0_SYNTH_ROUTE`** — reproduce the serving tail regression at kernel
+   `K0_SYNTH_ROUTE`** — reproduce the skewed-routing tail behavior at kernel
    level, where iteration is 139 s per campaign instead of 25 min per pair.
 6. Optimize against measured skew: m17 RR scatter under skew (already built),
    C re-sweep under skew, and if coarse certification is the culprit, finer
@@ -219,8 +213,11 @@ Phase C — close the loop at kernel speed (this is the optimization path):
    step_ms (~25 min on the fixed rig), then per-expert block occupancy vs
    tail correlation.
 7. Revalidate any kernel change through the standard MoK gate ladder, then
-   ONE serving pair to confirm transfer. Before quoting any final serving
-   number: ≥5 order-balanced pairs + the MLPerf accuracy check.
+   ONE serving pair to confirm transfer. Before quoting any serving number,
+   satisfy `../../../../docs/distributed/SERVING_BENCHMARK_METHODOLOGY.md` in
+   full — the M23 patch chain in both arms, a `RAGGED_SEAL_RECEIPT` coverage
+   quote, rescued-stock as the baseline, ≥5 order-balanced pairs, and the
+   MLPerf accuracy check.
 
 Discipline: stock control first; receipts before activation; never widen
 tolerances; every claimed number from an artifact, not an inference; commit

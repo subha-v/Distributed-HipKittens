@@ -66,11 +66,10 @@ one-line M2 clamp fixed the T≠4096 correctness defect, and 5-rotation
 campaigns measured M15 C=28 at 0.756× (T=4096), 0.885× (T=2048), and 1.094×
 (T=1024) of production — the megakernel family inverts at small batch,
 break-even ≈ 1,600–1,800 tokens/rank. (2) **Real serving** (amd-master
-`vllm-integration-m15` branch): M15 ran attested inside DeepSeek-R1 vLLM
-serving (58 layers × 8 ranks, receipt-gated) on real MLPerf text — parity
-throughput, better medians (TPOT p50 −2.5%), worse tails (TTFT p99 +5.7%,
-E2EL p99 +7.0%), consistent with balanced-routing tuning meeting real expert
-skew. The paused bottleneck study and its resume plan live in
+`vllm-integration-m15` branch): M15 was integrated and ran attested inside
+DeepSeek-R1 vLLM serving (58 layers × 8 ranks, receipt-gated) on real MLPerf
+text. The throughput A/B taken there is obsolete — see **Serving benchmark
+methodology** below. The paused bottleneck study and its resume plan live in
 `overnight/aug14/M15_SERVING_BOTTLENECK_HANDOFF.md`. (3) **GEMM-RS**
 (`GEMM-RS` branch): the evaluator's debug-flag contamination was removed
 (ours beats the GEMM+RCCL reference at 0.764×), and competition-mode
@@ -91,19 +90,17 @@ the worst layer — and 0.785× in the balanced control** (all gates green,
 5-run campaigns). Full results and fairness caveats in
 `overnight/aug14/M18_REPLICATION_RESULTS.md`.
 
-The serving integration then closed the loop the hard way.  Pair #1
-(aggregate replica set) LOST 5.7% end-to-end — the per-call diagnostic
-showed why: per-chunk set coverage is bimodal (p5=1%) and per-call max rank
-load hits 6.25x at p95, so a static set pays its carry cost on exactly the
-chunks it cannot help.  Two same-day fixes, each paired against stock on
-identical MLPerf prompts: per-layer top-16 sets (58 distinct) **+11.3%**;
-and **M19** (`K0P6_M15_ADAPTIVE`, `ablations-m19`) — per-layer replica
-slots plus an in-kernel per-chunk decision (M0.5 own-routing histogram,
-theta threshold, sender-published decision bitmaps with mirrored
-acceptance) — **+39.8% end-to-end serving throughput with TTFT p99 −32.2%**
-(13,395 vs 9,581 tok/s, n=1 pair; ≥5 order-balanced pairs + accuracy A/B
-pending; harness reference-match gates green).  Design:
-`overnight/aug14/M19_DESIGN.md`.
+The per-call routing diagnostic then drove the design forward: per-chunk
+replica-set coverage is bimodal (p5=1%, p75+=77%) and per-call max rank load
+hits 6.25x at p95, so a static aggregate set pays its carry cost on exactly
+the chunks it cannot help.  Two fixes followed — per-layer top-16 sets (58
+distinct), and **M19** (`K0P6_M15_ADAPTIVE`, `ablations-m19`): per-layer
+replica slots plus an in-kernel per-chunk decision (M0.5 own-routing
+histogram, theta threshold, sender-published decision bitmaps with mirrored
+acceptance), harness reference-match gates green.  Design:
+`overnight/aug14/M19_DESIGN.md`.  (The end-to-end serving pairs originally
+banked for these arms were retired on 2026-08-18 — see **Serving benchmark
+methodology** below.)
 
 The evening session closed the arc with **M20** (`K0P6_M20_SLOTPOOL`,
 `ablations-m20`): M19's routing machinery with the 41 GB of per-layer
@@ -119,6 +116,55 @@ under measured serving skew (6,035 vs 24,283 us) and 0.823x balanced at
 theta=64 (~0.76 with theta above uniform), at 672 MB versus M19's 41 GB.**
 Serving integration handoff:
 `overnight/aug14/M20_SERVING_INTEGRATION_HANDOFF.md`.
+
+### Serving benchmark methodology (2026-08-18) — all earlier serving numbers retired
+
+Per-step instrumentation added on 2026-08-18 showed that **every end-to-end
+vLLM serving A/B of the fused megakernel taken before that date is invalid**,
+in two compounding ways. (1) *Inert candidate*: the megakernel's activation
+seal required all 8 DP ranks at exactly 4096 pre-padding tokens
+simultaneously; on the real c32p workload that held on only **~2% of the ~230
+padded-4096 heavy steps per rank** (a single 1-token decode batch on any rank
+disqualified the step for everyone), so the candidate arms ran production
+kernels for ~98% of the heavy MoE work. (2) *De-graphed candidate + broken
+baseline*: on unsealed heavy steps the candidate server fell back to **no
+cudagraph at all** (it never registers the stock B4096 graph key), and in
+**both** arms any rank whose local batch looked like a uniform decode ran the
+whole model eagerly at 4096 padded tokens and frequently cancelled DP padding
+group-wide.
+
+**M23 "ragged seal" + "uniform-decode rescue"** (implemented and validated
+2026-08-18; zero HIP change) makes the seal accept the same padded-4096
+batches production already runs — measured coverage **99% of in-bucket steps,
+~95% of tokens** — and routes uniform-decode ranks to the graph in both arms.
+Fixing the baseline roughly **doubled it**. Two new reference points, same
+cell, **n=1 each**:
+
+| arm | input tok/s |
+|---|---:|
+| rescued stock (production-configured, M23 chain) | **20,918** |
+| m15 + M23 (first honest megakernel number) | **19,277** |
+
+Spec for both: c32p cell, concurrency 32, 1,024 MLPerf QSL prompts, ISL 4096,
+OSL 8, aggregate node input throughput, DeepSeek-R1-0528 TP=1/DP=8/EP on
+8× MI350X. These are **reference points, not a delta** — they are n=1 and
+cross-pair, against ±15% stock run-to-run drift.
+
+Consequently the obsolete serving milestones (the PF4H c32/c512/c1024 pairs;
+m15, m18, m19, m20 pairs; the balanced-prompt "flat" pair) have been removed
+from this repo's docs rather than restated; `git log` preserves them.
+**Kernel-level MoK numbers are unaffected** — 0.756x balanced, 0.8467x
+skew-replay, the M18/M19/M20 replication ratios above, and all training
+numbers never went through the seal.
+
+New serving claims must satisfy
+[the serving benchmark methodology](docs/distributed/SERVING_BENCHMARK_METHODOLOGY.md):
+the M23 patch chain in both arms, a `RAGGED_SEAL_RECEIPT` coverage quote with
+every megakernel number, rescued-stock as the only valid baseline, ≥5
+order-balanced pairs, exact-token SHA identity, a full workload spec, and the
+known residual dummy-rank asymmetry reported alongside. Design and
+implementation: `overnight/aug18-prefill/M23_RAGGED_SEAL_DESIGN.md` and
+`overnight/aug18-prefill/m23/M23_IMPL_NOTES.md`.
 
 Latest additions to the device primitive layer and the fused-MoE port
 (`distributed-kernels/fused_moe/`):
