@@ -1,0 +1,160 @@
+--- a/m15_contracts.py
++++ b/m15_contracts.py
+@@ -40,6 +40,7 @@
+ M15_MODE_VALUE = "m15"
+ RING_SLOTS_ENV = "VLLM_PF4H_M15_RING_SLOTS"
+ ALLOCATE_PART_ENV = "VLLM_PF4H_M15_ALLOCATE_PART"
++EPLB_COMPOSE_ENV = "VLLM_PF4H_M15_EPLB"
+ 
+ # The M15 source revision this packet is pinned against.  Bump together with
+ # ``M15_SOURCE_SHA256`` in ``m15_sources.py`` whenever the .hip changes.
+@@ -405,8 +406,39 @@
+     if forced == "1":
+         return True
+     return not part_is_dead(config)
++
++
++def eplb_compose_enabled(environ: Mapping[str, str] | None = None) -> bool:
++    """OFF by default; ``1`` composes M15 with vLLM EPLB placement-only.
++
++    With the variable unset the PF4H-FULL-018 blocker stands verbatim and
++    ``enable_eplb`` refuses activation, so the default build's behaviour is
++    byte-identical.  ``1`` swaps that single blocker for the compose gate in
++    :func:`m15_eplb.validate_eplb_compose`, which demands zero redundant
++    experts, synchronous EPLB, no elastic EP, and no M18/M20 replica pools.
++
++    Nothing on the data path changes: vLLM already resolves logical expert
++    ids to physical slot ids inside the router
++    (``BaseRouter._select_experts`` step 3), so the topk_ids the megakernel
++    receives are physical and ``dest = eid / E`` is already correct.
++    """
+ 
++    raw = (os.environ if environ is None else environ).get(EPLB_COMPOSE_ENV)
++    if raw is None:
++        return False
++    if raw not in ("0", "1"):
++        raise PF4HActivationError(
++            (
++                ActivationBlocker(
++                    "M15-ENV-004",
++                    f"{EPLB_COMPOSE_ENV}={raw!r} is not exactly '0' or '1'",
++                    "unset it to keep EPLB refused",
++                ),
++            )
++        )
++    return raw == "1"
+ 
++
+ #: The serving arm: exp_03/aug13's mode-12 ratchet at the M15 C-response
+ #: optimum.  C=28 service CTAs, g=353 (physical g 1 | throttle | skip dead
+ #: part zero | depth selector 01 -> vmcnt(4)), flush_rows=16.
+--- a/vllm_full.py
++++ b/vllm_full.py
+@@ -41,6 +41,28 @@
+ 
+ def _fail(code: str, summary: str, evidence: str) -> None:
+     raise PF4HActivationError((ActivationBlocker(code, summary, evidence),))
++
++
++def _eplb_compose_gate(
++    moe_config: Any, blockers: list[ActivationBlocker]
++) -> bool:
++    """Whether the EPLB placement-only compose owns the EPLB decision.
++
++    Imported lazily: ``m15_contracts``/``m15_eplb`` ship only with
++    ``--integration-mode m15``, and a ``full``-mode install must keep this
++    module importable.  With the file set absent, or the variable unset, the
++    caller falls through to the verbatim PF4H-FULL-018 refusal.
++    """
++
++    try:
++        from .m15_contracts import eplb_compose_enabled
++        from .m15_eplb import validate_eplb_compose
++    except ImportError:
++        return False
++    if not eplb_compose_enabled():
++        return False
++    blockers.extend(validate_eplb_compose(moe_config))
++    return True
+ 
+ 
+ def validate_full_selection(
+@@ -89,12 +111,22 @@
+                 "contiguous EP8 expert ownership",
+             )
+         )
+-    if bool(getattr(parallel, "enable_eplb", False)):
++    # EPLB is refused by default.  ``VLLM_PF4H_M15_EPLB=1`` swaps this single
++    # blocker for the placement-only compose gate: with zero redundant
++    # experts vLLM keeps 32 physical slots per rank in the same contiguous
++    # linear layout and only permutes which logical expert occupies each slot,
++    # and the router already resolves topk_ids to physical slot ids before the
++    # modular kernel sees them, so ``dest = eid / E`` inherits the balancing
++    # unchanged.  See m15_eplb.py for the evidence and the attestations.
++    if not _eplb_compose_gate(moe_config, blockers) and bool(
++        getattr(parallel, "enable_eplb", False)
++    ):
+         blockers.append(
+             ActivationBlocker(
+                 "PF4H-FULL-018",
+                 "EPLB can remap experts after graph capture",
+-                "disabled EPLB and fixed linear EP8 ownership",
++                "disabled EPLB and fixed linear EP8 ownership, or "
++                "VLLM_PF4H_M15_EPLB=1 for the placement-only compose",
+             )
+         )
+     if bool(getattr(parallel, "use_batched_activation_format", False)):
+--- a/m15_vllm.py
++++ b/m15_vllm.py
+@@ -31,6 +31,13 @@
+     m15_mode_selected,
+     ring_slots,
+ )
++from .m15_eplb import (
++    eplb_compose_enabled,
++    install_eplb_hooks,
++    register_layer_weights,
++    require_attested,
++    validate_runtime_compose,
++)
+ from .m15_graph_body import M15BoundState, M15GraphBody
+ from .m15_runtime import (
+     M15LayerDescriptor,
+@@ -195,6 +202,14 @@
+         self.state = record  # type: ignore[assignment]
+         self.experts = fused_experts
+         fused_experts.bind_controller(self)
++        if eplb_compose_enabled():
++            # Refuse a replica-pool runtime (EPLB would leave the M18/M20
++            # copies stale), then arm the placement proof.  This runs inside
++            # process_weights_after_loading, which vLLM completes before
++            # EplbState.add_model, so the add_model wrapper installed here is
++            # always in time to attest the initial map.
++            validate_runtime_compose(runtime)
++            install_eplb_hooks()
+ 
+     # -- invocation ----------------------------------------------------
+     def prepare(
+@@ -234,6 +249,9 @@
+                 quant_config,
+                 defer_input_quant,
+             )
++        # Fail closed: an eligible invocation must never precede the
++        # placement proof.  A dict-lookup on the steady-state path.
++        require_attested()
+         runtime, record = self._require_bound()
+         runtime.begin_invocation(self.layer_id, self._execution)
+         # M20 cached layers: write this chunk's decision bitmap on-stream
+@@ -444,6 +462,12 @@
+             int(w2.data_ptr()),
+             int(w2_scale.data_ptr()),
+         )
++        # Retain the tensors themselves so the post-rearrangement sweep can
++        # re-read data_ptr() -- bind_layer_weights only runs when Python does,
++        # and steady-state graph replay runs none.
++        register_layer_weights(
++            controller.layer_id, w1, w1_scale, w2, w2_scale
++        )
+ 
+ 
+ def wrap_mori_prepare_finalize(stock: Any, layer: Any) -> M15PrepareAndFinalize:
