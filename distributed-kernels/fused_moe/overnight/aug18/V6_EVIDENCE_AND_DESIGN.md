@@ -93,3 +93,38 @@ Projected stack: 1,670 − 45 (fastcvt+dgrad) − 150-250 (glue+drift) − 65
 (shared expert) → ~1,310-1,410 at parity-to-beating production, with the
 endgame fillers and deeper glue kills carrying toward the 1,020-1,100
 target.
+
+## 5. Session close-out (aug18 ~02:15 UTC)
+
+**Banked**: t1v6fastfull2 — t2v6+FASTCVT, bmm, FWD_SYNC=1: 260/260,
+1,663.1 inst / 1,684.9 avg, 19,703/19,448 tok/s, loss 9.1648e-3 (the v3b
+convergence bit-class).  New best stable, +7.5 ms over v3b full-run; the
+sync-free A/B showed −21 ms/iter before the known FWD_SYNC=0 instability
+killed it (barrier timeout at iter 6 — all 12-iter smokes are
+sync0-flattered; long runs need sync1 until the retire-latch port).
+
+**Host-time itemization (K0HT, the safe pure-perf_counter instrument after
+K0_MEGA_TIME's GPU-event path wedged the collectives a third time)**:
+b_wgrad_host 270 ms/iter, f_launch_sync 287 ms/iter, b_launch 26,
+everything else ~18.  **Graph-capturing the bmm block (K0_MEGA_WG_GRAPH)
+was a WASH (1,685.7 vs 1,684)** and b_wgrad_host did not collapse →
+the big host numbers are BACKPRESSURE (host parked on deep stream queues),
+not deletable glue.  The graph path stays env-gated default-off.
+
+**The governing law the drift math forces**: iteration pace = the
+critical (hottest, lowest-clocked) rank's wall clock.  Filler and
+scheduling only help e2e when they remove work from THAT rank's wall —
+in-window filler qualifies (every rank has the 1.6 + 1.3 ms service-pool
+idle); cross-rank wait-absorption and host-side reshuffling do not.
+
+**Next-session order (all sized)**:
+1. Retire-latch port (serving pattern) → FWD_SYNC=0 stable: −30-50 ms.
+2. Shared-expert GEMMs into the service-pool windows via the t2v6 cursor
+   scheduler: ~2 ms/layer·mb of critical-rank work moved into
+   critical-rank idle, plus its torch launches deleted: −50-65 ms.
+3. Launch/staging trims (pre-uploaded descriptors): −15-25 ms.
+4. Thermal experiment (one shot): power/clock rebalance to lift GPU2's
+   sclk toward the pack: 0-80 ms, shared with production.
+5. The bigger swings after that: per-block arrival-gated phase-1b (hides
+   transport for mid-pack ranks), attention-wgrad tiles via the same
+   scheduler, fwd-side prof TU.
