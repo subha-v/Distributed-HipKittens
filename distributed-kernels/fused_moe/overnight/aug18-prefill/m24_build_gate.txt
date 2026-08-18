@@ -1,0 +1,109 @@
+=== M24 BUILD GATE ===
+
+M24_BUILD_GATE_RECEIPT: NOT RUN
+
+STATUS: the gate could NOT be executed this session. The node refused every
+ssh connection for the entire session, on both known addresses:
+
+  10.0.0.228:2425  TCP OPEN, sshd answers with
+                   "kex_exchange_identification: read: Connection reset by peer"
+                   on every attempt (30+ attempts over ~50 minutes, spaced
+                   20-60 s, single-connection attempts included so this is not
+                   a MaxStartups artifact of our own polling).
+  10.5.95.87:2425  no route / connect timeout.
+  10.0.0.228:22    closed.
+
+Consequently NONE of the following has been done, and every one of them is a
+BLOCKING prerequisite before any M24 arm is built or measured:
+
+  1. the both-config compile (m24_compile_check.sh: base + fill, plus the
+     gated NORIG / STRICT / NULLWORK / composition / negative matrix, which
+     now runs by default);
+  2. this gate (m24_build_gate.sh): the default-build resource tuple +
+     normalised disassembly + .text sha256 versus the pre-M24 body at
+     a776ac75;
+  3. the per-arm no-spill assertion and the section-E cross-pin resource-tuple
+     equality check.
+
+The implementation is therefore NOT cleared for MoK. `ready_for_mok = false`.
+
+--------------------------------------------------------------------------
+WHAT WAS VERIFIED WITHOUT THE NODE (necessary, nowhere near sufficient)
+--------------------------------------------------------------------------
+* Preprocessor-level verification of the whole M24 macro block with a real
+  C preprocessor (cc -E), 12 configurations:
+    OK default                        SRC_REV=2   (no M24 code, no bump)
+    OK fill+zeropad                   SRC_REV=3
+    OK fill+dirty                     SRC_REV=3
+    OK fill+nullwork                  SRC_REV=3
+    OK fill only                      -> #error (ZERO_PAD required)
+    OK nullwork alone                 -> #error (FILL required)   [new, R.10]
+    OK strict alone                   -> #error (FILL required)
+    OK zeropad alone                  -> #error (FILL required)
+    OK norig_const alone              -> #error (FILL required)
+    OK norig_const + norig_table      -> #error (both claim the source)
+    OK dense_scatter                  -> #error (declared, not implemented)
+    OK tgrain 0                       -> #error
+* Descriptor cascade + raise-not-redefine block, 6 configurations:
+    OK plain 63    -> K0P6_M15_D_LEN 72
+    OK staged 64   -> 72
+    OK adaptive 65 -> 72
+    OK slotpool 71 -> 72
+    OK cascade 72  -> #error "another descriptor arm already claims slot 71"
+    OK cascade 80  -> #error                                       [new, R.9a]
+* Preprocessor-directive balance (depth 0, no orphans) and brace/paren balance
+  over the whole 2,900-line kernel body.
+* CPU-only test suites, both green:
+    m24/test_m24_fill.py       (host<->device encode/validate parity, the
+                                checksum definition, descriptor shape, all
+                                four composition validations, the buffer spec,
+                                the per-launch write incl. the fast path, and
+                                18 kernel-source invariants asserting the
+                                rev-3 review fixes are present)
+    m24/test_m24_mok_patch.py  (4 anchors unique, apply, AST-parses,
+                                idempotent, tamper-refused, inert with
+                                K0_M24_FILL unset, and the injected block
+                                executed against a fake torch producing
+                                payloads the device mirror ACCEPTS)
+
+None of this says anything about codegen: registers, scratch, occupancy, or
+whether the default build is instruction-identical. Only the gate does.
+
+--------------------------------------------------------------------------
+HOW TO RUN IT (first thing, once the node answers)
+--------------------------------------------------------------------------
+  # 0. sync this checkout to the node (GPU-free; hipcc is CPU-only work)
+  ssh -i ~/.ssh/muhammad-gpu -p 2425 subvadla@10.0.0.228 \
+      'mkdir -p ~/nightshift_m24_build'
+  rsync -az -e 'ssh -i ~/.ssh/muhammad-gpu -p 2425' \
+      ~/repos/Distributed-HipKittens/ \
+      subvadla@10.0.0.228:~/nightshift_m24_build/src/
+
+  # 1. both-config compile + the full macro matrix + the negative set
+  ssh ... 'cd ~/nightshift_m24_build/src/distributed-kernels/fused_moe/overnight/aug18-prefill \
+           && bash m24_compile_check.sh ~/nightshift_m24_build/src ~/nightshift_m24_build \
+              2>&1 | tee ~/nightshift_m24_build/compile_check.txt'
+
+  # 2. THE GATE (writes ~/nightshift_m24_build/gate_output.txt)
+  ssh ... 'cd ~/nightshift_m24_build/src/distributed-kernels/fused_moe/overnight/aug18-prefill \
+           && PRE_REF=a776ac75 bash m24_build_gate.sh \
+                ~/nightshift_m24_build/src ~/nightshift_m24_build'
+
+  # 3. copy the evidence back and commit it OVER this file
+  scp -i ~/.ssh/muhammad-gpu -P 2425 \
+      subvadla@10.0.0.228:~/nightshift_m24_build/gate_output.txt \
+      ~/repos/Distributed-HipKittens/distributed-kernels/fused_moe/overnight/aug18-prefill/m24_build_gate.txt
+
+PASS condition, all three, no exceptions:
+  RESOURCE TUPLE : IDENTICAL
+  DISASSEMBLY    : IDENTICAL
+  .text sha256   : IDENTICAL
+Anything else blocks every M24 arm. The `fill` build must additionally show
+ScratchSize 0 (occupancy-1 no-spill) and its resource tuple must MATCH the
+NORIG pins' (the section-E cross-pin equality check) -- that check is what
+detects a specialisation leak, and it is only meaningful now that the rev-3
+kernel no longer compiles the validation path out of the NORIG pins (R.3).
+
+The GPUs may be running a measurement. hipcc, llvm-objdump and llvm-objcopy
+are CPU-only; do not launch anything on the GPUs, do not kill anything, and do
+not touch ~/eplb_campaign.
