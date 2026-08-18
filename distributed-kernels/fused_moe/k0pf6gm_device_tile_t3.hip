@@ -358,13 +358,14 @@ __device__ __forceinline__ void k0p6_m15_task_done_defer(
 #define N2_KERNELS_ONLY
 #define N2_HOOK_CTX_ARG                                             \
   , const long long* __restrict__ k0p6_desc, int n2gm_task_lo,      \
-      int n2gm_task_hi
+      int n2gm_task_hi, k0p6_defer* n2gm_pend
 #define N2GM_TASK_WAIT_HOOK \
   if (!k0p6_a2_wait(b, tid, k0p6_desc)) return;
 #define N2GM_TASK_DONE_HOOK \
-  k0p6_m15_task_done_defer(b, nc, tid, k0p6_desc, m7_pend);
-#define N2GM_TASK_LOOP_HEAD_HOOK k0p6_m15_task_flush_defer(tid, k0p6_desc, m7_pend);
-#define N2GM_TASK_LOOP_TAIL_HOOK k0p6_m15_task_flush_defer(tid, k0p6_desc, m7_pend);
+  k0p6_m15_task_done_defer(b, nc, tid, k0p6_desc, *n2gm_pend);
+#define N2GM_TASK_LOOP_HEAD_HOOK \
+  k0p6_m15_task_flush_defer(tid, k0p6_desc, *n2gm_pend);
+#define N2GM_TASK_LOOP_TAIL_HOOK ;
 #define N2GM_TASK_START 0
 #define N2GM_TASK_STRIDE 1
 #define N2GM_TASK_LO n2gm_task_lo
@@ -927,7 +928,66 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
   }
   if (debug_stop == 2) return;
 
-  // ================= F1 — z-regen tasks (NO dependencies) ==================================
+  // ================= F1 — unpack (source, chunk, sub) tasks ================================
+  // FIRST family after dispatch: the 512 sub-tasks (64 rows each) gate on
+  // their chunk's epoch word; CTAs that find the cursor drained flow
+  // straight into z-regen, so arrival-bound unpackers never idle the
+  // grid.  signal: unpack_done[source] counted arrival, target 64.
+  {
+    const std::uint64_t epoch = k0p6_epoch(desc);
+    const unsigned int epoch32 = (unsigned int)epoch;
+    unsigned char* a_ll = (unsigned char*)k0p6_dread(desc, K0P6_D_A_LL);
+    unsigned char* a_dst = (unsigned char*)k0p6_dread(desc, K0P6_D_A_DST);
+    float* sc_stage = (float*)k0p6_dread(desc, K0P6_D_SC_STAGE);
+    int* recv_eid = (int*)k0p6_dread(desc, K0P6_D_RECV_EID);
+    float* recv_wgt = (float*)k0p6_dread(desc, K0P6_D_RECV_WGT);
+    const std::uint64_t* chunk_ready =
+        (const std::uint64_t*)k0p6_dread(desc, K0P6_D_CHUNK_READY);
+    const int nchunks = K0P6C_NCHUNK_MAX;
+    const int nsub = K0P6_CHUNK / 64;
+    const int g = lane >> 3, j = lane & 7;
+    while (true) {
+      const int t = k0p6t3_claim(ctrs + K0P6_T3_CTR_UNPK_CUR,
+                                 world * nchunks * nsub, claim_cell, tid);
+      if (t < 0) break;
+      const int s = t / (nchunks * nsub);
+      const int rem = t - s * (nchunks * nsub);
+      const int c = rem / nsub;
+      const int sub = rem - c * nsub;
+      unsigned int fill = 0u;
+      bool ok = true;
+      if (tid == 0)
+        ok = hk_moe::poll_epoch_word_system(
+            chunk_ready + (size_t)s * (size_t)nchunks + (size_t)c,
+            epoch32, (std::uint64_t)spin_limit, pperr, 8388608,
+            &fill, (unsigned int*)k0p6_dread(desc, K0P6_D_SPIN_DBG));
+      if (tid == 0) s_fill[0] = ok ? (int)fill : -1;
+      __syncthreads();
+      const int chunk_fill = s_fill[0];
+      __syncthreads();
+      if (chunk_fill < 0) return;  // fail-closed: pperr already set
+      hk_moe::acquire_payload_system();
+      const int sub0 = sub * 64;
+      int sub_fill = chunk_fill - sub0;
+      if (sub_fill < 0) sub_fill = 0;
+      else if (sub_fill > 64) sub_fill = 64;
+      const int r0 = s * MAXTOK + c * K0P6_CHUNK + sub0;
+      for (int r = r0 + wid; r < r0 + sub_fill; r += (int)(blockDim.x >> 6)) {
+        k0p6_unpack_row_nopoll((size_t)r,
+                               a_ll + (size_t)r * (size_t)K0P5_ROW_STRIDE,
+                               a_dst, sc_stage, recv_eid, recv_wgt, g, j);
+      }
+      asm volatile("s_waitcnt vmcnt(0)" ::: "memory");
+      __syncthreads();
+      if (tid == 0) {
+        __hip_atomic_fetch_add(ctrs + K0P6_T3_CTR_UNPACK + s, 1u,
+                               __ATOMIC_ACQ_REL, __HIP_MEMORY_SCOPE_AGENT);
+      }
+    }
+  }
+  if (debug_stop == 3) return;
+
+  // ================= F2 — z-regen tasks (NO dependencies) ==================================
   // These absorb the dY dispatch flight time and the cross-rank drift the
   // M2 barrier used to realize: a CTA that finishes its M1b share flows
   // straight into z tiles while peers' rows are still on the wire.
@@ -949,58 +1009,6 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
       production_fused_moe::n2::n2p6t2b_phase1z_body(
           xrows, xsc, w13o, s13o, sti, sei, nvi, zq, dqz, tile_desc, ntiles,
           desc, t);
-    }
-  }
-  if (debug_stop == 3) return;
-
-  // ================= F2 — unpack (source, chunk) tasks =====================================
-  // gate: the chunk's epoch word (published by the source's M1b last-CTA);
-  // work: unpack that chunk's dY rows into a_dst/sc_stage (the backward
-  // needs no recv_eid/hcnt/holes — phase bodies read only a_dst/sc + plan);
-  // signal: unpack_done[source] counted arrival (8 chunks per source).
-  {
-    const std::uint64_t epoch = k0p6_epoch(desc);
-    const unsigned int epoch32 = (unsigned int)epoch;
-    unsigned char* a_ll = (unsigned char*)k0p6_dread(desc, K0P6_D_A_LL);
-    unsigned char* a_dst = (unsigned char*)k0p6_dread(desc, K0P6_D_A_DST);
-    float* sc_stage = (float*)k0p6_dread(desc, K0P6_D_SC_STAGE);
-    int* recv_eid = (int*)k0p6_dread(desc, K0P6_D_RECV_EID);
-    float* recv_wgt = (float*)k0p6_dread(desc, K0P6_D_RECV_WGT);
-    const std::uint64_t* chunk_ready =
-        (const std::uint64_t*)k0p6_dread(desc, K0P6_D_CHUNK_READY);
-    const int nchunks = K0P6C_NCHUNK_MAX;
-    const int g = lane >> 3, j = lane & 7;
-    while (true) {
-      const int t = k0p6t3_claim(ctrs + K0P6_T3_CTR_UNPK_CUR,
-                                 world * nchunks, claim_cell, tid);
-      if (t < 0) break;
-      const int s = t / nchunks;
-      const int c = t - s * nchunks;
-      unsigned int fill = 0u;
-      bool ok = true;
-      if (tid == 0)
-        ok = hk_moe::poll_epoch_word_system(
-            chunk_ready + (size_t)s * (size_t)nchunks + (size_t)c,
-            epoch32, (std::uint64_t)spin_limit, pperr, 8388608,
-            &fill, (unsigned int*)k0p6_dread(desc, K0P6_D_SPIN_DBG));
-      if (tid == 0) s_fill[0] = ok ? (int)fill : -1;
-      __syncthreads();
-      const int chunk_fill = s_fill[0];
-      __syncthreads();
-      if (chunk_fill < 0) return;  // fail-closed: pperr already set
-      hk_moe::acquire_payload_system();
-      const int r0 = s * MAXTOK + c * K0P6_CHUNK;
-      for (int r = r0 + wid; r < r0 + chunk_fill; r += (int)(blockDim.x >> 6)) {
-        k0p6_unpack_row_nopoll((size_t)r,
-                               a_ll + (size_t)r * (size_t)K0P5_ROW_STRIDE,
-                               a_dst, sc_stage, recv_eid, recv_wgt, g, j);
-      }
-      asm volatile("s_waitcnt vmcnt(0)" ::: "memory");
-      __syncthreads();
-      if (tid == 0) {
-        __hip_atomic_fetch_add(ctrs + K0P6_T3_CTR_UNPACK + s, 1u,
-                               __ATOMIC_ACQ_REL, __HIP_MEMORY_SCOPE_AGENT);
-      }
     }
   }
   if (debug_stop == 4) return;
@@ -1059,7 +1067,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
         bool sok = true;
         for (int s = 0; s < world && sok; ++s) {
           if ((smask >> s) & 1)
-            sok = k0p6t3_poll_count(ctrs + K0P6_T3_CTR_UNPACK + s, 8u,
+            sok = k0p6t3_poll_count(ctrs + K0P6_T3_CTR_UNPACK + s, 64u,
                                     spin_limit, pperr, 16777216);
         }
         claim_cell[1] = sok ? 1 : 0;
@@ -1088,6 +1096,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
     __hip_bfloat16* part = (__hip_bfloat16*)k0p6_dread(desc, K0P6_D_PART);
     const int* tile_desc = (const int*)k0p6_dread(desc, K0P6_D_TILE_DESC);
     const unsigned int epoch32 = (unsigned int)k0p6_epoch(desc);
+    k0p6_defer p2b_pend{-1, 0, 0};
 #pragma unroll 1
     for (int slab = 0; slab < K0P6_M15_SLABS; ++slab) {
       unsigned int* cursor =
@@ -1101,8 +1110,10 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
         const int t = base + u;
         production_fused_moe::n2::n2p6t2b_phase2b_body(
             dzq, dqdz, w13t, s13t, sti, swt, sei, nvi, part, tile_desc,
-            ntiles, desc, t, t + 1);
+            ntiles, desc, t, t + 1, &p2b_pend);
       }
+      // drain the last task's deferred RMWs before this CTA certifies.
+      k0p6_m15_task_flush_defer(tid, desc, p2b_pend);
       // Slab certificate WITHOUT a rendezvous: every CTA (task-claiming or
       // not) drains its vmem, writes back its L2 (the release half of the
       // old rendezvous — vmcnt alone does not make remote RMWs fabric-
