@@ -325,6 +325,9 @@ __device__ __forceinline__ void k0p6_m15_task_done_defer(
 #undef N2_P1Z_NAME
 #undef N2_P1Z_QUAL
 
+// K0P6_T2B_FASTCVT=1 (a BUILD flag of this TU's arms, never defaulted here)
+// selects the hardware fp8->f32 dequant in the swiglu' epilogue; the ctl
+// parity arm builds without it so the fastcvt delta is its own A/B.
 #define N2_P1B_QUAL __device__ __forceinline__
 #define N2_P1B_NAME n2p6t2b_phase1b_body
 #define N2_KERNELS_ONLY

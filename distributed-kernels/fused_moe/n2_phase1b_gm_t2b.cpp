@@ -53,10 +53,28 @@
 namespace production_fused_moe::n2 {
 
 // fp8 e4m3 byte -> f32 (the epilogue's z/act(z) dequant loads).
+// K0P6_T2B_FASTCVT=1 (t2v6 TU only; default 0 keeps t2b byte-identical):
+// __hip_cvt_fp8_to_halfraw lowers to branchy byte-check EMULATION — the
+// wgrad campaign measured that class at 90.7 -> 20.5 ms when swapped for
+// the hardware v_cvt_pk_f32_fp8 builtin, on these very Zq buffers.  The
+// epilogue issues 192 of these per lane per pass.
+#ifndef K0P6_T2B_FASTCVT
+#define K0P6_T2B_FASTCVT 0
+#endif
+#if K0P6_T2B_FASTCVT
+typedef __attribute__((__vector_size__(2 * sizeof(float)))) float
+    k0p6t2b_f32x2;
+__device__ __forceinline__ float k0p6t2b_fp8_to_f32(std::uint8_t b) {
+  const k0p6t2b_f32x2 v =
+      __builtin_amdgcn_cvt_pk_f32_fp8((unsigned int)b, false);
+  return v[0];
+}
+#else
 __device__ __forceinline__ float k0p6t2b_fp8_to_f32(std::uint8_t b) {
   const __half_raw h = __hip_cvt_fp8_to_halfraw(b, __HIP_E4M3);
   return __half2float(__half(h));
 }
+#endif
 
 // ---- backward geometry -----------------------------------------------------
 // dH2 = W2T · dY:  N = 2048 (kInter), K = 7168 (kHidden).
