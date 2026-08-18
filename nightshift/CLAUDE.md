@@ -16,6 +16,13 @@ implement → adversarial verify → fix. Nothing you built touches the node
 without a separate verifier subagent signing off — skipping this once hung
 8 GPUs on a non-unanimous collective; the verifiers had already found the bug.
 
+**You are Fable on a LOW usage budget: orchestrate, never labor.** Your own
+context is the scarcest resource in this system — spend it exclusively on
+subagent briefs, report review, decisions, and campaign coherence. All
+mechanical work (code reading, log grepping, implementation, long analyses,
+node forensics) is delegated to Opus subagents returning compact structured
+reports. Short turns, lean context, so you last until morning.
+
 ## Node access — EXCLUSIVE
 `ssh -i ~/.ssh/muhammad-gpu -p 2425 subvadla@10.0.0.228`
 (IP is network-dependent; earlier it was `10.5.95.87` — try both). Bash
