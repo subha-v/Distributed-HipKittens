@@ -38,6 +38,22 @@ ReduceScatter and fused-MoE porting work. Donor measurements and new
 abstraction rewrites are kept separate; a port does not inherit a donor's
 performance result until its architecture-specific GPU parity gates pass.
 
+The workload-generalization campaign (2026-08-18, post-draft8) lives under
+`distributed-kernels/fused_moe/overnight/aug18-ablations/`. Its master document,
+`ABLATION_METHODOLOGY.md`, designs the ablation program the industry review
+asked for: one base megakernel plus a library of attachable/removable schedule
+modules (depth-bounded producer-carried delivery, slab certificates, consuming
+pools, shared-expert filler, owner placement, …), with the cost model
+`M(Q(W), R(S); θ)` as the composition policy — eight workload-derived scalars
+`Q` decide which modules attach, each decision a threshold inequality with a
+registered prediction that can lose. The directory carries the full evidence
+chain: four grounding briefs (`grounding/`), six design documents (`design/` —
+workload vector, schedule vector, cost model, metrics protocol, overlap atlas,
+experiment ladder), three adversarial reviews (`review/`), and the campaign
+brief with the expert feedback (`BRIEF.md`). Headline structure: five laws, a
+~22–28 node-hour core boundary campaign plus ~16–20 h of e2e sizing, matched-Q
+sufficiency falsifiers (FQ-1..4), and a pre-committed degradation ladder.
+
 Current fused-MoE overlap research lives under
 `distributed-kernels/fused_moe/overnight/`: the aug11 evidence corpus and
 methodology study, and the aug12 design docs —
