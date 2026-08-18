@@ -2,31 +2,36 @@
  * @file
  * @brief G25-0b: the CDAR microbench (M25_TP8_MEGA_DESIGN.md gate ladder).
  *
- * Measures one full CDAR boundary (ERS commit -> owner gather/certify ->
- * MAG pull) end-to-end on 8 GPUs, single process, one kernel per device,
- * for both K1 transports and several message classes. Reports effective
- * all-reduce bandwidth (logical bytes = tokens x row_bytes vs median wall)
- * plus exact-value verification (every rank contributes value rank+1; every
- * consumed element must equal 36.0, exactly representable in bf16 — parity
- * evidence for free).
+ * v1. Measures one full CDAR boundary (ERS commit -> owner gather/certify ->
+ * MAG pull) end-to-end on 8 GPUs, single process, one kernel per device.
+ * Reports effective all-reduce bandwidth (logical bytes = tokens x row_bytes
+ * over median wall) plus exact-value verification (every rank contributes
+ * value rank+1; every consumed element must equal 36.0, exact in bf16).
  *
- * v0 HONESTY NOTES (what this does and does not measure):
- *  - No co-resident MFMA body yet: this is the transport+protocol ceiling,
- *    not the in-mega number. The co-residency degradation test is v1.
- *  - Per-iteration accum/arrive re-zero (hipMemsetAsync) and kernel launch
- *    are INSIDE the timed window; at the prefill message class (235 MB
- *    logical) they are noise, at the decode class they are not — decode
- *    numbers here bound one-shot latency from ABOVE only.
- *  - RCCL comparison runs separately (rccl-tests / a python driver); this
- *    binary prints the numbers to compare against.
- *  - Every wait is bounded with a retry cap: on exhaustion the kernel sets
- *    an error flag and exits (fail loud, never hang — the 8-GPU lesson).
+ * v1 changes over v0, from the first measured matrix (41.1 / 22.4 GB/s at
+ * the 235 MB class — 5-6x under the ~350-420 GB/s fabric ceiling, all
+ * correctness PASS):
+ *  - DEPTH IS A SWEPT AXIS (argv), dispatched over template instantiations.
+ *    The depth-4 law was measured for epilogues CO-RESIDENT with MFMA
+ *    waves; a pure-transport kernel is in-flight-starved at 4. K4's optimum
+ *    is workload-dependent — this sweep measures the transport-only curve.
+ *    (A bench kernel has no register cliff at stake; the exp_24 one-copy
+ *    discipline still applies inside REAL kernels.)
+ *  - BLOCKS-PER-SLAB is a swept axis: v0 left half the grid idle and one
+ *    block's waves serialized each slab's entire remote stream.
+ *  - The towers owner-reduce is vectorized (bf16x2 loads) and parallelized
+ *    across 32 duty blocks with a per-slab dynamic reduce-arrival; the last
+ *    reduce segment certifies. v0's single-block scalar loop dominated the
+ *    towers wall.
  *
- * Build (node):
- *   hipcc --offload-arch=gfx950 -std=c++20 -O3 -I <repo root> \
- *         m25_cdar_bench.hip -o m25_cdar_bench
- * Run:
- *   ./m25_cdar_bench <tokens> <slab_rows> <atomic|towers> <iters>
+ * Still v0-honest: no co-resident MFMA (transport ceiling, not in-mega
+ * number); memset+launch inside the timed window (noise at 235 MB, an upper
+ * bound at the decode class); RCCL comparison runs separately.
+ *
+ * Build: hipcc --offload-arch=gfx950 -std=c++20 -O3 -I <root> \
+ *        m25_cdar_bench.hip -o m25_cdar_bench
+ * Run:   ./m25_cdar_bench <tokens> <slab_rows> <atomic|towers> <iters> \
+ *        [depth=4|8|16|32] [blocks_per_slab]
  */
 
 #include <hip/hip_runtime.h>
@@ -49,7 +54,8 @@ static constexpr unsigned int kWorld = 8;
 static constexpr unsigned int kRowBytes = 14336;  // 7168 x bf16
 static constexpr unsigned int kBlocks = 64;
 static constexpr unsigned int kThreads = 256;
-static constexpr unsigned int kDutyBlocks = 8;    // owner-duty (also produce+consume)
+static constexpr unsigned int kDutyBlocks = 32;   // owner-reduce/certify pool
+static constexpr unsigned int kReduceSegs = 8;    // reduce segments per slab
 static constexpr std::uint64_t kSpin = 1u << 20;
 static constexpr unsigned int kAttempts = 512;
 
@@ -70,7 +76,6 @@ struct rank_report {
     unsigned int slabs_certified;
 };
 
-// Fill a bf16 buffer with a constant (bit pattern replicated as u32 pairs).
 __global__ void fill_bf16(std::byte* buf, std::size_t bytes,
                           unsigned int packed) {
     auto* out = reinterpret_cast<unsigned int*>(buf);
@@ -83,77 +88,109 @@ __global__ void fill_bf16(std::byte* buf, std::size_t bytes,
     }
 }
 
-template<cd::transport T>
+template<cd::transport T, unsigned int Depth>
 __global__ __launch_bounds__(kThreads, 1) void cdar_bench_kernel(
         cd::peer_view<kWorld> pv, unsigned int tokens, unsigned int slab_rows,
-        unsigned int rank, std::uint32_t epoch,
+        unsigned int rank, std::uint32_t epoch, unsigned int bps,
+        std::uint32_t* reduce_cells,
         const std::byte* __restrict__ src, std::byte* __restrict__ staging,
         rank_report* report, unsigned int expected_bits) {
     const cd::geometry<kWorld> g{tokens, kRowBytes, slab_rows, rank};
     const unsigned int nslabs = g.num_slabs();
     const unsigned int block = blockIdx.x;
-
-    // ---- produce: every block commits its share of ALL slabs, traversing
-    // slabs in rank-staggered order (owner rotation falls out of s % World).
     const unsigned int base = (rank + 1u) % kWorld;
-    for (unsigned int k = block; k < nslabs; k += kBlocks) {
-        const unsigned int slab = (base + k) % nslabs;
-        const unsigned int rows = g.rows_in(slab);
-        const std::byte* frag =
-            src + static_cast<std::size_t>(slab) * g.slab_bytes();
-        cd::ers_commit_fragment<T, 4u>(g, pv, slab, 0u, rows, frag,
-                                       threadIdx.x, blockDim.x);
-        // Drain this block's remote stream before arrival accounting.
-        kd::throttle_vmcnt<0>();
+
+    // ---- produce: work item = (slab, fragment); all blocks participate.
+    const unsigned int items = nslabs * bps;
+    for (unsigned int k = block; k < items; k += kBlocks) {
+        const unsigned int slab = (base + k / bps) % nslabs;
+        const unsigned int fragment = k % bps;
+        const unsigned int rows_total = g.rows_in(slab);
+        const unsigned int rows_per = (rows_total + bps - 1u) / bps;
+        const unsigned int r0 = fragment * rows_per;
+        const unsigned int rows =
+            r0 >= rows_total ? 0u
+                             : (rows_per < rows_total - r0 ? rows_per
+                                                           : rows_total - r0);
+        if (rows > 0u) {
+            const std::byte* frag =
+                src + static_cast<std::size_t>(slab) * g.slab_bytes() +
+                static_cast<std::size_t>(r0) * kRowBytes;
+            cd::ers_commit_fragment<T, Depth>(g, pv, slab, r0, rows, frag,
+                                              threadIdx.x, blockDim.x);
+            kd::throttle_vmcnt<0>();
+        }
         __syncthreads();
         if (threadIdx.x == 0u) {
-            cd::ers_local_arrive(g, pv, slab, 1u, epoch, rows);
+            cd::ers_local_arrive(g, pv, slab, bps, epoch, rows);
         }
         __syncthreads();
     }
 
-    // ---- owner duty: first kDutyBlocks blocks certify this rank's slabs.
+    // ---- owner duty: gather, (reduce), certify. Work item =
+    // (owned_slab, reduce_segment) over kDutyBlocks blocks; the LAST reduce
+    // segment (dynamic arrival) releases and certifies. For the atomic
+    // transport the "reduce" is empty and segment 0 alone certifies.
     if (block < kDutyBlocks) {
-        for (unsigned int s = rank + block * kWorld; s < nslabs;
-             s += kWorld * kDutyBlocks) {
-            // s owned by rank iff s % kWorld == rank; iterate that stripe.
-            if (g.owner_of(s) != rank) continue;
+        const unsigned int owned =
+            (nslabs > rank ? (nslabs - 1u - rank) / kWorld + 1u : 0u);
+        const unsigned int segs =
+            (T == cd::transport::store_towers) ? kReduceSegs : 1u;
+        const unsigned int duty_items = owned * segs;
+        for (unsigned int k = block; k < duty_items; k += kDutyBlocks) {
+            const unsigned int slab = rank + (k / segs) * kWorld;
+            const unsigned int seg = k % segs;
             cd::owner_gather og{};
             if (threadIdx.x == 0u) {
                 unsigned int tries = 0u;
                 do {
-                    cd::owner_gather_ready_into(g, pv, s, epoch, kSpin, og);
+                    cd::owner_gather_ready_into(g, pv, slab, epoch, kSpin, og);
                 } while (!og.ready && ++tries < kAttempts);
                 if (!og.ready) atomicAdd(&report->gather_timeouts, 1u);
             }
             __syncthreads();
             if (T == cd::transport::store_towers) {
-                // Owner-side reduce: sum kWorld towers into accum (bf16x2
-                // packed adds via float2 conversion kept simple: integer
-                // lanes over dwords with packed bf16 add intrinsic path is
-                // v1; v0 uses float math per element for correctness).
-                const std::size_t lo = s / kWorld * g.slab_bytes();
+                // Vectorized segment reduce: bf16x2 lanes over this
+                // segment's element range of the owned slab.
+                const std::size_t lo =
+                    static_cast<std::size_t>(slab / kWorld) * g.slab_bytes();
                 const std::size_t owned_stride =
                     ((nslabs + kWorld - 1u) / kWorld) * g.slab_bytes();
-                auto* acc = reinterpret_cast<__hip_bfloat16*>(
+                auto* acc2 = reinterpret_cast<__hip_bfloat162*>(
                     pv.accum[rank] + lo);
-                const std::size_t elems =
-                    static_cast<std::size_t>(g.rows_in(s)) * (kRowBytes / 2);
-                for (std::size_t i = threadIdx.x; i < elems; i += blockDim.x) {
-                    float acc_v = 0.f;
+                const std::size_t elems2 =
+                    static_cast<std::size_t>(g.rows_in(slab)) *
+                    (kRowBytes / 4);
+                const std::size_t per_seg =
+                    (elems2 + segs - 1u) / segs;
+                const std::size_t s0 = seg * per_seg;
+                const std::size_t s1 =
+                    s0 + per_seg < elems2 ? s0 + per_seg : elems2;
+                for (std::size_t i = s0 + threadIdx.x; i < s1;
+                     i += blockDim.x) {
+                    float ax = 0.f, ay = 0.f;
+#pragma unroll
                     for (unsigned int r = 0u; r < kWorld; ++r) {
-                        const auto* tw = reinterpret_cast<const __hip_bfloat16*>(
-                            pv.towers[rank] + r * owned_stride + lo);
-                        acc_v += __bfloat162float(tw[i]);
+                        const auto* tw2 =
+                            reinterpret_cast<const __hip_bfloat162*>(
+                                pv.towers[rank] + r * owned_stride + lo);
+                        ax += __bfloat162float(tw2[i].x);
+                        ay += __bfloat162float(tw2[i].y);
                     }
-                    acc[i] = __float2bfloat16(acc_v);
+                    acc2[i] = __hip_bfloat162(__float2bfloat16(ax),
+                                              __float2bfloat16(ay));
                 }
             }
             __syncthreads();
             kd::producer_drain_release<kd::memory_scope::system>();
             if (threadIdx.x == 0u) {
-                cd::owner_certify(g, pv, s, epoch, g.rows_in(s));
-                atomicAdd(&report->slabs_certified, 1u);
+                kd::counted_arrival ra;
+                kd::counted_arrive_dynamic_release_into<
+                    kd::memory_scope::system>(reduce_cells + slab, segs, ra);
+                if (ra.last) {
+                    cd::owner_certify(g, pv, slab, epoch, g.rows_in(slab));
+                    atomicAdd(&report->slabs_certified, 1u);
+                }
             }
         }
     }
@@ -174,7 +211,6 @@ __global__ __launch_bounds__(kThreads, 1) void cdar_bench_kernel(
             staging + static_cast<std::size_t>(slab) * g.slab_bytes();
         cd::mag_pull(g, pv, slab, dst, threadIdx.x, blockDim.x);
         __syncthreads();
-        // verify a sample: 64 elements per slab, exact bf16 compare
         if (threadIdx.x < 64u) {
             const auto* v = reinterpret_cast<const unsigned short*>(dst);
             const std::size_t elems =
@@ -194,11 +230,45 @@ static unsigned short f32_to_bf16_bits(float f) {
     return static_cast<unsigned short>((u + 0x7fffu + ((u >> 16) & 1u)) >> 16);
 }
 
+template<cd::transport T>
+static void launch_depth(unsigned int depth, hipStream_t s,
+                         const cd::peer_view<kWorld>& pv, unsigned int tokens,
+                         unsigned int slab_rows, unsigned int rank,
+                         std::uint32_t epoch, unsigned int bps,
+                         std::uint32_t* rcells, const std::byte* src,
+                         std::byte* stage, rank_report* rep,
+                         unsigned int bits) {
+    switch (depth) {
+        case 8:
+            cdar_bench_kernel<T, 8u><<<kBlocks, kThreads, 0, s>>>(
+                pv, tokens, slab_rows, rank, epoch, bps, rcells, src, stage,
+                rep, bits);
+            break;
+        case 16:
+            cdar_bench_kernel<T, 16u><<<kBlocks, kThreads, 0, s>>>(
+                pv, tokens, slab_rows, rank, epoch, bps, rcells, src, stage,
+                rep, bits);
+            break;
+        case 32:
+            cdar_bench_kernel<T, 32u><<<kBlocks, kThreads, 0, s>>>(
+                pv, tokens, slab_rows, rank, epoch, bps, rcells, src, stage,
+                rep, bits);
+            break;
+        default:
+            cdar_bench_kernel<T, 4u><<<kBlocks, kThreads, 0, s>>>(
+                pv, tokens, slab_rows, rank, epoch, bps, rcells, src, stage,
+                rep, bits);
+            break;
+    }
+}
+
 int main(int argc, char** argv) {
     const unsigned int tokens = argc > 1 ? std::atoi(argv[1]) : 16384u;
     const unsigned int slab_rows = argc > 2 ? std::atoi(argv[2]) : 512u;
     const std::string transport = argc > 3 ? argv[3] : "atomic";
     const int iters = argc > 4 ? std::atoi(argv[4]) : 7;
+    const unsigned int depth = argc > 5 ? std::atoi(argv[5]) : 4u;
+    const unsigned int bps = argc > 6 ? std::atoi(argv[6]) : 2u;
     const bool towers = transport == "towers";
 
     cd::geometry<kWorld> g{tokens, kRowBytes, slab_rows, 0u};
@@ -214,7 +284,6 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "need %u GPUs, have %d\n", kWorld, ndev);
         return 2;
     }
-    // P2P everywhere
     for (unsigned int a = 0; a < kWorld; ++a) {
         HIP_CHECK(hipSetDevice(a));
         for (unsigned int b = 0; b < kWorld; ++b) {
@@ -233,6 +302,7 @@ int main(int argc, char** argv) {
     std::byte* accum[kWorld]; std::byte* twr[kWorld]; std::byte* src[kWorld];
     std::byte* stage[kWorld];
     std::uint64_t* s64[kWorld]; std::uint32_t* s32[kWorld];
+    std::uint32_t* rcell[kWorld];
     rank_report* rep[kWorld];
     hipStream_t str[kWorld];
     for (unsigned int r = 0; r < kWorld; ++r) {
@@ -244,9 +314,9 @@ int main(int argc, char** argv) {
         HIP_CHECK(hipMalloc(&stage[r], src_b));
         HIP_CHECK(hipMalloc(&s64[r], sig64 * 8));
         HIP_CHECK(hipMalloc(&s32[r], nslabs * 4));
+        HIP_CHECK(hipMalloc(&rcell[r], nslabs * 4));
         HIP_CHECK(hipMalloc(&rep[r], sizeof(rank_report)));
         HIP_CHECK(hipMemset(s64[r], 0, sig64 * 8));
-        // rank r contributes value (r+1) everywhere
         const unsigned short b16 = f32_to_bf16_bits(static_cast<float>(r + 1));
         const unsigned int packed = (static_cast<unsigned int>(b16) << 16) | b16;
         fill_bf16<<<256, 256, 0, str[r]>>>(src[r], src_b, packed);
@@ -264,8 +334,7 @@ int main(int argc, char** argv) {
                      s32[r]};
     }
 
-    const float expect = 36.0f;  // sum r+1, r in [0,8)
-    const unsigned short expect_bits = f32_to_bf16_bits(expect);
+    const unsigned short expect_bits = f32_to_bf16_bits(36.0f);
     const std::size_t logical = static_cast<std::size_t>(tokens) * kRowBytes;
 
     std::vector<double> walls;
@@ -274,6 +343,7 @@ int main(int argc, char** argv) {
         for (unsigned int r = 0; r < kWorld; ++r) {
             HIP_CHECK(hipSetDevice(r));
             HIP_CHECK(hipMemsetAsync(s32[r], 0, nslabs * 4, str[r]));
+            HIP_CHECK(hipMemsetAsync(rcell[r], 0, nslabs * 4, str[r]));
             HIP_CHECK(hipMemsetAsync(accum[r], 0, accum_b, str[r]));
             HIP_CHECK(hipMemsetAsync(rep[r], 0, sizeof(rank_report), str[r]));
         }
@@ -285,15 +355,13 @@ int main(int argc, char** argv) {
         for (unsigned int r = 0; r < kWorld; ++r) {
             HIP_CHECK(hipSetDevice(r));
             if (towers) {
-                cdar_bench_kernel<cd::transport::store_towers>
-                    <<<kBlocks, kThreads, 0, str[r]>>>(
-                        pv, tokens, slab_rows, r, epoch, src[r], stage[r],
-                        rep[r], expect_bits);
+                launch_depth<cd::transport::store_towers>(
+                    depth, str[r], pv, tokens, slab_rows, r, epoch, bps,
+                    rcell[r], src[r], stage[r], rep[r], expect_bits);
             } else {
-                cdar_bench_kernel<cd::transport::atomic_accumulate>
-                    <<<kBlocks, kThreads, 0, str[r]>>>(
-                        pv, tokens, slab_rows, r, epoch, src[r], stage[r],
-                        rep[r], expect_bits);
+                launch_depth<cd::transport::atomic_accumulate>(
+                    depth, str[r], pv, tokens, slab_rows, r, epoch, bps,
+                    rcell[r], src[r], stage[r], rep[r], expect_bits);
             }
         }
         for (unsigned int r = 0; r < kWorld; ++r) {
@@ -320,14 +388,15 @@ int main(int argc, char** argv) {
     const double med = walls[walls.size() / 2];
     const double eff = static_cast<double>(logical) / (med * 1e-6) / 1e9;
     std::printf(
-        "CDAR_BENCH transport=%s tokens=%u slab_rows=%u slabs=%u iters=%d\n"
+        "CDAR_BENCH transport=%s depth=%u bps=%u tokens=%u slab_rows=%u "
+        "slabs=%u iters=%d\n"
         "  wall_us median=%.1f min=%.1f max=%.1f\n"
         "  logical_AR_bytes=%zu effective_AR_GBps=%.1f (per-iter incl. "
         "memset+launch)\n"
         "  certified=%u/%u(x last iter) gather_timeouts=%u mag_timeouts=%u "
         "verify_errors=%u\n"
         "%s\n",
-        transport.c_str(), tokens, slab_rows, nslabs, iters, med,
+        transport.c_str(), depth, bps, tokens, slab_rows, nslabs, iters, med,
         walls.front(), walls.back(), logical, eff, cert, nslabs, gt, mt, errs,
         (errs == 0 && gt == 0 && mt == 0) ? "CDAR_BENCH_PASS"
                                           : "CDAR_BENCH_FAIL");
