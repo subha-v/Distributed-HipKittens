@@ -1,0 +1,3136 @@
+# M24 fill-aware implementation (rev 3) -- kernel + host plumbing + gates.
+# Generated 2026-08-18T10:48:43Z against a776ac75 on branch ablations.
+# Excludes m24_impl.diff itself and the build-gate receipt.
+#
+diff --git a/distributed-kernels/fused_moe/k0pf6gm_device_tile_m15.hip b/distributed-kernels/fused_moe/k0pf6gm_device_tile_m15.hip
+index 538d7b25..593af0a8 100644
+--- a/distributed-kernels/fused_moe/k0pf6gm_device_tile_m15.hip
++++ b/distributed-kernels/fused_moe/k0pf6gm_device_tile_m15.hip
+@@ -164,6 +164,165 @@
+ #error "K0P6_M15_SAVE_Z and K0P6_M15_STAGED both claim descriptor slot 63"
+ #endif
+ 
++// ============================================================================
++// M24: FILL-AWARE megakernel (FILL_AWARE_DESIGN.md rev 2, commit 1329aebe).
++// Serving dispatches 4,096 padded rows while carrying ~1,539 real tokens per
++// rank per step (37.6% fill, 2.66x padding multiplier). M24 makes the mega's
++// row-proportional cost scale with n_orig instead of with the padded capacity:
++// a per-layer device buffer (descriptor slot 71) carries the DP n_orig vector,
++// ONE thread (bid==0 && tid==0) validates it PRE-barrier and publishes a
++// grid-uniform agreed_T_eff, and the five row-count sites re-derive T from it.
++// Nothing here is in mps_state (M0 zeroes that block grid-wide post-barrier);
++// M24's own per-layer buffer carries a 16-byte device-owned tail instead.
++// Every macro defaults to 0/off and the default build must be
++// instruction-identical to the pre-M24 body (build gate, design section E).
++//
++// Master switch. Gates the slot, the buffer read, the handshake, the publish,
++// and the five T_eff substitutions (KERNEL 943 / 977 / 1375 / 1587 / 1891).
++#ifndef K0P6_M24_FILL
++#define K0P6_M24_FILL 0
++#endif
++// Rounding granularity of T_eff. 256 is the conservative default: the
++// read-only hkp::csr_scan_block256 / hkp::pull_src_fill headers have only ever
++// been exercised at T in {4096, 2048, 1024} (design section B.3). Lower it to
++// 8 only after work-list G7 establishes T-generality.
++#ifndef K0P6_M24_TGRAIN
++#define K0P6_M24_TGRAIN 256
++#endif
++// M8 tail: zero out[T_eff, T_cap). MANDATORY in every fill build -- `out` is a
++// captured torch.empty_like allocation and rows past T_eff would otherwise
++// never be written again by anybody, so uninitialised graph-pool bytes (any of
++// which may decode as bf16 NaN) would persist across every replay and break
++// the max_nonfinite == 0 chokepoint (design section B.4).
++#ifndef K0P6_M24_ZERO_PAD
++#define K0P6_M24_ZERO_PAD 0
++#endif
++// Escape hatch so the adversarial verifier can build the unsafe
++// FILL=1/ZERO_PAD=0 variant deliberately (G8). Never used in a measured arm.
++#ifndef K0P6_M24_ALLOW_DIRTY_PAD
++#define K0P6_M24_ALLOW_DIRTY_PAD 0
++#endif
++// Receive-side null-work skip, keyed on GROUND TRUTH (total == 0 from the
++// settled chunk_ready fills) and never on a belief about peers' n_orig.
++// DIAGNOSTIC ONLY: a DP-dummy rank still owns 32 experts under EP8 and still
++// receives from every busy peer, so the predicate does not fire in serving
++// (design section B.5 demotion box). REQUIRES FILL (rev 3 review fix R.10):
++// with FILL=0 the second conjunct is `k0p6_dread(desc, K0P6_D_T) == 0`, a
++// compile-time false, so every guard is always taken and the arm is provably
++// inert -- an operator setting NULLWORK alone would get a clean build that
++// measures identically to base and would attribute the null result to the
++// mechanism rather than to the missing FILL.
++#ifndef K0P6_M24_NULLWORK
++#define K0P6_M24_NULLWORK 0
++#endif
++// MoK-only payload VALUE substitution: publish round_up_sat(N, TGRAIN)
++// instead of the buffer's n_orig[cur]. It substitutes the VALUE ONLY, and only
++// on the path an accepted payload takes -- the buffer read, the FULL
++// validation chain, the reject/fallback branch, the clamp, the publish, the
++// barrier ordering, the five consuming loads and the ZERO_PAD tail are
++// byte-for-byte the serving build, so the MoK binary is the shipping binary
++// (design section D, rev 2 box; rev 3 review fix R.3). The MoK harness
++// therefore has to write a VALID fill vector before every launch exactly as
++// serving does -- see m24_fill.py / m24_mok_patch.py. 0 == OFF, not "N = 0":
++// the ladder's N=0 point is built as K0P6_M24_NORIG_TABLE={0,0,0,0,0,0,0,0}.
++#ifndef K0P6_M24_NORIG_CONST
++#define K0P6_M24_NORIG_CONST 0
++#endif
++// MoK-only heterogeneous-fill source (arm D): a per-rank brace list indexed by
++// the runtime `cur`, e.g. -DK0P6_M24_NORIG_TABLE={4096,0,0,0,0,0,0,0}. It is
++// deliberately given NO default -- "unset" is its off state, because every
++// int8 value including 0 is a legal table entry. Mutually exclusive with
++// K0P6_M24_NORIG_CONST.
++// #define K0P6_M24_NORIG_TABLE {..8 entries..}
++// Raise a DISTINCT, run-voiding telemetry bit (K0P6_M24_ERR_STRICT, 1<<30) on
++// top of the generic reject bit when a payload is rejected. Mandatory = 1 for
++// the whole first serving arm (design section B.2).
++//
++// REV 3 REVIEW FIX R.2 -- what STRICT deliberately does NOT do any more. The
++// first implementation raised the generic fail bit 16777216, which the
++// post-M0-barrier uniform check turns into a grid-wide return ON THAT RANK
++// ONLY. A reject is a PER-RANK event -- the design itself lists "the pre-op
++// did not run for this rank" (eager fall-through, the M23 uniform rescue) as
++// an expected case -- so that converted an expected, benign staleness into a
++// NON-UNANIMOUS COLLECTIVE: 7 ranks spinning rows_done to spin_limit on all 58
++// layers while the 8th abandoned the step, and, because pperr is a sticky
++// device word that is never host-reset between replays, permanently
++// thereafter. STRICT therefore raises TELEMETRY ONLY; the device still
++// degrades to the padded capacity, which is bit-for-bit today's behaviour and
++// unanimous by construction. "Fail closed" is enforced by the HOST, which is
++// where a per-rank decision can be made globally: the MoK harness already
++// all-reduces pperr and blocks any arm whose value is nonzero, and the serving
++// receipt (G15) voids any run with a nonzero reject count.
++#ifndef K0P6_M24_STRICT
++#define K0P6_M24_STRICT 0
++#endif
++// T2-c/T2-d/T2-e placeholders (work-list G17). Declared so no arm can set them
++// believing they do something; each is a separate arm with its own gate and
++// none of them is implemented yet -- setting one is a loud build failure.
++#ifndef K0P6_M24_DENSE_SCATTER
++#define K0P6_M24_DENSE_SCATTER 0
++#endif
++#ifndef K0P6_M24_FILL_C
++#define K0P6_M24_FILL_C 0
++#endif
++#ifndef K0P6_M24_M8_ADAPT
++#define K0P6_M24_M8_ADAPT 0
++#endif
++
++#if K0P6_M24_FILL && !K0P6_M24_ZERO_PAD && !K0P6_M24_ALLOW_DIRTY_PAD
++#error "K0P6_M24_FILL requires K0P6_M24_ZERO_PAD (out[T_eff,T_cap) would keep uninitialised captured-pool bytes forever); set K0P6_M24_ALLOW_DIRTY_PAD to build the unsafe variant on purpose"
++#endif
++#if K0P6_M24_ZERO_PAD && !K0P6_M24_FILL
++#error "K0P6_M24_ZERO_PAD requires K0P6_M24_FILL (there is no T_eff without it)"
++#endif
++#if K0P6_M24_ALLOW_DIRTY_PAD && !K0P6_M24_FILL
++#error "K0P6_M24_ALLOW_DIRTY_PAD requires K0P6_M24_FILL"
++#endif
++#if K0P6_M24_FILL_C && !K0P6_M24_FILL
++#error "K0P6_M24_FILL_C requires K0P6_M24_FILL"
++#endif
++#if K0P6_M24_M8_ADAPT && !K0P6_M24_FILL
++#error "K0P6_M24_M8_ADAPT requires K0P6_M24_FILL"
++#endif
++#if K0P6_M24_NORIG_CONST && !K0P6_M24_FILL
++#error "K0P6_M24_NORIG_CONST requires K0P6_M24_FILL (it only substitutes the payload source)"
++#endif
++#if defined(K0P6_M24_NORIG_TABLE) && !K0P6_M24_FILL
++#error "K0P6_M24_NORIG_TABLE requires K0P6_M24_FILL (it only substitutes the payload source)"
++#endif
++#if K0P6_M24_STRICT && !K0P6_M24_FILL
++#error "K0P6_M24_STRICT requires K0P6_M24_FILL (there is no payload to fail closed on)"
++#endif
++#if K0P6_M24_NORIG_CONST && defined(K0P6_M24_NORIG_TABLE)
++#error "K0P6_M24_NORIG_CONST and K0P6_M24_NORIG_TABLE both claim the payload source"
++#endif
++#if K0P6_M24_FILL && K0P6_M24_TGRAIN < 1
++#error "K0P6_M24_TGRAIN must be at least 1"
++#endif
++#if K0P6_M24_DENSE_SCATTER
++#error "K0P6_M24_DENSE_SCATTER (T2-c) is declared but NOT implemented -- work-list G17, its own arm and accuracy gate"
++#endif
++#if K0P6_M24_FILL_C
++#error "K0P6_M24_FILL_C (T2-d, runtime-adaptive reserved_comm_ctas) is declared but NOT implemented -- work-list G17, and it must not land before arm E's C/flush_rows re-sweep"
++#endif
++#if K0P6_M24_M8_ADAPT
++#error "K0P6_M24_M8_ADAPT (T2-e, M8 granularity at low T) is declared but NOT implemented -- work-list G17"
++#endif
++// Rev 3 review fix R.10: NULLWORK was the one M24 macro with no FILL
++// cross-check, so it could be set alone and build a provably inert arm.
++#if K0P6_M24_NULLWORK && !K0P6_M24_FILL
++#error "K0P6_M24_NULLWORK requires K0P6_M24_FILL (with FILL=0 the T_eff==0 conjunct is a compile-time false and the arm is provably inert)"
++#endif
++// Rev 3 review fix R.9b: the JIT-cache guard must move on the M24 branch, or a
++// stale .hsaco compiled from the pre-M24 body is served for a fill arm. The
++// bump lives HERE, not at the K0P6_M15_SRC_REV definition, because K0P6_M24_*
++// is not defined yet at that point in the file.
++#if K0P6_M24_FILL
++#undef K0P6_M15_SRC_REV
++#define K0P6_M15_SRC_REV 3
++#endif
++// ============================================================================
++
+ // exp_27 shipped arm: M6 reads token-major sc_stage; M5's transpose is dead.
+ #ifndef K0P6_MPS_ASCALE_TM
+ #define K0P6_MPS_ASCALE_TM 1
+@@ -281,6 +440,51 @@
+ #define K0P6_M15_D_LEN K0P6_MPS_D_LEN
+ #endif
+ 
++#if K0P6_M24_FILL
++// M24 fill vector, one 16-byte-aligned device buffer PER LAYER:
++//   u32[0]        magic 0x4D323446 "M24F"
++//   u32[1]        gen        monotonic (>= 1) per mega-eligible model step
++//   u32[2]        flags      bit0 = fill-aware requested this step
++//   u32[3]        csum       K0P6_M24_MAGIC ^ w[1] ^ w[2] ^ n_orig[0..world)
++//                            (rev 3 review fix R.8: w[0] is deliberately NOT
++//                            in the sum -- w[0] IS the magic on any payload
++//                            that got past the magic test, so xoring it in
++//                            cancelled the seed exactly and the "seeded with
++//                            the magic" property the comment claimed did not
++//                            exist. m24_fill.py mirrors this definition.)
++//   u32[4]        gen_echo   duplicate of gen, packed LAST (tear detector)
++//   u32[5..7]     reserved (zero)
++//   u32[8 + p]    n_orig[p], p in [0, world)
++//   ---- device-owned tail; the pre-op's 32 + 4*world byte record NEVER
++//        covers it, and M0's mps_state zeroing never touches it ----
++//   u32[8+world+0] last_seen_gen   per-layer consume-once token
++//   u32[8+world+1] agreed_T_eff    the grid-uniform broadcast
++//   u32[8+world+2] agreed_flags    bit0 = fill in use, bits 1..3 reject reason
++//   u32[8+world+3] reserved
++// Slot 71 is above every slot any other arm claims (STAGED/REPLICATE/SAVE_Z
++// take 63; ADAPTIVE 64; M20_SLOTPOOL 65..70).
++#define K0P6_D_M24_FILL 71
++// REAL collision check (rev 3 review fix R.9a). The first implementation wrote
++// `#if K0P6_D_M24_FILL >= 72`, a comparison between two literals fixed three
++// lines apart that can never fire and protected nothing. The check that
++// actually catches the hazard the design named -- "a future arm reaches 71" --
++// is against the cascade's OWN length, evaluated BEFORE the raise below: if
++// any arm ever extends the cascade to a D_LEN > 71 it has claimed slot 71 and
++// M24 would silently alias it.
++#if K0P6_M15_D_LEN > K0P6_D_M24_FILL
++#error "another descriptor arm already claims slot 71 (or beyond); M24 must be re-slotted and m15_contracts.DescriptorSlot.M24_FILL updated with it"
++#endif
++// RAISE, never redefine: K0P6_M15_D_LEN above is an EXCLUSIVE #if/#elif
++// cascade, so an unconditional #define here would be a macro redefinition in
++// four of its branches. The default (non-SLOTPOOL) build jumps 63 -> 72,
++// leaving slots 63..70 UNCLAIMED: the host must zero-fill them and the device
++// must never read them.
++#if K0P6_M15_D_LEN < 72
++#undef K0P6_M15_D_LEN
++#define K0P6_M15_D_LEN 72
++#endif
++#endif
++
+ // Kernel symbol name, parametric so a RUN PIN branch can compile this body
+ // under the harness's expected name (the ablations-tbo16 pin pattern). The
+ // default is the sibling name; ablations-m15 sets it to k0pf6gm_mps_mega.
+@@ -323,6 +527,246 @@ __device__ __forceinline__ std::uint64_t k0p6_epoch(const long long* desc) {
+          1ull;
+ }
+ 
++// ---- M24: fill-vector handshake + the T_eff broadcast --------------------------------------
++// pperr bit 29 (536870912): M24 payload rejected. The step degrades to the
++// padded capacity -- bit-for-bit today's behaviour, and unanimous across the
++// grid and across ranks -- so it is not a device-side fault. It IS, however,
++// RUN-VOIDING telemetry, not "non-fatal": a fill arm whose payload was
++// rejected measured the pre-M24 kernel, and quoting its ratio as a fill number
++// is fairness item 3 ("candidate actually ran"). The MoK harness's existing
++// "all-reduced pperr must be 0" rule is therefore the CORRECT response and is
++// deliberately left unmasked (rev 3 review fix R.6).
++//
++// REV 3 REVIEW FIX R.5 -- bit 26 was K0P6_MPS_ERR_SERVICE. The first
++// implementation used 67108864, which is bit-for-bit K0P6_MPS_ERR_SERVICE
++// (moe_mps_adapter.cuh:30, "service/event poll timeout") in the same
++// translation unit, and the collision was silent because the macro names
++// differ. Every receipt rule that decodes bit 26 -- exp_34/exp_30's mode-14
++// correctness receipt, and moe_mps_adapter.cuh:917's live early-return in
++// wait_event_nonempty -- would have mis-read one for the other in both
++// directions. Bits 25..28 are all taken (M7DONE/SERVICE/DUAL/CONFIG); 29 and
++// 30 are free, and 31 is avoided because pperr is a signed int.
++#define K0P6_M24_ERR_REJECT 536870912
++// pperr bit 30: set IN ADDITION under K0P6_M24_STRICT. Distinct so a receipt
++// can tell "a reject happened in a permissive arm" from "a reject happened in
++// an arm that declared rejects unacceptable". Telemetry only -- see the
++// K0P6_M24_STRICT comment for why it must never gate a device-side return.
++#define K0P6_M24_ERR_STRICT 1073741824
++
++#if K0P6_M24_FILL
++#define K0P6_M24_MAGIC 0x4D323446u
++#define K0P6_M24_TAIL_LAST_GEN 0
++#define K0P6_M24_TAIL_TEFF 1
++#define K0P6_M24_TAIL_FLAGS 2
++// agreed_flags: bit0 = fill in use; bits 1..3 = reject reason when bit0 == 0.
++#define K0P6_M24_RJ_MAGIC 1u
++#define K0P6_M24_RJ_TEAR 2u
++#define K0P6_M24_RJ_CSUM 3u
++#define K0P6_M24_RJ_FLAGS 4u
++#define K0P6_M24_RJ_STALE 5u
++#define K0P6_M24_RJ_RANGE 6u
++
++__device__ __forceinline__ unsigned int* k0p6_m24_tail(const long long* desc,
++                                                       int world) {
++  return (unsigned int*)k0p6_dread(desc, K0P6_D_M24_FILL) + 8 + world;
++}
++
++// Saturating round-up into [0, cap]. LOAD-BEARING, not defensive noise: a
++// partially written or reused buffer yielding n = 0x7FFFFF80 would make a
++// plain round_up overflow int to a large negative, min(cap, negative) stays
++// negative, and every consuming loop would run zero times -- no output row
++// written at all, pperr clean, an entirely stale `out`. The 64-bit
++// intermediate plus the cap cannot produce that.
++__device__ __forceinline__ int k0p6_m24_round_up_sat(int n, int grain,
++                                                     int cap) {
++  if (cap <= 0) return 0;
++  if (n <= 0) return 0;
++  if (n >= cap) return cap;
++  const long long g = (long long)grain;
++  const long long r = (((long long)n + g - 1ll) / g) * g;
++  return (r >= (long long)cap) ? cap : (int)r;
++}
++
++// Single reader of the racing buffer: bid==0 && tid==0 ONLY, and PRE-barrier.
++// The existing M0 grid barrier (+ its acquire_payload_agent) is what carries
++// agreed_T_eff to all 256 CTAs, so T_eff is grid-uniform by construction from
++// ONE read of the buffer -- not from the hope that 256 CTAs racing an
++// asynchronous writer all observe the same bytes. No new barrier, no new poll,
++// no new cross-rank word. Returns the gen to commit post-barrier (0 = none).
++__device__ __forceinline__ unsigned int k0p6_m24_publish(const long long* desc,
++                                                         int cur, int world,
++                                                         int MAXTOK,
++                                                         int* pperr) {
++  if (blockIdx.x != 0u || threadIdx.x != 0u) return 0u;
++  const unsigned int* hdr =
++      (const unsigned int*)k0p6_dread(desc, K0P6_D_M24_FILL);
++  unsigned int* tail = (unsigned int*)hdr + 8 + world;
++  const int T_cap = (int)k0p6_dread(desc, K0P6_D_T);
++  // The tail is device-owned and single-writer (this thread, this layer); a
++  // plain load is correct and M0's mps_state zeroing cannot reach it.
++  const unsigned int last_gen = tail[K0P6_M24_TAIL_LAST_GEN];
++  // Scoped relaxed loads, never k0p6_dread: that is a bare unscoped volatile
++  // load, and this cell is mutated per step by another agent on this device.
++  const unsigned int magic =
++      hk_moe::load_relaxed<hk_moe::scope::system>(hdr + 0);
++  const unsigned int gen =
++      hk_moe::load_relaxed<hk_moe::scope::system>(hdr + 1);
++  const unsigned int flags =
++      hk_moe::load_relaxed<hk_moe::scope::system>(hdr + 2);
++  const unsigned int csum =
++      hk_moe::load_relaxed<hk_moe::scope::system>(hdr + 3);
++  const unsigned int gen_echo =
++      hk_moe::load_relaxed<hk_moe::scope::system>(hdr + 4);
++  // Seeded with the magic and NOT xoring w[0] (rev 3 review fix R.8): w[0] IS
++  // the magic on any payload that clears the magic test three lines below, so
++  // xoring it in cancelled the seed exactly. m24_fill.py mirrors this.
++  unsigned int acc = K0P6_M24_MAGIC ^ gen ^ flags;
++  bool range_ok = true;
++  int n_self = 0;
++  for (int p = 0; p < world; ++p) {
++    const unsigned int v =
++        hk_moe::load_relaxed<hk_moe::scope::system>(hdr + 8 + p);
++    acc ^= v;
++    if (v > (unsigned int)MAXTOK) range_ok = false;
++    if (p == cur) n_self = (int)v;
++  }
++  unsigned int reason = 0u;
++  if (magic != K0P6_M24_MAGIC) reason = K0P6_M24_RJ_MAGIC;
++  else if (gen_echo != gen) reason = K0P6_M24_RJ_TEAR;
++  else if (acc != csum) reason = K0P6_M24_RJ_CSUM;
++  else if ((flags & 1u) == 0u) reason = K0P6_M24_RJ_FLAGS;
++  else if (gen <= last_gen) reason = K0P6_M24_RJ_STALE;
++  else if (!range_ok) reason = K0P6_M24_RJ_RANGE;
++#if defined(K0P6_M24_NORIG_TABLE) || K0P6_M24_NORIG_CONST
++  // MoK arms substitute the payload VALUE only. The buffer read, the whole
++  // validation chain above, the reject/fallback branch below, the clamp, the
++  // publish, the barrier ordering and the five consuming loads are byte-for-
++  // byte the serving path (design section D, rev 2 box).
++  //
++  // REV 3 REVIEW FIX R.3 -- `reason = 0u;` used to sit at the bottom of this
++  // block. It made the six comparisons above, `range_ok`, `last_gen`, the
++  // whole else-branch (T_cap fallback, both atomicOrs) and the aflags
++  // computation provably unreachable, so LLVM deleted them AND the loads that
++  // fed only them (load_relaxed is a monotonic atomic load, which
++  // wouldInstructionBeTriviallyDead removes when unused). The result was the
++  // exact defect section D rev 2 and section E were written to prevent: the
++  // validation, the reject telemetry and the fail-closed path existed in no
++  // MoK binary and would have first executed on 8 live GPUs inside a serving
++  // campaign, while the mandated cross-pin resource-tuple equality check
++  // could not have passed. The MoK harness must therefore write a VALID fill
++  // vector before every launch, exactly as serving does (m24_fill.py,
++  // m24_mok_patch.py) -- the substitution below only replaces the number.
++  if (reason == 0u) {
++    int n_sub = 0;
++#if defined(K0P6_M24_NORIG_TABLE)
++    const int k0p6_m24_tbl[8] = K0P6_M24_NORIG_TABLE;
++    // Fully-unrolled select, NOT `tbl[cur]` (rev 3 review fix R.7a): `cur`
++    // comes from a volatile descriptor load, so the backend cannot prove it
++    // uniform and a divergent index into a function-local array is exactly how
++    // the array lands in scratch -- private_segment_fixed_size > 0 is an
++    // automatic fail of the arm build gate's no-spill assertion at
++    // occupancy-1. With p a loop constant this compiles to a select chain.
++#pragma unroll
++    for (int p = 0; p < 8; ++p) {
++      if (p == cur) n_sub = k0p6_m24_tbl[p];
++    }
++#else
++    n_sub = (int)(K0P6_M24_NORIG_CONST);
++#endif
++    // Opacity barrier: keep the substituted count a runtime value so no loop
++    // bound, tile count or unroll factor can be specialised on it. A cross-pin
++    // resource-tuple difference against the serving-shaped pin means it
++    // leaked. "+v", not "+s" (rev 3 review fix R.7b): the value is derived
++    // from a non-uniform `cur` under threadIdx-divergent control flow, and an
++    // SGPR constraint on a value the uniformity analysis cannot prove scalar
++    // is an "illegal VGPR to SGPR copy" build failure -- burning a node slot
++    // on an error the CPU-only compile check exists to catch. The serving pin
++    // reaches this point with n_self in a VGPR loaded from memory, so "+v" is
++    // also the constraint that makes the two pins MORE alike, not less.
++    asm volatile("" : "+v"(n_sub));
++    n_self = n_sub;
++  }
++#endif
++  int T_eff;
++  unsigned int aflags;
++  if (reason == 0u) {
++    T_eff = k0p6_m24_round_up_sat(n_self, K0P6_M24_TGRAIN, T_cap);
++    aflags = 1u;
++  } else {
++    // Degradation is toward MORE work, never toward wrong output.
++    T_eff = T_cap;
++    aflags = (reason & 7u) << 1;
++    atomicOr(pperr, K0P6_M24_ERR_REJECT);
++#if K0P6_M24_STRICT
++    // TELEMETRY ONLY -- never 16777216. See the K0P6_M24_STRICT comment: the
++    // generic fail bit is turned into a per-rank grid-wide return by the
++    // post-M0 check, and a reject is a per-rank event, so raising it here
++    // manufactured a non-unanimous collective out of an expected staleness
++    // (rev 3 review fix R.2).
++    atomicOr(pperr, K0P6_M24_ERR_STRICT);
++#endif
++  }
++  hk_moe::publish_relaxed<hk_moe::scope::agent>(tail + K0P6_M24_TAIL_TEFF,
++                                                (unsigned int)T_eff);
++  hk_moe::publish_relaxed<hk_moe::scope::agent>(tail + K0P6_M24_TAIL_FLAGS,
++                                                aflags);
++  // RELEASE, then the caller's grid barrier arrive (rev 3 review fix R.1).
++  // publish_relaxed is __hip_atomic_store(..., __ATOMIC_RELAXED, agent) -- it
++  // carries NO ordering, and hkp::grid_barrier's arrive is not shown to supply
++  // one: this kernel's own convention proves the opposite, since it calls
++  // release_cta_payload_system() immediately before the M7 slab grid_barrier
++  // and release_signal_batch_system() before the M1 publications, both of
++  // which would be redundant if the arrive were a release. Without this fence
++  // the two stores above may be reordered after CTA 0's arrive, letting CTAs
++  // 1..255 read the PREVIOUS launch's agreed_T_eff: divergent T across the
++  // grid, a destroyed M8 ticket (a CTA with the smaller nbatches consumes a
++  // ticket and then breaks without processing it), and half the grid running
++  // the ZERO_PAD sweep over rows the other half just combined. `store;
++  // release_fence; barrier_arrive` is the ordering the consumer's existing
++  // acquire_payload_agent() pairs with.
++  hk_moe::release_signal_batch_agent();
++  return (reason == 0u) ? gen : 0u;
++}
++
++// Post-barrier consume-once commit, same single thread, into M24's own tail --
++// so there is no race with M0's grid-strided mps_state zeroing loop, which
++// touches only mps_state.
++__device__ __forceinline__ void k0p6_m24_commit(const long long* desc,
++                                                int world, unsigned int gen) {
++  if (blockIdx.x != 0u || threadIdx.x != 0u || gen == 0u) return;
++  hk_moe::publish_relaxed<hk_moe::scope::agent>(
++      k0p6_m24_tail(desc, world) + K0P6_M24_TAIL_LAST_GEN, gen);
++}
++#endif
++
++// The row-count read every substitution site performs. RE-DERIVED at each of
++// the five sites and NEVER hoisted into one entry-computed value: the kernel
++// is __launch_bounds__(256,1) and both N2 GEMM bodies are __forceinline__, so
++// a value live from M0 to M8 crosses both GEMM inner loops at the 256-VGPR
++// occupancy-1 point -- the exp_38 spill cliff (+726.9 us). Today's kernel
++// re-reads the descriptor slot at each site and hoists nothing; M24 does the
++// same. The arm build gate's no-spill assertion is the enforcement.
++__device__ __forceinline__ int k0p6_m24_teff(const long long* desc, int world) {
++#if K0P6_M24_FILL
++  // CONSUMER-SIDE CLAMP (rev 3 review fix R.4). Section B.3 calls the clamp
++  // load-bearing rather than defensive noise, but the first implementation put
++  // it only at the PRODUCER, where by construction it cannot protect against a
++  // value the producer never wrote: an unpublished or residue tail word of
++  // 0xFFFFFFFF casts to -1, every consuming loop (`tau < T`,
++  // `(T+NT-1)/NT`, `csr_scan_block256(..., T, ...)`) then runs zero times, no
++  // output row is written, pperr stays clean, and ZERO_PAD's `T < T_cap`
++  // zeroes the whole `out` tensor -- 58 layers of zeros with a clean receipt.
++  // One scalar compare closes the entire class.
++  const int T_cap = (int)k0p6_dread(desc, K0P6_D_T);
++  const int t = (int)hk_moe::load_relaxed<hk_moe::scope::agent>(
++      (const unsigned int*)k0p6_m24_tail(desc, world) + K0P6_M24_TAIL_TEFF);
++  return ((unsigned int)t > (unsigned int)T_cap) ? T_cap : t;
++#else
++  (void)world;
++  return (int)k0p6_dread(desc, K0P6_D_T);
++#endif
++}
++
+ // ---- task hooks (donor forms, verbatim) ---------------------------------------------------
+ __device__ __forceinline__ void k0p6_a2_arrive(int b, int tid, const long long* desc) {
+   if (tid == 0) {
+@@ -811,6 +1255,15 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
+ #if K0P6_M15_STAGED
+         || k0p6_dread(desc, K0P6_D_M15_STAGE) == 0 ||
+         (k0p6_dread(desc, K0P6_D_M15_STAGE) & 15) != 0
++#endif
++#if K0P6_M24_FILL
++        // A fill build with no fill buffer has nowhere to publish the
++        // grid-uniform T_eff and nowhere to keep last_seen_gen, so it fails
++        // CLOSED at entry rather than dereferencing a null tail. The buffer is
++        // 32 + 4*world header bytes + a 16-byte device-owned tail, 16-byte
++        // aligned, one per layer.
++        || k0p6_dread(desc, K0P6_D_M24_FILL) == 0 ||
++        (k0p6_dread(desc, K0P6_D_M24_FILL) & 15) != 0
+ #endif
+         ) {
+       if (bid == 0 && tid == 0) atomicOr(pperr, K0P6_MPS_ERR_CONFIG);
+@@ -875,6 +1328,13 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
+           retired + tid, epoch > 0 ? epoch - 1ull : 0ull,
+           (std::uint64_t)spin_limit, pperr, 16777216);
+     }
++#if K0P6_M24_FILL
++    // M24 (design section B.2): single-reader validate + publish of
++    // agreed_T_eff, PRE-barrier. The barrier below is what makes it
++    // grid-uniform; no new barrier, poll or cross-rank word is added.
++    const unsigned int m24_gen =
++        k0p6_m24_publish(desc, cur, world, MAXTOK, pperr);
++#endif
+     {
+       unsigned int* gbar = (unsigned int*)k0p6_dread(desc, K0P6_D_GBAR);
+       const hkp::local_grid_epoch bar{gbar, pperr, spin_limit};
+@@ -883,6 +1343,13 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
+     }
+     hk_moe::acquire_payload_agent();
+     if (hk_moe::error_bit_set_agent(pperr, 16777216 | 2097152)) return;
++#if K0P6_M24_FILL
++    // Consume-once: only an ACCEPTED gen is committed, so a torn/garbage gen
++    // can never poison last_seen_gen and wedge every later step into the
++    // fallback. Into M24's own tail -- never mps_state, which M0 zeroes
++    // grid-wide a few lines below.
++    k0p6_m24_commit(desc, world, m24_gen);
++#endif
+     const int maxb = (int)k0p6_dread(desc, K0P6_D_MAXB);
+     unsigned int* a2_done = (unsigned int*)k0p6_dread(desc, K0P6_D_A2_DONE);
+     unsigned int* part_done = (unsigned int*)k0p6_dread(desc, K0P6_D_PART_DONE);
+@@ -940,7 +1407,16 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
+   {
+     int* hcnt_pre = (int*)k0p6_dread(desc, K0P6_D_HCNT);
+     const int* my_ids_pre = (const int*)k0p6_dread(desc, K0P6_D_MYIDS);
++    // M24 substitution site 5 (the one invisible to a grep for K0P6_D_T):
++    // without it the M0.5 pre-pass histograms my_ids over all 4,096 padded
++    // rows and the per-chunk replication decision is derived from pad routing.
++    // Written as an #if/#else so a FILL=0 ADAPTIVE build keeps the original
++    // register alias rather than gaining a second volatile descriptor load.
++#if K0P6_M24_FILL
++    const int T_pre = k0p6_m24_teff(desc, world);
++#else
+     const int T_pre = input_tokens;
++#endif
+     unsigned int* gbar = (unsigned int*)k0p6_dread(desc, K0P6_D_GBAR);
+     const hkp::local_grid_epoch bar{gbar, pperr, spin_limit};
+     const hkp::fail_closed bar_err{pperr, 2097152};
+@@ -974,7 +1450,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
+     const auto* symmetric = k0p6_symmetric(desc);
+     const std::uint64_t epoch = k0p6_epoch(desc);
+     const int par = (int)(epoch & 1ull);
+-    const int T = (int)k0p6_dread(desc, K0P6_D_T);
++    const int T = k0p6_m24_teff(desc, world);   // M24 site 1 (M1 dispatch)
+     const int* my_ids = (const int*)k0p6_dread(desc, K0P6_D_MYIDS);
+     const float* my_wgt = (const float*)k0p6_dread(desc, K0P6_D_MYWG);
+     const unsigned short* hidden = (const unsigned short*)k0p6_dread(desc, K0P6_D_HIDDEN);
+@@ -1218,12 +1694,46 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
+           else all = 0;
+         }
+         if (all) { s_total = tsum; break; }
+-        if (++spins > spin_limit) { atomicOr(pperr, 16777216); break; }
++        if (++spins > spin_limit) { atomicOr(pperr, 16777216);
++#if K0P6_M24_NULLWORK
++          // Rev 3 review response R.7c (belt-and-braces; the finding itself is
++          // REBUTTED in Appendix R -- the timing-out CTA cannot reach any
++          // null_work guard, because the pperr check after this block's grid
++          // barrier returns the WHOLE grid on the bit it just set). Still: a
++          // timeout must never leave s_total at its initial 0 and make the
++          // null-work predicate read "this rank received nothing" when the
++          // truth is "this rank never found out". 0xFFFFFFFF is not a row
++          // count any peer can publish and forces null_work false.
++          s_total = 0xFFFFFFFFu;
++#endif
++          break; }
+         __builtin_amdgcn_s_sleep(4);
+       }
+     }
+     __syncthreads();
+     const unsigned int total = s_total;
++#if K0P6_M24_NULLWORK
++    // M24 G5: receive-side null work. The predicate is GROUND TRUTH -- `total`
++    // is the sum of all 8 sources' rows_done payloads, i.e. what this rank
++    // actually received -- and never a belief about peers' n_orig. If a rank
++    // with a stale buffer dispatched real rows to a peer that had skipped
++    // M6/M7 on a belief, those rows would never be computed and the stale
++    // rank's combine would read zeroed slots: silent wrong output. Ground
++    // truth cannot disagree with itself.
++    //
++    // GUARD BODIES, NEVER BARRIERS OR PUBLICATIONS. The untouchable set is the
++    // NINE grid barriers -- M0 (after the retire poll), the two ADAPTIVE M0.5
++    // barriers, M2's rendezvous, M3, M4, M5, the M7 slab rendezvous, and the
++    // STAGED R2 -- plus the three publication blocks (M1's rows_done +
++    // chunk_ready epoch words, the M7 slab-word publication, and M9's retire
++    // pokes). A subset of CTAs skipping a grid_barrier desynchronises the
++    // epoch for the whole grid: the non-unanimous-collective hang class. A
++    // globally-dummy epoch must still publish every word a peer polls.
++    //
++    // Recomputed at the later sites from s_total (which nothing writes after
++    // this point) rather than carried in a register across the GEMM bodies.
++    const bool null_work = (total == 0u) && (k0p6_m24_teff(desc, world) == 0);
++#endif
+ 
+     const int npairs = world * nchunks;
+     for (int k = wave; k < npairs; k += wave_count) {
+@@ -1286,6 +1796,11 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
+     __syncthreads();
+ #endif
+ 
++#if K0P6_M24_NULLWORK
++    // Guarded-block idiom: the braces live INSIDE the #if, so the default
++    // build is textually unchanged here, not merely semantically unchanged.
++    if (!null_work) {   // M2 unpack loop body (barrier-free region)
++#endif
+     for (int r = wave; r < T_ext; r += wave_count) {
+       const int s = r / MAXTOK;
+       const int off = r - s * MAXTOK;
+@@ -1327,6 +1842,9 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
+       }
+       __syncwarp();
+     }
++#if K0P6_M24_NULLWORK
++    }   // if (!null_work) -- M2 unpack loop
++#endif
+ 
+     T_loc = (int)total;
+     if (T_ext < 0 || T_ext > T_loc_max) {
+@@ -1334,6 +1852,9 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
+       return;
+     }
+ 
++#if K0P6_M24_NULLWORK
++    if (!null_work)   // hole-fill body (recv_eid = -1 over the dead tails)
++#endif
+     {
+       int* recv_eid_h = (int*)k0p6_dread(desc, K0P6_D_RECV_EID);
+       const int gtid = bid * (int)blockDim.x + tid;
+@@ -1372,7 +1893,8 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
+     unsigned int* gbar = (unsigned int*)k0p6_dread(desc, K0P6_D_GBAR);
+     const hkp::local_grid_epoch bar{gbar, pperr, spin_limit};
+     const hkp::fail_closed bar_err{pperr, 2097152};
+-    const int T = (int)k0p6_dread(desc, K0P6_D_T);
++    // M24 site 2 (csr_scan_block256 + pull_src_fill)
++    const int T = k0p6_m24_teff(desc, world);
+     int* scratch = (int*)k0p6_dread(desc, K0P6_D_SCRATCH);
+     int* nvi = (int*)k0p6_dread(desc, K0P6_D_NVI);
+     int* sei = (int*)k0p6_dread(desc, K0P6_D_SEI);
+@@ -1471,8 +1993,17 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
+                         scratch, sti, swt, pperr, 1048576);
+     (void)pairs;
+ #else
++    // NOTE: k0p6_sort::pad above is DELIBERATELY NOT guarded -- it is its own
++    // region, and skipping it would leave stale per-expert round-up entries in
++    // sti/swt for any later arm that skips only part of this set.
++#if K0P6_M24_NULLWORK
++    if (!(s_total == 0u && k0p6_m24_teff(desc, world) == 0))
++#endif
+     k0p6_sort::scatter(recv_eid, recv_wgt, pairs, lo, E, TOPK, PADMAX, scratch, sti, swt,
+                        pperr, 1048576);
++#endif
++#if K0P6_M24_NULLWORK
++    if (!(s_total == 0u && k0p6_m24_teff(desc, world) == 0))
+ #endif
+     hkp::pull_src_fill(pull_stage, pull_ptr, T, TOPK, T * world, pull_src, pperr, 1048576);
+ 
+@@ -1491,6 +2022,9 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
+   if (debug_stop == 4) return;
+ 
+   // ================= M6: N2 phase1 (donor verbatim) =========================================
++#if K0P6_M24_NULLWORK
++  if (!(s_total == 0u && k0p6_m24_teff(desc, world) == 0))
++#endif
+   production_fused_moe::n2::n2p6m15_phase1_body(
+       (const std::uint8_t*)k0p6_dread(desc, K0P6_D_A_DST),
+ #if K0P6_MPS_ASCALE_TM
+@@ -1539,6 +2073,9 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
+         const hk_moe::mps::config mrole = hk_moe::mps::decode_config(
+             (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
+         if (!hk_moe::mps::is_service_cta(mrole, bid, nct)) {
++#if K0P6_M24_NULLWORK
++          if (!(s_total == 0u && k0p6_m24_teff(desc, world) == 0))
++#endif
+           production_fused_moe::n2::n2p6m15_phase2_body(
+               (const std::uint8_t*)k0p6_dread(desc, K0P6_D_A2Q),
+               (const float*)k0p6_dread(desc, K0P6_D_DQ2),
+@@ -1584,7 +2121,11 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
+           if (!hk_moe::error_bit_set_agent(
+                   pperr, 16777216 | 2097152 | 33554432 |
+                              K0P6_MPS_ERR_CONFIG)) {
+-            const int T = (int)k0p6_dread(desc, K0P6_D_T);
++            // M24 site 3 (M7 pool front-half sweep). NOTE the quota below is
++            // sized to slab-1's compute shadow at nbatches = 1,024 (T=4096);
++            // at T_eff it is proportionally smaller, so C / flush_rows are no
++            // longer at their tuned point -- arm E re-sweeps them at runtime.
++            const int T = k0p6_m24_teff(desc, world);
+             const int* pull_ptr =
+                 (const int*)k0p6_dread(desc, K0P6_D_PULL_PTR);
+             const int* pull_src =
+@@ -1888,7 +2429,8 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
+     __syncthreads();
+     const bool payload_ok = !hk_moe::error_bit_set_agent(
+         pperr, 16777216 | 2097152 | 33554432 | K0P6_MPS_ERR_CONFIG);
+-    const int T = payload_ok ? (int)k0p6_dread(desc, K0P6_D_T) : 0;
++    // M24 site 4 (M8 combine): nbatches and the per-token live guard.
++    const int T = payload_ok ? k0p6_m24_teff(desc, world) : 0;
+     const int* pull_ptr = (const int*)k0p6_dread(desc, K0P6_D_PULL_PTR);
+     const int* pull_src = (const int*)k0p6_dread(desc, K0P6_D_PULL_SRC);
+     unsigned short* slots = (unsigned short*)k0p6_dread(desc, K0P6_D_MPS_SLOTS);
+@@ -1944,6 +2486,33 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
+     }
+ #endif
+     (void)nbatches;
++#if K0P6_M24_ZERO_PAD
++    // M24 G4: make the pad region DETERMINISTIC. `out` is a captured
++    // torch.empty_like allocation whose pointer every replay reuses; today M8
++    // rewrites all 4,096 rows with finite garbage every step, but under
++    // fill-awareness rows [T_eff, T_cap) are never written by anybody again,
++    // so whatever uninitialised graph-pool bytes sat there on the first replay
++    // would persist forever -- and any column decoding as bf16 NaN flows
++    // through 58 layers and breaks max_nonfinite == 0. No consumer reads a row
++    // >= n_orig (design section C.3), so zero is as valid as garbage and
++    // strictly better behaved. Grid-strided uint4 stores, same geometry as the
++    // consume-and-zero inside k0p6_m15_m8_batch. Cost is MEASURED from the
++    // NORIG_CONST=3968 R0b point, not asserted.
++    if (payload_ok) {
++      const int T_cap = (int)k0p6_dread(desc, K0P6_D_T);
++      if (T < T_cap) {
++        constexpr size_t kV = (size_t)K0P6_H / 8u;   // uint4 per output row
++        uint4* o4 = reinterpret_cast<uint4*>(out);
++        uint4 z4;
++        z4.x = 0u; z4.y = 0u; z4.z = 0u; z4.w = 0u;
++        const size_t v_lo = (size_t)T * kV;
++        const size_t v_hi = (size_t)T_cap * kV;
++        const size_t gtid8 = (size_t)(bid * (int)blockDim.x + tid);
++        const size_t gstride8 = (size_t)(nct * (int)blockDim.x);
++        for (size_t i = v_lo + gtid8; i < v_hi; i += gstride8) o4[i] = z4;
++      }
++    }
++#endif
+     if (tid == 0) {
+       const hk_moe::mps::config m8cfg = hk_moe::mps::decode_config(
+           (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
+diff --git a/distributed-kernels/fused_moe/overnight/aug18-prefill/FILL_AWARE_DESIGN.md b/distributed-kernels/fused_moe/overnight/aug18-prefill/FILL_AWARE_DESIGN.md
+index 14c94802..65afe48e 100644
+--- a/distributed-kernels/fused_moe/overnight/aug18-prefill/FILL_AWARE_DESIGN.md
++++ b/distributed-kernels/fused_moe/overnight/aug18-prefill/FILL_AWARE_DESIGN.md
+@@ -376,7 +376,9 @@ which survives across launches. The handshake becomes:
+   `T_eff_candidate`, **clamp it to `[0, desc[K0P6_D_T]]`** (§B.3), and
+   `publish_value<scope::agent>(&tail.agreed_T_eff, T_eff)` plus `agreed_flags`.
+   On reject: publish `agreed_T_eff = desc[K0P6_D_T]`, set the reject reason in `agreed_flags`,
+-  raise a **non-fatal** telemetry bit in `pperr` (or a hard fail under `K0P6_M24_STRICT`).
++  raise a **run-voiding** telemetry bit in `pperr` (rev 3, R.6b: not "non-fatal" — the harness
++  blocks any arm with a nonzero `pperr`, and that is correct, because an arm whose payload was
++  rejected measured the pre-M24 kernel), plus a second distinct bit under `K0P6_M24_STRICT`.
+ * **The existing M0 grid barrier at KERNEL:882 carries the value.** It is already followed by
+   `hk_moe::acquire_payload_agent()` (KERNEL:883), so a pre-barrier single-writer publish is
+   visible to every CTA afterwards. **No new barrier, no new poll, no new cross-rank word.**
+@@ -400,6 +402,19 @@ behaviour. **Degradation is toward more work, never toward wrong output.**
+ 
+ **Belt-and-braces, because this is the one silent-wrong-output class in the design:**
+ 
++
++> **⚠ REV 3 CORRECTION (Appendix R3.1 / R.2) — what `STRICT = 1` does.** It raises a distinct
++> telemetry bit (`K0P6_M24_ERR_STRICT`, 1<<30) and the device still degrades to the padded
++> capacity. It does **NOT** take any device-side global action. The first implementation raised
++> the generic fail bit `16777216`, which the post-M0 check turns into a grid-wide return **on
++> that rank only** — and a reject is a per-rank event this very section lists as expected, so
++> that manufactured a non-unanimous collective (7 ranks spinning `rows_done` to `spin_limit` on
++> all 58 layers) out of ordinary staleness, permanently, because `pperr` is sticky across
++> replays. **Fail-closed is a HOST property**: the MoK harness blocks any arm with a nonzero
++> all-reduced `pperr`, and the serving receipt (G15) voids any run with a nonzero reject count.
++> Wherever this document says STRICT "hard-fails" or "fail-closes", read it as *the run is
++> voided by the host*, never *the device returns early*.
++
+ * `K0P6_M24_STRICT = 1` is **mandatory for the entire first serving arm**, not just bring-up:
+   any reject becomes a loud `pperr` failure rather than a silent 4,096-row fallback.
+ * G15's receipt records, per run, `Σ T_eff` against the shim's own independently-recorded
+@@ -490,7 +505,7 @@ every consuming loop (`for (…; tau < T; …)` at KERNEL:993; `(T + NT − 1)/N
+ 1600) would execute zero times: **no output row written at all, `pperr` clean, an entirely stale
+ `out` tensor and no error bit**. `round_up_sat` saturates at `desc[K0P6_D_T]`, the clamp bounds
+ below at 0, and any input outside `[0, MAXTOK]` is rejected by the §B.2 validation with a
+-telemetry bit. `K0P6_M24_STRICT` turns it into a hard fail.
++telemetry bit (rev 3: bit 1<<29, **not** 1<<26 — that is `K0P6_MPS_ERR_SERVICE`). `K0P6_M24_STRICT` adds a second, distinct bit (1<<30); neither is a device-side fail-closed (R.2).
+ 
+ **The capacity site is deliberately NOT changed.** The entry guard's `input_tokens` (KERNEL:759,
+ tested at 789-790 against `MAXTOK`) is a *capacity* check. It stays on `desc[44] = 4096`, so the
+@@ -845,7 +860,7 @@ Declared in the `#ifndef` block of `k0pf6gm_device_tile_m15.hip` alongside `K0P6
+ | `K0P6_M24_NULLWORK` | **0** | The `total == 0` receive-side skip (§B.5 1b). Independent of `FILL` (it reads ground truth). **Diagnostic only — see the demotion box in §B.5; it does not fire in serving.** |
+ | `K0P6_M24_NORIG_CONST` | **0** | MoK-only payload *source* substitution, so the harness needs no host plumbing (§F.3). **Rev 2: it substitutes the SOURCE only, never the mechanism** — see the box below. |
+ | `K0P6_M24_NORIG_TABLE` | unset | MoK-only, arm D: a per-rank list (`{4096,0,0,0,0,0,0,0}`) indexed at runtime by `cur`, giving the **heterogeneous-fill** regime the homogeneous arms are structurally blind to (§B.5, §F.3). Mutually exclusive with `NORIG_CONST`. |
+-| `K0P6_M24_STRICT` | **0** | Turn a rejected/stale payload from "silently use `T = 4096` + telemetry bit" into a hard `pperr` fail-closed. **Mandatory = 1 for the entire first serving arm**, not only bring-up (§B.2). |
++| `K0P6_M24_STRICT` | **0** | Raise a DISTINCT run-voiding telemetry bit (`K0P6_M24_ERR_STRICT`, 1<<30) on a rejected/stale payload, on top of the generic reject bit; the device still degrades to `T = 4096`. **Mandatory = 1 for the entire first serving arm**, not only bring-up (§B.2). **Rev 3 (R.2): it must never raise `16777216`** — that is a per-rank grid-wide return and turns an expected staleness into a non-unanimous collective. |
+ | `K0P6_M24_DENSE_SCATTER` | **0** | T2-c (§B.6). **Moves the accumulation order further, on top of the baseline nondeterminism §C.2 documents** — never enabled in an accuracy-gated headline arm. |
+ | `K0P6_M24_FILL_C` | **0** | T2-d, runtime-adaptive `reserved_comm_ctas`. Own campaign. `#error` without `FILL`. |
+ | `K0P6_M24_M8_ADAPT` | **0** | T2-e, combine granularity at low `T`. `#error` without `FILL`. |
+@@ -1411,3 +1426,66 @@ against a baseline we shouldn't quote** to **≈ +22 % against the secondary bas
+ against the one that counts** — which means M24 alone probably does not clear the mission
+ target, and §H.9's step-count defect has to be worked in parallel. That last sentence is the
+ most useful thing the review produced.
++
++---
++
++## Appendix R3 — Implementation review responses (rev 3, 2026-08-18)
++
++Two adversarial reviewers read the **implementation** (kernel + shim), lenses **conformance-race**
++and **buildgate-hardware**. Between them: **7 distinct blocking findings** (two found by both),
++**9 major**, **4 minor**. Every blocking and major finding is dispositioned below.
++**All blocking findings are FIXED. One major finding is REBUTTED with evidence (R.7c) and a
++belt-and-braces guard added anyway. Nothing remains open.**
++
++The reviews were right about the shape of the failure: the first implementation was a **kernel-only
++change**. Section B.3's host half — allocate, bind slot 71, write the payload — did not exist in
++either repository, and three of the seven blocking findings are that absence viewed from different
++angles. The other four are ordering and dead-code defects that the missing host half had hidden.
++
++### R3.1 Blocking — all FIXED
++
++| # | finding (lens) | disposition |
++|---|---|---|
++| **R.1** | The `agreed_T_eff` broadcast is a **bare relaxed store with no release** before the M0 grid barrier, so CTAs 1..255 may read the previous launch's value: divergent `T` across the grid, a destroyed M8 ticket, and half the grid running the `ZERO_PAD` sweep over rows the other half combined. (conformance-race) | **FIXED.** `hk_moe::release_signal_batch_agent()` (= `thread_release<agent>`, `sync.cuh:86-98`) now closes `k0p6_m24_publish`, giving `store; release_fence; barrier_arrive` — the ordering the consumer's existing `acquire_payload_agent()` was already half of. The reviewer's proof that the barrier does not carry a release (this kernel calls `release_cta_payload_system()` before the M7 slab barrier and `release_signal_batch_system()` before the M1 publications, both redundant if it did) is exactly right. |
++| **R.2** | `K0P6_M24_STRICT` — **mandatory = 1 for the whole first serving arm** — raised the generic fail bit `16777216`, which the post-M0 check turns into a grid-wide return **on that rank only**. A reject is a **per-rank** event that §B.2 itself lists as expected, so STRICT manufactured a **non-unanimous collective** out of ordinary staleness: 7 ranks spinning `rows_done` to `spin_limit` on all 58 layers. And because `pperr` is sticky and never host-reset between replays (`m15_contracts.py` BufferSpec note), one benign reject disabled the megakernel **permanently**, after which `out` — a captured `torch.empty_like` buffer — is never written again while every step still burns a `spin_limit` stall. (both lenses, independently) | **FIXED.** STRICT no longer raises `16777216`. It raises its own telemetry bit `K0P6_M24_ERR_STRICT` (1<<30) and the device still degrades to `T_cap`, which is bit-for-bit today's behaviour and unanimous by construction. **Fail-closed moves to the host**, the only place a per-rank observation can be turned into a global decision: the MoK harness already all-reduces `pperr` and blocks any arm with a nonzero value, and the serving receipt (G15) voids any run with a nonzero reject count. §B.2's "STRICT = 1 on the first serving arm" stands; what it *means* is now stated correctly. |
++| **R.3** | The unconditional `reason = 0u;` in the `NORIG` block made the whole validation chain, `range_ok`, `last_gen`, the reject branch, both `atomicOr`s and the `aflags` computation **provably unreachable**, so LLVM deleted them *and* the header loads that fed only them (`load_relaxed` is a monotonic atomic load, which `wouldInstructionBeTriviallyDead` removes when unused). Every MoK pin therefore priced a binary **missing the exact code paths §D rev 2 and §E exist to price**, the mandated cross-pin resource-tuple equality check could not have passed, and the reject/fail-closed path would have first executed on 8 live GPUs inside a serving campaign. (both lenses) | **FIXED.** `reason = 0u;` is gone. The substitution now happens **inside `if (reason == 0u)`** and replaces only the *number*: the buffer read, the six-way validation chain, the reject/fallback branch, the clamp, the publish, the barrier ordering, the five consuming loads and the `ZERO_PAD` tail are byte-for-byte the serving path. The consequence is deliberate and is the point: a MoK arm now needs a **genuinely valid, genuinely fresh payload before every launch**, exactly as serving does — which is what `m24_mok_patch.py` supplies. |
++| **R.4** | **B3 is entirely absent**: nothing allocates the fill buffer, binds slot 71, or implements the `write_fill_vector` pre-op, so every `FILL=1` build reads `desc[71]` out of bounds of a 63-word descriptor — and, since `k0p6_m24_publish` also **stores** through that pointer, performs an unbounded device write on all 8 GPUs whenever the residue looks like a non-null 16-byte-aligned address. R0b, the fill ladder and arm D could not have produced a number. (conformance-race) | **FIXED — the host half now exists and is tested.** `m15_eplb0/m24_fill.py`: the encoder, the checksum (authoritative, mirrored by the device), `descriptor_with_fill_slot()` (extends the cascade descriptor to 72 words, binds slot 71, zero-fills every unclaimed slot), `M24FillVector` (per-layer **zeroed** allocation, 16-byte-alignment assertion, the per-launch write with a 3-scalar fast path so the pre-op cannot starve the device from Python), and `validate_payload_mirror()` — a Python re-implementation of `k0p6_m24_publish` used to prove host and device agree. `m24/m24_mok_patch.py` wires it into the MoK harness in four anchor-exact, idempotent, fail-loud hunks. `m24/test_m24_fill.py` and `m24/test_m24_mok_patch.py` are CPU-only and green. |
++| **R.5** | The device-owned tail word `last_seen_gen` is **read on the very first launch** but nothing initialises it: no `BufferSpec`, no `zero=True`, no `m24` parameter on `buffer_table()`. Allocator residue >= the first `gen` (0xDEADBEEF from a recycled caching-allocator block) makes every step reject as stale, so the arm runs the pre-M24 kernel while reporting itself as M24 — the project's named past sin with no receipt able to detect it. (buildgate-hardware) | **FIXED.** `buffer_table(..., m24=True)` emits the per-layer spec (`slot 71`, `8 + world + 4` int32 words, rank-local, **`zero=True`**) and the function's docstring states *why* the zeroing is load-bearing rather than hygiene. `M24FillVector` allocates with `zeros()`, never `empty()`, and asserts 16-byte alignment at construction. A test asserts the tail reads back all-zero before the first write. |
++| **R.6** | **Neither configuration had actually been compiled** — no resource-usage log for the default or the `FILL=1` build anywhere in the tree — and `m24_compile_check.sh` structurally **cannot** perform the section-E gate, because it never builds the pre-M24 body: `run_cfg base` compares against nothing. (buildgate-hardware) | **FIXED.** `m24_build_gate.sh` is new and does the real gate: it extracts the pre-M24 body from git (`PRE_REF`, default `a776ac75`) so the "before" side cannot be a hand-made copy that quietly differs, builds **both** through the **same pin path with the same compile line**, and compares the resource tuple, the normalised disassembly of `k0pf6gm_mps_mega`, and a sha256 of the raw `.text`. It writes `M24_BUILD_GATE_RECEIPT: PASS/FAIL` and exits non-zero on divergence. Both-config compiles and the gate run on the node; the receipt is committed as `m24_build_gate.txt`. |
++| **R.7** | `K0P6_M24_STRICT`'s sticky-`pperr` cascade (see R.2) — filed independently by the second lens with the additional observation that the poisoning is **permanent for the server's life**, not per-step. | **FIXED with R.2.** The additional observation is correct and is why the fix is "telemetry only" rather than "reset `pperr`": a sticky word is the right design for a protocol error, so M24 must not raise one for a condition the design classifies as expected. |
++
++### R3.2 Major — FIXED except R.7c, which is REBUTTED
++
++| # | finding (lens) | disposition |
++|---|---|---|
++| **R.4b** | No sanity clamp at the **consumer**: `k0p6_m24_teff` cast a raw u32 straight to `int`, so an unpublished/residue tail of `0xFFFFFFFF` becomes `-1`, every consuming loop runs zero times, no output row is written, `pperr` stays clean, and `ZERO_PAD` zeroes the whole `out` tensor — 58 layers of zeros with a clean receipt. §B.3 called the clamp load-bearing but placed it only at the producer, where it cannot protect against a value the producer never wrote. (conformance-race) | **FIXED.** `k0p6_m24_teff` now reads `T_cap` and returns `((unsigned)t > (unsigned)T_cap) ? T_cap : t` — one scalar compare, and it closes the whole class including the negative-cast case. |
++| **R.5b** | `K0P6_M24_ERR_REJECT` was `67108864`, **bit-for-bit `K0P6_MPS_ERR_SERVICE`** (`moe_mps_adapter.cuh:30`) in the same translation unit, silently, because the macro names differ. Every receipt rule that decodes bit 26 — exp_34/exp_30's mode-14 correctness receipt, and `moe_mps_adapter.cuh:917`'s live early-return in `wait_event_nonempty` — would mis-read one for the other in both directions. (buildgate-hardware) | **FIXED.** `K0P6_M24_ERR_REJECT` = 1<<29, `K0P6_M24_ERR_STRICT` = 1<<30. Bits 25..28 are taken (M7DONE / SERVICE / DUAL / CONFIG); 31 is avoided because `pperr` is a signed `int`. A test asserts no M24 bit aliases any of them. |
++| **R.6b** | pperr bit 26 was documented as "**non-fatal** telemetry", but the harness all-reduces `pperr` and blocks the arm on any nonzero value, so the designed graceful degradation is a hard arm failure. (conformance-race) | **FIXED as a documentation defect, deliberately not as a harness change.** The harness rule is **correct**: an arm whose payload was rejected measured the pre-M24 kernel, and quoting its ratio as a fill number is fairness item 3. The bit is now documented as **run-voiding telemetry**, the word "non-fatal" is gone, and the harness is left unmasked. |
++| **R.6c** | `attest_descriptor_words`'s `m24_plain` switch is all-or-nothing, so it handles exactly **two** descriptor shapes — plain M24, and M24 composed with STAGED+REPLICATE+ADAPTIVE+SLOTPOOL simultaneously. Every partial composition raises spurious blockers (M24+ADAPTIVE binds slot 64 ⇒ `m24_plain` False ⇒ M15-DESC-005 demands an M18R table the arm has no reason to bind ⇒ `refuse_if` aborts activation), making §H.8's composition arms unrunnable. The inverse hole also existed: a genuinely mis-bound M24+SLOTPOOL descriptor with 63..70 all zero skipped every M20 check. (both lenses) | **FIXED.** The inferred boolean is replaced by an explicit **`cascade_words`** argument — the pre-raise `K0P6_M15_D_LEN` (63 / 64 / 65 / 71) — which is what actually determines which slots a build claims. The M18/M19/M20 branches key on it; slots in `[cascade_words, 71)` must be **zero** (new `M15-DESC-015`); omitting it on an M24 build is itself a blocker (`M15-DESC-014`). All four compositions are asserted clean in `test_m24_fill.py`, and a default-0 arm's path is asserted unchanged. |
++| **R.7d** | The default compile check never built any NORIG pin: `M24_FULL` defaulted to 0, so `run_cfg base`/`fill` reported success while R0b's **blocking** `inert_4096` pin, arm D's **mandatory** skew pin, and the two constructs most likely to fail codegen were never compiled. The first time anyone would learn a blocking pin does not build is with the node claimed and the GPU window open. (both lenses) | **FIXED.** `M24_FULL` defaults to **1** — this is hipcc, i.e. CPU-only work, so there was never a reason to skip it. The matrix also gained the `NORIG_TABLE {0,...}` ladder point, the four composition builds (+STAGED / +REPLICATE / +ADAPTIVE / +SLOTPOOL), and a **negative** set (`neg_cfg`) asserting that NULLWORK-alone, STRICT-alone, `FILL` without `ZERO_PAD`, and both payload sources at once all **fail to build**, and fail for the right reason. |
++| **R.7a/b** | Arm D's `K0P6_M24_NORIG_TABLE` indexed a **function-local array with the runtime `cur`** (which comes from a bare volatile load the uniformity analysis cannot prove uniform), then applied an **SGPR-only** `"+s"` inline-asm constraint to the result. Either the array lands in scratch — `private_segment_fixed_size > 0`, an automatic fail of the no-spill assertion at occupancy-1 — or the `"+s"` constraint on a VGPR-resident value is a hard "illegal VGPR to SGPR copy" build error. (buildgate-hardware, conformance-race) | **FIXED.** The table read is a fully-unrolled `for (p = 0..7) if (p == cur) n_sub = tbl[p];` select chain with no memory operand, and the opacity barrier is `"+v"`, not `"+s"`. `"+v"` is also the constraint that makes the MoK pin *more* like the serving pin, which reaches that point with `n_self` in a VGPR loaded from memory. Both are now compiled by the default compile check (R.7d). |
++| **R.7c** | The `K0P6_M24_NULLWORK` predicate is **not CTA-uniform on the M2 rendezvous timeout path**: on timeout `tid==0` breaks without writing `s_total`, leaving it 0, so a timing-out CTA computes `null_work = true` while a CTA that saw the data computes `false` — a rank whose GEMM tile set is only partially computed while its slab certificates still publish, i.e. cluster-wide silent wrong output with clean receipts on 7 of 8 ranks. (buildgate-hardware) | **REBUTTED — the divergent CTA cannot reach any `null_work` guard — and a belt-and-braces guard added anyway.** Evidence, `k0pf6gm_device_tile_m15.hip`: the timeout branch at **:1706** sets `pperr` bit 16777216 *before* it breaks; `null_work` is computed at **:1735** but its first use is the M2 unpack guard at **:1802**; and between them, at **:1756-1760**, the M2 rendezvous `grid_barrier` is followed by `acquire_payload_agent()` and `if (hk_moe::error_bit_set_agent(pperr, 16777216 \| 8388608 \| 2097152)) return;`. `pperr` is a single agent-scope word, so after that barrier **every** CTA on the rank observes the bit the timing-out CTA set and **all** of them return — before the first guarded body, before `k0p6_sort::pad`, before M6/M7, and before any slab certificate is published. The failure scenario requires the timing-out CTA to proceed past :1760, which it cannot. The finding's underlying *principle* is correct and worth keeping loud, so the timeout branch now additionally sets `s_total = 0xFFFFFFFFu` under `#if K0P6_M24_NULLWORK` (a value no peer can publish, forcing `null_work` false); it is `NULLWORK`-gated, so the default build is untouched. |
++
++### R3.3 Minor — all FIXED
++
++* **R.8** — the checksum's "seed with the magic" was a no-op (the seed cancelled word 0 exactly, in both the device and host definitions). Word 0 is now excluded from the sum in both, and both comments say so. A test asserts the checksum is **not** the self-cancelling variant.
++* **R.9a** — `#if K0P6_D_M24_FILL >= 72` was a comparison between two literals fixed three lines apart and could never fire. Replaced with `#if K0P6_M15_D_LEN > K0P6_D_M24_FILL`, evaluated **before** the raise, which is the check that actually catches "a future arm reaches 71".
++* **R.9b** — `K0P6_M15_SRC_REV` is now bumped to 3 on the `K0P6_M24_FILL` branch (the bump lives after the M24 macro block, because `K0P6_M24_*` is not defined yet at the `SRC_REV` definition). Without it a stale `.hsaco` compiled from the pre-M24 body can be served for a fill arm.
++* **R.10** — `K0P6_M24_NULLWORK` gained the `#error` tying it to `FILL` that every other M24 macro already had, and its comment no longer claims to be "independent of FILL by construction" — with `FILL=0` it is provably inert, which is exactly the trap the `#error` closes.
++
++### R3.4 What the reviews changed about the plan
++
++1. **§B.3's host half is no longer a later work-list item.** It is a prerequisite of the *first*
++   MoK arm, because the rev-3 kernel validates for real in every pin. `m24_fill.py` +
++   `m24_mok_patch.py` land with the kernel, not after it.
++2. **"Fail closed" is a host property, not a device property.** Any device-side global action
++   taken on a per-rank observation is a non-unanimous collective. The device's only safe
++   response to a bad payload is to do *more* work; the host decides whether the run counts.
++3. **A MoK pin that skips a code path is not a MoK pin.** R.3's `reason = 0u` is the second time
++   this project built a candidate that did not run what it claimed. The §E cross-pin
++   resource-tuple equality check is the detector, and it only works if the pins genuinely
++   execute the same paths.
++4. **G9 parts 1-3 are still outstanding.** The `K0_MOK_COMPARE_ROWS` rel-err gate, the
++   `[0,N)`-restricted poison count, and the `_st_idx → N−1` self-test are unimplemented. They are
++   **blocking prerequisites for every fill arm** (A/B/C/D) and are *not* required for R0a or R0b,
++   which run at `T_eff = T_cap` and compare all 4,096 rows.
+diff --git a/distributed-kernels/fused_moe/overnight/aug18-prefill/m15_eplb0/m15_contracts.py b/distributed-kernels/fused_moe/overnight/aug18-prefill/m15_eplb0/m15_contracts.py
+index 0fa2179a..20625fad 100644
+--- a/distributed-kernels/fused_moe/overnight/aug18-prefill/m15_eplb0/m15_contracts.py
++++ b/distributed-kernels/fused_moe/overnight/aug18-prefill/m15_eplb0/m15_contracts.py
+@@ -146,11 +146,73 @@ class DescriptorSlot(int, Enum):
+     MPS_STATE = 60
+     MPS_SLOTS = 61
+     MPS_CFG = 62
++    # M24 fill-aware arm only (``K0P6_M24_FILL=1``): pointer to this layer's
++    # fill-vector buffer.  Slots 63..70 stay outside the enum -- they belong to
++    # the STAGED / REPLICATE / ADAPTIVE / SLOTPOOL arms and are validated by
++    # the branches in :func:`attest_descriptor_words`, which is also what keeps
++    # the enum walk below from indexing past a 63-word descriptor.
++    M24_FILL = 71
+ 
+ 
+ #: ``K0P6_MPS_D_LEN``; slot 63 exists only under ``K0P6_M15_STAGED=1``.
++#: DELIBERATELY STILL 63.  This is the default ``expected_words`` for every
++#: descriptor validation, so raising it would change host behaviour for
++#: default-0, non-M24 control arms whose kernel still compiles
++#: ``K0P6_M15_D_LEN = 63`` -- which would make the M24 campaign's own control
++#: arm no longer byte-for-byte the pre-M24 serving configuration and void the
++#: ``m15/patched-stock`` leg of the mandated three-way decomposition.
+ M15_DESCRIPTOR_WORDS = 63
+ 
++#: ``K0P6_M15_D_LEN`` under ``K0P6_M24_FILL=1``: the M24 raise (63/64/65/71 ->
++#: 72).  Pass it EXPLICITLY as ``expected_words`` on M24 builds only.  On a
++#: plain (non-composed) M24 build slots 63..70 are UNCLAIMED: the host must
++#: zero-fill them and the device never reads them.
++M15_DESCRIPTOR_WORDS_M24 = 72
++
++#: M24 fill-vector buffer (one per layer, int32, device, 16-byte aligned):
++#: ``8`` header words + ``world`` ``n_orig`` words + a ``4``-word DEVICE-OWNED
++#: tail that the on-stream pre-op's ``32 + 4*world`` byte record never covers
++#: and that ``M0``'s ``mps_state`` zeroing never touches.
++#:   header: ``[0] magic  [1] gen  [2] flags  [3] csum  [4] gen_echo  [5..7] rsv``
++#:   then    ``[8 + p] n_orig[p]`` for ``p in range(world)``
++#:   tail:   ``[8+world+0] last_seen_gen  [+1] agreed_T_eff``
++#:           ``[+2] agreed_flags  [+3] rsv``
++M24_FILL_HEADER_WORDS = 8
++M24_FILL_TAIL_WORDS = 4
++#: ``K0P6_M24_MAGIC`` -- ASCII ``"M24F"``.
++M24_FILL_MAGIC = 0x4D323446
++
++
++def m24_fill_buffer_words(world: int) -> int:
++    """int32 words in one layer's M24 fill buffer (header + n_orig + tail)."""
++    return M24_FILL_HEADER_WORDS + int(world) + M24_FILL_TAIL_WORDS
++
++
++def m24_fill_buffer_bytes(world: int) -> int:
++    """Bytes in one layer's M24 fill buffer: ``32 + 4*world + 16``."""
++    return 4 * m24_fill_buffer_words(world)
++
++
++def m24_fill_checksum(gen: int, flags: int, n_orig: "list[int] | tuple[int, ...]") -> int:
++    """The ``csum`` word the device pre-op must write.
++
++    Authoritative definition, mirrored by ``k0p6_m24_publish`` in
++    ``k0pf6gm_device_tile_m15.hip``: seed with the magic, then xor ``gen``
++    (word 1), ``flags`` (word 2) and every ``n_orig`` word.
++
++    Word 0 is deliberately NOT in the sum (rev 3 review fix R.8).  It is the
++    magic on any payload that got past the magic test, so xoring it in
++    cancelled the seed exactly -- the "seeded with the magic" property both
++    this docstring and the kernel comment claimed did not exist, and a future
++    header-layout change could have relied on it.
++    """
++    acc = M24_FILL_MAGIC            # seed (word 0 is NOT xored in)
++    acc ^= int(gen) & 0xFFFFFFFF    # word[1]
++    acc ^= int(flags) & 0xFFFFFFFF  # word[2]
++    for value in n_orig:
++        acc ^= int(value) & 0xFFFFFFFF
++    return acc & 0xFFFFFFFF
++
+ #: Slots holding a plain integer value rather than a device address.
+ SCALAR_SLOTS = frozenset(
+     {
+@@ -570,9 +632,20 @@ def buffer_table(
+     elide_part: bool = False,
+     adaptive: bool = False,
+     m20: bool = False,
++    m24: bool = False,
+ ) -> tuple[BufferSpec, ...]:
+     """Every descriptor-bound allocation, in a rank-deterministic order.
+ 
++    ``m24`` appends the fill-vector buffer (slot 71) that the M24 fill-aware
++    arm requires.  It is rank-LOCAL, not symmetric, and it is appended LAST so
++    every earlier entry keeps its position.  Its ``zero=True`` is
++    load-bearing, not hygiene: the device-owned tail word ``last_seen_gen``
++    is READ by the very first launch (``k0p6_m24_publish``) and written only
++    on an accepted step, so allocator residue >= the first ``gen`` makes every
++    step reject with ``RJ_STALE``, silently running the pre-M24 kernel in an
++    arm labelled M24 -- the project's named past sin (candidate never actually
++    ran) with no receipt able to detect it.
++
+     ``elide_part`` drops the 560 MiB ``part`` tower, which
+     :func:`part_is_dead` proves is never dereferenced at mode 12 with the skip
+     bit set.  Slot 21 then carries a null word -- the same value the kernel
+@@ -998,6 +1071,30 @@ def buffer_table(
+             if m20
+             else ()
+         ),
++        # M24 only, appended LAST.  ONE PER LAYER -- this spec describes a
++        # single layer's buffer and the caller allocates ``num_layers`` of
++        # them, exactly as it does for the per-layer descriptors.  Rank-local,
++        # 16-byte aligned (the device entry guard refuses anything else; the
++        # torch caching allocator's 256-byte base guarantees it).  MUST be
++        # zeroed: see the ``m24`` note in this function's docstring.
++        *(
++            (
++                BufferSpec(
++                    DescriptorSlot.M24_FILL,
++                    "m24_fill",
++                    m24_fill_buffer_words(bucket.world),
++                    4,
++                    "int32",
++                    False,
++                    True,
++                    "M24 fill vector, ONE PER LAYER: 8 header + world n_orig "
++                    "+ 4 device-owned tail words; host writes only the first "
++                    "8+world, the device owns the tail",
++                ),
++            )
++            if m24
++            else ()
++        ),
+     )
+ 
+ 
+@@ -1288,6 +1385,7 @@ def attest_descriptor_words(
+     spin_limit: int = M15_SPIN_LIMIT,
+     part_elided: bool = False,
+     expected_words: int = M15_DESCRIPTOR_WORDS,
++    cascade_words: int | None = None,
+ ) -> list[ActivationBlocker]:
+     """Check the scalar slots of a fully built descriptor vector.
+ 
+@@ -1299,6 +1397,28 @@ def attest_descriptor_words(
+     arm (slot 63 = the M18R table pointer, checked non-null below like every
+     other pointer slot the enum names -- slot 63 itself is outside the enum
+     and validated by the device entry guard's magic/nrep check instead).
++    It is :data:`M15_DESCRIPTOR_WORDS_M24` (72) for an M24 fill-aware build,
++    which must be passed EXPLICITLY: the module default stays 63 so a
++    default-0 control arm's descriptor path is provably unchanged.
++
++    ``cascade_words`` is the length the kernel's ``K0P6_M15_D_LEN`` cascade
++    produced BEFORE M24's raise-not-redefine block: 63 for a plain M24 build,
++    64 with STAGED/REPLICATE/SAVE_Z, 65 with +ADAPTIVE, 71 with +SLOTPOOL.  It
++    is required on M24 builds and ignored otherwise.
++
++    REV 3 REVIEW FIX R.6/R.8b -- why an explicit ``cascade_words`` and not an
++    inferred flag.  The first implementation inferred a single boolean,
++    ``m24_plain = all(words[63..70] == 0)``, and skipped the M18/M19/M20
++    branches wholesale on it.  Because ``expected_words`` is 72 for EVERY M24
++    build, that handled exactly two descriptor shapes -- plain M24, and M24
++    composed with STAGED+REPLICATE+ADAPTIVE+SLOTPOOL all at once -- and raised
++    spurious blockers for every partial composition (M24+ADAPTIVE binds slot
++    64, so ``m24_plain`` is False, so M15-DESC-005 demands an M18R table the
++    arm has no reason to bind and ``refuse_if`` aborts activation).  It also
++    had the inverse hole: a genuinely mis-bound M24+SLOTPOOL descriptor with
++    63..70 all zero set ``m24_plain`` True and skipped every M20 check
++    silently.  The cascade length is the thing that actually determines which
++    slots are claimed, so the caller states it.
+     """
+ 
+     out: list[ActivationBlocker] = []
+@@ -1311,7 +1431,66 @@ def attest_descriptor_words(
+             )
+         )
+         return out
+-    if expected_words > M15_DESCRIPTOR_WORDS and int(words[63]) == 0:
++    # M24 raises K0P6_M15_D_LEN to 72 from whatever the composition cascade
++    # produced; `claimed` is how far the cascade itself reached, i.e. which of
++    # slots 63..70 this build's kernel actually reads.  Everything at or above
++    # `claimed` and below 71 is UNCLAIMED and must be zero.
++    m24_build = expected_words >= M15_DESCRIPTOR_WORDS_M24
++    if m24_build:
++        if cascade_words is None:
++            out.append(
++                _blocker(
++                    "M15-DESC-014",
++                    "an M24 descriptor was attested without cascade_words",
++                    "the caller must state the pre-raise K0P6_M15_D_LEN (63 "
++                    "plain, 64 STAGED/REPLICATE, 65 +ADAPTIVE, 71 +SLOTPOOL) "
++                    "so the M18/M19/M20 slot checks apply to exactly the "
++                    "slots this build claims",
++                )
++            )
++            return out
++        claimed = int(cascade_words)
++        if claimed < M15_DESCRIPTOR_WORDS or claimed > int(
++            DescriptorSlot.M24_FILL
++        ):
++            out.append(
++                _blocker(
++                    "M15-DESC-014",
++                    f"cascade_words={claimed} is not a legal pre-raise "
++                    "K0P6_M15_D_LEN",
++                    "63, 64, 65 or 71 -- anything above 71 means another arm "
++                    "claims the M24 fill slot and the kernel's own #error "
++                    "would have refused the build",
++                )
++            )
++            return out
++        fill_ptr = int(words[int(DescriptorSlot.M24_FILL)])
++        if fill_ptr == 0 or fill_ptr % 16:
++            out.append(
++                _blocker(
++                    "M15-DESC-013",
++                    f"M24 descriptor slot 71 (fill vector) is {fill_ptr:#x}",
++                    "a 16-byte-aligned per-layer fill buffer of "
++                    f"{m24_fill_buffer_bytes(bucket.world)} bytes "
++                    "(32 + 4*world header + a 16-byte device-owned tail)",
++                )
++            )
++        for unclaimed in range(claimed, int(DescriptorSlot.M24_FILL)):
++            if int(words[unclaimed]) != 0:
++                out.append(
++                    _blocker(
++                        "M15-DESC-015",
++                        f"descriptor slot {unclaimed} is "
++                        f"{int(words[unclaimed]):#x} but this build's cascade "
++                        f"stops at {claimed}",
++                        "zero in every slot the kernel does not compile -- a "
++                        "non-zero word there is a mis-built descriptor, and "
++                        "the device never reads it",
++                    )
++                )
++    else:
++        claimed = expected_words
++    if claimed > M15_DESCRIPTOR_WORDS and int(words[63]) == 0:
+         out.append(
+             _blocker(
+                 "M15-DESC-005",
+@@ -1319,7 +1498,7 @@ def attest_descriptor_words(
+                 "a bound M18R table before any descriptor commit",
+             )
+         )
+-    if expected_words > 64 and int(words[64]) == 0:
++    if claimed > 64 and int(words[64]) == 0:
+         out.append(
+             _blocker(
+                 "M15-DESC-006",
+@@ -1327,7 +1506,7 @@ def attest_descriptor_words(
+                 "the symmetric decision words carved with the ring slot",
+             )
+         )
+-    if expected_words > 65:
++    if claimed > 65:
+         # M20: slot 65 (DECIN) and the four pool bases (66..69) must be
+         # bound; the device entry guard refuses them independently.  Slot 70
+         # (prefetch duty) is deliberately nullable — cache mode passes 0 and
+@@ -1378,6 +1557,12 @@ def attest_descriptor_words(
+                 )
+             )
+     for slot in DescriptorSlot:
++        if int(slot) >= expected_words:
++            # A slot this build's kernel does not compile (today only slot 71,
++            # the M24 fill vector, which exists solely under K0P6_M24_FILL=1).
++            # No enum member below 63 can reach this, so a default-0 arm walks
++            # exactly the slots it walked before M24.
++            continue
+         if slot in SCALAR_SLOTS:
+             continue
+         if slot is DescriptorSlot.PART and part_elided:
+diff --git a/distributed-kernels/fused_moe/overnight/aug18-prefill/m15_eplb0/m24_fill.py b/distributed-kernels/fused_moe/overnight/aug18-prefill/m15_eplb0/m24_fill.py
+new file mode 100644
+index 00000000..6dd4bbc6
+--- /dev/null
++++ b/distributed-kernels/fused_moe/overnight/aug18-prefill/m15_eplb0/m24_fill.py
+@@ -0,0 +1,433 @@
++"""M24 fill-vector host plumbing: allocate, bind, and write the payload.
++
++This is the host half of ``FILL_AWARE_DESIGN.md`` section B.3 (work-list G12 /
++G13b).  It was entirely missing from the first M24 implementation, which is why
++both adversarial reviews returned a blocking finding: the kernel's
++``K0P6_M24_FILL=1`` path reads descriptor slot 71 and dereferences it, and
++nothing in either repository allocated a buffer, bound the slot, or wrote a
++payload.  A 63-word descriptor plus an unconditional ``desc[71]`` read is an
++out-of-bounds device read 72 bytes past the tensor, and -- because
++``k0p6_m24_publish`` also STORES through that pointer -- a wild device write on
++all 8 GPUs whenever the residue happened to look like a 16-byte-aligned
++non-null address.
++
++Three consumers, one definition:
++
++* the MoK harness (``m24_mok_patch.py`` wires this module into
++  ``e004pf_k0pf_ab.py``),
++* the serving shim (``m15_runtime.py`` on the node, work-list G13b -- which
++  writes the same record from a device kernel instead of a host copy so the
++  op is capturable; the ENCODING below is what that kernel must produce),
++* the offline tests (``m24/test_m24_fill.py``), which re-implement the DEVICE
++  validator in Python and prove the two agree.
++
++Buffer layout (int32 words, one buffer PER LAYER, 16-byte aligned)::
++
++    [0]            magic     0x4D323446 "M24F"
++    [1]            gen       monotonic, >= 1, one per mega-eligible model step
++    [2]            flags     bit0 = fill-aware requested this step
++    [3]            csum      MAGIC ^ gen ^ flags ^ n_orig[0..world)
++    [4]            gen_echo  duplicate of gen (tear detector)
++    [5..7]         reserved (zero)
++    [8 + p]        n_orig[p] for p in range(world)
++    ---- DEVICE-OWNED TAIL: the host writes it exactly ONCE, at allocation,
++         by zeroing.  Never again. ----
++    [8+world+0]    last_seen_gen   per-layer consume-once token
++    [8+world+1]    agreed_T_eff    the grid-uniform broadcast
++    [8+world+2]    agreed_flags
++    [8+world+3]    reserved
++
++The zeroing is load-bearing, not hygiene.  ``last_seen_gen`` is READ by the
++very first launch and written only on an accepted step, so allocator residue
++>= the first ``gen`` (0xDEADBEEF out of a recycled caching-allocator block is
++the common case) makes every step reject with ``RJ_STALE``, and the arm
++silently runs the pre-M24 kernel while reporting itself as M24 -- the project's
++named past sin, with no receipt able to detect it.
++
++This module deliberately imports ``torch`` lazily so the encoding, the
++checksum and the validator mirror can be tested on a laptop.
++"""
++
++from __future__ import annotations
++
++from dataclasses import dataclass
++from typing import Sequence
++
++#: ``K0P6_M24_MAGIC`` -- ASCII ``"M24F"``.
++M24_FILL_MAGIC = 0x4D323446
++#: Header words before the ``n_orig`` vector.
++M24_FILL_HEADER_WORDS = 8
++#: The DEVICE-OWNED tail the host writes exactly once, by zeroing.
++M24_FILL_TAIL_WORDS = 4
++
++# DELIBERATELY SELF-CONTAINED.  ``m15_contracts`` is a member of the deployed
++# ``pf4h_integration`` package and imports two siblings that exist only on the
++# node, so importing it here would make this module unusable from the MoK
++# harness and from a laptop test.  The definitions are duplicated instead and
++# CROSS-CHECKED below whenever m15_contracts does happen to be importable, so
++# a drift between the two is a loud AssertionError rather than a silent
++# checksum mismatch that the device reports as RJ_CSUM.
++
++
++def m24_fill_buffer_words(world: int) -> int:
++    """int32 words in one layer's M24 fill buffer (header + n_orig + tail)."""
++    return M24_FILL_HEADER_WORDS + int(world) + M24_FILL_TAIL_WORDS
++
++
++def m24_fill_buffer_bytes(world: int) -> int:
++    """Bytes in one layer's M24 fill buffer: ``32 + 4*world + 16``."""
++    return 4 * m24_fill_buffer_words(world)
++
++
++def m24_fill_checksum(
++    gen: int, flags: int, n_orig: "Sequence[int]"
++) -> int:
++    """``csum``: seed with the magic, xor gen, flags and every ``n_orig``.
++
++    Word 0 is NOT in the sum: it IS the magic on any payload that clears the
++    magic test, so xoring it in would cancel the seed exactly (rev 3 review
++    fix R.8).  Mirrored by ``k0p6_m24_publish``.
++    """
++    acc = M24_FILL_MAGIC
++    acc ^= int(gen) & 0xFFFFFFFF
++    acc ^= int(flags) & 0xFFFFFFFF
++    for value in n_orig:
++        acc ^= int(value) & 0xFFFFFFFF
++    return acc & 0xFFFFFFFF
++
++
++def _cross_check_contracts() -> None:
++    """Assert this module and ``m15_contracts`` cannot drift apart."""
++    try:
++        from .m15_contracts import (  # type: ignore[import-not-found]
++            M24_FILL_HEADER_WORDS as _H,
++            M24_FILL_MAGIC as _M,
++            M24_FILL_TAIL_WORDS as _T,
++            m24_fill_checksum as _csum,
++        )
++    except Exception:  # noqa: BLE001 - any import failure means "not here"
++        return
++    assert (_M, _H, _T) == (
++        M24_FILL_MAGIC,
++        M24_FILL_HEADER_WORDS,
++        M24_FILL_TAIL_WORDS,
++    ), "m24_fill and m15_contracts disagree on the fill-buffer layout"
++    probe = [1539, 0, 4096, 7, 7, 7, 7, 7]
++    assert _csum(3, 1, probe) == m24_fill_checksum(3, 1, probe), (
++        "m24_fill and m15_contracts disagree on the fill-vector checksum"
++    )
++
++
++_cross_check_contracts()
++
++__all__ = [
++    "M24_FILL_ALIGNMENT",
++    "M24_DESCRIPTOR_WORDS",
++    "M24_FILL_SLOT",
++    "RejectReason",
++    "encode_fill_header",
++    "descriptor_with_fill_slot",
++    "validate_payload_mirror",
++    "M24FillVector",
++]
++
++#: The device entry guard refuses anything else (``desc[71] & 15``).
++M24_FILL_ALIGNMENT = 16
++#: ``K0P6_D_M24_FILL``.
++M24_FILL_SLOT = 71
++#: ``K0P6_M15_D_LEN`` after M24's raise-not-redefine block.
++M24_DESCRIPTOR_WORDS = 72
++
++_U32 = 0xFFFFFFFF
++
++
++class RejectReason:
++    """Mirror of the ``K0P6_M24_RJ_*`` codes, in the device's test order."""
++
++    ACCEPT = 0
++    MAGIC = 1
++    TEAR = 2
++    CSUM = 3
++    FLAGS = 4
++    STALE = 5
++    RANGE = 6
++
++
++def encode_fill_header(
++    gen: int,
++    n_orig: Sequence[int],
++    *,
++    world: int | None = None,
++    flags: int = 1,
++) -> list[int]:
++    """The ``8 + world`` int32 words the pre-op writes.  Never the tail.
++
++    ``gen`` must be >= 1 and strictly increasing per layer buffer: the device
++    rejects ``gen <= last_seen_gen`` as stale.  ``flags`` bit 0 must be set or
++    the device rejects with ``RJ_FLAGS`` -- clearing it is the deliberate
++    "run this step at the padded capacity" escape.
++    """
++    values = [int(v) for v in n_orig]
++    if world is None:
++        world = len(values)
++    if len(values) != world:
++        raise ValueError(f"n_orig has {len(values)} entries, world is {world}")
++    if int(gen) <= 0 or int(gen) > _U32:
++        raise ValueError(f"gen must be in [1, 2**32-1]; got {gen}")
++    if any(v < 0 or v > _U32 for v in values):
++        raise ValueError(f"n_orig out of u32 range: {values}")
++    gen = int(gen) & _U32
++    flags = int(flags) & _U32
++    words = [0] * (M24_FILL_HEADER_WORDS + world)
++    words[0] = M24_FILL_MAGIC
++    words[1] = gen
++    words[2] = flags
++    words[3] = m24_fill_checksum(gen, flags, values)
++    words[4] = gen                      # gen_echo
++    # words[5..7] stay zero (reserved).
++    for p, value in enumerate(values):
++        words[M24_FILL_HEADER_WORDS + p] = value & _U32
++    return words
++
++
++def descriptor_with_fill_slot(
++    cascade_words: Sequence[int], fill_ptr: int
++) -> list[int]:
++    """Extend a cascade-length descriptor to the 72 words an M24 build reads.
++
++    ``cascade_words`` is the descriptor the composition cascade already built
++    (63 plain, 64 with STAGED/REPLICATE, 65 with +ADAPTIVE, 71 with
++    +SLOTPOOL).  Slots between its end and 71 are UNCLAIMED by this build and
++    are zero-filled: the kernel never reads them, and
++    ``m15_contracts.attest_descriptor_words`` refuses a non-zero word there.
++    """
++    words = [int(w) for w in cascade_words]
++    if len(words) > M24_FILL_SLOT:
++        raise ValueError(
++            f"cascade produced {len(words)} words, so another arm already "
++            f"claims slot {M24_FILL_SLOT}; the kernel's own #error refuses "
++            "this build"
++        )
++    if int(fill_ptr) == 0 or int(fill_ptr) % M24_FILL_ALIGNMENT:
++        raise ValueError(
++            f"fill buffer pointer {fill_ptr:#x} must be non-null and "
++            f"{M24_FILL_ALIGNMENT}-byte aligned (the device entry guard "
++            "fails closed on anything else)"
++        )
++    words.extend([0] * (M24_FILL_SLOT - len(words)))
++    words.append(int(fill_ptr))
++    assert len(words) == M24_DESCRIPTOR_WORDS
++    return words
++
++
++def validate_payload_mirror(
++    buffer_words: Sequence[int],
++    *,
++    cur: int,
++    world: int,
++    maxtok: int,
++    t_cap: int,
++    tgrain: int = 256,
++) -> tuple[int, int]:
++    """Python mirror of ``k0p6_m24_publish``.  Returns ``(reason, T_eff)``.
++
++    Kept in the same order as the device's ``if/else if`` chain so a test can
++    assert both the accept/reject verdict AND which reason fires first.  The
++    saturating round-up mirrors ``k0p6_m24_round_up_sat``.
++    """
++    words = [int(w) & _U32 for w in buffer_words]
++    need = M24_FILL_HEADER_WORDS + world + M24_FILL_TAIL_WORDS
++    if len(words) != need:
++        raise ValueError(f"buffer has {len(words)} words, expected {need}")
++    magic, gen, flags, csum, gen_echo = words[0:5]
++    n_orig = words[M24_FILL_HEADER_WORDS : M24_FILL_HEADER_WORDS + world]
++    last_gen = words[M24_FILL_HEADER_WORDS + world + 0]
++
++    acc = M24_FILL_MAGIC ^ gen ^ flags
++    range_ok = True
++    n_self = 0
++    for p, value in enumerate(n_orig):
++        acc ^= value
++        if value > maxtok:
++            range_ok = False
++        if p == cur:
++            n_self = value
++    acc &= _U32
++
++    if magic != M24_FILL_MAGIC:
++        reason = RejectReason.MAGIC
++    elif gen_echo != gen:
++        reason = RejectReason.TEAR
++    elif acc != csum:
++        reason = RejectReason.CSUM
++    elif (flags & 1) == 0:
++        reason = RejectReason.FLAGS
++    elif gen <= last_gen:
++        reason = RejectReason.STALE
++    elif not range_ok:
++        reason = RejectReason.RANGE
++    else:
++        reason = RejectReason.ACCEPT
++
++    if reason != RejectReason.ACCEPT:
++        return reason, t_cap
++    return reason, _round_up_sat(n_self, tgrain, t_cap)
++
++
++def _as_i32(word: int) -> int:
++    """u32 -> the signed value torch.int32 stores.  The magic and most
++    checksums exceed 2**31, so this is not optional."""
++    word &= _U32
++    return word - (1 << 32) if word >= (1 << 31) else word
++
++
++def _round_up_sat(n: int, grain: int, cap: int) -> int:
++    if cap <= 0 or n <= 0:
++        return 0
++    if n >= cap:
++        return cap
++    r = ((n + grain - 1) // grain) * grain
++    return cap if r >= cap else r
++
++
++@dataclass
++class _LayerBuffer:
++    tensor: object
++    pointer: int
++    gen: int
++
++
++class M24FillVector:
++    """One zeroed fill buffer per layer, plus the per-step write.
++
++    Usage (MoK harness and shim alike)::
++
++        fill = M24FillVector(world=WORLD, num_layers=1, maxtok=MAXTOK)
++        desc = descriptor_with_fill_slot(cascade_desc, fill.pointer(0))
++        ...
++        fill.write(0, n_orig)           # ON THE MEGA'S STREAM, before launch
++        launch_mega(desc)
++
++    ``write`` is stream-ordered against the launch that follows it, which is
++    what makes the tear detector unnecessary on the primary path -- it exists
++    for a future writer that is not stream-ordered with the mega.
++    """
++
++    def __init__(
++        self,
++        *,
++        world: int,
++        num_layers: int = 1,
++        maxtok: int = 4096,
++        device: str = "cuda",
++        torch_module: object | None = None,
++    ) -> None:
++        if torch_module is None:  # pragma: no cover - node-only path
++            import torch as torch_module  # type: ignore[no-redef]
++        self._torch = torch_module
++        self.world = int(world)
++        self.maxtok = int(maxtok)
++        self.num_layers = int(num_layers)
++        self._words = m24_fill_buffer_words(self.world)
++        self._header_words = M24_FILL_HEADER_WORDS + self.world
++        self._layers: list[_LayerBuffer] = []
++        for _ in range(self.num_layers):
++            # zeros(), never empty(): the device-owned tail's last_seen_gen is
++            # read on the FIRST launch.  See the module docstring.
++            tensor = self._torch.zeros(
++                self._words, dtype=self._torch.int32, device=device
++            )
++            pointer = int(tensor.data_ptr())
++            if pointer % M24_FILL_ALIGNMENT:
++                raise RuntimeError(
++                    f"M24 fill buffer at {pointer:#x} is not "
++                    f"{M24_FILL_ALIGNMENT}-byte aligned; the device entry "
++                    "guard fails closed on it"
++                )
++            self._layers.append(_LayerBuffer(tensor, pointer, 0))
++        # Pinned host staging for the header write.  One small H2D copy per
++        # launch beats a kernel launch, and it is the same order of magnitude
++        # as the descriptor writes the shim already does out of capture.
++        self._staging = self._torch.zeros(
++            self._header_words, dtype=self._torch.int32, pin_memory=True
++        )
++        # The payload is constant across launches in every MoK arm and across
++        # most serving steps, so the full encode runs only when it changes and
++        # a repeat write touches exactly three scalars (gen, csum, gen_echo).
++        # This matters: the pre-op sits INSIDE the timed region, and a
++        # per-launch Python re-encode plus tensor construction would be tens of
++        # microseconds of host work able to starve the device in a tight loop.
++        self._cached_payload: tuple[tuple[int, ...], int] | None = None
++
++    def nbytes(self) -> int:
++        return m24_fill_buffer_bytes(self.world)
++
++    def pointer(self, layer: int = 0) -> int:
++        return self._layers[layer].pointer
++
++    def pointers(self) -> list[int]:
++        return [entry.pointer for entry in self._layers]
++
++    def current_gen(self, layer: int = 0) -> int:
++        return self._layers[layer].gen
++
++    def write(
++        self,
++        layer: int,
++        n_orig: Sequence[int],
++        *,
++        gen: int | None = None,
++        flags: int = 1,
++        non_blocking: bool = True,
++    ) -> int:
++        """Write one step's payload into ``layer``'s buffer.  Returns ``gen``.
++
++        The default ``gen`` is this layer's previous value plus one, which is
++        exactly the device's consume-once contract.  Passing ``gen`` is for
++        tests that need to reproduce a stale or replayed payload.
++        """
++        entry = self._layers[layer]
++        if gen is None:
++            gen = entry.gen + 1
++        key = (tuple(int(v) for v in n_orig), int(flags))
++        if self._cached_payload != key:
++            words = encode_fill_header(
++                gen, n_orig, world=self.world, flags=flags
++            )
++            self._staging.copy_(
++                self._torch.tensor(
++                    [_as_i32(w) for w in words], dtype=self._torch.int32
++                )
++            )
++            self._cached_payload = key
++        else:
++            csum = m24_fill_checksum(gen, flags, key[0])
++            self._staging[1] = _as_i32(gen & _U32)
++            self._staging[3] = _as_i32(csum)
++            self._staging[4] = _as_i32(gen & _U32)
++        entry.tensor[: self._header_words].copy_(
++            self._staging, non_blocking=non_blocking
++        )
++        entry.gen = gen
++        return gen
++
++    def write_all(
++        self, n_orig: Sequence[int], *, flags: int = 1
++    ) -> list[int]:
++        return [
++            self.write(layer, n_orig, flags=flags)
++            for layer in range(self.num_layers)
++        ]
++
++    def read_tail(self, layer: int = 0) -> dict[str, int]:
++        """Host-side read of the device-owned tail, for receipts (G15).
++
++        Synchronising; never call it on the timed path.
++        """
++        entry = self._layers[layer]
++        tail = entry.tensor[self._header_words :].tolist()
++        return {
++            "last_seen_gen": int(tail[0]) & _U32,
++            "agreed_T_eff": int(tail[1]) & _U32,
++            "agreed_flags": int(tail[2]) & _U32,
++        }
+diff --git a/distributed-kernels/fused_moe/overnight/aug18-prefill/m24/m24_mok_patch.py b/distributed-kernels/fused_moe/overnight/aug18-prefill/m24/m24_mok_patch.py
+new file mode 100644
+index 00000000..00ad5f36
+--- /dev/null
++++ b/distributed-kernels/fused_moe/overnight/aug18-prefill/m24/m24_mok_patch.py
+@@ -0,0 +1,275 @@
++#!/usr/bin/env python3
++"""Wire the M24 fill vector into the MoK harness.  Anchor-exact, idempotent.
++
++WHY THIS EXISTS.  ``K0P6_M24_FILL=1`` makes the megakernel read descriptor
++slot 71, dereference it, and STORE through it.  The MoK harness builds a
++63..71-word descriptor and knows nothing about slot 71, so before this patch
++every fill arm read 72 bytes past the descriptor tensor and, whenever the
++residue happened to look like a non-null 16-byte-aligned address, wrote through
++it on all 8 GPUs.  Both adversarial reviews returned this as blocking.
++
++It also closes the second half of the same hole.  The rev-3 kernel no longer
++short-circuits its validation under ``NORIG_CONST`` / ``NORIG_TABLE`` -- the
++MoK binary now runs the SAME validate/reject/publish path as the serving
++binary, which is the entire point of the section-D "the MoK binary is the
++shipping binary" box.  That means a MoK arm needs a genuinely valid, genuinely
++fresh payload before every launch, exactly as serving does.  Without it every
++step would reject with ``RJ_STALE`` after the first, fall back to the padded
++capacity, and the arm would silently measure the pre-M24 kernel.
++
++WHAT IT CHANGES (four hunks, all no-ops unless ``K0_M24_FILL`` is set):
++
++  1. a helper block after ``sp()``: lazily imports ``m24_fill`` from the DHK
++     checkout and allocates the per-layer buffer;
++  2. the MPS descriptor build: extends the cascade descriptor to 72 words with
++     slot 71 bound and every unclaimed slot zeroed;
++  3. ``_expected_mps_words``: 72 on a fill build, so the harness's own drift
++     assertion still fires on a mis-built descriptor;
++  4. ``_pf6mps_mega``: the on-stream pre-op, issued on the SAME stream as the
++     launch that follows it.
++
++ENV:
++  ``K0_M24_FILL=1``        turn the plumbing on (must match the pin's macros)
++  ``K0_M24_NORIG=a,b,...`` the per-rank n_orig payload (default: MAXTOK on
++                           every rank, i.e. full fill -- the value the
++                           NORIG_CONST/NORIG_TABLE pins override on-device)
++  ``K0_M24_SHIM_DIR``      where ``m24_fill.py`` lives (default: derived from
++                           ``DHK_ROOT``)
++
++Usage:
++    python3 m24_mok_patch.py [--check] [PATH_TO_e004pf_k0pf_ab.py]
++
++Exit codes: 0 applied or already applied, 2 anchor mismatch / refusal.
++"""
++
++from __future__ import annotations
++
++import argparse
++import ast
++import os
++import sys
++from pathlib import Path
++
++MARKER = "PF4H_M24_MOK_FILL_V1"
++
++DEFAULT_TARGET = (
++    "~/amd-master/auto-gpu-kernel/k0_fused_moe/prefill_opt/host/"
++    "e004pf_k0pf_ab.py"
++)
++
++# --------------------------------------------------------------------------
++# Hunk 1 -- the helper block, appended after sp().
++# --------------------------------------------------------------------------
++ANCHOR_SP = "def sp(): return torch.cuda.current_stream().cuda_stream"
++
++BLOCK_HELPER = f'''
++
++# ---- {MARKER} ------------------------------------------------------------
++# M24 fill vector for the MoK arms.  Inert unless K0_M24_FILL is set, and the
++# ONLY thing it does when set is give the kernel a valid payload to validate --
++# the fill EFFECT comes from the pin's K0P6_M24_NORIG_* macros, never from
++# here, so this block is identical across the whole ladder.
++_K0_M24_FILL = None
++_K0_M24_NORIG = None
++
++
++def _k0_m24_enabled():
++    return os.environ.get("K0_M24_FILL", "").strip() not in ("", "0")
++
++
++def _k0_m24_init(world, maxtok):
++    """Allocate the per-layer fill buffer.  Returns None when M24 is off."""
++    global _K0_M24_FILL, _K0_M24_NORIG
++    if not _k0_m24_enabled():
++        return None
++    if _K0_M24_FILL is not None:
++        return _K0_M24_FILL
++    shim = os.environ.get("K0_M24_SHIM_DIR", "").strip()
++    if not shim:
++        root = os.environ.get("DHK_ROOT", "").strip()
++        if not root:
++            raise RuntimeError(
++                "K0_M24_FILL is set but neither K0_M24_SHIM_DIR nor DHK_ROOT "
++                "is; the pin discipline requires an explicit DHK_ROOT anyway "
++                "(DECOMP_RUNBOOK 4.2)"
++            )
++        shim = os.path.join(
++            os.path.expanduser(root),
++            "distributed-kernels/fused_moe/overnight/aug18-prefill/m15_eplb0",
++        )
++    if shim not in sys.path:
++        sys.path.insert(0, shim)
++    import m24_fill as _m24
++    raw = os.environ.get("K0_M24_NORIG", "").strip()
++    if raw:
++        vals = [int(x) for x in raw.replace(",", " ").split()]
++        if len(vals) == 1:
++            vals = vals * int(world)
++    else:
++        # Full fill.  The device-side substitution pins are what move the
++        # ladder; the harness payload only has to be VALID.
++        vals = [int(maxtok)] * int(world)
++    if len(vals) != int(world):
++        raise RuntimeError(
++            "K0_M24_NORIG has %d entries, world is %d" % (len(vals), world)
++        )
++    if any(v < 0 or v > int(maxtok) for v in vals):
++        raise RuntimeError(
++            "K0_M24_NORIG entries must be in [0, MAXTOK=%d]; got %r"
++            % (maxtok, vals)
++        )
++    _K0_M24_NORIG = vals
++    _K0_M24_FILL = _m24.M24FillVector(
++        world=int(world), num_layers=1, maxtok=int(maxtok),
++        torch_module=torch,
++    )
++    print("[M24] fill vector at %#x, n_orig=%r" % (
++        _K0_M24_FILL.pointer(0), vals), flush=True)
++    return _K0_M24_FILL
++
++
++def _k0_m24_preop(stream):
++    """One step's payload, ON THE LAUNCH'S STREAM.  ~2 us, inside timing."""
++    if _K0_M24_FILL is None:
++        return
++    cur = torch.cuda.current_stream()
++    if int(cur.cuda_stream) == int(stream):
++        _K0_M24_FILL.write(0, _K0_M24_NORIG)
++    else:
++        with torch.cuda.stream(torch.cuda.ExternalStream(int(stream))):
++            _K0_M24_FILL.write(0, _K0_M24_NORIG)
++# ---- end {MARKER} --------------------------------------------------------
++'''
++
++# --------------------------------------------------------------------------
++# Hunk 2 -- extend the MPS descriptor before it becomes a tensor.
++# --------------------------------------------------------------------------
++ANCHOR_DESC = (
++    '                pf6_state["desc_mps"] = torch.tensor(\n'
++    "                    _pf6mps_desc_list, dtype=torch.int64, device=\"cuda\"\n"
++    "                )"
++)
++
++BLOCK_DESC = (
++    f"                # {MARKER}: bind descriptor slot 71 and zero-fill every\n"
++    "                # slot this build's cascade does not claim.  Without this\n"
++    "                # the kernel's unconditional desc[71] read is out of\n"
++    "                # bounds of the descriptor tensor.\n"
++    "                if _k0_m24_init(WORLD, MAXTOK) is not None:\n"
++    "                    import m24_fill as _m24mod\n"
++    "                    _pf6mps_desc_list = _m24mod.descriptor_with_fill_slot(\n"
++    "                        _pf6mps_desc_list, _K0_M24_FILL.pointer(0)\n"
++    "                    )\n"
++) + ANCHOR_DESC
++
++# --------------------------------------------------------------------------
++# Hunk 3 -- the harness's own descriptor-length assertion.
++# --------------------------------------------------------------------------
++ANCHOR_WORDS = (
++    "                if _m20 is not None:\n"
++    "                    _expected_mps_words = 71"
++)
++
++BLOCK_WORDS = ANCHOR_WORDS + (
++    f"\n                # {MARKER}: M24 raises K0P6_M15_D_LEN to 72 from\n"
++    "                # whatever the cascade produced.\n"
++    "                if _K0_M24_FILL is not None:\n"
++    "                    _expected_mps_words = 72"
++)
++
++# --------------------------------------------------------------------------
++# Hunk 4 -- the on-stream pre-op, immediately before the mega launch.
++# --------------------------------------------------------------------------
++ANCHOR_LAUNCH = (
++    '    if not os.environ.get("K0_MPS_SKIP_LAUNCH"):\n'
++    "        fn_pf6mps_mega.launch("
++)
++
++BLOCK_LAUNCH = (
++    f"    # {MARKER}: the fill vector is a per-STEP payload with a\n"
++    "    # consume-once gen, so it is refreshed before every launch -- a graph\n"
++    "    # replay on a stale payload is exactly what RJ_STALE rejects.\n"
++    "    _k0_m24_preop(stream)\n"
++) + ANCHOR_LAUNCH
++
++
++HUNKS = (
++    ("helper block after sp()", ANCHOR_SP, ANCHOR_SP + BLOCK_HELPER),
++    ("MPS descriptor slot 71", ANCHOR_DESC, BLOCK_DESC),
++    ("_expected_mps_words = 72", ANCHOR_WORDS, BLOCK_WORDS),
++    ("on-stream pre-op", ANCHOR_LAUNCH, BLOCK_LAUNCH),
++)
++
++
++def apply(path: Path, *, check_only: bool = False) -> int:
++    if not path.is_file():
++        print(f"[m24_mok_patch] REFUSE: {path} is not a file", file=sys.stderr)
++        return 2
++    source = path.read_text()
++
++    if MARKER in source:
++        # Idempotent: prove all four hunks are present, not just the marker.
++        missing = [
++            name
++            for name, _anchor, replacement in HUNKS
++            if replacement not in source
++        ]
++        if missing:
++            print(
++                "[m24_mok_patch] REFUSE: the marker is present but these "
++                f"hunks are not: {missing}. The file was hand-edited; "
++                "restore it before re-patching.",
++                file=sys.stderr,
++            )
++            return 2
++        print("[m24_mok_patch] already applied (all 4 hunks present)")
++        return 0
++
++    for name, anchor, _replacement in HUNKS:
++        count = source.count(anchor)
++        if count != 1:
++            print(
++                f"[m24_mok_patch] REFUSE: anchor for '{name}' matched {count} "
++                "times, expected exactly 1. The harness moved; re-derive the "
++                "anchor rather than loosening it.",
++                file=sys.stderr,
++            )
++            return 2
++
++    if check_only:
++        print("[m24_mok_patch] all 4 anchors match exactly once (not applied)")
++        return 0
++
++    patched = source
++    for _name, anchor, replacement in HUNKS:
++        patched = patched.replace(anchor, replacement, 1)
++
++    try:
++        ast.parse(patched)
++    except SyntaxError as exc:  # pragma: no cover - a patch bug, not a run bug
++        print(
++            f"[m24_mok_patch] REFUSE: the patched file does not parse: {exc}",
++            file=sys.stderr,
++        )
++        return 2
++
++    path.write_text(patched)
++    print(f"[m24_mok_patch] applied 4 hunks to {path}")
++    return 0
++
++
++def main(argv: list[str] | None = None) -> int:
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument("target", nargs="?", default=DEFAULT_TARGET)
++    parser.add_argument(
++        "--check", action="store_true",
++        help="verify the anchors without writing",
++    )
++    args = parser.parse_args(argv)
++    return apply(
++        Path(os.path.expanduser(args.target)), check_only=args.check
++    )
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+diff --git a/distributed-kernels/fused_moe/overnight/aug18-prefill/m24/test_m24_fill.py b/distributed-kernels/fused_moe/overnight/aug18-prefill/m24/test_m24_fill.py
+new file mode 100644
+index 00000000..58f76d31
+--- /dev/null
++++ b/distributed-kernels/fused_moe/overnight/aug18-prefill/m24/test_m24_fill.py
+@@ -0,0 +1,558 @@
++#!/usr/bin/env python3
++"""CPU-only tests for the M24 fill-vector host plumbing and its kernel mirror.
++
++No GPU, no node, no torch.  What this proves:
++
++  1. ENCODE/VALIDATE PARITY -- the host encoder (``m24_fill.encode_fill_header``)
++     produces payloads the Python mirror of ``k0p6_m24_publish`` accepts, and
++     every corruption produces the reject reason the device's ``if/else if``
++     chain would produce first.
++  2. CHECKSUM DEFINITION -- host and device agree, including the rev-3 fix that
++     word 0 is NOT in the sum.
++  3. DESCRIPTOR SHAPE -- ``descriptor_with_fill_slot`` builds exactly 72 words,
++     zero-fills the slots this build's cascade does not claim, and refuses a
++     null / mis-aligned pointer and an over-long cascade.
++  4. COMPOSITION VALIDATION -- ``attest_descriptor_words`` accepts plain M24,
++     M24+STAGED, M24+ADAPTIVE and M24+SLOTPOOL, and refuses a descriptor with
++     junk in an unclaimed slot or with ``cascade_words`` omitted.  This is the
++     regression net for the rev-3 R.6/R.8b finding (the old ``m24_plain``
++     switch made every PARTIAL composition unactivatable).
++  5. BUFFER SPEC -- ``buffer_table(m24=True)`` yields the per-layer spec with
++     ``zero=True``, which is what stops the first launch reading allocator
++     residue as ``last_seen_gen``.
++  6. KERNEL SOURCE INVARIANTS -- the eight rev-3 review fixes are asserted
++     against the .hip text, so a later edit that reverts one fails here rather
++     than on 8 GPUs.
++
++Run:  python3 test_m24_fill.py          (also works under pytest)
++"""
++
++from __future__ import annotations
++
++import re
++import sys
++from pathlib import Path
++
++HERE = Path(__file__).resolve()
++AUG18 = HERE.parents[1]
++FUSED_MOE = HERE.parents[3]
++KERNEL = FUSED_MOE / "k0pf6gm_device_tile_m15.hip"
++SHIM = AUG18 / "m15_eplb0"
++
++# ``m15_contracts`` is a member of the deployed ``pf4h_integration`` package on
++# the node and imports two siblings (``contracts``, ``errors``) that live only
++# there.  Stub exactly the two symbols it uses so the module loads on a laptop.
++import importlib.util  # noqa: E402
++import types  # noqa: E402
++from dataclasses import dataclass  # noqa: E402
++
++
++@dataclass(frozen=True)
++class _FrozenContract:
++    ep_size: int = 8
++    topk: int = 8
++    local_experts: int = 32
++    hidden_size: int = 7168
++    quant_block: int = 128
++    global_experts: int = 256
++
++
++@dataclass(frozen=True)
++class _ActivationBlocker:
++    code: str
++    summary: str
++    evidence: str
++
++
++class _PF4HActivationError(RuntimeError):
++    pass
++
++
++def _load_shim_module(name: str):
++    pkg = sys.modules.setdefault("m15_eplb0", types.ModuleType("m15_eplb0"))
++    pkg.__path__ = [str(SHIM)]  # type: ignore[attr-defined]
++    stub_contracts = types.ModuleType("m15_eplb0.contracts")
++    stub_contracts.FROZEN_CONTRACT = _FrozenContract()  # type: ignore[attr-defined]
++    stub_errors = types.ModuleType("m15_eplb0.errors")
++    stub_errors.ActivationBlocker = _ActivationBlocker  # type: ignore[attr-defined]
++    stub_errors.PF4HActivationError = _PF4HActivationError  # type: ignore[attr-defined]
++    sys.modules.setdefault("m15_eplb0.contracts", stub_contracts)
++    sys.modules.setdefault("m15_eplb0.errors", stub_errors)
++    spec = importlib.util.spec_from_file_location(
++        f"m15_eplb0.{name}", SHIM / f"{name}.py"
++    )
++    assert spec and spec.loader
++    module = importlib.util.module_from_spec(spec)
++    sys.modules[f"m15_eplb0.{name}"] = module
++    spec.loader.exec_module(module)
++    return module
++
++
++C = _load_shim_module("m15_contracts")
++F = _load_shim_module("m24_fill")
++
++WORLD = 8
++MAXTOK = 4096
++T_CAP = 4096
++FAILURES: list[str] = []
++
++
++def check(name: str, condition: bool, detail: str = "") -> None:
++    if condition:
++        print(f"  ok   {name}")
++    else:
++        print(f"  FAIL {name} {detail}")
++        FAILURES.append(f"{name} {detail}")
++
++
++def _buffer(header: list[int], last_gen: int = 0) -> list[int]:
++    """Header + n_orig + the 4-word device-owned tail."""
++    return list(header) + [last_gen, 0, 0, 0]
++
++
++# ---------------------------------------------------------------- 1 + 2
++def test_encode_validate_parity() -> None:
++    print("1/2. encode <-> validate parity, and the checksum definition")
++    n_orig = [1539, 1600, 1480, 1720, 0, 4096, 900, 2048]
++
++    header = F.encode_fill_header(1, n_orig, world=WORLD)
++    check("header length is 8 + world", len(header) == 8 + WORLD)
++    check("word 0 is the magic", header[0] == C.M24_FILL_MAGIC)
++    check("gen_echo duplicates gen", header[4] == header[1] == 1)
++    check("reserved words 5..7 are zero", header[5:8] == [0, 0, 0])
++
++    # The rev-3 checksum: seeded with the magic, word 0 NOT xored in.
++    expect = C.M24_FILL_MAGIC ^ 1 ^ 1
++    for value in n_orig:
++        expect ^= value
++    check("csum matches the seeded definition", header[3] == expect & 0xFFFFFFFF,
++          f"got {header[3]:#x} want {expect & 0xFFFFFFFF:#x}")
++    check(
++        "csum is NOT the self-cancelling variant",
++        header[3] != (expect ^ C.M24_FILL_MAGIC) & 0xFFFFFFFF,
++    )
++
++    reason, t_eff = F.validate_payload_mirror(
++        _buffer(header), cur=0, world=WORLD, maxtok=MAXTOK, t_cap=T_CAP
++    )
++    check("a fresh payload is accepted", reason == F.RejectReason.ACCEPT)
++    check("T_eff = round_up(1539, 256) = 1792", t_eff == 1792, f"got {t_eff}")
++
++    # Every reject reason, in the device's evaluation order.
++    cases = [
++        ("magic", lambda w: w.__setitem__(0, 0xDEADBEEF), F.RejectReason.MAGIC),
++        ("tear", lambda w: w.__setitem__(4, 99), F.RejectReason.TEAR),
++        ("csum", lambda w: w.__setitem__(3, w[3] ^ 1), F.RejectReason.CSUM),
++        ("flags", lambda w: w.__setitem__(2, 0), F.RejectReason.FLAGS),
++        ("range", lambda w: w.__setitem__(8, MAXTOK + 1), F.RejectReason.RANGE),
++    ]
++    for name, corrupt, want in cases:
++        words = _buffer(F.encode_fill_header(7, n_orig, world=WORLD))
++        if name in ("flags", "csum", "range"):
++            # flags/range change the payload, so re-seal the checksum where the
++            # corruption is meant to be caught by a LATER test than csum.
++            if name == "flags":
++                words[2] = 0
++                words[3] = C.m24_fill_checksum(7, 0, words[8 : 8 + WORLD])
++            elif name == "range":
++                bad = list(n_orig)
++                bad[0] = MAXTOK + 1
++                words = _buffer(F.encode_fill_header(7, bad, world=WORLD))
++            else:
++                corrupt(words)
++        else:
++            corrupt(words)
++        reason, t_eff = F.validate_payload_mirror(
++            words, cur=0, world=WORLD, maxtok=MAXTOK, t_cap=T_CAP
++        )
++        check(f"reject reason {name}", reason == want, f"got {reason}")
++        check(f"{name} degrades to the padded capacity", t_eff == T_CAP)
++
++    # Stale: gen <= last_seen_gen.  This is the EXPECTED path the design
++    # enumerates, and it must degrade to T_cap, never to a short step.
++    words = _buffer(F.encode_fill_header(5, n_orig, world=WORLD), last_gen=5)
++    reason, t_eff = F.validate_payload_mirror(
++        words, cur=0, world=WORLD, maxtok=MAXTOK, t_cap=T_CAP
++    )
++    check("replayed gen is stale", reason == F.RejectReason.STALE)
++    check("stale degrades to the padded capacity", t_eff == T_CAP)
++
++    words = _buffer(F.encode_fill_header(6, n_orig, world=WORLD), last_gen=5)
++    reason, _ = F.validate_payload_mirror(
++        words, cur=0, world=WORLD, maxtok=MAXTOK, t_cap=T_CAP
++    )
++    check("gen = last + 1 is accepted", reason == F.RejectReason.ACCEPT)
++
++    # Per-rank selection and the saturating clamp.
++    for cur, want in ((5, 4096), (4, 0), (7, 2048)):
++        _, t_eff = F.validate_payload_mirror(
++            _buffer(F.encode_fill_header(3, n_orig, world=WORLD)),
++            cur=cur, world=WORLD, maxtok=MAXTOK, t_cap=T_CAP,
++        )
++        check(f"cur={cur} selects its own n_orig", t_eff == want, f"got {t_eff}")
++
++
++# ---------------------------------------------------------------- 3
++def test_descriptor_shape() -> None:
++    print("3. descriptor_with_fill_slot")
++    for cascade_len in (63, 64, 65, 71):
++        cascade = list(range(1, cascade_len + 1))
++        words = F.descriptor_with_fill_slot(cascade, 0x1000)
++        check(f"cascade {cascade_len} -> 72 words", len(words) == 72)
++        check(
++            f"cascade {cascade_len} keeps its own slots",
++            words[:cascade_len] == cascade,
++        )
++        check(
++            f"cascade {cascade_len} zero-fills the unclaimed slots",
++            all(w == 0 for w in words[cascade_len:71]),
++        )
++        check(f"cascade {cascade_len} binds slot 71", words[71] == 0x1000)
++
++    for bad_ptr in (0, 0x1008, 0x1001):
++        try:
++            F.descriptor_with_fill_slot(list(range(63)), bad_ptr)
++            check(f"pointer {bad_ptr:#x} refused", False, "no exception")
++        except ValueError:
++            check(f"pointer {bad_ptr:#x} refused", True)
++    try:
++        F.descriptor_with_fill_slot(list(range(72)), 0x1000)
++        check("over-long cascade refused", False, "no exception")
++    except ValueError:
++        check("over-long cascade refused", True)
++
++
++# ---------------------------------------------------------------- 4
++def test_composition_validation() -> None:
++    print("4. attest_descriptor_words across the compositions")
++    bucket = C.M15_PREFILL_B4096_BUCKET
++
++    def descriptor(cascade_len: int, *, fill_ptr: int = 0x2000,
++                   junk_slot: int | None = None) -> list[int]:
++        # Non-null plausible words for every slot the cascade claims; the
++        # scalar-slot checks below are exercised by the module's own suite, so
++        # here we only care about the 63..71 window and the length.
++        words = [0x40 * (i + 1) for i in range(cascade_len)]
++        words = F.descriptor_with_fill_slot(words, fill_ptr)
++        if junk_slot is not None:
++            words[junk_slot] = 0xBADF00D0
++        return words
++
++    def codes(cascade_len: int, **kwargs) -> set[str]:
++        words = descriptor(cascade_len, **kwargs)
++        blockers = C.attest_descriptor_words(
++            words,
++            bucket,
++            rank=0,
++            config_word=0,
++            expected_words=C.M15_DESCRIPTOR_WORDS_M24,
++            cascade_words=cascade_len,
++        )
++        return {b.code for b in blockers}
++
++    for cascade_len, label in (
++        (63, "plain M24"),
++        (64, "M24 + STAGED/REPLICATE"),
++        (65, "M24 + ADAPTIVE"),
++        (71, "M24 + SLOTPOOL"),
++    ):
++        found = codes(cascade_len)
++        spurious = found & {
++            "M15-DESC-005", "M15-DESC-006", "M15-DESC-007", "M15-DESC-008",
++            "M15-DESC-013", "M15-DESC-014", "M15-DESC-015",
++        }
++        check(f"{label} raises no M24/M18/M19/M20 slot blocker",
++              not spurious, f"got {sorted(spurious)}")
++
++    check(
++        "junk in an unclaimed slot is refused",
++        "M15-DESC-015" in codes(63, junk_slot=64),
++    )
++    words = descriptor(63)
++    words[71] = 0
++    blockers = C.attest_descriptor_words(
++        words, bucket, rank=0, config_word=0,
++        expected_words=C.M15_DESCRIPTOR_WORDS_M24, cascade_words=63,
++    )
++    check("a null fill pointer is refused",
++          "M15-DESC-013" in {b.code for b in blockers})
++    words[71] = 0x2008
++    blockers = C.attest_descriptor_words(
++        words, bucket, rank=0, config_word=0,
++        expected_words=C.M15_DESCRIPTOR_WORDS_M24, cascade_words=63,
++    )
++    check("an 8-byte-aligned fill pointer is refused",
++          "M15-DESC-013" in {b.code for b in blockers})
++
++    blockers = C.attest_descriptor_words(
++        descriptor(63), bucket, rank=0, config_word=0,
++        expected_words=C.M15_DESCRIPTOR_WORDS_M24,
++    )
++    check("omitting cascade_words on an M24 build is refused",
++          "M15-DESC-014" in {b.code for b in blockers})
++
++    # A default-0 (non-M24) arm must walk exactly the slots it walked before.
++    non_m24 = [0x40 * (i + 1) for i in range(63)]
++    blockers = C.attest_descriptor_words(
++        non_m24, bucket, rank=0, config_word=0
++    )
++    check("a default-0 arm raises no M24 blocker",
++          not ({"M15-DESC-013", "M15-DESC-014", "M15-DESC-015"}
++               & {b.code for b in blockers}))
++
++
++# ---------------------------------------------------------------- 5
++def test_buffer_spec() -> None:
++    print("5. buffer_table(m24=True)")
++    bucket = C.M15_PREFILL_B4096_BUCKET
++    try:
++        table = C.buffer_table(bucket, m24=True)
++    except TypeError as exc:
++        check("buffer_table accepts m24=", False, str(exc))
++        return
++    specs = [s for s in table if s.name == "m24_fill"]
++    check("the m24_fill spec is present", len(specs) == 1)
++    if not specs:
++        return
++    spec = specs[0]
++    check("slot 71", int(spec.slot) == 71)
++    check("int32", spec.itemsize == 4 and spec.dtype == "int32")
++    check("not symmetric (rank-local)", spec.symmetric is False)
++    check("ZEROED before the first epoch", spec.zero is True)
++    check("8 + world + 4 words",
++          spec.elements == 8 + WORLD + 4, f"got {spec.elements}")
++    check("32 + 4*world + 16 bytes",
++          spec.nbytes == 32 + 4 * WORLD + 16, f"got {spec.nbytes}")
++    table0 = C.buffer_table(bucket)
++    check("a default-0 arm allocates no fill buffer",
++          not any(s.name == "m24_fill" for s in table0))
++
++
++# ---------------------------------------------------------------- 6
++def test_kernel_invariants() -> None:
++    print("6. kernel source invariants (the rev-3 review fixes)")
++    src = KERNEL.read_text()
++
++    publish = src[src.index("k0p6_m24_publish(const long long* desc"):]
++    publish = publish[: publish.index("\n}\n")]
++
++    check(
++        "R.1 the publish releases before the caller's barrier arrive",
++        "release_signal_batch_agent()" in publish,
++    )
++    check(
++        "R.2 STRICT never raises the grid-return bit 16777216",
++        "atomicOr(pperr, 16777216)" not in publish,
++    )
++    check(
++        "R.2 STRICT raises its own telemetry bit",
++        "atomicOr(pperr, K0P6_M24_ERR_STRICT)" in publish,
++    )
++    check(
++        "R.3 the NORIG block no longer kills the validation path",
++        not re.search(r"^\s*reason = 0u;", publish, re.M),
++    )
++    check(
++        "R.3 the substitution is gated on an accepted payload",
++        re.search(r"NORIG_TABLE\) \|\| K0P6_M24_NORIG_CONST\n(.|\n)*?"
++                  r"if \(reason == 0u\) \{", publish) is not None,
++    )
++    check("R.7a NORIG_TABLE is a select chain, not tbl[cur]",
++          "k0p6_m24_tbl[cur]" not in src)
++    asm_lines = [ln for ln in publish.splitlines()
++                 if "asm volatile" in ln and not ln.lstrip().startswith("//")]
++    check('R.7b the opacity barrier uses "+v", not "+s"',
++          len(asm_lines) == 1 and '"+v"(n_sub)' in asm_lines[0]
++          and '"+s"' not in asm_lines[0],
++          f"asm lines: {asm_lines}")
++
++    teff = src[src.index("int k0p6_m24_teff(const long long* desc"):]
++    teff = teff[: teff.index("\n}\n")]
++    check(
++        "R.4 the consumer clamps T_eff to the padded capacity",
++        "(unsigned int)t > (unsigned int)T_cap" in teff,
++    )
++
++    check("R.5 the reject bit is 1<<29, not K0P6_MPS_ERR_SERVICE",
++          "#define K0P6_M24_ERR_REJECT 536870912" in src)
++    check("R.5 the strict bit is 1<<30",
++          "#define K0P6_M24_ERR_STRICT 1073741824" in src)
++    for stale in ("67108864", "268435456", "134217728", "33554432"):
++        check(f"R.5 no M24 bit aliases {stale}",
++              f"K0P6_M24_ERR_REJECT {stale}" not in src
++              and f"K0P6_M24_ERR_STRICT {stale}" not in src)
++
++    check("R.8 the checksum seed no longer cancels word 0",
++          "unsigned int acc = K0P6_M24_MAGIC ^ gen ^ flags;" in src)
++    check("R.9a the slot check compares against the cascade length",
++          "#if K0P6_M15_D_LEN > K0P6_D_M24_FILL" in src)
++    directives = [ln for ln in src.splitlines() if ln.startswith("#if ")]
++    check("R.9a the tautological literal check is gone",
++          not any("K0P6_D_M24_FILL >= 72" in ln for ln in directives))
++    check("R.9b SRC_REV is bumped on the M24 branch",
++          re.search(r"#if K0P6_M24_FILL\n#undef K0P6_M15_SRC_REV\n"
++                    r"#define K0P6_M15_SRC_REV 3", src) is not None)
++    check("R.10 NULLWORK has a FILL cross-check",
++          "#if K0P6_M24_NULLWORK && !K0P6_M24_FILL" in src)
++
++    # Every M24 macro has an #error tying it to FILL.
++    for macro in ("ZERO_PAD", "ALLOW_DIRTY_PAD", "FILL_C", "M8_ADAPT",
++                  "NORIG_CONST", "STRICT", "NULLWORK"):
++        check(f"cross-check for K0P6_M24_{macro}",
++              f"#if K0P6_M24_{macro} && !K0P6_M24_FILL" in src)
++
++
++# ---------------------------------------------------------------- 7
++class _FakeView:
++    def __init__(self, parent: "_FakeTensor", start: int, stop: int) -> None:
++        self.parent, self.start, self.stop = parent, start, stop
++
++    def copy_(self, other, non_blocking: bool = False):  # noqa: ANN001
++        values = other.tolist() if hasattr(other, "tolist") else list(other)
++        assert len(values) == self.stop - self.start
++        self.parent.data[self.start : self.stop] = values
++        return self
++
++    def tolist(self) -> list[int]:
++        return list(self.parent.data[self.start : self.stop])
++
++
++class _FakeTensor:
++    """The 1-D int32 slice of torch this module actually uses."""
++
++    _next_ptr = 0x7F0000000000
++
++    def __init__(self, n: int) -> None:
++        self.data = [0] * n
++        _FakeTensor._next_ptr += 256          # torch's allocator base grain
++        self._ptr = _FakeTensor._next_ptr
++
++    def data_ptr(self) -> int:
++        return self._ptr
++
++    def __getitem__(self, key):  # noqa: ANN001
++        if isinstance(key, slice):
++            start = key.start or 0
++            stop = len(self.data) if key.stop is None else key.stop
++            return _FakeView(self, start, stop)
++        return self.data[key]
++
++    def __setitem__(self, key, value):  # noqa: ANN001
++        self.data[key] = value
++
++    def copy_(self, other, non_blocking: bool = False):  # noqa: ANN001
++        self.data[:] = other.tolist() if hasattr(other, "tolist") else list(other)
++        return self
++
++    def tolist(self) -> list[int]:
++        return list(self.data)
++
++
++class _FakeTorch:
++    int32 = "int32"
++
++    @staticmethod
++    def zeros(n, dtype=None, device=None, pin_memory=False):  # noqa: ANN001
++        return _FakeTensor(n)
++
++    @staticmethod
++    def empty(n, dtype=None, device=None, pin_memory=False):  # noqa: ANN001
++        return _FakeTensor(n)
++
++    @staticmethod
++    def tensor(values, dtype=None):  # noqa: ANN001
++        t = _FakeTensor(len(values))
++        t.data[:] = list(values)
++        return t
++
++
++def test_fill_vector_writes() -> None:
++    print("7. M24FillVector: allocation, the per-launch write, the fast path")
++    fill = F.M24FillVector(
++        world=WORLD, num_layers=2, maxtok=MAXTOK, torch_module=_FakeTorch
++    )
++    check("buffer is 32 + 4*world + 16 bytes", fill.nbytes() == 32 + 4 * WORLD + 16)
++    check("pointers are 16-byte aligned",
++          all(p % 16 == 0 for p in fill.pointers()))
++    check("the device-owned tail starts zeroed",
++          fill.read_tail(0) == {"last_seen_gen": 0, "agreed_T_eff": 0,
++                                "agreed_flags": 0})
++
++    n_orig = [1539, 1600, 1480, 1720, 0, 4096, 900, 2048]
++    last_gen = 0
++    # 4 launches: the first takes the full-encode path, the rest the 3-scalar
++    # fast path.  Every one of them must be ACCEPTED by the device mirror
++    # against the last_seen_gen the previous launch would have committed.
++    for launch in range(4):
++        gen = fill.write(0, n_orig)
++        raw = [w & 0xFFFFFFFF for w in fill._layers[0].tensor.tolist()]
++        raw[8 + WORLD] = last_gen           # what the device committed
++        reason, t_eff = F.validate_payload_mirror(
++            raw, cur=0, world=WORLD, maxtok=MAXTOK, t_cap=T_CAP
++        )
++        check(f"launch {launch} payload accepted",
++              reason == F.RejectReason.ACCEPT, f"reason {reason}")
++        check(f"launch {launch} T_eff = 1792", t_eff == 1792, f"got {t_eff}")
++        check(f"launch {launch} gen advanced", gen == launch + 1)
++        last_gen = gen
++
++    # Replaying a launch without bumping gen must be rejected as stale -- the
++    # consume-once contract that stops a graph replay running on a payload the
++    # pre-op never refreshed.
++    fill.write(0, n_orig, gen=last_gen)
++    raw = [w & 0xFFFFFFFF for w in fill._layers[0].tensor.tolist()]
++    raw[8 + WORLD] = last_gen
++    reason, t_eff = F.validate_payload_mirror(
++        raw, cur=0, world=WORLD, maxtok=MAXTOK, t_cap=T_CAP
++    )
++    check("a replayed gen is stale", reason == F.RejectReason.STALE)
++    check("stale still degrades to the padded capacity", t_eff == T_CAP)
++
++    # Changing the payload must take the full-encode path and stay valid.
++    other = [4096] * WORLD
++    fill.write(1, other)
++    raw = [w & 0xFFFFFFFF for w in fill._layers[1].tensor.tolist()]
++    reason, t_eff = F.validate_payload_mirror(
++        raw, cur=3, world=WORLD, maxtok=MAXTOK, t_cap=T_CAP
++    )
++    check("a changed payload re-encodes correctly",
++          reason == F.RejectReason.ACCEPT)
++    check("full fill yields T_eff = T_cap", t_eff == T_CAP)
++    check("layers keep independent gens",
++          fill.current_gen(0) == 4 and fill.current_gen(1) == 1,
++          f"got {fill.current_gen(0)}, {fill.current_gen(1)}")
++
++    # Interleaving two layers on the SAME payload exercises the fast path with
++    # a per-layer gen: the shared staging buffer must be re-stamped each time.
++    for _ in range(3):
++        fill.write(0, other)
++        fill.write(1, other)
++    for layer, prev in ((0, fill.current_gen(0) - 1), (1, fill.current_gen(1) - 1)):
++        raw = [w & 0xFFFFFFFF for w in fill._layers[layer].tensor.tolist()]
++        raw[8 + WORLD] = prev
++        reason, _ = F.validate_payload_mirror(
++            raw, cur=0, world=WORLD, maxtok=MAXTOK, t_cap=T_CAP
++        )
++        check(f"interleaved layer {layer} stays accepted",
++              reason == F.RejectReason.ACCEPT, f"reason {reason}")
++
++
++def main() -> int:
++    test_encode_validate_parity()
++    test_descriptor_shape()
++    test_composition_validation()
++    test_buffer_spec()
++    test_kernel_invariants()
++    test_fill_vector_writes()
++    print()
++    if FAILURES:
++        print(f"{len(FAILURES)} FAILURE(S):")
++        for line in FAILURES:
++            print(f"  - {line}")
++        return 1
++    print("all M24 host-plumbing tests passed")
++    return 0
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+diff --git a/distributed-kernels/fused_moe/overnight/aug18-prefill/m24/test_m24_mok_patch.py b/distributed-kernels/fused_moe/overnight/aug18-prefill/m24/test_m24_mok_patch.py
+new file mode 100644
+index 00000000..0158b920
+--- /dev/null
++++ b/distributed-kernels/fused_moe/overnight/aug18-prefill/m24/test_m24_mok_patch.py
+@@ -0,0 +1,317 @@
++#!/usr/bin/env python3
++"""CPU-only tests for m24_mok_patch.py, against a byte-copy of the harness.
++
++Proves, with no GPU and no node:
++
++  1. ANCHORS   -- all four anchors match exactly once in the real harness.
++  2. APPLY     -- the patched file AST-parses and carries the marker.
++  3. IDEMPOTENCY -- a second run is a no-op and leaves the bytes unchanged.
++  4. TAMPER    -- a hand-edited file that keeps the marker but loses a hunk is
++                  REFUSED rather than double-patched.
++  5. INERTNESS -- with K0_M24_FILL unset, every injected predicate is false, so
++                  the descriptor, the expected-word count and the launch path
++                  are the pre-patch ones.  This is the zero-change ratchet the
++                  runbook requires before any arm is believed.
++  6. LIVE PATH -- with K0_M24_FILL set, the injected helper allocates, binds
++                  slot 71 into a 72-word descriptor, and issues one pre-op per
++                  launch whose payload the DEVICE MIRROR accepts.
++
++Run:  python3 test_m24_mok_patch.py       (also works under pytest)
++
++Set K0_HARNESS to point at a different e004pf_k0pf_ab.py.
++"""
++
++from __future__ import annotations
++
++import ast
++import importlib.util
++import os
++import shutil
++import subprocess
++import sys
++import tempfile
++import types
++from pathlib import Path
++
++HERE = Path(__file__).resolve()
++M24 = HERE.parent
++AUG18 = HERE.parents[1]
++SHIM = AUG18 / "m15_eplb0"
++PATCHER = M24 / "m24_mok_patch.py"
++
++HARNESS = Path(
++    os.environ.get(
++        "K0_HARNESS",
++        os.path.expanduser(
++            "~/amd-master/auto-gpu-kernel/k0_fused_moe/prefill_opt/host/"
++            "e004pf_k0pf_ab.py"
++        ),
++    )
++)
++
++FAILURES: list[str] = []
++
++
++def check(name: str, condition: bool, detail: str = "") -> None:
++    if condition:
++        print(f"  ok   {name}")
++    else:
++        print(f"  FAIL {name} {detail}")
++        FAILURES.append(f"{name} {detail}")
++
++
++def _load(path: Path, name: str):
++    spec = importlib.util.spec_from_file_location(name, path)
++    assert spec and spec.loader
++    module = importlib.util.module_from_spec(spec)
++    sys.modules[name] = module
++    spec.loader.exec_module(module)
++    return module
++
++
++def main() -> int:
++    if not HARNESS.is_file():
++        print(f"SKIP: harness not found at {HARNESS}")
++        print("      (set K0_HARNESS to run these tests)")
++        return 0
++
++    patcher = _load(PATCHER, "m24_mok_patch")
++    original = HARNESS.read_text()
++
++    print("1. anchors")
++    for name, anchor, _repl in patcher.HUNKS:
++        check(f"'{name}' matches exactly once",
++              original.count(anchor) == 1,
++              f"count {original.count(anchor)}")
++    check("the harness is not already patched", patcher.MARKER not in original)
++
++    with tempfile.TemporaryDirectory() as tmp:
++        mirror = Path(tmp) / "e004pf_k0pf_ab.py"
++        shutil.copyfile(HARNESS, mirror)
++
++        print("2. apply")
++        rc = subprocess.run(
++            [sys.executable, str(PATCHER), str(mirror)],
++            capture_output=True, text=True,
++        )
++        check("patcher exits 0", rc.returncode == 0, rc.stderr.strip())
++        patched = mirror.read_text()
++        check("marker present", patcher.MARKER in patched)
++        try:
++            ast.parse(patched)
++            check("patched file parses", True)
++        except SyntaxError as exc:
++            check("patched file parses", False, str(exc))
++        for name, _anchor, repl in patcher.HUNKS:
++            check(f"hunk '{name}' landed", repl in patched)
++        check("only the four hunks changed the length",
++              len(patched) > len(original))
++
++        print("3. idempotency")
++        rc2 = subprocess.run(
++            [sys.executable, str(PATCHER), str(mirror)],
++            capture_output=True, text=True,
++        )
++        check("second run exits 0", rc2.returncode == 0, rc2.stderr.strip())
++        check("second run changes nothing", mirror.read_text() == patched)
++        check("second run says 'already applied'",
++              "already applied" in rc2.stdout)
++
++        print("4. tamper refusal")
++        tampered = Path(tmp) / "tampered.py"
++        broken = patched.replace(
++            "    _k0_m24_preop(stream)\n", "", 1
++        )
++        tampered.write_text(broken)
++        rc3 = subprocess.run(
++            [sys.executable, str(PATCHER), str(tampered)],
++            capture_output=True, text=True,
++        )
++        check("a marked-but-incomplete file is refused", rc3.returncode == 2,
++              f"rc {rc3.returncode}")
++
++        print("5/6. the injected block, executed in isolation")
++        _exercise_injected_block(patched)
++
++    print()
++    if FAILURES:
++        print(f"{len(FAILURES)} FAILURE(S):")
++        for line in FAILURES:
++            print(f"  - {line}")
++        return 1
++    print("all m24_mok_patch tests passed")
++    return 0
++
++
++# --------------------------------------------------------------------------
++# The injected helper block is pure Python that touches only os/sys/torch, so
++# it can be lifted out of the patched harness and executed against a fake
++# torch.  That is what turns "the patch applies" into "the patch works".
++# --------------------------------------------------------------------------
++class _FakeStream:
++    def __init__(self, handle: int) -> None:
++        self.cuda_stream = handle
++
++
++class _FakeView:
++    def __init__(self, parent, start, stop):  # noqa: ANN001
++        self.parent, self.start, self.stop = parent, start, stop
++
++    def copy_(self, other, non_blocking=False):  # noqa: ANN001
++        values = other.tolist() if hasattr(other, "tolist") else list(other)
++        self.parent.data[self.start : self.stop] = values
++        return self
++
++    def tolist(self):
++        return list(self.parent.data[self.start : self.stop])
++
++
++class _FakeTensor:
++    _next_ptr = 0x7F0000000000
++
++    def __init__(self, n: int) -> None:
++        self.data = [0] * n
++        _FakeTensor._next_ptr += 256
++        self._ptr = _FakeTensor._next_ptr
++
++    def data_ptr(self):
++        return self._ptr
++
++    def __getitem__(self, key):  # noqa: ANN001
++        if isinstance(key, slice):
++            return _FakeView(self, key.start or 0,
++                             len(self.data) if key.stop is None else key.stop)
++        return self.data[key]
++
++    def __setitem__(self, key, value):  # noqa: ANN001
++        self.data[key] = value
++
++    def copy_(self, other, non_blocking=False):  # noqa: ANN001
++        self.data[:] = other.tolist() if hasattr(other, "tolist") else list(other)
++        return self
++
++    def tolist(self):
++        return list(self.data)
++
++
++def _fake_torch():
++    torch = types.ModuleType("torch")
++    torch.int32 = "int32"
++    torch.zeros = lambda n, dtype=None, device=None, pin_memory=False: _FakeTensor(n)
++    torch.empty = lambda n, dtype=None, device=None, pin_memory=False: _FakeTensor(n)
++
++    def _tensor(values, dtype=None):  # noqa: ANN001
++        t = _FakeTensor(len(values))
++        t.data[:] = list(values)
++        return t
++
++    torch.tensor = _tensor
++    class _StreamCtx:
++        def __init__(self, stream):  # noqa: ANN001
++            self.stream = stream
++
++        def __enter__(self):
++            return self.stream
++
++        def __exit__(self, *exc):  # noqa: ANN002
++            return False
++
++    cuda = types.SimpleNamespace()
++    cuda.current_stream = lambda: _FakeStream(0xABC)
++    cuda.ExternalStream = _FakeStream
++    cuda.stream = _StreamCtx
++    torch.cuda = cuda
++    return torch
++
++
++def _exercise_injected_block(patched: str) -> None:
++    marker = "# ---- PF4H_M24_MOK_FILL_V1"
++    start = patched.index(marker)
++    end = patched.index("# ---- end PF4H_M24_MOK_FILL_V1")
++    block = patched[start:end]
++
++    env = dict(os.environ)
++    for key in ("K0_M24_FILL", "K0_M24_NORIG", "K0_M24_SHIM_DIR", "DHK_ROOT"):
++        env.pop(key, None)
++
++    def run(extra_env: dict[str, str]):
++        # The real ``sys`` (the block manipulates sys.path to find the shim);
++        # a fake ``os`` so the env is controlled; a fake ``torch``.
++        namespace: dict[str, object] = {
++            "os": types.SimpleNamespace(environ={**env, **extra_env},
++                                        path=os.path),
++            "sys": sys,
++            "torch": _fake_torch(),
++        }
++        exec(compile(block, "<injected>", "exec"), namespace)  # noqa: S102
++        return namespace
++
++    # 5. INERTNESS -- nothing set.
++    ns = run({})
++    check("inert: _k0_m24_enabled() is False", ns["_k0_m24_enabled"]() is False)
++    check("inert: _k0_m24_init returns None",
++          ns["_k0_m24_init"](8, 4096) is None)
++    check("inert: the pre-op is a no-op", ns["_k0_m24_preop"](0xABC) is None)
++    check("inert: no buffer allocated", ns["_K0_M24_FILL"] is None)
++
++    # 6. LIVE -- K0_M24_FILL=1, the shim pointed at this checkout.
++    ns = run({"K0_M24_FILL": "1", "K0_M24_SHIM_DIR": str(SHIM)})
++    fill = ns["_k0_m24_init"](8, 4096)
++    check("live: a fill vector is allocated", fill is not None)
++    if fill is None:
++        return
++    check("live: default payload is full fill",
++          ns["_K0_M24_NORIG"] == [4096] * 8, f"got {ns['_K0_M24_NORIG']}")
++    check("live: pointer is 16-byte aligned", fill.pointer(0) % 16 == 0)
++
++    m24_fill = _load(SHIM / "m24_fill.py", "m24_fill_probe")
++    desc = m24_fill.descriptor_with_fill_slot(list(range(1, 64)), fill.pointer(0))
++    check("live: descriptor is 72 words", len(desc) == 72)
++    check("live: slots 63..70 are zero", all(w == 0 for w in desc[63:71]))
++    check("live: slot 71 is the fill pointer", desc[71] == fill.pointer(0))
++
++    last_gen = 0
++    for launch in range(3):
++        ns["_k0_m24_preop"](0xABC)          # same stream as the launch
++        raw = [w & 0xFFFFFFFF for w in fill._layers[0].tensor.tolist()]
++        raw[8 + 8] = last_gen
++        reason, t_eff = m24_fill.validate_payload_mirror(
++            raw, cur=0, world=8, maxtok=4096, t_cap=4096
++        )
++        check(f"live: pre-op launch {launch} payload accepted",
++              reason == m24_fill.RejectReason.ACCEPT, f"reason {reason}")
++        check(f"live: pre-op launch {launch} T_eff = 4096", t_eff == 4096)
++        last_gen = fill.current_gen(0)
++
++    # A foreign stream must still work (ExternalStream path).
++    ns["_k0_m24_preop"](0xDEF)
++    raw = [w & 0xFFFFFFFF for w in fill._layers[0].tensor.tolist()]
++    raw[8 + 8] = last_gen
++    reason, _ = m24_fill.validate_payload_mirror(
++        raw, cur=0, world=8, maxtok=4096, t_cap=4096
++    )
++    check("live: the foreign-stream path still writes a valid payload",
++          reason == m24_fill.RejectReason.ACCEPT, f"reason {reason}")
++
++    # A payload out of range must be refused at INIT, not on the device.
++    ns2 = run({"K0_M24_FILL": "1", "K0_M24_SHIM_DIR": str(SHIM),
++               "K0_M24_NORIG": "9999"})
++    try:
++        ns2["_k0_m24_init"](8, 4096)
++        check("live: an out-of-range K0_M24_NORIG is refused", False,
++              "no exception")
++    except RuntimeError:
++        check("live: an out-of-range K0_M24_NORIG is refused", True)
++
++    ns3 = run({"K0_M24_FILL": "1", "K0_M24_SHIM_DIR": str(SHIM),
++               "K0_M24_NORIG": "1539,1600,1480"})
++    try:
++        ns3["_k0_m24_init"](8, 4096)
++        check("live: a wrong-length K0_M24_NORIG is refused", False,
++              "no exception")
++    except RuntimeError:
++        check("live: a wrong-length K0_M24_NORIG is refused", True)
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+diff --git a/distributed-kernels/fused_moe/overnight/aug18-prefill/m24_build_gate.sh b/distributed-kernels/fused_moe/overnight/aug18-prefill/m24_build_gate.sh
+new file mode 100755
+index 00000000..e6706da3
+--- /dev/null
++++ b/distributed-kernels/fused_moe/overnight/aug18-prefill/m24_build_gate.sh
+@@ -0,0 +1,221 @@
++#!/usr/bin/env bash
++# ============================================================================
++# M24 BUILD GATE (design section E / work-list G6) -- CPU-ONLY.
++#
++# Proves the DEFAULT build (every K0P6_M24_* macro at 0) is instruction-
++# identical to the PRE-M24 body.  This is the discipline the exp_38 cliff
++# bought: reachable-but-unused code near the M7 epilogue cost +726.9 us, so a
++# default-arm .text perturbation must be impossible, not unlikely.
++#
++# It compiles TWO kernels through the SAME pin path with the SAME compile line
++# and compares:
++#   (a) the -Rpass-analysis=kernel-resource-usage tuple (SGPR/VGPR/AGPR/
++#       ScratchSize/Occupancy/Spill/LDS), and
++#   (b) the DISASSEMBLY of k0pf6gm_mps_mega, plus a sha256 of the raw .text.
++# Both must be IDENTICAL.  Anything else is a gate failure and blocks every
++# M24 arm.
++#
++# The two kernels:
++#   pre  : k0pf6gm_device_tile_m15.hip at ${PRE_REF} (default a776ac75, the
++#          commit before the M24 implementation), from `git show`.
++#   post : the working tree's k0pf6gm_device_tile_m15.hip, all macros default.
++#
++# Usage (on the node):
++#   bash m24_build_gate.sh [SRC_DIR] [OUT_DIR]
++#     SRC_DIR : a Distributed-HipKittens checkout carrying the M24 edits
++#               (default: ~/nightshift_m24_build/src)
++#     OUT_DIR : scratch (default: ~/nightshift_m24_build)
++#   env PRE_REF=<git ref>   the pre-M24 commit (default a776ac75)
++#       K0_AMD_ROOT=...     amd-master checkout (default ~/amd-master)
++#       K0PF_IMAGE=...      image used when hipcc is not on the host
++#
++# Writes ${OUT_DIR}/gate_output.txt.  Exit 0 = IDENTICAL, 1 = DIVERGED.
++# GPUs are never touched: hipcc, llvm-objdump and llvm-objcopy are CPU work.
++# ============================================================================
++set -euo pipefail
++
++SRC_DIR="${1:-$HOME/nightshift_m24_build/src}"
++OUT_DIR="${2:-$HOME/nightshift_m24_build}"
++AMD_ROOT="${K0_AMD_ROOT:-$HOME/amd-master}"
++IMAGE="${K0PF_IMAGE:-rocm/atom-dev:vllm-latest}"
++PRE_REF="${PRE_REF:-a776ac75}"
++
++M15_REL="distributed-kernels/fused_moe/k0pf6gm_device_tile_m15.hip"
++M15="${SRC_DIR}/${M15_REL}"
++GATE="${OUT_DIR}/gate"
++PIN="${GATE}/pin"
++LOG="${OUT_DIR}/gate_output.txt"
++
++[[ -f "${M15}" ]] || { echo "missing ${M15}" >&2; exit 2; }
++[[ -d "${AMD_ROOT}/HipKittens/include" ]] || {
++  echo "missing ${AMD_ROOT}/HipKittens (set K0_AMD_ROOT)" >&2; exit 2; }
++
++rm -rf "${GATE}"; mkdir -p "${PIN}/distributed-kernels/fused_moe" "${GATE}/out"
++exec > >(tee "${LOG}") 2>&1
++
++echo "=== M24 BUILD GATE ==="
++echo "date        : $(date -u +%FT%TZ)"
++echo "host        : $(hostname)"
++echo "SRC_DIR     : ${SRC_DIR}"
++echo "PRE_REF     : ${PRE_REF}"
++echo "src HEAD    : $(git -C "${SRC_DIR}" rev-parse HEAD 2>/dev/null || echo '?')"
++echo "src status  : $(git -C "${SRC_DIR}" status --porcelain "${M15_REL}" 2>/dev/null | tr '\n' ' ')"
++echo "post sha256 : $(shasum -a 256 "${M15}" | awk '{print $1}')"
++
++# The PRE body comes from git, so it cannot be a hand-made "clean copy" that
++# quietly differs from the commit the review was written against.
++git -C "${SRC_DIR}" show "${PRE_REF}:${M15_REL}" > "${GATE}/pre_m15.hip"
++echo "pre sha256  : $(shasum -a 256 "${GATE}/pre_m15.hip" | awk '{print $1}')"
++echo "pre bytes   : $(wc -c < "${GATE}/pre_m15.hip")"
++echo "post bytes  : $(wc -c < "${M15}")"
++if cmp -s "${GATE}/pre_m15.hip" "${M15}"; then
++  echo "WARNING: pre and post sources are IDENTICAL -- the gate is vacuous."
++fi
++echo
++
++# Everything except the m15 body is copied once and shared by both builds, so
++# the ONLY difference between the two compiles is the body itself.
++cp -a "${SRC_DIR}/distributed-kernels/fused_moe/." \
++      "${PIN}/distributed-kernels/fused_moe/"
++MPS="${PIN}/distributed-kernels/fused_moe/k0pf6gm_device_tile_mps.hip"
++
++mkpin() {   # $1 = body file.  ONE pin path for both builds: a path difference
++            # is a codegen difference in ELF metadata and would muddy the
++            # comparison.
++  {
++    echo "// M24 BUILD-GATE PIN (generated $(date -u +%FT%TZ))."
++    echo "// Body below is k0pf6gm_device_tile_m15.hip VERBATIM (inline, not"
++    echo "// #include: the mori JIT content hash does not hash -I paths)."
++    echo "#define K0P6_M15_KERNEL_NAME k0pf6gm_mps_mega"
++    cat "$1"
++  } > "${MPS}"
++}
++
++HIPCC_ARGS=(
++  --offload-arch=gfx950
++  -std=c++17 -O3 -c
++  -DKITTENS_CDNA4
++  -DHIP_ENABLE_WARP_SYNC_BUILTINS
++  -ffast-math
++  -Rpass-analysis=kernel-resource-usage
++  -mllvm -amdgpu-mfma-vgpr-form=1
++  -I"${AMD_ROOT}/HipKittens/include"
++  -I"${AMD_ROOT}/HipKittens/prototype"
++  -I"${AMD_ROOT}/auto-gpu-kernel/k0_fused_moe/solution/hip"
++  -I"${AMD_ROOT}/auto-gpu-kernel/k0_fused_moe/prefill_opt/kernels"
++  -I"${SRC_DIR}/include"
++  -I"${PIN}/distributed-kernels/fused_moe"
++)
++for d in "${AMD_ROOT}/mori/include" "${SRC_DIR}/third_party/mori/include" \
++         /opt/rocm/include; do
++  [[ -d "${d}" ]] && HIPCC_ARGS+=(-I"${d}")
++done
++
++IN_DOCKER=0
++command -v hipcc >/dev/null 2>&1 || IN_DOCKER=1
++
++run_tool() {   # run a rocm-llvm tool on the host or in the image
++  local tool="$1"; shift
++  if [[ "${IN_DOCKER}" == "0" ]]; then
++    local bin="${tool}"
++    command -v "${bin}" >/dev/null 2>&1 || bin="/opt/rocm/llvm/bin/${tool}"
++    "${bin}" "$@"
++  else
++    docker run --rm \
++      -v "${SRC_DIR}:${SRC_DIR}:ro" -v "${AMD_ROOT}:${AMD_ROOT}:ro" \
++      -v "${OUT_DIR}:${OUT_DIR}" \
++      --entrypoint "/opt/rocm/llvm/bin/${tool}" "${IMAGE}" "$@"
++  fi
++}
++
++build() {   # $1 = tag
++  local tag="$1"
++  local obj="${GATE}/out/${tag}.o"
++  local res="${GATE}/out/${tag}.res"
++  if [[ "${IN_DOCKER}" == "0" ]]; then
++    hipcc "${HIPCC_ARGS[@]}" "${MPS}" -o "${obj}" 2> "${res}"
++  else
++    docker run --rm \
++      -v "${SRC_DIR}:${SRC_DIR}:ro" -v "${AMD_ROOT}:${AMD_ROOT}:ro" \
++      -v "${OUT_DIR}:${OUT_DIR}" \
++      --entrypoint /opt/rocm/bin/hipcc "${IMAGE}" \
++      "${HIPCC_ARGS[@]}" "${MPS}" -o "${obj}" 2> "${res}"
++  fi
++  # Resource tuple, normalised: drop the source path the remark prints.
++  grep -E "SGPRs|VGPRs|AGPRs|ScratchSize|Occupancy|Spill|LDS|Function Name" \
++    "${res}" | sed -E 's/^[^ ]*:[0-9]+:[0-9]+: //' \
++    > "${GATE}/out/${tag}.tuple" || true
++  # Disassembly of the kernel, with addresses and raw encodings stripped so the
++  # comparison is over INSTRUCTIONS, not over where they happen to land.
++  run_tool llvm-objdump -d --mcpu=gfx950 "${obj}" \
++    > "${GATE}/out/${tag}.dis.raw"
++  sed -E 's/^[[:space:]]*[0-9a-f]+:([[:space:]]+[0-9a-f]{2})+[[:space:]]*//' \
++    "${GATE}/out/${tag}.dis.raw" \
++    | sed -E 's/\/\/ [0-9A-F]{12}: [0-9A-F]{8}.*$//' \
++    | grep -v -E '^\s*$|file format|Disassembly of section' \
++    > "${GATE}/out/${tag}.dis"
++  run_tool llvm-objcopy -O binary --only-section=.text "${obj}" \
++    "${GATE}/out/${tag}.text" 2>/dev/null || true
++}
++
++echo "--- building PRE (${PRE_REF}, pre-M24 body) ---"
++mkpin "${GATE}/pre_m15.hip"
++build pre
++echo "--- building POST (working tree, all K0P6_M24_* at their 0 defaults) ---"
++mkpin "${M15}"
++build post
++
++echo
++echo "=== compile line (identical for both) ==="
++printf '%s\n' "hipcc ${HIPCC_ARGS[*]} ${MPS}"
++
++echo
++echo "=== resource tuples ==="
++echo "--- pre ---";  cat "${GATE}/out/pre.tuple"
++echo "--- post ---"; cat "${GATE}/out/post.tuple"
++
++rc=0
++echo
++echo "=== VERDICTS ==="
++if diff -u "${GATE}/out/pre.tuple" "${GATE}/out/post.tuple" > "${GATE}/out/tuple.diff"; then
++  echo "RESOURCE TUPLE : IDENTICAL"
++else
++  echo "RESOURCE TUPLE : DIVERGED"
++  cat "${GATE}/out/tuple.diff"
++  rc=1
++fi
++
++if [[ -s "${GATE}/out/pre.dis" && -s "${GATE}/out/post.dis" ]]; then
++  if diff -u "${GATE}/out/pre.dis" "${GATE}/out/post.dis" > "${GATE}/out/dis.diff"; then
++    echo "DISASSEMBLY    : IDENTICAL ($(wc -l < "${GATE}/out/post.dis") lines)"
++  else
++    echo "DISASSEMBLY    : DIVERGED"
++    head -80 "${GATE}/out/dis.diff"
++    echo "  (full diff: ${GATE}/out/dis.diff)"
++    rc=1
++  fi
++else
++  echo "DISASSEMBLY    : UNAVAILABLE -- llvm-objdump produced nothing."
++  echo "                 The gate is NOT satisfied by the tuple alone."
++  rc=1
++fi
++
++pre_text="$(shasum -a 256 "${GATE}/out/pre.text" 2>/dev/null | awk '{print $1}')"
++post_text="$(shasum -a 256 "${GATE}/out/post.text" 2>/dev/null | awk '{print $1}')"
++if [[ -n "${pre_text}" && "${pre_text}" == "${post_text}" ]]; then
++  echo ".text sha256   : IDENTICAL ${pre_text}"
++elif [[ -n "${pre_text}" && -n "${post_text}" ]]; then
++  echo ".text sha256   : DIVERGED  pre=${pre_text} post=${post_text}"
++  rc=1
++else
++  echo ".text sha256   : unavailable (llvm-objcopy); the disassembly compare above governs"
++fi
++
++echo
++if [[ "${rc}" == "0" ]]; then
++  echo "M24_BUILD_GATE_RECEIPT: PASS -- the default build is instruction-identical to ${PRE_REF}"
++else
++  echo "M24_BUILD_GATE_RECEIPT: FAIL -- the default build is NOT instruction-identical; every M24 arm is blocked"
++fi
++echo "evidence: ${GATE}/out/{pre,post}.{tuple,dis,text}, ${LOG}"
++exit "${rc}"
+diff --git a/distributed-kernels/fused_moe/overnight/aug18-prefill/m24_compile_check.sh b/distributed-kernels/fused_moe/overnight/aug18-prefill/m24_compile_check.sh
+new file mode 100755
+index 00000000..3e078412
+--- /dev/null
++++ b/distributed-kernels/fused_moe/overnight/aug18-prefill/m24_compile_check.sh
+@@ -0,0 +1,182 @@
++#!/usr/bin/env bash
++# ============================================================================
++# M24 compile check — CPU-ONLY, safe while the GPUs are running a measurement.
++#
++# Compiles the M24 kernel body in BOTH configurations that matter:
++#   base : every K0P6_M24_* macro at its default 0   (must be the pre-M24 body)
++#   fill : K0P6_M24_FILL=1 K0P6_M24_ZERO_PAD=1       (the arm shape)
++# and, optionally, the composed / MoK-source variants.
++#
++# It builds each configuration as a RUN PIN, exactly as DECOMP_RUNBOOK.md 4.2
++# prescribes: the pin's k0pf6gm_device_tile_mps.hip is the kernel-name stanza
++# plus k0pf6gm_device_tile_m15.hip INLINED VERBATIM (never #include -- the mori
++# JIT content hash ignores -I paths, the exp_04 trap).
++#
++# This is NOT the build gate. It produces .o + resource-usage reports so an
++# implementation error surfaces before any GPU time; the byte-identical .text
++# comparison (design section E / work-list G6) is a separate, later step.
++#
++# Usage (on the node):
++#   bash m24_compile_check.sh [SRC_DIR] [OUT_DIR]
++#     SRC_DIR: a Distributed-HipKittens checkout carrying the M24 edits
++#              (default: ~/nightshift_m24_build/src)
++#     OUT_DIR: scratch                (default: ~/nightshift_m24_build)
++#
++# Compiles on the host if hipcc is present, otherwise inside the same image the
++# MoK campaign uses (rocm/atom-dev:vllm-latest, K0PF_IMAGE to override) with no
++# GPU devices attached -- hipcc is CPU-only work.
++# ============================================================================
++set -euo pipefail
++
++SRC_DIR="${1:-$HOME/nightshift_m24_build/src}"
++OUT_DIR="${2:-$HOME/nightshift_m24_build}"
++AMD_ROOT="${K0_AMD_ROOT:-$HOME/amd-master}"
++IMAGE="${K0PF_IMAGE:-rocm/atom-dev:vllm-latest}"
++
++M15="${SRC_DIR}/distributed-kernels/fused_moe/k0pf6gm_device_tile_m15.hip"
++[[ -f "${M15}" ]] || { echo "missing ${M15}" >&2; exit 2; }
++[[ -d "${AMD_ROOT}/HipKittens/include" ]] || {
++  echo "missing ${AMD_ROOT}/HipKittens (set K0_AMD_ROOT)" >&2; exit 2; }
++
++mkdir -p "${OUT_DIR}/pins" "${OUT_DIR}/obj"
++
++mkpin() {   # $1 = pin name, $2.. = extra "MACRO value" defines
++  local name="$1"; shift
++  local dst="${OUT_DIR}/pins/${name}"
++  rm -rf "${dst}"; mkdir -p "${dst}/distributed-kernels/fused_moe"
++  cp -a "${SRC_DIR}/distributed-kernels/fused_moe/." \
++        "${dst}/distributed-kernels/fused_moe/"
++  local mps="${dst}/distributed-kernels/fused_moe/k0pf6gm_device_tile_mps.hip"
++  {
++    echo "// M24 COMPILE-CHECK PIN (generated $(date -u +%FT%TZ))."
++    echo "// Body below is k0pf6gm_device_tile_m15.hip VERBATIM (inline, not"
++    echo "// #include: the mori JIT content hash does not hash -I paths)."
++    echo "#define K0P6_M15_KERNEL_NAME k0pf6gm_mps_mega"
++    local d
++    for d in "$@"; do echo "#define ${d}"; done
++    cat "${M15}"
++  } > "${mps}"
++  echo "${mps}"
++}
++
++# The MoK modules' own compile options (benchmarks/mok_synthetic_prefill/
++# CMakeLists.txt configure_k0_module) plus the include set the mps tile needs.
++hip_compile() {   # $1 = pin source, $2 = tag
++  local src="$1" tag="$2"
++  local args=(
++    --offload-arch=gfx950
++    -std=c++17 -O3 -c
++    -DKITTENS_CDNA4
++    -DHIP_ENABLE_WARP_SYNC_BUILTINS
++    -ffast-math
++    -Rpass-analysis=kernel-resource-usage
++    -mllvm -amdgpu-mfma-vgpr-form=1
++    -I"${AMD_ROOT}/HipKittens/include"
++    -I"${AMD_ROOT}/HipKittens/prototype"
++    -I"${AMD_ROOT}/auto-gpu-kernel/k0_fused_moe/solution/hip"
++    -I"${AMD_ROOT}/auto-gpu-kernel/k0_fused_moe/prefill_opt/kernels"
++    -I"${SRC_DIR}/include"
++    -I"${SRC_DIR}/distributed-kernels/fused_moe"
++  )
++  # mori headers, if the checkout carries them
++  for d in "${AMD_ROOT}/mori/include" "${SRC_DIR}/third_party/mori/include" \
++           /opt/rocm/include; do
++    [[ -d "${d}" ]] && args+=(-I"${d}")
++  done
++  args+=("${src}" -o "${OUT_DIR}/obj/${tag}.o")
++  if command -v hipcc >/dev/null 2>&1; then
++    echo "+ hipcc ${args[*]}" | tee "${OUT_DIR}/obj/${tag}.cmd"
++    hipcc "${args[@]}" 2> "${OUT_DIR}/obj/${tag}.res" || return 1
++  else
++    echo "+ [docker ${IMAGE}] /opt/rocm/bin/hipcc ${args[*]}" \
++      | tee "${OUT_DIR}/obj/${tag}.cmd"
++    docker run --rm \
++      -v "${SRC_DIR}:${SRC_DIR}:ro" -v "${AMD_ROOT}:${AMD_ROOT}:ro" \
++      -v "${OUT_DIR}:${OUT_DIR}" \
++      --entrypoint /opt/rocm/bin/hipcc "${IMAGE}" \
++      "${args[@]}" 2> "${OUT_DIR}/obj/${tag}.res" || return 1
++  fi
++}
++
++run_cfg() {   # $1 = tag, $2.. = defines
++  local tag="$1"; shift
++  local pin; pin="$(mkpin "${tag}" "$@")"
++  echo "=== ${tag}: $*"
++  if hip_compile "${pin}" "${tag}"; then
++    echo "--- ${tag} OK"
++    grep -E "SGPRs|VGPRs|AGPRs|ScratchSize|Occupancy|Spill|LDS" \
++      "${OUT_DIR}/obj/${tag}.res" || true
++  else
++    echo "--- ${tag} FAILED"
++    tail -40 "${OUT_DIR}/obj/${tag}.res"
++    return 1
++  fi
++}
++
++rc=0
++run_cfg base                                                        || rc=1
++run_cfg fill  "K0P6_M24_FILL 1" "K0P6_M24_ZERO_PAD 1"               || rc=1
++# M24_FULL DEFAULTS TO 1 (rev 3 review fix R.7d). It used to default to 0, so
++# the default run built only `base` and `fill` and reported success -- while the
++# two constructs most likely to fail codegen (the inline-asm opacity barrier on
++# a non-uniform value, and the NORIG_TABLE local array under divergent control
++# flow) live ONLY in the gated pins, as does R0b's blocking inert_4096 pin and
++# arm D's mandatory skew pin. The first time anyone would have learned that the
++# blocking pin does not build is with the node claimed and the GPU window open.
++# This is hipcc, i.e. CPU-only work; there is no reason to skip it. Set
++# M24_FULL=0 only to shorten a smoke check.
++if [[ "${M24_FULL:-1}" != "0" ]]; then
++  run_cfg fill_nullwork "K0P6_M24_FILL 1" "K0P6_M24_ZERO_PAD 1" \
++                        "K0P6_M24_NULLWORK 1"                       || rc=1
++  run_cfg fill_strict   "K0P6_M24_FILL 1" "K0P6_M24_ZERO_PAD 1" \
++                        "K0P6_M24_STRICT 1"                         || rc=1
++  run_cfg inert_4096    "K0P6_M24_FILL 1" "K0P6_M24_ZERO_PAD 1" \
++                        "K0P6_M24_NORIG_CONST 4096"                 || rc=1
++  run_cfg fill_1539     "K0P6_M24_FILL 1" "K0P6_M24_ZERO_PAD 1" \
++                        "K0P6_M24_NORIG_CONST 1539"                 || rc=1
++  run_cfg skew_a        "K0P6_M24_FILL 1" "K0P6_M24_ZERO_PAD 1" \
++                        "K0P6_M24_NORIG_TABLE {4096,0,0,0,0,0,0,0}" || rc=1
++  run_cfg ladder_0      "K0P6_M24_FILL 1" "K0P6_M24_ZERO_PAD 1" \
++                        "K0P6_M24_NORIG_TABLE {0,0,0,0,0,0,0,0}"    || rc=1
++  run_cfg dirty         "K0P6_M24_FILL 1" "K0P6_M24_ALLOW_DIRTY_PAD 1" || rc=1
++  # Compositions section H.8 claims. The descriptor cascade + the raise-not-
++  # redefine block must survive each of them with no macro-redefinition
++  # warning and no slot collision.
++  run_cfg fill_staged   "K0P6_M24_FILL 1" "K0P6_M24_ZERO_PAD 1" \
++                        "K0P6_M15_STAGED 1"                         || rc=1
++  run_cfg fill_rep      "K0P6_M24_FILL 1" "K0P6_M24_ZERO_PAD 1" \
++                        "K0P6_M15_REPLICATE 1"                      || rc=1
++  run_cfg fill_adapt    "K0P6_M24_FILL 1" "K0P6_M24_ZERO_PAD 1" \
++                        "K0P6_M15_REPLICATE 1" "K0P6_M15_ADAPTIVE 1" || rc=1
++  run_cfg fill_slotpool "K0P6_M24_FILL 1" "K0P6_M24_ZERO_PAD 1" \
++                        "K0P6_M15_REPLICATE 1" "K0P6_M15_ADAPTIVE 1" \
++                        "K0P6_M20_SLOTPOOL 1"                       || rc=1
++fi
++# The NULLWORK-alone and STRICT-alone builds MUST fail (their #error
++# cross-checks). A silent success here means a guard was lost.
++neg_cfg() {   # $1 = tag, $2.. = defines that must NOT compile
++  local tag="$1"; shift
++  local pin; pin="$(mkpin "neg_${tag}" "$@")"
++  echo "=== neg_${tag} (must FAIL): $*"
++  if hip_compile "${pin}" "neg_${tag}"; then
++    echo "--- neg_${tag} COMPILED, but the #error cross-check should have fired"
++    return 1
++  fi
++  if grep -q "K0P6_M24" "${OUT_DIR}/obj/neg_${tag}.res"; then
++    echo "--- neg_${tag} correctly refused"
++    return 0
++  fi
++  echo "--- neg_${tag} failed for the WRONG reason:"
++  tail -20 "${OUT_DIR}/obj/neg_${tag}.res"
++  return 1
++}
++if [[ "${M24_FULL:-1}" != "0" ]]; then
++  neg_cfg nullwork_alone "K0P6_M24_NULLWORK 1"                      || rc=1
++  neg_cfg strict_alone   "K0P6_M24_STRICT 1"                        || rc=1
++  neg_cfg fill_nozero    "K0P6_M24_FILL 1"                          || rc=1
++  neg_cfg both_sources   "K0P6_M24_FILL 1" "K0P6_M24_ZERO_PAD 1" \
++                         "K0P6_M24_NORIG_CONST 1024" \
++                         "K0P6_M24_NORIG_TABLE {0,0,0,0,0,0,0,0}"   || rc=1
++fi
++echo "resource reports in ${OUT_DIR}/obj/*.res"
++exit "${rc}"

@@ -146,10 +146,72 @@ class DescriptorSlot(int, Enum):
     MPS_STATE = 60
     MPS_SLOTS = 61
     MPS_CFG = 62
+    # M24 fill-aware arm only (``K0P6_M24_FILL=1``): pointer to this layer's
+    # fill-vector buffer.  Slots 63..70 stay outside the enum -- they belong to
+    # the STAGED / REPLICATE / ADAPTIVE / SLOTPOOL arms and are validated by
+    # the branches in :func:`attest_descriptor_words`, which is also what keeps
+    # the enum walk below from indexing past a 63-word descriptor.
+    M24_FILL = 71
 
 
 #: ``K0P6_MPS_D_LEN``; slot 63 exists only under ``K0P6_M15_STAGED=1``.
+#: DELIBERATELY STILL 63.  This is the default ``expected_words`` for every
+#: descriptor validation, so raising it would change host behaviour for
+#: default-0, non-M24 control arms whose kernel still compiles
+#: ``K0P6_M15_D_LEN = 63`` -- which would make the M24 campaign's own control
+#: arm no longer byte-for-byte the pre-M24 serving configuration and void the
+#: ``m15/patched-stock`` leg of the mandated three-way decomposition.
 M15_DESCRIPTOR_WORDS = 63
+
+#: ``K0P6_M15_D_LEN`` under ``K0P6_M24_FILL=1``: the M24 raise (63/64/65/71 ->
+#: 72).  Pass it EXPLICITLY as ``expected_words`` on M24 builds only.  On a
+#: plain (non-composed) M24 build slots 63..70 are UNCLAIMED: the host must
+#: zero-fill them and the device never reads them.
+M15_DESCRIPTOR_WORDS_M24 = 72
+
+#: M24 fill-vector buffer (one per layer, int32, device, 16-byte aligned):
+#: ``8`` header words + ``world`` ``n_orig`` words + a ``4``-word DEVICE-OWNED
+#: tail that the on-stream pre-op's ``32 + 4*world`` byte record never covers
+#: and that ``M0``'s ``mps_state`` zeroing never touches.
+#:   header: ``[0] magic  [1] gen  [2] flags  [3] csum  [4] gen_echo  [5..7] rsv``
+#:   then    ``[8 + p] n_orig[p]`` for ``p in range(world)``
+#:   tail:   ``[8+world+0] last_seen_gen  [+1] agreed_T_eff``
+#:           ``[+2] agreed_flags  [+3] rsv``
+M24_FILL_HEADER_WORDS = 8
+M24_FILL_TAIL_WORDS = 4
+#: ``K0P6_M24_MAGIC`` -- ASCII ``"M24F"``.
+M24_FILL_MAGIC = 0x4D323446
+
+
+def m24_fill_buffer_words(world: int) -> int:
+    """int32 words in one layer's M24 fill buffer (header + n_orig + tail)."""
+    return M24_FILL_HEADER_WORDS + int(world) + M24_FILL_TAIL_WORDS
+
+
+def m24_fill_buffer_bytes(world: int) -> int:
+    """Bytes in one layer's M24 fill buffer: ``32 + 4*world + 16``."""
+    return 4 * m24_fill_buffer_words(world)
+
+
+def m24_fill_checksum(gen: int, flags: int, n_orig: "list[int] | tuple[int, ...]") -> int:
+    """The ``csum`` word the device pre-op must write.
+
+    Authoritative definition, mirrored by ``k0p6_m24_publish`` in
+    ``k0pf6gm_device_tile_m15.hip``: seed with the magic, then xor ``gen``
+    (word 1), ``flags`` (word 2) and every ``n_orig`` word.
+
+    Word 0 is deliberately NOT in the sum (rev 3 review fix R.8).  It is the
+    magic on any payload that got past the magic test, so xoring it in
+    cancelled the seed exactly -- the "seeded with the magic" property both
+    this docstring and the kernel comment claimed did not exist, and a future
+    header-layout change could have relied on it.
+    """
+    acc = M24_FILL_MAGIC            # seed (word 0 is NOT xored in)
+    acc ^= int(gen) & 0xFFFFFFFF    # word[1]
+    acc ^= int(flags) & 0xFFFFFFFF  # word[2]
+    for value in n_orig:
+        acc ^= int(value) & 0xFFFFFFFF
+    return acc & 0xFFFFFFFF
 
 #: Slots holding a plain integer value rather than a device address.
 SCALAR_SLOTS = frozenset(
@@ -570,8 +632,19 @@ def buffer_table(
     elide_part: bool = False,
     adaptive: bool = False,
     m20: bool = False,
+    m24: bool = False,
 ) -> tuple[BufferSpec, ...]:
     """Every descriptor-bound allocation, in a rank-deterministic order.
+
+    ``m24`` appends the fill-vector buffer (slot 71) that the M24 fill-aware
+    arm requires.  It is rank-LOCAL, not symmetric, and it is appended LAST so
+    every earlier entry keeps its position.  Its ``zero=True`` is
+    load-bearing, not hygiene: the device-owned tail word ``last_seen_gen``
+    is READ by the very first launch (``k0p6_m24_publish``) and written only
+    on an accepted step, so allocator residue >= the first ``gen`` makes every
+    step reject with ``RJ_STALE``, silently running the pre-M24 kernel in an
+    arm labelled M24 -- the project's named past sin (candidate never actually
+    ran) with no receipt able to detect it.
 
     ``elide_part`` drops the 560 MiB ``part`` tower, which
     :func:`part_is_dead` proves is never dereferenced at mode 12 with the skip
@@ -998,6 +1071,30 @@ def buffer_table(
             if m20
             else ()
         ),
+        # M24 only, appended LAST.  ONE PER LAYER -- this spec describes a
+        # single layer's buffer and the caller allocates ``num_layers`` of
+        # them, exactly as it does for the per-layer descriptors.  Rank-local,
+        # 16-byte aligned (the device entry guard refuses anything else; the
+        # torch caching allocator's 256-byte base guarantees it).  MUST be
+        # zeroed: see the ``m24`` note in this function's docstring.
+        *(
+            (
+                BufferSpec(
+                    DescriptorSlot.M24_FILL,
+                    "m24_fill",
+                    m24_fill_buffer_words(bucket.world),
+                    4,
+                    "int32",
+                    False,
+                    True,
+                    "M24 fill vector, ONE PER LAYER: 8 header + world n_orig "
+                    "+ 4 device-owned tail words; host writes only the first "
+                    "8+world, the device owns the tail",
+                ),
+            )
+            if m24
+            else ()
+        ),
     )
 
 
@@ -1288,6 +1385,7 @@ def attest_descriptor_words(
     spin_limit: int = M15_SPIN_LIMIT,
     part_elided: bool = False,
     expected_words: int = M15_DESCRIPTOR_WORDS,
+    cascade_words: int | None = None,
 ) -> list[ActivationBlocker]:
     """Check the scalar slots of a fully built descriptor vector.
 
@@ -1299,6 +1397,28 @@ def attest_descriptor_words(
     arm (slot 63 = the M18R table pointer, checked non-null below like every
     other pointer slot the enum names -- slot 63 itself is outside the enum
     and validated by the device entry guard's magic/nrep check instead).
+    It is :data:`M15_DESCRIPTOR_WORDS_M24` (72) for an M24 fill-aware build,
+    which must be passed EXPLICITLY: the module default stays 63 so a
+    default-0 control arm's descriptor path is provably unchanged.
+
+    ``cascade_words`` is the length the kernel's ``K0P6_M15_D_LEN`` cascade
+    produced BEFORE M24's raise-not-redefine block: 63 for a plain M24 build,
+    64 with STAGED/REPLICATE/SAVE_Z, 65 with +ADAPTIVE, 71 with +SLOTPOOL.  It
+    is required on M24 builds and ignored otherwise.
+
+    REV 3 REVIEW FIX R.6/R.8b -- why an explicit ``cascade_words`` and not an
+    inferred flag.  The first implementation inferred a single boolean,
+    ``m24_plain = all(words[63..70] == 0)``, and skipped the M18/M19/M20
+    branches wholesale on it.  Because ``expected_words`` is 72 for EVERY M24
+    build, that handled exactly two descriptor shapes -- plain M24, and M24
+    composed with STAGED+REPLICATE+ADAPTIVE+SLOTPOOL all at once -- and raised
+    spurious blockers for every partial composition (M24+ADAPTIVE binds slot
+    64, so ``m24_plain`` is False, so M15-DESC-005 demands an M18R table the
+    arm has no reason to bind and ``refuse_if`` aborts activation).  It also
+    had the inverse hole: a genuinely mis-bound M24+SLOTPOOL descriptor with
+    63..70 all zero set ``m24_plain`` True and skipped every M20 check
+    silently.  The cascade length is the thing that actually determines which
+    slots are claimed, so the caller states it.
     """
 
     out: list[ActivationBlocker] = []
@@ -1311,7 +1431,66 @@ def attest_descriptor_words(
             )
         )
         return out
-    if expected_words > M15_DESCRIPTOR_WORDS and int(words[63]) == 0:
+    # M24 raises K0P6_M15_D_LEN to 72 from whatever the composition cascade
+    # produced; `claimed` is how far the cascade itself reached, i.e. which of
+    # slots 63..70 this build's kernel actually reads.  Everything at or above
+    # `claimed` and below 71 is UNCLAIMED and must be zero.
+    m24_build = expected_words >= M15_DESCRIPTOR_WORDS_M24
+    if m24_build:
+        if cascade_words is None:
+            out.append(
+                _blocker(
+                    "M15-DESC-014",
+                    "an M24 descriptor was attested without cascade_words",
+                    "the caller must state the pre-raise K0P6_M15_D_LEN (63 "
+                    "plain, 64 STAGED/REPLICATE, 65 +ADAPTIVE, 71 +SLOTPOOL) "
+                    "so the M18/M19/M20 slot checks apply to exactly the "
+                    "slots this build claims",
+                )
+            )
+            return out
+        claimed = int(cascade_words)
+        if claimed < M15_DESCRIPTOR_WORDS or claimed > int(
+            DescriptorSlot.M24_FILL
+        ):
+            out.append(
+                _blocker(
+                    "M15-DESC-014",
+                    f"cascade_words={claimed} is not a legal pre-raise "
+                    "K0P6_M15_D_LEN",
+                    "63, 64, 65 or 71 -- anything above 71 means another arm "
+                    "claims the M24 fill slot and the kernel's own #error "
+                    "would have refused the build",
+                )
+            )
+            return out
+        fill_ptr = int(words[int(DescriptorSlot.M24_FILL)])
+        if fill_ptr == 0 or fill_ptr % 16:
+            out.append(
+                _blocker(
+                    "M15-DESC-013",
+                    f"M24 descriptor slot 71 (fill vector) is {fill_ptr:#x}",
+                    "a 16-byte-aligned per-layer fill buffer of "
+                    f"{m24_fill_buffer_bytes(bucket.world)} bytes "
+                    "(32 + 4*world header + a 16-byte device-owned tail)",
+                )
+            )
+        for unclaimed in range(claimed, int(DescriptorSlot.M24_FILL)):
+            if int(words[unclaimed]) != 0:
+                out.append(
+                    _blocker(
+                        "M15-DESC-015",
+                        f"descriptor slot {unclaimed} is "
+                        f"{int(words[unclaimed]):#x} but this build's cascade "
+                        f"stops at {claimed}",
+                        "zero in every slot the kernel does not compile -- a "
+                        "non-zero word there is a mis-built descriptor, and "
+                        "the device never reads it",
+                    )
+                )
+    else:
+        claimed = expected_words
+    if claimed > M15_DESCRIPTOR_WORDS and int(words[63]) == 0:
         out.append(
             _blocker(
                 "M15-DESC-005",
@@ -1319,7 +1498,7 @@ def attest_descriptor_words(
                 "a bound M18R table before any descriptor commit",
             )
         )
-    if expected_words > 64 and int(words[64]) == 0:
+    if claimed > 64 and int(words[64]) == 0:
         out.append(
             _blocker(
                 "M15-DESC-006",
@@ -1327,7 +1506,7 @@ def attest_descriptor_words(
                 "the symmetric decision words carved with the ring slot",
             )
         )
-    if expected_words > 65:
+    if claimed > 65:
         # M20: slot 65 (DECIN) and the four pool bases (66..69) must be
         # bound; the device entry guard refuses them independently.  Slot 70
         # (prefetch duty) is deliberately nullable — cache mode passes 0 and
@@ -1378,6 +1557,12 @@ def attest_descriptor_words(
                 )
             )
     for slot in DescriptorSlot:
+        if int(slot) >= expected_words:
+            # A slot this build's kernel does not compile (today only slot 71,
+            # the M24 fill vector, which exists solely under K0P6_M24_FILL=1).
+            # No enum member below 63 can reach this, so a default-0 arm walks
+            # exactly the slots it walked before M24.
+            continue
         if slot in SCALAR_SLOTS:
             continue
         if slot is DescriptorSlot.PART and part_elided:

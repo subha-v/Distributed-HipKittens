@@ -164,6 +164,165 @@
 #error "K0P6_M15_SAVE_Z and K0P6_M15_STAGED both claim descriptor slot 63"
 #endif
 
+// ============================================================================
+// M24: FILL-AWARE megakernel (FILL_AWARE_DESIGN.md rev 2, commit 1329aebe).
+// Serving dispatches 4,096 padded rows while carrying ~1,539 real tokens per
+// rank per step (37.6% fill, 2.66x padding multiplier). M24 makes the mega's
+// row-proportional cost scale with n_orig instead of with the padded capacity:
+// a per-layer device buffer (descriptor slot 71) carries the DP n_orig vector,
+// ONE thread (bid==0 && tid==0) validates it PRE-barrier and publishes a
+// grid-uniform agreed_T_eff, and the five row-count sites re-derive T from it.
+// Nothing here is in mps_state (M0 zeroes that block grid-wide post-barrier);
+// M24's own per-layer buffer carries a 16-byte device-owned tail instead.
+// Every macro defaults to 0/off and the default build must be
+// instruction-identical to the pre-M24 body (build gate, design section E).
+//
+// Master switch. Gates the slot, the buffer read, the handshake, the publish,
+// and the five T_eff substitutions (KERNEL 943 / 977 / 1375 / 1587 / 1891).
+#ifndef K0P6_M24_FILL
+#define K0P6_M24_FILL 0
+#endif
+// Rounding granularity of T_eff. 256 is the conservative default: the
+// read-only hkp::csr_scan_block256 / hkp::pull_src_fill headers have only ever
+// been exercised at T in {4096, 2048, 1024} (design section B.3). Lower it to
+// 8 only after work-list G7 establishes T-generality.
+#ifndef K0P6_M24_TGRAIN
+#define K0P6_M24_TGRAIN 256
+#endif
+// M8 tail: zero out[T_eff, T_cap). MANDATORY in every fill build -- `out` is a
+// captured torch.empty_like allocation and rows past T_eff would otherwise
+// never be written again by anybody, so uninitialised graph-pool bytes (any of
+// which may decode as bf16 NaN) would persist across every replay and break
+// the max_nonfinite == 0 chokepoint (design section B.4).
+#ifndef K0P6_M24_ZERO_PAD
+#define K0P6_M24_ZERO_PAD 0
+#endif
+// Escape hatch so the adversarial verifier can build the unsafe
+// FILL=1/ZERO_PAD=0 variant deliberately (G8). Never used in a measured arm.
+#ifndef K0P6_M24_ALLOW_DIRTY_PAD
+#define K0P6_M24_ALLOW_DIRTY_PAD 0
+#endif
+// Receive-side null-work skip, keyed on GROUND TRUTH (total == 0 from the
+// settled chunk_ready fills) and never on a belief about peers' n_orig.
+// DIAGNOSTIC ONLY: a DP-dummy rank still owns 32 experts under EP8 and still
+// receives from every busy peer, so the predicate does not fire in serving
+// (design section B.5 demotion box). REQUIRES FILL (rev 3 review fix R.10):
+// with FILL=0 the second conjunct is `k0p6_dread(desc, K0P6_D_T) == 0`, a
+// compile-time false, so every guard is always taken and the arm is provably
+// inert -- an operator setting NULLWORK alone would get a clean build that
+// measures identically to base and would attribute the null result to the
+// mechanism rather than to the missing FILL.
+#ifndef K0P6_M24_NULLWORK
+#define K0P6_M24_NULLWORK 0
+#endif
+// MoK-only payload VALUE substitution: publish round_up_sat(N, TGRAIN)
+// instead of the buffer's n_orig[cur]. It substitutes the VALUE ONLY, and only
+// on the path an accepted payload takes -- the buffer read, the FULL
+// validation chain, the reject/fallback branch, the clamp, the publish, the
+// barrier ordering, the five consuming loads and the ZERO_PAD tail are
+// byte-for-byte the serving build, so the MoK binary is the shipping binary
+// (design section D, rev 2 box; rev 3 review fix R.3). The MoK harness
+// therefore has to write a VALID fill vector before every launch exactly as
+// serving does -- see m24_fill.py / m24_mok_patch.py. 0 == OFF, not "N = 0":
+// the ladder's N=0 point is built as K0P6_M24_NORIG_TABLE={0,0,0,0,0,0,0,0}.
+#ifndef K0P6_M24_NORIG_CONST
+#define K0P6_M24_NORIG_CONST 0
+#endif
+// MoK-only heterogeneous-fill source (arm D): a per-rank brace list indexed by
+// the runtime `cur`, e.g. -DK0P6_M24_NORIG_TABLE={4096,0,0,0,0,0,0,0}. It is
+// deliberately given NO default -- "unset" is its off state, because every
+// int8 value including 0 is a legal table entry. Mutually exclusive with
+// K0P6_M24_NORIG_CONST.
+// #define K0P6_M24_NORIG_TABLE {..8 entries..}
+// Raise a DISTINCT, run-voiding telemetry bit (K0P6_M24_ERR_STRICT, 1<<30) on
+// top of the generic reject bit when a payload is rejected. Mandatory = 1 for
+// the whole first serving arm (design section B.2).
+//
+// REV 3 REVIEW FIX R.2 -- what STRICT deliberately does NOT do any more. The
+// first implementation raised the generic fail bit 16777216, which the
+// post-M0-barrier uniform check turns into a grid-wide return ON THAT RANK
+// ONLY. A reject is a PER-RANK event -- the design itself lists "the pre-op
+// did not run for this rank" (eager fall-through, the M23 uniform rescue) as
+// an expected case -- so that converted an expected, benign staleness into a
+// NON-UNANIMOUS COLLECTIVE: 7 ranks spinning rows_done to spin_limit on all 58
+// layers while the 8th abandoned the step, and, because pperr is a sticky
+// device word that is never host-reset between replays, permanently
+// thereafter. STRICT therefore raises TELEMETRY ONLY; the device still
+// degrades to the padded capacity, which is bit-for-bit today's behaviour and
+// unanimous by construction. "Fail closed" is enforced by the HOST, which is
+// where a per-rank decision can be made globally: the MoK harness already
+// all-reduces pperr and blocks any arm whose value is nonzero, and the serving
+// receipt (G15) voids any run with a nonzero reject count.
+#ifndef K0P6_M24_STRICT
+#define K0P6_M24_STRICT 0
+#endif
+// T2-c/T2-d/T2-e placeholders (work-list G17). Declared so no arm can set them
+// believing they do something; each is a separate arm with its own gate and
+// none of them is implemented yet -- setting one is a loud build failure.
+#ifndef K0P6_M24_DENSE_SCATTER
+#define K0P6_M24_DENSE_SCATTER 0
+#endif
+#ifndef K0P6_M24_FILL_C
+#define K0P6_M24_FILL_C 0
+#endif
+#ifndef K0P6_M24_M8_ADAPT
+#define K0P6_M24_M8_ADAPT 0
+#endif
+
+#if K0P6_M24_FILL && !K0P6_M24_ZERO_PAD && !K0P6_M24_ALLOW_DIRTY_PAD
+#error "K0P6_M24_FILL requires K0P6_M24_ZERO_PAD (out[T_eff,T_cap) would keep uninitialised captured-pool bytes forever); set K0P6_M24_ALLOW_DIRTY_PAD to build the unsafe variant on purpose"
+#endif
+#if K0P6_M24_ZERO_PAD && !K0P6_M24_FILL
+#error "K0P6_M24_ZERO_PAD requires K0P6_M24_FILL (there is no T_eff without it)"
+#endif
+#if K0P6_M24_ALLOW_DIRTY_PAD && !K0P6_M24_FILL
+#error "K0P6_M24_ALLOW_DIRTY_PAD requires K0P6_M24_FILL"
+#endif
+#if K0P6_M24_FILL_C && !K0P6_M24_FILL
+#error "K0P6_M24_FILL_C requires K0P6_M24_FILL"
+#endif
+#if K0P6_M24_M8_ADAPT && !K0P6_M24_FILL
+#error "K0P6_M24_M8_ADAPT requires K0P6_M24_FILL"
+#endif
+#if K0P6_M24_NORIG_CONST && !K0P6_M24_FILL
+#error "K0P6_M24_NORIG_CONST requires K0P6_M24_FILL (it only substitutes the payload source)"
+#endif
+#if defined(K0P6_M24_NORIG_TABLE) && !K0P6_M24_FILL
+#error "K0P6_M24_NORIG_TABLE requires K0P6_M24_FILL (it only substitutes the payload source)"
+#endif
+#if K0P6_M24_STRICT && !K0P6_M24_FILL
+#error "K0P6_M24_STRICT requires K0P6_M24_FILL (there is no payload to fail closed on)"
+#endif
+#if K0P6_M24_NORIG_CONST && defined(K0P6_M24_NORIG_TABLE)
+#error "K0P6_M24_NORIG_CONST and K0P6_M24_NORIG_TABLE both claim the payload source"
+#endif
+#if K0P6_M24_FILL && K0P6_M24_TGRAIN < 1
+#error "K0P6_M24_TGRAIN must be at least 1"
+#endif
+#if K0P6_M24_DENSE_SCATTER
+#error "K0P6_M24_DENSE_SCATTER (T2-c) is declared but NOT implemented -- work-list G17, its own arm and accuracy gate"
+#endif
+#if K0P6_M24_FILL_C
+#error "K0P6_M24_FILL_C (T2-d, runtime-adaptive reserved_comm_ctas) is declared but NOT implemented -- work-list G17, and it must not land before arm E's C/flush_rows re-sweep"
+#endif
+#if K0P6_M24_M8_ADAPT
+#error "K0P6_M24_M8_ADAPT (T2-e, M8 granularity at low T) is declared but NOT implemented -- work-list G17"
+#endif
+// Rev 3 review fix R.10: NULLWORK was the one M24 macro with no FILL
+// cross-check, so it could be set alone and build a provably inert arm.
+#if K0P6_M24_NULLWORK && !K0P6_M24_FILL
+#error "K0P6_M24_NULLWORK requires K0P6_M24_FILL (with FILL=0 the T_eff==0 conjunct is a compile-time false and the arm is provably inert)"
+#endif
+// Rev 3 review fix R.9b: the JIT-cache guard must move on the M24 branch, or a
+// stale .hsaco compiled from the pre-M24 body is served for a fill arm. The
+// bump lives HERE, not at the K0P6_M15_SRC_REV definition, because K0P6_M24_*
+// is not defined yet at that point in the file.
+#if K0P6_M24_FILL
+#undef K0P6_M15_SRC_REV
+#define K0P6_M15_SRC_REV 3
+#endif
+// ============================================================================
+
 // exp_27 shipped arm: M6 reads token-major sc_stage; M5's transpose is dead.
 #ifndef K0P6_MPS_ASCALE_TM
 #define K0P6_MPS_ASCALE_TM 1
@@ -281,6 +440,51 @@
 #define K0P6_M15_D_LEN K0P6_MPS_D_LEN
 #endif
 
+#if K0P6_M24_FILL
+// M24 fill vector, one 16-byte-aligned device buffer PER LAYER:
+//   u32[0]        magic 0x4D323446 "M24F"
+//   u32[1]        gen        monotonic (>= 1) per mega-eligible model step
+//   u32[2]        flags      bit0 = fill-aware requested this step
+//   u32[3]        csum       K0P6_M24_MAGIC ^ w[1] ^ w[2] ^ n_orig[0..world)
+//                            (rev 3 review fix R.8: w[0] is deliberately NOT
+//                            in the sum -- w[0] IS the magic on any payload
+//                            that got past the magic test, so xoring it in
+//                            cancelled the seed exactly and the "seeded with
+//                            the magic" property the comment claimed did not
+//                            exist. m24_fill.py mirrors this definition.)
+//   u32[4]        gen_echo   duplicate of gen, packed LAST (tear detector)
+//   u32[5..7]     reserved (zero)
+//   u32[8 + p]    n_orig[p], p in [0, world)
+//   ---- device-owned tail; the pre-op's 32 + 4*world byte record NEVER
+//        covers it, and M0's mps_state zeroing never touches it ----
+//   u32[8+world+0] last_seen_gen   per-layer consume-once token
+//   u32[8+world+1] agreed_T_eff    the grid-uniform broadcast
+//   u32[8+world+2] agreed_flags    bit0 = fill in use, bits 1..3 reject reason
+//   u32[8+world+3] reserved
+// Slot 71 is above every slot any other arm claims (STAGED/REPLICATE/SAVE_Z
+// take 63; ADAPTIVE 64; M20_SLOTPOOL 65..70).
+#define K0P6_D_M24_FILL 71
+// REAL collision check (rev 3 review fix R.9a). The first implementation wrote
+// `#if K0P6_D_M24_FILL >= 72`, a comparison between two literals fixed three
+// lines apart that can never fire and protected nothing. The check that
+// actually catches the hazard the design named -- "a future arm reaches 71" --
+// is against the cascade's OWN length, evaluated BEFORE the raise below: if
+// any arm ever extends the cascade to a D_LEN > 71 it has claimed slot 71 and
+// M24 would silently alias it.
+#if K0P6_M15_D_LEN > K0P6_D_M24_FILL
+#error "another descriptor arm already claims slot 71 (or beyond); M24 must be re-slotted and m15_contracts.DescriptorSlot.M24_FILL updated with it"
+#endif
+// RAISE, never redefine: K0P6_M15_D_LEN above is an EXCLUSIVE #if/#elif
+// cascade, so an unconditional #define here would be a macro redefinition in
+// four of its branches. The default (non-SLOTPOOL) build jumps 63 -> 72,
+// leaving slots 63..70 UNCLAIMED: the host must zero-fill them and the device
+// must never read them.
+#if K0P6_M15_D_LEN < 72
+#undef K0P6_M15_D_LEN
+#define K0P6_M15_D_LEN 72
+#endif
+#endif
+
 // Kernel symbol name, parametric so a RUN PIN branch can compile this body
 // under the harness's expected name (the ablations-tbo16 pin pattern). The
 // default is the sibling name; ablations-m15 sets it to k0pf6gm_mps_mega.
@@ -321,6 +525,246 @@ __device__ __forceinline__ std::uint64_t k0p6_epoch(const long long* desc) {
   return (std::uint64_t)
              hk_moe::load_relaxed<hk_moe::scope::agent>(epoch_cell) +
          1ull;
+}
+
+// ---- M24: fill-vector handshake + the T_eff broadcast --------------------------------------
+// pperr bit 29 (536870912): M24 payload rejected. The step degrades to the
+// padded capacity -- bit-for-bit today's behaviour, and unanimous across the
+// grid and across ranks -- so it is not a device-side fault. It IS, however,
+// RUN-VOIDING telemetry, not "non-fatal": a fill arm whose payload was
+// rejected measured the pre-M24 kernel, and quoting its ratio as a fill number
+// is fairness item 3 ("candidate actually ran"). The MoK harness's existing
+// "all-reduced pperr must be 0" rule is therefore the CORRECT response and is
+// deliberately left unmasked (rev 3 review fix R.6).
+//
+// REV 3 REVIEW FIX R.5 -- bit 26 was K0P6_MPS_ERR_SERVICE. The first
+// implementation used 67108864, which is bit-for-bit K0P6_MPS_ERR_SERVICE
+// (moe_mps_adapter.cuh:30, "service/event poll timeout") in the same
+// translation unit, and the collision was silent because the macro names
+// differ. Every receipt rule that decodes bit 26 -- exp_34/exp_30's mode-14
+// correctness receipt, and moe_mps_adapter.cuh:917's live early-return in
+// wait_event_nonempty -- would have mis-read one for the other in both
+// directions. Bits 25..28 are all taken (M7DONE/SERVICE/DUAL/CONFIG); 29 and
+// 30 are free, and 31 is avoided because pperr is a signed int.
+#define K0P6_M24_ERR_REJECT 536870912
+// pperr bit 30: set IN ADDITION under K0P6_M24_STRICT. Distinct so a receipt
+// can tell "a reject happened in a permissive arm" from "a reject happened in
+// an arm that declared rejects unacceptable". Telemetry only -- see the
+// K0P6_M24_STRICT comment for why it must never gate a device-side return.
+#define K0P6_M24_ERR_STRICT 1073741824
+
+#if K0P6_M24_FILL
+#define K0P6_M24_MAGIC 0x4D323446u
+#define K0P6_M24_TAIL_LAST_GEN 0
+#define K0P6_M24_TAIL_TEFF 1
+#define K0P6_M24_TAIL_FLAGS 2
+// agreed_flags: bit0 = fill in use; bits 1..3 = reject reason when bit0 == 0.
+#define K0P6_M24_RJ_MAGIC 1u
+#define K0P6_M24_RJ_TEAR 2u
+#define K0P6_M24_RJ_CSUM 3u
+#define K0P6_M24_RJ_FLAGS 4u
+#define K0P6_M24_RJ_STALE 5u
+#define K0P6_M24_RJ_RANGE 6u
+
+__device__ __forceinline__ unsigned int* k0p6_m24_tail(const long long* desc,
+                                                       int world) {
+  return (unsigned int*)k0p6_dread(desc, K0P6_D_M24_FILL) + 8 + world;
+}
+
+// Saturating round-up into [0, cap]. LOAD-BEARING, not defensive noise: a
+// partially written or reused buffer yielding n = 0x7FFFFF80 would make a
+// plain round_up overflow int to a large negative, min(cap, negative) stays
+// negative, and every consuming loop would run zero times -- no output row
+// written at all, pperr clean, an entirely stale `out`. The 64-bit
+// intermediate plus the cap cannot produce that.
+__device__ __forceinline__ int k0p6_m24_round_up_sat(int n, int grain,
+                                                     int cap) {
+  if (cap <= 0) return 0;
+  if (n <= 0) return 0;
+  if (n >= cap) return cap;
+  const long long g = (long long)grain;
+  const long long r = (((long long)n + g - 1ll) / g) * g;
+  return (r >= (long long)cap) ? cap : (int)r;
+}
+
+// Single reader of the racing buffer: bid==0 && tid==0 ONLY, and PRE-barrier.
+// The existing M0 grid barrier (+ its acquire_payload_agent) is what carries
+// agreed_T_eff to all 256 CTAs, so T_eff is grid-uniform by construction from
+// ONE read of the buffer -- not from the hope that 256 CTAs racing an
+// asynchronous writer all observe the same bytes. No new barrier, no new poll,
+// no new cross-rank word. Returns the gen to commit post-barrier (0 = none).
+__device__ __forceinline__ unsigned int k0p6_m24_publish(const long long* desc,
+                                                         int cur, int world,
+                                                         int MAXTOK,
+                                                         int* pperr) {
+  if (blockIdx.x != 0u || threadIdx.x != 0u) return 0u;
+  const unsigned int* hdr =
+      (const unsigned int*)k0p6_dread(desc, K0P6_D_M24_FILL);
+  unsigned int* tail = (unsigned int*)hdr + 8 + world;
+  const int T_cap = (int)k0p6_dread(desc, K0P6_D_T);
+  // The tail is device-owned and single-writer (this thread, this layer); a
+  // plain load is correct and M0's mps_state zeroing cannot reach it.
+  const unsigned int last_gen = tail[K0P6_M24_TAIL_LAST_GEN];
+  // Scoped relaxed loads, never k0p6_dread: that is a bare unscoped volatile
+  // load, and this cell is mutated per step by another agent on this device.
+  const unsigned int magic =
+      hk_moe::load_relaxed<hk_moe::scope::system>(hdr + 0);
+  const unsigned int gen =
+      hk_moe::load_relaxed<hk_moe::scope::system>(hdr + 1);
+  const unsigned int flags =
+      hk_moe::load_relaxed<hk_moe::scope::system>(hdr + 2);
+  const unsigned int csum =
+      hk_moe::load_relaxed<hk_moe::scope::system>(hdr + 3);
+  const unsigned int gen_echo =
+      hk_moe::load_relaxed<hk_moe::scope::system>(hdr + 4);
+  // Seeded with the magic and NOT xoring w[0] (rev 3 review fix R.8): w[0] IS
+  // the magic on any payload that clears the magic test three lines below, so
+  // xoring it in cancelled the seed exactly. m24_fill.py mirrors this.
+  unsigned int acc = K0P6_M24_MAGIC ^ gen ^ flags;
+  bool range_ok = true;
+  int n_self = 0;
+  for (int p = 0; p < world; ++p) {
+    const unsigned int v =
+        hk_moe::load_relaxed<hk_moe::scope::system>(hdr + 8 + p);
+    acc ^= v;
+    if (v > (unsigned int)MAXTOK) range_ok = false;
+    if (p == cur) n_self = (int)v;
+  }
+  unsigned int reason = 0u;
+  if (magic != K0P6_M24_MAGIC) reason = K0P6_M24_RJ_MAGIC;
+  else if (gen_echo != gen) reason = K0P6_M24_RJ_TEAR;
+  else if (acc != csum) reason = K0P6_M24_RJ_CSUM;
+  else if ((flags & 1u) == 0u) reason = K0P6_M24_RJ_FLAGS;
+  else if (gen <= last_gen) reason = K0P6_M24_RJ_STALE;
+  else if (!range_ok) reason = K0P6_M24_RJ_RANGE;
+#if defined(K0P6_M24_NORIG_TABLE) || K0P6_M24_NORIG_CONST
+  // MoK arms substitute the payload VALUE only. The buffer read, the whole
+  // validation chain above, the reject/fallback branch below, the clamp, the
+  // publish, the barrier ordering and the five consuming loads are byte-for-
+  // byte the serving path (design section D, rev 2 box).
+  //
+  // REV 3 REVIEW FIX R.3 -- `reason = 0u;` used to sit at the bottom of this
+  // block. It made the six comparisons above, `range_ok`, `last_gen`, the
+  // whole else-branch (T_cap fallback, both atomicOrs) and the aflags
+  // computation provably unreachable, so LLVM deleted them AND the loads that
+  // fed only them (load_relaxed is a monotonic atomic load, which
+  // wouldInstructionBeTriviallyDead removes when unused). The result was the
+  // exact defect section D rev 2 and section E were written to prevent: the
+  // validation, the reject telemetry and the fail-closed path existed in no
+  // MoK binary and would have first executed on 8 live GPUs inside a serving
+  // campaign, while the mandated cross-pin resource-tuple equality check
+  // could not have passed. The MoK harness must therefore write a VALID fill
+  // vector before every launch, exactly as serving does (m24_fill.py,
+  // m24_mok_patch.py) -- the substitution below only replaces the number.
+  if (reason == 0u) {
+    int n_sub = 0;
+#if defined(K0P6_M24_NORIG_TABLE)
+    const int k0p6_m24_tbl[8] = K0P6_M24_NORIG_TABLE;
+    // Fully-unrolled select, NOT `tbl[cur]` (rev 3 review fix R.7a): `cur`
+    // comes from a volatile descriptor load, so the backend cannot prove it
+    // uniform and a divergent index into a function-local array is exactly how
+    // the array lands in scratch -- private_segment_fixed_size > 0 is an
+    // automatic fail of the arm build gate's no-spill assertion at
+    // occupancy-1. With p a loop constant this compiles to a select chain.
+#pragma unroll
+    for (int p = 0; p < 8; ++p) {
+      if (p == cur) n_sub = k0p6_m24_tbl[p];
+    }
+#else
+    n_sub = (int)(K0P6_M24_NORIG_CONST);
+#endif
+    // Opacity barrier: keep the substituted count a runtime value so no loop
+    // bound, tile count or unroll factor can be specialised on it. A cross-pin
+    // resource-tuple difference against the serving-shaped pin means it
+    // leaked. "+v", not "+s" (rev 3 review fix R.7b): the value is derived
+    // from a non-uniform `cur` under threadIdx-divergent control flow, and an
+    // SGPR constraint on a value the uniformity analysis cannot prove scalar
+    // is an "illegal VGPR to SGPR copy" build failure -- burning a node slot
+    // on an error the CPU-only compile check exists to catch. The serving pin
+    // reaches this point with n_self in a VGPR loaded from memory, so "+v" is
+    // also the constraint that makes the two pins MORE alike, not less.
+    asm volatile("" : "+v"(n_sub));
+    n_self = n_sub;
+  }
+#endif
+  int T_eff;
+  unsigned int aflags;
+  if (reason == 0u) {
+    T_eff = k0p6_m24_round_up_sat(n_self, K0P6_M24_TGRAIN, T_cap);
+    aflags = 1u;
+  } else {
+    // Degradation is toward MORE work, never toward wrong output.
+    T_eff = T_cap;
+    aflags = (reason & 7u) << 1;
+    atomicOr(pperr, K0P6_M24_ERR_REJECT);
+#if K0P6_M24_STRICT
+    // TELEMETRY ONLY -- never 16777216. See the K0P6_M24_STRICT comment: the
+    // generic fail bit is turned into a per-rank grid-wide return by the
+    // post-M0 check, and a reject is a per-rank event, so raising it here
+    // manufactured a non-unanimous collective out of an expected staleness
+    // (rev 3 review fix R.2).
+    atomicOr(pperr, K0P6_M24_ERR_STRICT);
+#endif
+  }
+  hk_moe::publish_relaxed<hk_moe::scope::agent>(tail + K0P6_M24_TAIL_TEFF,
+                                                (unsigned int)T_eff);
+  hk_moe::publish_relaxed<hk_moe::scope::agent>(tail + K0P6_M24_TAIL_FLAGS,
+                                                aflags);
+  // RELEASE, then the caller's grid barrier arrive (rev 3 review fix R.1).
+  // publish_relaxed is __hip_atomic_store(..., __ATOMIC_RELAXED, agent) -- it
+  // carries NO ordering, and hkp::grid_barrier's arrive is not shown to supply
+  // one: this kernel's own convention proves the opposite, since it calls
+  // release_cta_payload_system() immediately before the M7 slab grid_barrier
+  // and release_signal_batch_system() before the M1 publications, both of
+  // which would be redundant if the arrive were a release. Without this fence
+  // the two stores above may be reordered after CTA 0's arrive, letting CTAs
+  // 1..255 read the PREVIOUS launch's agreed_T_eff: divergent T across the
+  // grid, a destroyed M8 ticket (a CTA with the smaller nbatches consumes a
+  // ticket and then breaks without processing it), and half the grid running
+  // the ZERO_PAD sweep over rows the other half just combined. `store;
+  // release_fence; barrier_arrive` is the ordering the consumer's existing
+  // acquire_payload_agent() pairs with.
+  hk_moe::release_signal_batch_agent();
+  return (reason == 0u) ? gen : 0u;
+}
+
+// Post-barrier consume-once commit, same single thread, into M24's own tail --
+// so there is no race with M0's grid-strided mps_state zeroing loop, which
+// touches only mps_state.
+__device__ __forceinline__ void k0p6_m24_commit(const long long* desc,
+                                                int world, unsigned int gen) {
+  if (blockIdx.x != 0u || threadIdx.x != 0u || gen == 0u) return;
+  hk_moe::publish_relaxed<hk_moe::scope::agent>(
+      k0p6_m24_tail(desc, world) + K0P6_M24_TAIL_LAST_GEN, gen);
+}
+#endif
+
+// The row-count read every substitution site performs. RE-DERIVED at each of
+// the five sites and NEVER hoisted into one entry-computed value: the kernel
+// is __launch_bounds__(256,1) and both N2 GEMM bodies are __forceinline__, so
+// a value live from M0 to M8 crosses both GEMM inner loops at the 256-VGPR
+// occupancy-1 point -- the exp_38 spill cliff (+726.9 us). Today's kernel
+// re-reads the descriptor slot at each site and hoists nothing; M24 does the
+// same. The arm build gate's no-spill assertion is the enforcement.
+__device__ __forceinline__ int k0p6_m24_teff(const long long* desc, int world) {
+#if K0P6_M24_FILL
+  // CONSUMER-SIDE CLAMP (rev 3 review fix R.4). Section B.3 calls the clamp
+  // load-bearing rather than defensive noise, but the first implementation put
+  // it only at the PRODUCER, where by construction it cannot protect against a
+  // value the producer never wrote: an unpublished or residue tail word of
+  // 0xFFFFFFFF casts to -1, every consuming loop (`tau < T`,
+  // `(T+NT-1)/NT`, `csr_scan_block256(..., T, ...)`) then runs zero times, no
+  // output row is written, pperr stays clean, and ZERO_PAD's `T < T_cap`
+  // zeroes the whole `out` tensor -- 58 layers of zeros with a clean receipt.
+  // One scalar compare closes the entire class.
+  const int T_cap = (int)k0p6_dread(desc, K0P6_D_T);
+  const int t = (int)hk_moe::load_relaxed<hk_moe::scope::agent>(
+      (const unsigned int*)k0p6_m24_tail(desc, world) + K0P6_M24_TAIL_TEFF);
+  return ((unsigned int)t > (unsigned int)T_cap) ? T_cap : t;
+#else
+  (void)world;
+  return (int)k0p6_dread(desc, K0P6_D_T);
+#endif
 }
 
 // ---- task hooks (donor forms, verbatim) ---------------------------------------------------
@@ -812,6 +1256,15 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
         || k0p6_dread(desc, K0P6_D_M15_STAGE) == 0 ||
         (k0p6_dread(desc, K0P6_D_M15_STAGE) & 15) != 0
 #endif
+#if K0P6_M24_FILL
+        // A fill build with no fill buffer has nowhere to publish the
+        // grid-uniform T_eff and nowhere to keep last_seen_gen, so it fails
+        // CLOSED at entry rather than dereferencing a null tail. The buffer is
+        // 32 + 4*world header bytes + a 16-byte device-owned tail, 16-byte
+        // aligned, one per layer.
+        || k0p6_dread(desc, K0P6_D_M24_FILL) == 0 ||
+        (k0p6_dread(desc, K0P6_D_M24_FILL) & 15) != 0
+#endif
         ) {
       if (bid == 0 && tid == 0) atomicOr(pperr, K0P6_MPS_ERR_CONFIG);
       return;
@@ -875,6 +1328,13 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
           retired + tid, epoch > 0 ? epoch - 1ull : 0ull,
           (std::uint64_t)spin_limit, pperr, 16777216);
     }
+#if K0P6_M24_FILL
+    // M24 (design section B.2): single-reader validate + publish of
+    // agreed_T_eff, PRE-barrier. The barrier below is what makes it
+    // grid-uniform; no new barrier, poll or cross-rank word is added.
+    const unsigned int m24_gen =
+        k0p6_m24_publish(desc, cur, world, MAXTOK, pperr);
+#endif
     {
       unsigned int* gbar = (unsigned int*)k0p6_dread(desc, K0P6_D_GBAR);
       const hkp::local_grid_epoch bar{gbar, pperr, spin_limit};
@@ -883,6 +1343,13 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
     }
     hk_moe::acquire_payload_agent();
     if (hk_moe::error_bit_set_agent(pperr, 16777216 | 2097152)) return;
+#if K0P6_M24_FILL
+    // Consume-once: only an ACCEPTED gen is committed, so a torn/garbage gen
+    // can never poison last_seen_gen and wedge every later step into the
+    // fallback. Into M24's own tail -- never mps_state, which M0 zeroes
+    // grid-wide a few lines below.
+    k0p6_m24_commit(desc, world, m24_gen);
+#endif
     const int maxb = (int)k0p6_dread(desc, K0P6_D_MAXB);
     unsigned int* a2_done = (unsigned int*)k0p6_dread(desc, K0P6_D_A2_DONE);
     unsigned int* part_done = (unsigned int*)k0p6_dread(desc, K0P6_D_PART_DONE);
@@ -940,7 +1407,16 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
   {
     int* hcnt_pre = (int*)k0p6_dread(desc, K0P6_D_HCNT);
     const int* my_ids_pre = (const int*)k0p6_dread(desc, K0P6_D_MYIDS);
+    // M24 substitution site 5 (the one invisible to a grep for K0P6_D_T):
+    // without it the M0.5 pre-pass histograms my_ids over all 4,096 padded
+    // rows and the per-chunk replication decision is derived from pad routing.
+    // Written as an #if/#else so a FILL=0 ADAPTIVE build keeps the original
+    // register alias rather than gaining a second volatile descriptor load.
+#if K0P6_M24_FILL
+    const int T_pre = k0p6_m24_teff(desc, world);
+#else
     const int T_pre = input_tokens;
+#endif
     unsigned int* gbar = (unsigned int*)k0p6_dread(desc, K0P6_D_GBAR);
     const hkp::local_grid_epoch bar{gbar, pperr, spin_limit};
     const hkp::fail_closed bar_err{pperr, 2097152};
@@ -974,7 +1450,7 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
     const auto* symmetric = k0p6_symmetric(desc);
     const std::uint64_t epoch = k0p6_epoch(desc);
     const int par = (int)(epoch & 1ull);
-    const int T = (int)k0p6_dread(desc, K0P6_D_T);
+    const int T = k0p6_m24_teff(desc, world);   // M24 site 1 (M1 dispatch)
     const int* my_ids = (const int*)k0p6_dread(desc, K0P6_D_MYIDS);
     const float* my_wgt = (const float*)k0p6_dread(desc, K0P6_D_MYWG);
     const unsigned short* hidden = (const unsigned short*)k0p6_dread(desc, K0P6_D_HIDDEN);
@@ -1218,12 +1694,46 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
           else all = 0;
         }
         if (all) { s_total = tsum; break; }
-        if (++spins > spin_limit) { atomicOr(pperr, 16777216); break; }
+        if (++spins > spin_limit) { atomicOr(pperr, 16777216);
+#if K0P6_M24_NULLWORK
+          // Rev 3 review response R.7c (belt-and-braces; the finding itself is
+          // REBUTTED in Appendix R -- the timing-out CTA cannot reach any
+          // null_work guard, because the pperr check after this block's grid
+          // barrier returns the WHOLE grid on the bit it just set). Still: a
+          // timeout must never leave s_total at its initial 0 and make the
+          // null-work predicate read "this rank received nothing" when the
+          // truth is "this rank never found out". 0xFFFFFFFF is not a row
+          // count any peer can publish and forces null_work false.
+          s_total = 0xFFFFFFFFu;
+#endif
+          break; }
         __builtin_amdgcn_s_sleep(4);
       }
     }
     __syncthreads();
     const unsigned int total = s_total;
+#if K0P6_M24_NULLWORK
+    // M24 G5: receive-side null work. The predicate is GROUND TRUTH -- `total`
+    // is the sum of all 8 sources' rows_done payloads, i.e. what this rank
+    // actually received -- and never a belief about peers' n_orig. If a rank
+    // with a stale buffer dispatched real rows to a peer that had skipped
+    // M6/M7 on a belief, those rows would never be computed and the stale
+    // rank's combine would read zeroed slots: silent wrong output. Ground
+    // truth cannot disagree with itself.
+    //
+    // GUARD BODIES, NEVER BARRIERS OR PUBLICATIONS. The untouchable set is the
+    // NINE grid barriers -- M0 (after the retire poll), the two ADAPTIVE M0.5
+    // barriers, M2's rendezvous, M3, M4, M5, the M7 slab rendezvous, and the
+    // STAGED R2 -- plus the three publication blocks (M1's rows_done +
+    // chunk_ready epoch words, the M7 slab-word publication, and M9's retire
+    // pokes). A subset of CTAs skipping a grid_barrier desynchronises the
+    // epoch for the whole grid: the non-unanimous-collective hang class. A
+    // globally-dummy epoch must still publish every word a peer polls.
+    //
+    // Recomputed at the later sites from s_total (which nothing writes after
+    // this point) rather than carried in a register across the GEMM bodies.
+    const bool null_work = (total == 0u) && (k0p6_m24_teff(desc, world) == 0);
+#endif
 
     const int npairs = world * nchunks;
     for (int k = wave; k < npairs; k += wave_count) {
@@ -1286,6 +1796,11 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
     __syncthreads();
 #endif
 
+#if K0P6_M24_NULLWORK
+    // Guarded-block idiom: the braces live INSIDE the #if, so the default
+    // build is textually unchanged here, not merely semantically unchanged.
+    if (!null_work) {   // M2 unpack loop body (barrier-free region)
+#endif
     for (int r = wave; r < T_ext; r += wave_count) {
       const int s = r / MAXTOK;
       const int off = r - s * MAXTOK;
@@ -1327,6 +1842,9 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
       }
       __syncwarp();
     }
+#if K0P6_M24_NULLWORK
+    }   // if (!null_work) -- M2 unpack loop
+#endif
 
     T_loc = (int)total;
     if (T_ext < 0 || T_ext > T_loc_max) {
@@ -1334,6 +1852,9 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
       return;
     }
 
+#if K0P6_M24_NULLWORK
+    if (!null_work)   // hole-fill body (recv_eid = -1 over the dead tails)
+#endif
     {
       int* recv_eid_h = (int*)k0p6_dread(desc, K0P6_D_RECV_EID);
       const int gtid = bid * (int)blockDim.x + tid;
@@ -1372,7 +1893,8 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
     unsigned int* gbar = (unsigned int*)k0p6_dread(desc, K0P6_D_GBAR);
     const hkp::local_grid_epoch bar{gbar, pperr, spin_limit};
     const hkp::fail_closed bar_err{pperr, 2097152};
-    const int T = (int)k0p6_dread(desc, K0P6_D_T);
+    // M24 site 2 (csr_scan_block256 + pull_src_fill)
+    const int T = k0p6_m24_teff(desc, world);
     int* scratch = (int*)k0p6_dread(desc, K0P6_D_SCRATCH);
     int* nvi = (int*)k0p6_dread(desc, K0P6_D_NVI);
     int* sei = (int*)k0p6_dread(desc, K0P6_D_SEI);
@@ -1471,8 +1993,17 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
                         scratch, sti, swt, pperr, 1048576);
     (void)pairs;
 #else
+    // NOTE: k0p6_sort::pad above is DELIBERATELY NOT guarded -- it is its own
+    // region, and skipping it would leave stale per-expert round-up entries in
+    // sti/swt for any later arm that skips only part of this set.
+#if K0P6_M24_NULLWORK
+    if (!(s_total == 0u && k0p6_m24_teff(desc, world) == 0))
+#endif
     k0p6_sort::scatter(recv_eid, recv_wgt, pairs, lo, E, TOPK, PADMAX, scratch, sti, swt,
                        pperr, 1048576);
+#endif
+#if K0P6_M24_NULLWORK
+    if (!(s_total == 0u && k0p6_m24_teff(desc, world) == 0))
 #endif
     hkp::pull_src_fill(pull_stage, pull_ptr, T, TOPK, T * world, pull_src, pperr, 1048576);
 
@@ -1491,6 +2022,9 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
   if (debug_stop == 4) return;
 
   // ================= M6: N2 phase1 (donor verbatim) =========================================
+#if K0P6_M24_NULLWORK
+  if (!(s_total == 0u && k0p6_m24_teff(desc, world) == 0))
+#endif
   production_fused_moe::n2::n2p6m15_phase1_body(
       (const std::uint8_t*)k0p6_dread(desc, K0P6_D_A_DST),
 #if K0P6_MPS_ASCALE_TM
@@ -1539,6 +2073,9 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
         const hk_moe::mps::config mrole = hk_moe::mps::decode_config(
             (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));
         if (!hk_moe::mps::is_service_cta(mrole, bid, nct)) {
+#if K0P6_M24_NULLWORK
+          if (!(s_total == 0u && k0p6_m24_teff(desc, world) == 0))
+#endif
           production_fused_moe::n2::n2p6m15_phase2_body(
               (const std::uint8_t*)k0p6_dread(desc, K0P6_D_A2Q),
               (const float*)k0p6_dread(desc, K0P6_D_DQ2),
@@ -1584,7 +2121,11 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
           if (!hk_moe::error_bit_set_agent(
                   pperr, 16777216 | 2097152 | 33554432 |
                              K0P6_MPS_ERR_CONFIG)) {
-            const int T = (int)k0p6_dread(desc, K0P6_D_T);
+            // M24 site 3 (M7 pool front-half sweep). NOTE the quota below is
+            // sized to slab-1's compute shadow at nbatches = 1,024 (T=4096);
+            // at T_eff it is proportionally smaller, so C / flush_rows are no
+            // longer at their tuned point -- arm E re-sweeps them at runtime.
+            const int T = k0p6_m24_teff(desc, world);
             const int* pull_ptr =
                 (const int*)k0p6_dread(desc, K0P6_D_PULL_PTR);
             const int* pull_src =
@@ -1888,7 +2429,8 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
     __syncthreads();
     const bool payload_ok = !hk_moe::error_bit_set_agent(
         pperr, 16777216 | 2097152 | 33554432 | K0P6_MPS_ERR_CONFIG);
-    const int T = payload_ok ? (int)k0p6_dread(desc, K0P6_D_T) : 0;
+    // M24 site 4 (M8 combine): nbatches and the per-token live guard.
+    const int T = payload_ok ? k0p6_m24_teff(desc, world) : 0;
     const int* pull_ptr = (const int*)k0p6_dread(desc, K0P6_D_PULL_PTR);
     const int* pull_src = (const int*)k0p6_dread(desc, K0P6_D_PULL_SRC);
     unsigned short* slots = (unsigned short*)k0p6_dread(desc, K0P6_D_MPS_SLOTS);
@@ -1944,6 +2486,33 @@ extern "C" __global__ void __launch_bounds__(256, 1) K0P6_M15_KERNEL_NAME(
     }
 #endif
     (void)nbatches;
+#if K0P6_M24_ZERO_PAD
+    // M24 G4: make the pad region DETERMINISTIC. `out` is a captured
+    // torch.empty_like allocation whose pointer every replay reuses; today M8
+    // rewrites all 4,096 rows with finite garbage every step, but under
+    // fill-awareness rows [T_eff, T_cap) are never written by anybody again,
+    // so whatever uninitialised graph-pool bytes sat there on the first replay
+    // would persist forever -- and any column decoding as bf16 NaN flows
+    // through 58 layers and breaks max_nonfinite == 0. No consumer reads a row
+    // >= n_orig (design section C.3), so zero is as valid as garbage and
+    // strictly better behaved. Grid-strided uint4 stores, same geometry as the
+    // consume-and-zero inside k0p6_m15_m8_batch. Cost is MEASURED from the
+    // NORIG_CONST=3968 R0b point, not asserted.
+    if (payload_ok) {
+      const int T_cap = (int)k0p6_dread(desc, K0P6_D_T);
+      if (T < T_cap) {
+        constexpr size_t kV = (size_t)K0P6_H / 8u;   // uint4 per output row
+        uint4* o4 = reinterpret_cast<uint4*>(out);
+        uint4 z4;
+        z4.x = 0u; z4.y = 0u; z4.z = 0u; z4.w = 0u;
+        const size_t v_lo = (size_t)T * kV;
+        const size_t v_hi = (size_t)T_cap * kV;
+        const size_t gtid8 = (size_t)(bid * (int)blockDim.x + tid);
+        const size_t gstride8 = (size_t)(nct * (int)blockDim.x);
+        for (size_t i = v_lo + gtid8; i < v_hi; i += gstride8) o4[i] = z4;
+      }
+    }
+#endif
     if (tid == 0) {
       const hk_moe::mps::config m8cfg = hk_moe::mps::decode_config(
           (std::uint64_t)k0p6_dread(desc, K0P6_D_MPS_CFG));

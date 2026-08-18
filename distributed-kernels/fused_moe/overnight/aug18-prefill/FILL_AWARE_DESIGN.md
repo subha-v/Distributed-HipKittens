@@ -376,7 +376,9 @@ which survives across launches. The handshake becomes:
   `T_eff_candidate`, **clamp it to `[0, desc[K0P6_D_T]]`** (§B.3), and
   `publish_value<scope::agent>(&tail.agreed_T_eff, T_eff)` plus `agreed_flags`.
   On reject: publish `agreed_T_eff = desc[K0P6_D_T]`, set the reject reason in `agreed_flags`,
-  raise a **non-fatal** telemetry bit in `pperr` (or a hard fail under `K0P6_M24_STRICT`).
+  raise a **run-voiding** telemetry bit in `pperr` (rev 3, R.6b: not "non-fatal" — the harness
+  blocks any arm with a nonzero `pperr`, and that is correct, because an arm whose payload was
+  rejected measured the pre-M24 kernel), plus a second distinct bit under `K0P6_M24_STRICT`.
 * **The existing M0 grid barrier at KERNEL:882 carries the value.** It is already followed by
   `hk_moe::acquire_payload_agent()` (KERNEL:883), so a pre-barrier single-writer publish is
   visible to every CTA afterwards. **No new barrier, no new poll, no new cross-rank word.**
@@ -399,6 +401,19 @@ in that case the buffer still carries the *previous* step's `gen`, which is **no
 behaviour. **Degradation is toward more work, never toward wrong output.**
 
 **Belt-and-braces, because this is the one silent-wrong-output class in the design:**
+
+
+> **⚠ REV 3 CORRECTION (Appendix R3.1 / R.2) — what `STRICT = 1` does.** It raises a distinct
+> telemetry bit (`K0P6_M24_ERR_STRICT`, 1<<30) and the device still degrades to the padded
+> capacity. It does **NOT** take any device-side global action. The first implementation raised
+> the generic fail bit `16777216`, which the post-M0 check turns into a grid-wide return **on
+> that rank only** — and a reject is a per-rank event this very section lists as expected, so
+> that manufactured a non-unanimous collective (7 ranks spinning `rows_done` to `spin_limit` on
+> all 58 layers) out of ordinary staleness, permanently, because `pperr` is sticky across
+> replays. **Fail-closed is a HOST property**: the MoK harness blocks any arm with a nonzero
+> all-reduced `pperr`, and the serving receipt (G15) voids any run with a nonzero reject count.
+> Wherever this document says STRICT "hard-fails" or "fail-closes", read it as *the run is
+> voided by the host*, never *the device returns early*.
 
 * `K0P6_M24_STRICT = 1` is **mandatory for the entire first serving arm**, not just bring-up:
   any reject becomes a loud `pperr` failure rather than a silent 4,096-row fallback.
@@ -490,7 +505,7 @@ every consuming loop (`for (…; tau < T; …)` at KERNEL:993; `(T + NT − 1)/N
 1600) would execute zero times: **no output row written at all, `pperr` clean, an entirely stale
 `out` tensor and no error bit**. `round_up_sat` saturates at `desc[K0P6_D_T]`, the clamp bounds
 below at 0, and any input outside `[0, MAXTOK]` is rejected by the §B.2 validation with a
-telemetry bit. `K0P6_M24_STRICT` turns it into a hard fail.
+telemetry bit (rev 3: bit 1<<29, **not** 1<<26 — that is `K0P6_MPS_ERR_SERVICE`). `K0P6_M24_STRICT` adds a second, distinct bit (1<<30); neither is a device-side fail-closed (R.2).
 
 **The capacity site is deliberately NOT changed.** The entry guard's `input_tokens` (KERNEL:759,
 tested at 789-790 against `MAXTOK`) is a *capacity* check. It stays on `desc[44] = 4096`, so the
@@ -845,7 +860,7 @@ Declared in the `#ifndef` block of `k0pf6gm_device_tile_m15.hip` alongside `K0P6
 | `K0P6_M24_NULLWORK` | **0** | The `total == 0` receive-side skip (§B.5 1b). Independent of `FILL` (it reads ground truth). **Diagnostic only — see the demotion box in §B.5; it does not fire in serving.** |
 | `K0P6_M24_NORIG_CONST` | **0** | MoK-only payload *source* substitution, so the harness needs no host plumbing (§F.3). **Rev 2: it substitutes the SOURCE only, never the mechanism** — see the box below. |
 | `K0P6_M24_NORIG_TABLE` | unset | MoK-only, arm D: a per-rank list (`{4096,0,0,0,0,0,0,0}`) indexed at runtime by `cur`, giving the **heterogeneous-fill** regime the homogeneous arms are structurally blind to (§B.5, §F.3). Mutually exclusive with `NORIG_CONST`. |
-| `K0P6_M24_STRICT` | **0** | Turn a rejected/stale payload from "silently use `T = 4096` + telemetry bit" into a hard `pperr` fail-closed. **Mandatory = 1 for the entire first serving arm**, not only bring-up (§B.2). |
+| `K0P6_M24_STRICT` | **0** | Raise a DISTINCT run-voiding telemetry bit (`K0P6_M24_ERR_STRICT`, 1<<30) on a rejected/stale payload, on top of the generic reject bit; the device still degrades to `T = 4096`. **Mandatory = 1 for the entire first serving arm**, not only bring-up (§B.2). **Rev 3 (R.2): it must never raise `16777216`** — that is a per-rank grid-wide return and turns an expected staleness into a non-unanimous collective. |
 | `K0P6_M24_DENSE_SCATTER` | **0** | T2-c (§B.6). **Moves the accumulation order further, on top of the baseline nondeterminism §C.2 documents** — never enabled in an accuracy-gated headline arm. |
 | `K0P6_M24_FILL_C` | **0** | T2-d, runtime-adaptive `reserved_comm_ctas`. Own campaign. `#error` without `FILL`. |
 | `K0P6_M24_M8_ADAPT` | **0** | T2-e, combine granularity at low `T`. `#error` without `FILL`. |
@@ -1411,3 +1426,66 @@ against a baseline we shouldn't quote** to **≈ +22 % against the secondary bas
 against the one that counts** — which means M24 alone probably does not clear the mission
 target, and §H.9's step-count defect has to be worked in parallel. That last sentence is the
 most useful thing the review produced.
+
+---
+
+## Appendix R3 — Implementation review responses (rev 3, 2026-08-18)
+
+Two adversarial reviewers read the **implementation** (kernel + shim), lenses **conformance-race**
+and **buildgate-hardware**. Between them: **7 distinct blocking findings** (two found by both),
+**9 major**, **4 minor**. Every blocking and major finding is dispositioned below.
+**All blocking findings are FIXED. One major finding is REBUTTED with evidence (R.7c) and a
+belt-and-braces guard added anyway. Nothing remains open.**
+
+The reviews were right about the shape of the failure: the first implementation was a **kernel-only
+change**. Section B.3's host half — allocate, bind slot 71, write the payload — did not exist in
+either repository, and three of the seven blocking findings are that absence viewed from different
+angles. The other four are ordering and dead-code defects that the missing host half had hidden.
+
+### R3.1 Blocking — all FIXED
+
+| # | finding (lens) | disposition |
+|---|---|---|
+| **R.1** | The `agreed_T_eff` broadcast is a **bare relaxed store with no release** before the M0 grid barrier, so CTAs 1..255 may read the previous launch's value: divergent `T` across the grid, a destroyed M8 ticket, and half the grid running the `ZERO_PAD` sweep over rows the other half combined. (conformance-race) | **FIXED.** `hk_moe::release_signal_batch_agent()` (= `thread_release<agent>`, `sync.cuh:86-98`) now closes `k0p6_m24_publish`, giving `store; release_fence; barrier_arrive` — the ordering the consumer's existing `acquire_payload_agent()` was already half of. The reviewer's proof that the barrier does not carry a release (this kernel calls `release_cta_payload_system()` before the M7 slab barrier and `release_signal_batch_system()` before the M1 publications, both redundant if it did) is exactly right. |
+| **R.2** | `K0P6_M24_STRICT` — **mandatory = 1 for the whole first serving arm** — raised the generic fail bit `16777216`, which the post-M0 check turns into a grid-wide return **on that rank only**. A reject is a **per-rank** event that §B.2 itself lists as expected, so STRICT manufactured a **non-unanimous collective** out of ordinary staleness: 7 ranks spinning `rows_done` to `spin_limit` on all 58 layers. And because `pperr` is sticky and never host-reset between replays (`m15_contracts.py` BufferSpec note), one benign reject disabled the megakernel **permanently**, after which `out` — a captured `torch.empty_like` buffer — is never written again while every step still burns a `spin_limit` stall. (both lenses, independently) | **FIXED.** STRICT no longer raises `16777216`. It raises its own telemetry bit `K0P6_M24_ERR_STRICT` (1<<30) and the device still degrades to `T_cap`, which is bit-for-bit today's behaviour and unanimous by construction. **Fail-closed moves to the host**, the only place a per-rank observation can be turned into a global decision: the MoK harness already all-reduces `pperr` and blocks any arm with a nonzero value, and the serving receipt (G15) voids any run with a nonzero reject count. §B.2's "STRICT = 1 on the first serving arm" stands; what it *means* is now stated correctly. |
+| **R.3** | The unconditional `reason = 0u;` in the `NORIG` block made the whole validation chain, `range_ok`, `last_gen`, the reject branch, both `atomicOr`s and the `aflags` computation **provably unreachable**, so LLVM deleted them *and* the header loads that fed only them (`load_relaxed` is a monotonic atomic load, which `wouldInstructionBeTriviallyDead` removes when unused). Every MoK pin therefore priced a binary **missing the exact code paths §D rev 2 and §E exist to price**, the mandated cross-pin resource-tuple equality check could not have passed, and the reject/fail-closed path would have first executed on 8 live GPUs inside a serving campaign. (both lenses) | **FIXED.** `reason = 0u;` is gone. The substitution now happens **inside `if (reason == 0u)`** and replaces only the *number*: the buffer read, the six-way validation chain, the reject/fallback branch, the clamp, the publish, the barrier ordering, the five consuming loads and the `ZERO_PAD` tail are byte-for-byte the serving path. The consequence is deliberate and is the point: a MoK arm now needs a **genuinely valid, genuinely fresh payload before every launch**, exactly as serving does — which is what `m24_mok_patch.py` supplies. |
+| **R.4** | **B3 is entirely absent**: nothing allocates the fill buffer, binds slot 71, or implements the `write_fill_vector` pre-op, so every `FILL=1` build reads `desc[71]` out of bounds of a 63-word descriptor — and, since `k0p6_m24_publish` also **stores** through that pointer, performs an unbounded device write on all 8 GPUs whenever the residue looks like a non-null 16-byte-aligned address. R0b, the fill ladder and arm D could not have produced a number. (conformance-race) | **FIXED — the host half now exists and is tested.** `m15_eplb0/m24_fill.py`: the encoder, the checksum (authoritative, mirrored by the device), `descriptor_with_fill_slot()` (extends the cascade descriptor to 72 words, binds slot 71, zero-fills every unclaimed slot), `M24FillVector` (per-layer **zeroed** allocation, 16-byte-alignment assertion, the per-launch write with a 3-scalar fast path so the pre-op cannot starve the device from Python), and `validate_payload_mirror()` — a Python re-implementation of `k0p6_m24_publish` used to prove host and device agree. `m24/m24_mok_patch.py` wires it into the MoK harness in four anchor-exact, idempotent, fail-loud hunks. `m24/test_m24_fill.py` and `m24/test_m24_mok_patch.py` are CPU-only and green. |
+| **R.5** | The device-owned tail word `last_seen_gen` is **read on the very first launch** but nothing initialises it: no `BufferSpec`, no `zero=True`, no `m24` parameter on `buffer_table()`. Allocator residue >= the first `gen` (0xDEADBEEF from a recycled caching-allocator block) makes every step reject as stale, so the arm runs the pre-M24 kernel while reporting itself as M24 — the project's named past sin with no receipt able to detect it. (buildgate-hardware) | **FIXED.** `buffer_table(..., m24=True)` emits the per-layer spec (`slot 71`, `8 + world + 4` int32 words, rank-local, **`zero=True`**) and the function's docstring states *why* the zeroing is load-bearing rather than hygiene. `M24FillVector` allocates with `zeros()`, never `empty()`, and asserts 16-byte alignment at construction. A test asserts the tail reads back all-zero before the first write. |
+| **R.6** | **Neither configuration had actually been compiled** — no resource-usage log for the default or the `FILL=1` build anywhere in the tree — and `m24_compile_check.sh` structurally **cannot** perform the section-E gate, because it never builds the pre-M24 body: `run_cfg base` compares against nothing. (buildgate-hardware) | **FIXED.** `m24_build_gate.sh` is new and does the real gate: it extracts the pre-M24 body from git (`PRE_REF`, default `a776ac75`) so the "before" side cannot be a hand-made copy that quietly differs, builds **both** through the **same pin path with the same compile line**, and compares the resource tuple, the normalised disassembly of `k0pf6gm_mps_mega`, and a sha256 of the raw `.text`. It writes `M24_BUILD_GATE_RECEIPT: PASS/FAIL` and exits non-zero on divergence. Both-config compiles and the gate run on the node; the receipt is committed as `m24_build_gate.txt`. |
+| **R.7** | `K0P6_M24_STRICT`'s sticky-`pperr` cascade (see R.2) — filed independently by the second lens with the additional observation that the poisoning is **permanent for the server's life**, not per-step. | **FIXED with R.2.** The additional observation is correct and is why the fix is "telemetry only" rather than "reset `pperr`": a sticky word is the right design for a protocol error, so M24 must not raise one for a condition the design classifies as expected. |
+
+### R3.2 Major — FIXED except R.7c, which is REBUTTED
+
+| # | finding (lens) | disposition |
+|---|---|---|
+| **R.4b** | No sanity clamp at the **consumer**: `k0p6_m24_teff` cast a raw u32 straight to `int`, so an unpublished/residue tail of `0xFFFFFFFF` becomes `-1`, every consuming loop runs zero times, no output row is written, `pperr` stays clean, and `ZERO_PAD` zeroes the whole `out` tensor — 58 layers of zeros with a clean receipt. §B.3 called the clamp load-bearing but placed it only at the producer, where it cannot protect against a value the producer never wrote. (conformance-race) | **FIXED.** `k0p6_m24_teff` now reads `T_cap` and returns `((unsigned)t > (unsigned)T_cap) ? T_cap : t` — one scalar compare, and it closes the whole class including the negative-cast case. |
+| **R.5b** | `K0P6_M24_ERR_REJECT` was `67108864`, **bit-for-bit `K0P6_MPS_ERR_SERVICE`** (`moe_mps_adapter.cuh:30`) in the same translation unit, silently, because the macro names differ. Every receipt rule that decodes bit 26 — exp_34/exp_30's mode-14 correctness receipt, and `moe_mps_adapter.cuh:917`'s live early-return in `wait_event_nonempty` — would mis-read one for the other in both directions. (buildgate-hardware) | **FIXED.** `K0P6_M24_ERR_REJECT` = 1<<29, `K0P6_M24_ERR_STRICT` = 1<<30. Bits 25..28 are taken (M7DONE / SERVICE / DUAL / CONFIG); 31 is avoided because `pperr` is a signed `int`. A test asserts no M24 bit aliases any of them. |
+| **R.6b** | pperr bit 26 was documented as "**non-fatal** telemetry", but the harness all-reduces `pperr` and blocks the arm on any nonzero value, so the designed graceful degradation is a hard arm failure. (conformance-race) | **FIXED as a documentation defect, deliberately not as a harness change.** The harness rule is **correct**: an arm whose payload was rejected measured the pre-M24 kernel, and quoting its ratio as a fill number is fairness item 3. The bit is now documented as **run-voiding telemetry**, the word "non-fatal" is gone, and the harness is left unmasked. |
+| **R.6c** | `attest_descriptor_words`'s `m24_plain` switch is all-or-nothing, so it handles exactly **two** descriptor shapes — plain M24, and M24 composed with STAGED+REPLICATE+ADAPTIVE+SLOTPOOL simultaneously. Every partial composition raises spurious blockers (M24+ADAPTIVE binds slot 64 ⇒ `m24_plain` False ⇒ M15-DESC-005 demands an M18R table the arm has no reason to bind ⇒ `refuse_if` aborts activation), making §H.8's composition arms unrunnable. The inverse hole also existed: a genuinely mis-bound M24+SLOTPOOL descriptor with 63..70 all zero skipped every M20 check. (both lenses) | **FIXED.** The inferred boolean is replaced by an explicit **`cascade_words`** argument — the pre-raise `K0P6_M15_D_LEN` (63 / 64 / 65 / 71) — which is what actually determines which slots a build claims. The M18/M19/M20 branches key on it; slots in `[cascade_words, 71)` must be **zero** (new `M15-DESC-015`); omitting it on an M24 build is itself a blocker (`M15-DESC-014`). All four compositions are asserted clean in `test_m24_fill.py`, and a default-0 arm's path is asserted unchanged. |
+| **R.7d** | The default compile check never built any NORIG pin: `M24_FULL` defaulted to 0, so `run_cfg base`/`fill` reported success while R0b's **blocking** `inert_4096` pin, arm D's **mandatory** skew pin, and the two constructs most likely to fail codegen were never compiled. The first time anyone would learn a blocking pin does not build is with the node claimed and the GPU window open. (both lenses) | **FIXED.** `M24_FULL` defaults to **1** — this is hipcc, i.e. CPU-only work, so there was never a reason to skip it. The matrix also gained the `NORIG_TABLE {0,...}` ladder point, the four composition builds (+STAGED / +REPLICATE / +ADAPTIVE / +SLOTPOOL), and a **negative** set (`neg_cfg`) asserting that NULLWORK-alone, STRICT-alone, `FILL` without `ZERO_PAD`, and both payload sources at once all **fail to build**, and fail for the right reason. |
+| **R.7a/b** | Arm D's `K0P6_M24_NORIG_TABLE` indexed a **function-local array with the runtime `cur`** (which comes from a bare volatile load the uniformity analysis cannot prove uniform), then applied an **SGPR-only** `"+s"` inline-asm constraint to the result. Either the array lands in scratch — `private_segment_fixed_size > 0`, an automatic fail of the no-spill assertion at occupancy-1 — or the `"+s"` constraint on a VGPR-resident value is a hard "illegal VGPR to SGPR copy" build error. (buildgate-hardware, conformance-race) | **FIXED.** The table read is a fully-unrolled `for (p = 0..7) if (p == cur) n_sub = tbl[p];` select chain with no memory operand, and the opacity barrier is `"+v"`, not `"+s"`. `"+v"` is also the constraint that makes the MoK pin *more* like the serving pin, which reaches that point with `n_self` in a VGPR loaded from memory. Both are now compiled by the default compile check (R.7d). |
+| **R.7c** | The `K0P6_M24_NULLWORK` predicate is **not CTA-uniform on the M2 rendezvous timeout path**: on timeout `tid==0` breaks without writing `s_total`, leaving it 0, so a timing-out CTA computes `null_work = true` while a CTA that saw the data computes `false` — a rank whose GEMM tile set is only partially computed while its slab certificates still publish, i.e. cluster-wide silent wrong output with clean receipts on 7 of 8 ranks. (buildgate-hardware) | **REBUTTED — the divergent CTA cannot reach any `null_work` guard — and a belt-and-braces guard added anyway.** Evidence, `k0pf6gm_device_tile_m15.hip`: the timeout branch at **:1706** sets `pperr` bit 16777216 *before* it breaks; `null_work` is computed at **:1735** but its first use is the M2 unpack guard at **:1802**; and between them, at **:1756-1760**, the M2 rendezvous `grid_barrier` is followed by `acquire_payload_agent()` and `if (hk_moe::error_bit_set_agent(pperr, 16777216 \| 8388608 \| 2097152)) return;`. `pperr` is a single agent-scope word, so after that barrier **every** CTA on the rank observes the bit the timing-out CTA set and **all** of them return — before the first guarded body, before `k0p6_sort::pad`, before M6/M7, and before any slab certificate is published. The failure scenario requires the timing-out CTA to proceed past :1760, which it cannot. The finding's underlying *principle* is correct and worth keeping loud, so the timeout branch now additionally sets `s_total = 0xFFFFFFFFu` under `#if K0P6_M24_NULLWORK` (a value no peer can publish, forcing `null_work` false); it is `NULLWORK`-gated, so the default build is untouched. |
+
+### R3.3 Minor — all FIXED
+
+* **R.8** — the checksum's "seed with the magic" was a no-op (the seed cancelled word 0 exactly, in both the device and host definitions). Word 0 is now excluded from the sum in both, and both comments say so. A test asserts the checksum is **not** the self-cancelling variant.
+* **R.9a** — `#if K0P6_D_M24_FILL >= 72` was a comparison between two literals fixed three lines apart and could never fire. Replaced with `#if K0P6_M15_D_LEN > K0P6_D_M24_FILL`, evaluated **before** the raise, which is the check that actually catches "a future arm reaches 71".
+* **R.9b** — `K0P6_M15_SRC_REV` is now bumped to 3 on the `K0P6_M24_FILL` branch (the bump lives after the M24 macro block, because `K0P6_M24_*` is not defined yet at the `SRC_REV` definition). Without it a stale `.hsaco` compiled from the pre-M24 body can be served for a fill arm.
+* **R.10** — `K0P6_M24_NULLWORK` gained the `#error` tying it to `FILL` that every other M24 macro already had, and its comment no longer claims to be "independent of FILL by construction" — with `FILL=0` it is provably inert, which is exactly the trap the `#error` closes.
+
+### R3.4 What the reviews changed about the plan
+
+1. **§B.3's host half is no longer a later work-list item.** It is a prerequisite of the *first*
+   MoK arm, because the rev-3 kernel validates for real in every pin. `m24_fill.py` +
+   `m24_mok_patch.py` land with the kernel, not after it.
+2. **"Fail closed" is a host property, not a device property.** Any device-side global action
+   taken on a per-rank observation is a non-unanimous collective. The device's only safe
+   response to a bad payload is to do *more* work; the host decides whether the run counts.
+3. **A MoK pin that skips a code path is not a MoK pin.** R.3's `reason = 0u` is the second time
+   this project built a candidate that did not run what it claimed. The §E cross-pin
+   resource-tuple equality check is the detector, and it only works if the pins genuinely
+   execute the same paths.
+4. **G9 parts 1-3 are still outstanding.** The `K0_MOK_COMPARE_ROWS` rel-err gate, the
+   `[0,N)`-restricted poison count, and the `_st_idx → N−1` self-test are unimplemented. They are
+   **blocking prerequisites for every fill arm** (A/B/C/D) and are *not* required for R0a or R0b,
+   which run at `T_eff = T_cap` and compare all 4,096 rows.
