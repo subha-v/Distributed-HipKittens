@@ -1,5 +1,14 @@
 # ABLATION_METHODOLOGY — one base megakernel, a library of schedule modules, and a cost model that decides which to attach
 
+> **SCOPE SUPERSEDED 2026-08-18 (evening), mentor decision:** the active plan is
+> `UNDERSTANDING_PLAN.md` — understand the megakernels we already have (why fast, why slow) at
+> two prefill anchor cells and expose abstractions from that, MoK-style. This document's
+> workload-generalization campaign (the W-grid, Q-sufficiency falsifiers, cost-model fit/hold-out,
+> Phase-4 e2e ladder) is **not being run**; it stays in-tree as the extension plan. Its
+> instruments (phase ledger, repeatability, receipts), its interaction cells (K5/K4/B.res/FQ-2),
+> its derived quantities (T*, h*, b*, C_sat) and §9/§10 (law cards, HK PR) are inherited by the
+> anatomy campaign as explanatory tools.
+
 **Date:** 2026-08-18 · **Audience:** Simran + the industry reviewers who saw draft8 ·
 **Status:** campaign design, pre-registration pending. No number below is new; every number
 carries its source. Predictions are labelled **REGISTERED PRIOR** and were written before the

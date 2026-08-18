@@ -38,21 +38,22 @@ ReduceScatter and fused-MoE porting work. Donor measurements and new
 abstraction rewrites are kept separate; a port does not inherit a donor's
 performance result until its architecture-specific GPU parity gates pass.
 
-The workload-generalization campaign (2026-08-18, post-draft8) lives under
-`distributed-kernels/fused_moe/overnight/aug18-ablations/`. Its master document,
-`ABLATION_METHODOLOGY.md`, designs the ablation program the industry review
-asked for: one base megakernel plus a library of attachable/removable schedule
-modules (depth-bounded producer-carried delivery, slab certificates, consuming
-pools, shared-expert filler, owner placement, …), with the cost model
-`M(Q(W), R(S); θ)` as the composition policy — eight workload-derived scalars
-`Q` decide which modules attach, each decision a threshold inequality with a
-registered prediction that can lose. The directory carries the full evidence
-chain: four grounding briefs (`grounding/`), six design documents (`design/` —
-workload vector, schedule vector, cost model, metrics protocol, overlap atlas,
-experiment ladder), three adversarial reviews (`review/`), and the campaign
-brief with the expert feedback (`BRIEF.md`). Headline structure: five laws, a
-~22–28 node-hour core boundary campaign plus ~16–20 h of e2e sizing, matched-Q
-sufficiency falsifiers (FQ-1..4), and a pre-committed degradation ladder.
+The post-draft8 campaign (2026-08-18) lives under
+`distributed-kernels/fused_moe/overnight/aug18-ablations/`. The active plan is
+**`UNDERSTANDING_PLAN.md`** (r2, twice adversarially reviewed): Track 1 —
+**beat production end-to-end at low concurrency** (C=32 TP8+EP; gate ladder
+G-L0..G-L4: ρ-swept device phase ledger with directly-measured transport β and
+a profiler-confirmed exposed-AR prize, RCCL-hybrid floor, shared-expert filler,
+metered AR, then TP8 serving integration) — and Track 2, the **anatomy
+campaign**: twelve mechanism-attribution questions (Q1–Q12) over the megakernel
+ladder we already own (7,712 → 5,822 µs plus the instructive failures),
+producing a MoK-style `MEGAKERNEL_ANATOMY.md` whose abstractions are
+**hardware-agnostic data-movement contracts** (Iris/IrisX-aligned; the DHK
+headers are one backend). ≈15–22 node-hours total. The earlier
+workload-generalization design (`ABLATION_METHODOLOGY.md`, scope-superseded but
+kept as the extension plan) and its full evidence chain — grounding briefs,
+six design docs, and five adversarial reviews (`review/`) — remain in the same
+directory, with `BRIEF.md` carrying the expert feedback that started it.
 
 Current fused-MoE overlap research lives under
 `distributed-kernels/fused_moe/overnight/`: the aug11 evidence corpus and
