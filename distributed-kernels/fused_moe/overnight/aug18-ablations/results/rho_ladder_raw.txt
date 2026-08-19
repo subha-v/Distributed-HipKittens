@@ -1,0 +1,240 @@
+### rep=1 rho_nom=0.65 k_inner=2048 arm=compute rc=0 23:04:48Z
+BOUNDARY_BENCH mode=compute depth=4 tokens=16384 slab_rows=256 k_inner=2048 iters=7
+  wall_us median=1405.6 min=1386.9 max=1581.5
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=1 rho_nom=0.65 k_inner=2048 arm=phased rc=0 23:04:49Z
+BOUNDARY_BENCH mode=phased depth=4 tokens=16384 slab_rows=256 k_inner=2048 iters=7
+  wall_us median=3634.6 min=3425.3 max=3667.9
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=1 rho_nom=0.65 k_inner=2048 arm=fused rc=0 23:04:50Z
+BOUNDARY_BENCH mode=fused depth=4 tokens=16384 slab_rows=256 k_inner=2048 iters=7
+  wall_us median=3622.4 min=3462.3 max=3636.8
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=1 rho_nom=0.65 k_inner=2048 arm=rccl rc=0 23:05:25Z
+BOUNDARY_BENCH mode=rccl depth=4 tokens=16384 slab_rows=256 k_inner=2048 iters=7
+  wall_us median=2893.4 min=2885.7 max=45719.0
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=1 rho_nom=1.0 k_inner=3078 arm=compute rc=0 23:05:25Z
+BOUNDARY_BENCH mode=compute depth=4 tokens=16384 slab_rows=256 k_inner=3078 iters=7
+  wall_us median=2176.6 min=2174.8 max=2423.8
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=1 rho_nom=1.0 k_inner=3078 arm=phased rc=0 23:05:26Z
+BOUNDARY_BENCH mode=phased depth=4 tokens=16384 slab_rows=256 k_inner=3078 iters=7
+  wall_us median=4497.0 min=4177.2 max=4512.6
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=1 rho_nom=1.0 k_inner=3078 arm=fused rc=0 23:05:27Z
+BOUNDARY_BENCH mode=fused depth=4 tokens=16384 slab_rows=256 k_inner=3078 iters=7
+  wall_us median=4462.3 min=4282.1 max=4477.9
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=1 rho_nom=1.0 k_inner=3078 arm=rccl rc=0 23:06:02Z
+BOUNDARY_BENCH mode=rccl depth=4 tokens=16384 slab_rows=256 k_inner=3078 iters=7
+  wall_us median=3769.6 min=3754.3 max=43543.7
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=1 rho_nom=2.0 k_inner=6029 arm=compute rc=0 23:06:03Z
+BOUNDARY_BENCH mode=compute depth=4 tokens=16384 slab_rows=256 k_inner=6029 iters=7
+  wall_us median=4421.7 min=4393.3 max=4822.3
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=1 rho_nom=2.0 k_inner=6029 arm=phased rc=0 23:06:03Z
+BOUNDARY_BENCH mode=phased depth=4 tokens=16384 slab_rows=256 k_inner=6029 iters=7
+  wall_us median=6911.5 min=6560.4 max=6922.3
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=1 rho_nom=2.0 k_inner=6029 arm=fused rc=0 23:06:04Z
+BOUNDARY_BENCH mode=fused depth=4 tokens=16384 slab_rows=256 k_inner=6029 iters=7
+  wall_us median=6842.4 min=6617.7 max=6888.4
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=1 rho_nom=2.0 k_inner=6029 arm=rccl rc=0 23:06:39Z
+BOUNDARY_BENCH mode=rccl depth=4 tokens=16384 slab_rows=256 k_inner=6029 iters=7
+  wall_us median=5986.4 min=5930.6 max=44006.1
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=1 rho_nom=3.0 k_inner=9040 arm=compute rc=0 23:06:40Z
+BOUNDARY_BENCH mode=compute depth=4 tokens=16384 slab_rows=256 k_inner=9040 iters=7
+  wall_us median=6478.8 min=6431.9 max=7442.2
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=1 rho_nom=3.0 k_inner=9040 arm=phased rc=0 23:06:41Z
+BOUNDARY_BENCH mode=phased depth=4 tokens=16384 slab_rows=256 k_inner=9040 iters=7
+  wall_us median=9331.7 min=8875.4 max=9360.5
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=1 rho_nom=3.0 k_inner=9040 arm=fused rc=0 23:06:41Z
+BOUNDARY_BENCH mode=fused depth=4 tokens=16384 slab_rows=256 k_inner=9040 iters=7
+  wall_us median=9398.3 min=9117.0 max=9438.5
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=1 rho_nom=3.0 k_inner=9040 arm=rccl rc=0 23:07:16Z
+BOUNDARY_BENCH mode=rccl depth=4 tokens=16384 slab_rows=256 k_inner=9040 iters=7
+  wall_us median=8404.1 min=8349.3 max=48713.3
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=2 rho_nom=0.65 k_inner=2048 arm=compute rc=0 23:07:17Z
+BOUNDARY_BENCH mode=compute depth=4 tokens=16384 slab_rows=256 k_inner=2048 iters=7
+  wall_us median=1460.2 min=1443.7 max=1584.0
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=2 rho_nom=0.65 k_inner=2048 arm=phased rc=0 23:07:18Z
+BOUNDARY_BENCH mode=phased depth=4 tokens=16384 slab_rows=256 k_inner=2048 iters=7
+  wall_us median=3658.2 min=3448.0 max=3677.1
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=2 rho_nom=0.65 k_inner=2048 arm=fused rc=0 23:07:19Z
+BOUNDARY_BENCH mode=fused depth=4 tokens=16384 slab_rows=256 k_inner=2048 iters=7
+  wall_us median=3638.3 min=3493.8 max=3647.2
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=2 rho_nom=0.65 k_inner=2048 arm=rccl rc=0 23:07:54Z
+BOUNDARY_BENCH mode=rccl depth=4 tokens=16384 slab_rows=256 k_inner=2048 iters=7
+  wall_us median=2908.7 min=2900.6 max=31005.0
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=2 rho_nom=1.0 k_inner=3078 arm=compute rc=0 23:07:54Z
+BOUNDARY_BENCH mode=compute depth=4 tokens=16384 slab_rows=256 k_inner=3078 iters=7
+  wall_us median=2258.7 min=2251.2 max=2438.9
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=2 rho_nom=1.0 k_inner=3078 arm=phased rc=0 23:07:55Z
+BOUNDARY_BENCH mode=phased depth=4 tokens=16384 slab_rows=256 k_inner=3078 iters=7
+  wall_us median=4489.5 min=4118.4 max=4500.8
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=2 rho_nom=1.0 k_inner=3078 arm=fused rc=0 23:07:56Z
+BOUNDARY_BENCH mode=fused depth=4 tokens=16384 slab_rows=256 k_inner=3078 iters=7
+  wall_us median=4447.1 min=4277.7 max=4476.7
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=2 rho_nom=1.0 k_inner=3078 arm=rccl rc=0 23:08:31Z
+BOUNDARY_BENCH mode=rccl depth=4 tokens=16384 slab_rows=256 k_inner=3078 iters=7
+  wall_us median=3777.1 min=3735.2 max=42560.3
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=2 rho_nom=2.0 k_inner=6029 arm=compute rc=0 23:08:31Z
+BOUNDARY_BENCH mode=compute depth=4 tokens=16384 slab_rows=256 k_inner=6029 iters=7
+  wall_us median=4477.5 min=4430.6 max=4803.1
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=2 rho_nom=2.0 k_inner=6029 arm=phased rc=0 23:08:32Z
+BOUNDARY_BENCH mode=phased depth=4 tokens=16384 slab_rows=256 k_inner=6029 iters=7
+  wall_us median=6879.0 min=6478.3 max=6907.9
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=2 rho_nom=2.0 k_inner=6029 arm=fused rc=0 23:08:33Z
+BOUNDARY_BENCH mode=fused depth=4 tokens=16384 slab_rows=256 k_inner=6029 iters=7
+  wall_us median=6869.5 min=6487.3 max=6919.3
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=2 rho_nom=2.0 k_inner=6029 arm=rccl rc=0 23:09:08Z
+BOUNDARY_BENCH mode=rccl depth=4 tokens=16384 slab_rows=256 k_inner=6029 iters=7
+  wall_us median=5907.2 min=5895.1 max=46207.8
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=2 rho_nom=3.0 k_inner=9040 arm=compute rc=0 23:09:09Z
+BOUNDARY_BENCH mode=compute depth=4 tokens=16384 slab_rows=256 k_inner=9040 iters=7
+  wall_us median=6557.2 min=6517.3 max=7261.1
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=2 rho_nom=3.0 k_inner=9040 arm=phased rc=0 23:09:09Z
+BOUNDARY_BENCH mode=phased depth=4 tokens=16384 slab_rows=256 k_inner=9040 iters=7
+  wall_us median=9308.5 min=8820.7 max=9351.0
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=2 rho_nom=3.0 k_inner=9040 arm=fused rc=0 23:09:10Z
+BOUNDARY_BENCH mode=fused depth=4 tokens=16384 slab_rows=256 k_inner=9040 iters=7
+  wall_us median=9420.7 min=8995.0 max=9455.4
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=2 rho_nom=3.0 k_inner=9040 arm=rccl rc=0 23:09:45Z
+BOUNDARY_BENCH mode=rccl depth=4 tokens=16384 slab_rows=256 k_inner=9040 iters=7
+  wall_us median=8405.2 min=8365.0 max=46389.1
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=3 rho_nom=0.65 k_inner=2048 arm=compute rc=0 23:09:45Z
+BOUNDARY_BENCH mode=compute depth=4 tokens=16384 slab_rows=256 k_inner=2048 iters=7
+  wall_us median=1282.1 min=1280.0 max=1554.0
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=3 rho_nom=0.65 k_inner=2048 arm=phased rc=0 23:09:46Z
+BOUNDARY_BENCH mode=phased depth=4 tokens=16384 slab_rows=256 k_inner=2048 iters=7
+  wall_us median=3599.3 min=3398.8 max=3615.9
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=3 rho_nom=0.65 k_inner=2048 arm=fused rc=0 23:09:47Z
+BOUNDARY_BENCH mode=fused depth=4 tokens=16384 slab_rows=256 k_inner=2048 iters=7
+  wall_us median=3622.5 min=3463.2 max=3639.6
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=3 rho_nom=0.65 k_inner=2048 arm=rccl rc=0 23:10:22Z
+BOUNDARY_BENCH mode=rccl depth=4 tokens=16384 slab_rows=256 k_inner=2048 iters=7
+  wall_us median=2913.9 min=2873.6 max=43808.2
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=3 rho_nom=1.0 k_inner=3078 arm=compute rc=0 23:10:22Z
+BOUNDARY_BENCH mode=compute depth=4 tokens=16384 slab_rows=256 k_inner=3078 iters=7
+  wall_us median=2178.3 min=2146.0 max=2413.8
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=3 rho_nom=1.0 k_inner=3078 arm=phased rc=0 23:10:23Z
+BOUNDARY_BENCH mode=phased depth=4 tokens=16384 slab_rows=256 k_inner=3078 iters=7
+  wall_us median=4493.6 min=4242.4 max=4523.4
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=3 rho_nom=1.0 k_inner=3078 arm=fused rc=0 23:10:24Z
+BOUNDARY_BENCH mode=fused depth=4 tokens=16384 slab_rows=256 k_inner=3078 iters=7
+  wall_us median=4462.5 min=4338.5 max=4491.9
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=3 rho_nom=1.0 k_inner=3078 arm=rccl rc=0 23:10:59Z
+BOUNDARY_BENCH mode=rccl depth=4 tokens=16384 slab_rows=256 k_inner=3078 iters=7
+  wall_us median=3764.0 min=3726.5 max=41786.9
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=3 rho_nom=2.0 k_inner=6029 arm=compute rc=0 23:11:00Z
+BOUNDARY_BENCH mode=compute depth=4 tokens=16384 slab_rows=256 k_inner=6029 iters=7
+  wall_us median=4385.3 min=4360.1 max=4812.1
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=3 rho_nom=2.0 k_inner=6029 arm=phased rc=0 23:11:01Z
+BOUNDARY_BENCH mode=phased depth=4 tokens=16384 slab_rows=256 k_inner=6029 iters=7
+  wall_us median=6861.2 min=6375.5 max=6892.5
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=3 rho_nom=2.0 k_inner=6029 arm=fused rc=0 23:11:02Z
+BOUNDARY_BENCH mode=fused depth=4 tokens=16384 slab_rows=256 k_inner=6029 iters=7
+  wall_us median=6864.1 min=6576.1 max=6883.0
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=3 rho_nom=2.0 k_inner=6029 arm=rccl rc=0 23:11:36Z
+BOUNDARY_BENCH mode=rccl depth=4 tokens=16384 slab_rows=256 k_inner=6029 iters=7
+  wall_us median=5938.0 min=5908.3 max=43590.4
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=3 rho_nom=3.0 k_inner=9040 arm=compute rc=0 23:11:37Z
+BOUNDARY_BENCH mode=compute depth=4 tokens=16384 slab_rows=256 k_inner=9040 iters=7
+  wall_us median=6626.7 min=6537.2 max=7072.9
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=3 rho_nom=3.0 k_inner=9040 arm=phased rc=0 23:11:38Z
+BOUNDARY_BENCH mode=phased depth=4 tokens=16384 slab_rows=256 k_inner=9040 iters=7
+  wall_us median=9364.6 min=8882.0 max=9383.1
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=3 rho_nom=3.0 k_inner=9040 arm=fused rc=0 23:11:39Z
+BOUNDARY_BENCH mode=fused depth=4 tokens=16384 slab_rows=256 k_inner=9040 iters=7
+  wall_us median=9398.8 min=9036.5 max=9408.3
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
+### rep=3 rho_nom=3.0 k_inner=9040 arm=rccl rc=0 23:12:14Z
+BOUNDARY_BENCH mode=rccl depth=4 tokens=16384 slab_rows=256 k_inner=9040 iters=7
+  wall_us median=8601.2 min=8557.6 max=43807.7
+  gather_timeouts=0 mag_timeouts=0 verify_errors=0
+BOUNDARY_BENCH_PASS
