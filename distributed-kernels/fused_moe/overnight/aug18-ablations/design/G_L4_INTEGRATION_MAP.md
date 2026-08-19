@@ -258,3 +258,128 @@ an edit rather than a rewrite.
 Whichever is chosen, the entry needs its own selection/eligibility contract
 (replacing B1-B7) and its own receipt family, because the analyzer currently
 keys coverage off the DP-only `RAGGED_SEAL_RECEIPT` (§4).
+
+---
+
+## 4. SEAL, COVERAGE, AND THE FILLER'S STREAM STORY
+
+### 4.1 What the M23 seal does on the DP path
+
+M23 exists to solve a problem that is **purely an artefact of DP lockstep**.
+Under DP8 every rank runs its own batch, DP padding inflates all ranks to the
+max, and the pre-M23 seal demanded all eight *original* counts be exactly 4096
+(`M23_RAGGED_SEAL_DESIGN.md:98-112`) — a coincidence, not a regime, which is why
+the mega sealed on **2% of in-bucket steps** and ran **eagerly** on the rest
+(`:35`, `:41-48`). M23 replaces that with a **DP-unanimous** predicate carried on
+row 4 of the existing DP all-reduce, so all eight ranks make the *same* graph
+decision; a rank inside `execute_dummy_batch` contributes 0 precisely because a
+split decision would deadlock the collective (`m23/m23_patch.py:440-459`).
+Coverage went 2% -> ~99% (`DECOMP_RUNBOOK.md:18`).
+
+### 4.2 Under TP8 the seal is not needed — but coverage still is
+
+`_pf4h_m23_ragged_enabled` hard-gates on `data_parallel_size == 8`
+(`m23/m23_patch.py:429`), so **M23 is inert under TP8**, and structurally so:
+with `dp_size = 1` there is one batch, one decision, no peers to agree with, no
+dummy ranks, no `execute_dummy_batch`. This matches the banked verdict that the
+ragged seal and the whole M24 fill lever **die under TP8**
+(`TP8_STATE.md:368-372`). **Do not port M23.**
+
+What must be ported is everything the seal was *carrying alongside* the
+unanimity bit:
+
+1. **Shape admission.** Something must still decide, per step, whether this
+   batch is one the mega may run. Under TP8 that is a *local* predicate on the
+   step's token count and the layer's tensors — no collective needed. This is
+   the replacement for B4/B5/B6.
+2. **Coverage counters.** Non-negotiable: BENCHMARK_PROTOCOL.md:56-58 item 3
+   requires proof the kernel ran the traffic, and it exists because the pre-M23
+   era measured an inert kernel for weeks. `coverage_patch.py` supplies the
+   per-step counters on the DP path. **UNVERIFIED (contents).** Verify:
+   `sed -n 1,120p ~/eplb_campaign/coverage_patch.py`.
+3. **An analyzer-visible receipt.** `analyze_campaign_v5.py:127` parses
+   `RAGGED_SEAL_RECEIPT` and `:160-163` **FAILs the cell** on a missing or
+   below-threshold receipt. A TP8 arm emitting no such line is scored as a
+   failure regardless of its throughput. So a TP8 arm needs either an
+   equivalently-named receipt or an analyzer branch — a small but *blocking*
+   harness item (§6).
+
+### 4.3 The graph-capture question that replaces it
+
+Under TP8 the seal's other job — keeping the mega and the captured graph in
+agreement — becomes a **shape-bucket** question. A 16,384-token prefill chunk is
+far above any full-cudagraph capture size, so it runs through the piecewise
+compiled path, and the mega must be launchable from inside that region at a
+static shape per compile range. **UNVERIFIED**: the resolved capture sizes and
+compile ranges for the vendor arm. Verify:
+`grep -iE "cudagraph|compile_range|capture" ~/20260818_m15_campaign_b0v5/pair_01/*native_tuned_tp*/server_config_dump.txt`.
+
+### 4.4 The filler: stream, priority, and where the shared expert moves
+
+**§1.5 amended.** §1.5 said a monolithic AR leaves no dependency-free
+co-resident work. That holds for *sharded* shared-expert variants, and there is
+exactly one way out of it, which is the sharpened Option A:
+
+> **Replicate the shared expert.** If every rank computes the *full-width*
+> shared MLP, its output is already identical on all ranks and needs **no
+> reduction**. It can therefore be added **after** AR#2 instead of before it:
+> `out = AR(routed_partial) + shared_full` is arithmetically identical to
+> `AR(routed_partial + shared_shard)`. That single change takes the shared
+> expert **out of AR#2's dependency cone**: its input (post-AR#1, post-norm
+> hidden) is ready before AR#2 starts and its output is not consumed until
+> after AR#2 ends, so its whole execution fits in the AR shadow **with no
+> chunking of the collective at all.**
+
+That is why Option A can be a two-stream host-side change with **zero in-kernel
+fusion**: stream 1 issues the RCCL all-reduce, stream 2 runs the replicated
+shared-expert GEMMs, one event joins them, and the add happens after the join.
+It is also consistent with the new gate result (the AR loses 0.00% beside a
+full-GPU MFMA kernel; 44-53% of the exposed AR is absorbable for free), which
+removes the co-residency-tax objection that would otherwise have sunk it.
+
+**But replication is a work-for-latency trade, and the sizing must gate it.**
+Per rank per MoE layer at a 16,384-token step (all **DERIVED**, arithmetic shown
+so it can be corrected):
+
+| quantity | value |
+|---|---|
+| routed experts (16,384 assigned rows/rank x 88.1 MFLOP/row) | ~1,443 GFLOP |
+| shared expert, TP8-**sharded** (`2*16384*7168*512 + 2*16384*256*7168`) | ~180 GFLOP (12.5% of routed) |
+| shared expert, **replicated** (`2*16384*7168*4096 + 2*16384*2048*7168`) | ~1,443 GFLOP — **8x the sharded cost, equal to the entire routed load** |
+| extra weight footprint if replicated | ~44 MB/layer x 58 = **~2.2 GB/rank**, out of the KV pool at `--gpu-memory-utilization 0.9` |
+
+Let `S` = sharded shared-expert time (~0.5 ms/layer if the routed region is
+3.5-4.5 ms), `R = 8S` (~4 ms) the replicated time, `W` = exposed AR window
+(~2.8 ms/layer, `TP8_STATE.md:115-122`, **never profiler-confirmed**).
+
+> **Decision rule:** the replicated filler gains `S` per layer **iff `R <= W`**.
+> Overflow does not vanish — it lands back on the critical path, so the net is
+> `S - max(0, R - W)`. On today's DERIVED numbers `R ~ 4.0 ms > W ~ 2.8 ms`, so
+> it would **lose ~0.7 ms/layer**. It turns positive if the effective MFMA rate
+> is ~1.4x my estimate, or if `W` is larger than the derived 2.8 ms, or if AR#2
+> is metered so that `W` grows.
+
+**Verdict on Option A: mechanism ACCEPTED, sizing NOT YET CLEARED.** The
+dependency-cone argument is sound and is the genuine unlock — it is the only
+shape that hides the shared expert without touching the collective. Its
+viability turns on two numbers we have never measured on the real arm, and both
+are cheap: (i) `W`, the per-layer exposed AR, from **G-L0c** (one profiled
+native TP8 step, already the first item on the ladder and already flagged as an
+honesty blocker); (ii) `S` and `R`, from a standalone timing of the shared-expert
+GEMMs at both widths. **Measure `W`, `S`, `R` before building Option A** — the
+build is otherwise a coin flip on an inequality we can settle in under an hour
+of node time.
+
+If `R > W` holds, the fallback is not "no filler": it is to **meter AR#2** so a
+*sharded* shared expert (only `S` of work, no replication cost, no extra 2.2 GB)
+hides in the chunk shadow — which is the G-L3 mechanism, and needs the Option-B
+region hook of §3.3. Recorded sequencing consequence: **G-L2 and G-L3 are not
+independent rungs.** Either replication clears `R <= W` (G-L2 standalone, no
+metering), or it does not and G-L3's metering becomes a *prerequisite* for G-L2
+rather than a follow-on.
+
+**Priority story, either way:** the shared-expert tiles are routing-independent,
+so they are the correct work-queue fallback whenever routed tiles starve — the
+pipeline fill/drain smoother. Under Option A that is a host-side stream
+priority (comm stream must not be starved of CUs by the filler; the 0.00%
+co-residency result says it currently is not, at full-GPU MFMA occupancy).
