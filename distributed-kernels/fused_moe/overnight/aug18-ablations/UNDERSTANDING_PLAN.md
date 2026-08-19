@@ -214,3 +214,41 @@ No new kernel variants except instrumented/debug builds of existing ones and Tra
 arms. No workload grid. No decode. No claim that any arm is optimal outside its anchor. No
 cost-model validation program — banked inequalities appear only where they explain a measured
 delta, at a directly-measured β.
+
+## 8. Results ledger (gate outcomes as they land)
+
+**2026-08-18 — G-L0a ρ ladder: COMPLETE, 48/48 PASS** (`results/RHO_LADDER_G0A.md` @9361d444;
+medians of K=3, tokens=16,384, slab_rows=256, depth=4, bps=2):
+
+| ρ_meas | compute | phased | fused | rccl | exposed ours / RCCL | h_wall |
+|---:|---:|---:|---:|---:|---|---:|
+| 0.631 | 1,405.6 | 3,634.6 | 3,622.5 | 2,908.7 | 2,229 / 1,488 | +0.55% |
+| 0.941 | 2,178.3 | 4,493.6 | 4,462.3 | 3,769.6 | 2,315 / 1,586 | +1.50% |
+| 1.786 | 4,421.7 | 6,879.0 | 6,864.1 | 5,938.0 | 2,476 / 1,553 | +0.40% |
+| 2.383 | 6,557.2 | 9,331.7 | 9,398.8 | 8,405.2 | 2,751 / 1,925 | **−2.33%** |
+
+**Verdict: fusion hides nothing at ANY reachable compute intensity** — h_wall ≤ 1.9% in every
+repeat and negative at deployment-like ρ, with the arms DISJOINT at the top rung (all three
+fused medians above all three phased medians, ≥33.7 µs). The four G25-1 nulls are
+**ρ-INDEPENDENT**, not Amdahl-capped: the unreachable-bar rescue (mechanism review B1) is
+retired. **G-L3's fused-CDAR readmission does not open on wall evidence**; only a ledger result
+showing large hidden-but-interference-eaten overlap could reopen it. Q10's remaining question is
+now sharply binary: transport never co-scheduled (scheduling) vs overlapped-but-taxed
+(interference) — the phase ledger decides.
+
+RCCL leads fused by 693–994 µs at every rung; β = ours/RCCL 1.43–1.60, median **1.48**, stable
+across a 4.7× change in co-resident compute (corroborates the banked 1.506×; still
+subtraction-derived — the standalone arms now need only a single ρ). **Track 1 order confirmed
+by data: RCCL-hybrid floor + shared-expert filler over RCCL's ~1.5–1.9 ms exposure is the
+build; fused CDAR stays benched.**
+
+**New mechanism, unplanned (Q10c):** the SEQUENTIAL transport phase costs **+23.4% more after a
+4.7× longer compute phase** (2,229 → 2,751 µs) at flat clocks (0.45% spread, ≤62 °C — not
+thermal). A ρ-dependent component of the phased arm's tax; also why nominal ρ=3 measures only
+2.38 (the denominator moves). The transport-only arm gains a second job: transport cold vs
+post-compute. Candidate mechanisms to discriminate: cache/TLB state left by the compute phase,
+fine-grained DVFS/power residency, MES/queue state — design a discriminating arm after the
+ledger lands.
+
+Ops rule (recorded): never quote `wall_us_max` on the rccl arm — RCCL's lazy channel setup makes
+the first of 7 iterations 15.8× the median; medians are immune (min/median within 1.5%).
