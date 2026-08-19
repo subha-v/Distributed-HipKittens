@@ -1,5 +1,10 @@
 # HipKittens
 
+> **This branch (`kernel-atlas`)** organizes every MoE megakernel built in this project — across
+> all branches and the companion `amd-master` repo — into [`atlas/`](atlas/): the kernel catalog,
+> the why-fast/why-slow causal ledger, the hardware-agnostic data-movement abstractions
+> (Iris/IrisX-aligned), and the evidence index. Start at [`atlas/README.md`](atlas/README.md).
+
 HipKittens is a repository in the ThunderKittens cinematic universe! This work provides minimal, opinionated C++ embedded programming primitives to help you write speedy AMD AI kernels. HipKittens is built from the hardware up: we do what the silicon tells us. 
 
 <div align="center" >
