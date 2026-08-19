@@ -365,4 +365,156 @@ KITTENS_DISTRIBUTED_HOST_DEVICE_INLINE std::size_t signal_words64(
     return static_cast<std::size_t>(g.num_slabs()) * (World + 1u);
 }
 
+// ---------------------------------------------------------------------------
+// E-B1 / E-B2 — device phase ledger  (compile-time gated: M25_LEDGER, def. 0)
+// ---------------------------------------------------------------------------
+//
+// A per-CTA RAW EVENT RING, not a set of running maxima. Every record is one
+// closed interval {t0, t1} in the device's own 100 MHz realtime domain, tagged
+// with a phase code and an aux payload (rows or bytes). All reduction — phase
+// spans, unions, overlap, the E-B2 duty histogram, and the cross-rank rank-max
+// — happens on the HOST after the launch joins. That choice is what discharges
+// four of LAW-63's five traps by construction rather than by discipline.
+//
+// LAW-63 acceptance criteria, and how each is met:
+//   (a) `s_waitcnt lgkmcnt(0)` after every `s_memrealtime`.  realtime_now()
+//       below is the single call site; the wait is inside the same asm block,
+//       so no caller can forget it (LAW-63a killed four of six prior sites).
+//   (b) the clock is the CONSTANT-RATE 100 MHz realtime counter, NOT the
+//       ~2.2 GHz shader clock: 1 tick = 10 ns = 0.01 us exactly. Mixing the
+//       two is a 22x error. The host prints hipDeviceAttributeWallClockRate
+//       next to kLedgerHz every run so the conversion carries a receipt.
+//   (c) running maxima are RESET between epochs — here there are no running
+//       maxima at all: the host zeroes `count[]` before every iteration, so a
+//       ring only ever describes the iteration it was armed for. A soak can
+//       not leak into a timed iteration.
+//   (d) spans are reduced ACROSS RANKS to rank-max on the host (rank-0-only
+//       reporting understates a combine-class phase by 38%). The bench prints
+//       every rank AND an explicit RANKMAX row; there is no rank-0 fast path.
+//   (e) timestamps from different kernel launches are NEVER subtracted: the
+//       ring is indexed by launch slot, every launch gets its own time origin
+//       (min over that launch's kernel-entry stamps on that rank), and the
+//       host analysis refuses to combine slots.
+//
+// Cost: one `s_memrealtime` pair per phase per CTA under `threadIdx.x == 0`,
+// with every bracket OUTSIDE the poll bodies and outside the store loops —
+// the t2v6 PROF-arm shape (`k0pf6gm_device_tile_t2v6.hip`, desc slot 73),
+// measured cost-free on the training chassis. Wall parity against the
+// M25_LEDGER=0 build is a run-time acceptance criterion, not an assumption.
+#ifndef M25_LEDGER
+#define M25_LEDGER 0
+#endif
+
+#if M25_LEDGER
+
+/// s_memrealtime ticks per second on CDNA (constant-rate wall counter).
+/// 1 tick = 10 ns. NEVER mix with s_getreg/clock() shader ticks (LAW-63b).
+inline constexpr std::uint64_t kLedgerHz = 100000000ull;
+inline constexpr double kLedgerTickUs = 0.01;
+
+/// Phase codes. `lg_kernel` brackets the whole launch on this CTA and is the
+/// only event guaranteed present; the loop-span codes bracket a whole loop,
+/// the rest bracket one iteration's phase.
+enum ledger_code : std::uint32_t {
+    lg_kernel      = 1u,   ///< CTA entry stamp (t0 == t1); origin of the slot
+    lg_prod_loop   = 2u,   ///< whole producer loop (aux = producer_block)
+    lg_mfma1       = 3u,   ///< one item's pre-boundary MFMA burst (aux = rows)
+    lg_commit      = 4u,   ///< ERS remote store/atomic issue (aux = bytes)
+    lg_drain       = 5u,   ///< vmcnt drain + local arrive (aux = slab)
+    lg_duty_loop   = 6u,   ///< whole owner-duty loop
+    lg_gather_wait = 7u,   ///< owner gather poll (bracketed OUTSIDE the poll)
+    lg_reduce      = 8u,   ///< owner tower reduce (aux = slab)
+    lg_certify     = 9u,   ///< counted arrival + certificate multicast
+    lg_cons_loop   = 10u,  ///< whole consume loop
+    lg_mag_wait    = 11u,  ///< consumer certificate wait (OUTSIDE the poll)
+    lg_pull        = 12u,  ///< mag_pull remote read (aux = bytes)
+    lg_verify      = 13u,  ///< verification sample
+    lg_mfma2       = 14u,  ///< post-boundary MFMA burst (aux = rows)
+    lg_tx_loop     = 15u,  ///< whole exposed-transport loop (phased arm)
+    lg_kernel_end  = 16u,  ///< CTA exit stamp (t0 == t1)
+    lg_code_count  = 17u
+};
+
+/// One closed interval. 24 B, 8 B aligned; written by one thread, read only
+/// by the host after the launch joins (the join is the release edge).
+struct ledger_event {
+    std::uint64_t t0;
+    std::uint64_t t1;
+    std::uint32_t code;
+    std::uint32_t aux;
+};
+
+/// Device-side view of one LAUNCH SLOT's ring: `cap` events per CTA.
+struct ledger_view {
+    ledger_event* ev;
+    std::uint32_t* count;   ///< [blocks]; low 16 = written, high 16 = dropped
+    unsigned int cap;
+};
+
+/// Per-CTA cursor, register-resident, owned by threadIdx.x == 0.
+struct ledger_cursor {
+    ledger_event* ring;
+    unsigned int cap;
+    unsigned int n;
+    unsigned int dropped;
+};
+
+/// The 100 MHz realtime read. `s_memrealtime` is an SMEM instruction: its
+/// destination SGPR pair is INVALID until `s_waitcnt lgkmcnt(0)`, so the wait
+/// is welded into the same asm block (LAW-63a). Destination is a scalar pair
+/// => the constraint is "s", not "r".
+KITTENS_DISTRIBUTED_DEVICE_INLINE std::uint64_t realtime_now() {
+#if defined(__HIP_DEVICE_COMPILE__)
+    std::uint64_t t;
+    asm volatile("s_memrealtime %0\n\ts_waitcnt lgkmcnt(0)"
+                 : "=s"(t) :: "memory");
+    return t;
+#else
+    return 0ull;
+#endif
+}
+
+KITTENS_DISTRIBUTED_DEVICE_INLINE ledger_cursor ledger_open(
+        const ledger_view& v, unsigned int block) {
+    ledger_cursor c;
+    c.ring = v.ev + static_cast<std::size_t>(block) * v.cap;
+    c.cap = v.cap;
+    c.n = 0u;
+    c.dropped = 0u;
+    return c;
+}
+
+/// Plain 24 B store: not atomic, not volatile, no fence — (CTA, slot) has
+/// exactly one writer and the only reader is the host after the join.
+///
+/// `store` predicates only the WRITE; the cursor arithmetic runs on every
+/// thread so `n`/`dropped` stay CTA-uniform and the whole cursor lives in
+/// SGPRs instead of VGPRs. That is what keeps the instrument off the vector
+/// register budget of an occupancy-1 kernel (LAW-32: a megakernel can be made
+/// slow purely by the register allocator).
+KITTENS_DISTRIBUTED_DEVICE_INLINE void ledger_mark(
+        ledger_cursor& c, std::uint32_t code, std::uint64_t t0,
+        std::uint64_t t1, std::uint32_t aux, bool store) {
+    if (c.n < c.cap) {
+        if (store) {
+            ledger_event e;
+            e.t0 = t0;
+            e.t1 = t1;
+            e.code = code;
+            e.aux = aux;
+            c.ring[c.n] = e;
+        }
+        ++c.n;
+    } else {
+        ++c.dropped;
+    }
+}
+
+KITTENS_DISTRIBUTED_DEVICE_INLINE void ledger_close(
+        const ledger_view& v, unsigned int block, const ledger_cursor& c) {
+    v.count[block] = (c.n & 0xffffu) | (c.dropped << 16);
+}
+
+#endif // M25_LEDGER
+
 } // namespace kittens::distributed::cdar
