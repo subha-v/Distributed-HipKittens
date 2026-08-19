@@ -622,6 +622,9 @@ __global__ __launch_bounds__(kThreads, 1) void filler_kernel(
 }
 #endif
 
+/// Runtime filler grid size (argv 10; default kFillerBlocks).
+static unsigned int g_fblocks = kFillerBlocks;
+
 /// Host-side shim so every filler call site compiles at M25_G1=0 (where the
 /// device image must stay identical to the banked one).
 static void launch_filler(hipStream_t s, const std::byte* src,
@@ -630,7 +633,7 @@ static void launch_filler(hipStream_t s, const std::byte* src,
                           unsigned int total_rows, unsigned int k_filler,
                           rank_report* rep) {
 #if M25_G1
-    filler_kernel<<<kFillerBlocks, kThreads, 0, s>>>(
+    filler_kernel<<<g_fblocks, kThreads, 0, s>>>(
         src, i0, i1, rows_per_item, span_rows, total_rows, k_filler, rep);
 #else
     (void)s; (void)src; (void)i0; (void)i1; (void)rows_per_item;
@@ -915,6 +918,12 @@ int main(int argc, char** argv) {
     const unsigned int bps = argc > 7 ? std::atoi(argv[7]) : 2u;
     const unsigned int chunks = argc > 8 ? std::atoi(argv[8]) : 1u;
     unsigned int k_filler = argc > 9 ? std::atoi(argv[9]) : 0u;
+    // Filler tuning (race-3 follow-ups): grid size trades filler-vs-RCCL CU
+    // contention; priority trades dispatch order. Both runtime so retention
+    // can be swept without rebuilds.
+    g_fblocks = argc > 10 ? std::atoi(argv[10]) : kFillerBlocks;
+    if (g_fblocks < 1u || g_fblocks > 1024u) g_fblocks = kFillerBlocks;
+    const int fprio = argc > 11 ? std::atoi(argv[11]) : 0;
 
     // argv 1 is a comma-separated ARM LIST, round-robin over iterations.
     // LAW-60: cross-session lone-arm contrasts are void, so the only valid way
@@ -1042,9 +1051,13 @@ int main(int argc, char** argv) {
             HIP_CHECK(hipSetDevice(r));
             int prio_lo = 0, prio_hi = 0;
             HIP_CHECK(hipDeviceGetStreamPriorityRange(&prio_lo, &prio_hi));
+            // Race-2 measured only ~38% filler retention beside the AR with a
+            // low-priority stream (vs 44-53% cross-process). Priority is argv
+            // 11 (fprio: 0=low, 1=high) so retention can be tuned without a
+            // rebuild.
             HIP_CHECK(hipStreamCreateWithPriority(&fstr[r],
                                                   hipStreamNonBlocking,
-                                                  prio_lo));
+                                                  fprio ? prio_hi : prio_lo));
             HIP_CHECK(hipEventCreateWithFlags(&ev_b1[r],
                                               hipEventDisableTiming));
             HIP_CHECK(hipEventCreateWithFlags(&ev_fend[r],

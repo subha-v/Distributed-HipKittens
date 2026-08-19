@@ -278,3 +278,18 @@ now exact.
 at ab.py line 2006) was denied by the agent-session permission classifier 3×; needs the
 operator to run it by hand or approve. R7 relaunch, wall parity, ledger-on cells, and the beta
 arm queue behind node access.
+
+**2026-08-19 — G-L2 CLOSED (negative), U2 resolved, G-L1 promoted to primary**
+(`results/GL1_GL2_BOUNDARY_RACES.md`): five boundary races at the C=32 deployment chunk.
+The shared-expert filler cannot beat production structure in any legal form: sharded+merged
+chunked-AR loses at every N (chunk tax + 50% retention + exposed head); full replication is 8×
+work > window; the only winning arm (−317 µs, filler at HIGH stream priority, 48% retention)
+models reduction-free work. **U2 from production source: TP8+EP pays ONE all-reduce** (pre-add
+branch; the shared-expert AR fires only on all2all-manager paths; fusion-shared-experts env is
+False in the serving image) — no second collective to delete. Track 1 reroutes: (1) **G-L1
+MoE-region GEMM floor is the primary lever** (fused region vs AITER sequence + glue at TP8
+shapes — unmeasured); (2) serving-level next-chunk overlap (48%-retention physics banked, needs
+G-L4 W1); (3) weight prefetch. Mechanism cards banked: in-process filler retention 38%→48% by
+stream priority; chunk tax +153/+201/+668 at N=2/4/8; RCCL needs default channels (16ch = +48%
+AR); merged schedules have no interior optimum. The +6–10% e2e projection is revised down
+pending the G-L1 floor measurement.
