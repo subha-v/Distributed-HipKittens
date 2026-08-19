@@ -383,3 +383,155 @@ so they are the correct work-queue fallback whenever routed tiles starve — the
 pipeline fill/drain smoother. Under Option A that is a host-side stream
 priority (comm stream must not be starved of CUs by the filler; the 0.00%
 co-residency result says it currently is not, at full-GPU MFMA occupancy).
+
+---
+
+## 5. BASELINE ARM — the exact reproduction recipe
+
+**This runs FIRST when Phase B starts, before any hybrid exists.** We currently
+have exactly one `native_tuned_tp` number and it is `n=1, UNBALANCED`
+(calibration-grade by construction — `TP8_STATE.md:104-106`). The win bar must
+be our own measured pair set, not that number.
+
+**Image:** `vllm/vllm-openai-rocm:v0.25.1`, digest
+`sha256:84459732ca98b40fe2f5338a3f050be6d522504e47a484a5180d58fb75956f86`
+(`nightshift/BENCHMARK_PROTOCOL.md:12-14`).
+**Model:** `/hf_home/hub/models--deepseek-ai--DeepSeek-R1-0528/snapshots/4236a6af538feda4548eca9ab308586007567f52`
+(`run_m15_campaign_eplb_v5.sh:137`).
+
+**Container** (`:915-933`), identical for every arm:
+`--network host --ipc host --shm-size 32g --device /dev/kfd --device /dev/dri
+--group-add video --group-add render -v /data/hf_home:/hf_home:ro
+-v $QSL_PKL:/qsl/dataset.pkl:ro -v <out>:/results -v <out>:/prof
+--entrypoint bash`. For `native_*` arms **no** PF4H mounts and **no** patch
+chain — `apply_command()` returns `true` (`:634-637`).
+
+**Env** (`arm_env()`, `:525-538`) — exactly six variables, nothing of ours:
+```
+VLLM_ROCM_USE_AITER=1  VLLM_ROCM_USE_AITER_MOE=1  SAFETENSORS_FAST_GPU=1
+TORCH_BLAS_PREFER_HIPBLASLT=1  HIP_FORCE_DEV_KERNARG=1  VLLM_RPC_TIMEOUT=1800000
+```
+`NCCL_MIN_NCHANNELS=112` is deliberately **absent** (AMD documents it for
+MI300X/MI325X, not gfx950 — `ARMS.md:185`).
+
+**Serve line** (`serve_flags()`, `:710-729`; per-flag citations `ARMS.md:200-210`):
+```
+vllm serve $MODEL --served-model-name r1 --host 0.0.0.0 --port 8000 \
+  --trust-remote-code --tensor-parallel-size 8 --enable-expert-parallel \
+  --attention-backend ROCM_AITER_MLA \
+  --max-model-len 32768 --max-num-batched-tokens 16384 --max-num-seqs 2048 \
+  --gpu-memory-utilization 0.9 --no-enable-prefix-caching \
+  --compilation-config '{"cudagraph_mode":"FULL_AND_PIECEWISE"}' \
+  --async-scheduling --seed 0
+```
+`--max-num-batched-tokens 16384` is what makes the boundary tensor 235 MB and
+is therefore the flag that ties this arm to the whole G25 rig
+(`TP8_STATE.md:46-50`). One API server, so readiness waits for **1**
+`Application startup complete.` (`:1030`).
+
+**Cell `c32p`** (`cell_params`, `:1175`): `concurrency 32, prompts 1024,
+ISL 4096, OSL 8, seed 320802`, driver closed, `temperature 0.0`,
+`ignore_eos true`, prompts from the MLPerf QSL
+(`mlperf-qsl-concat-v2-stride7`), client `bench_exact_token_ids_v3.py`.
+
+**Protocol binding** (`BENCHMARK_PROTOCOL.md:51-53`,
+`SERVING_BENCHMARK_METHODOLOGY.md:227-246`): `>=5` order-balanced pairs is a
+hard floor; balancing is a **rotation**, so `PAIRS` must be a multiple of the
+arm count (`ARMS.md:60-61`); `ARM_COOLDOWN=240`; fresh server per arm.
+
+**The wrinkle, and the fix.** A lone arm cannot be order-balanced, so a
+baseline-only run cannot satisfy the protocol on its own. Run the baseline
+**against `native_default`** — both are untouched-image arms, so the pair is
+legitimate, and it buys three things at once: our own `native_tuned_tp`
+distribution, the vendor-tuning delta (tuned vs shipped default), and the
+night's position/drift band.
+
+```bash
+export PROMPT_SOURCE=qsl QSL_PKL=/path/to/mlperf_deepseek_r1_qsl.pkl
+export ARM_COOLDOWN=240
+RUN_TAG=gl4base bash run_m15_campaign_eplb_v5.sh \
+  --arms native_tuned_tp,native_default --cells c32p --pairs 6
+```
+6 pairs = 12 runs. Per run ~162 s of measured wall (banked below) plus startup
+plus the 240 s cooldown ⇒ **~2.5-3 node-hours**, the cheapest item on the
+ladder.
+
+**Authenticity gate, not a note.** `capture_config_receipt` **FAILs** a
+`native_*` run if any `VLLM_PF4H_*` appears in `docker inspect` or if
+`PF4H_INTEGRATION_PATCH_V3_M15` / `PF4H_COVERAGE_PATCH_V1` /
+`PF4H_M23_RAGGED_SEAL_V1` / `PF4H_RR_*` appears in its log (`ARMS.md:133-136`).
+
+**What we expect to reproduce** (banked b0v5, `n=1`, for sanity only —
+`distributed-kernels/tp8_mega/results/serving/b0v5_pair_01_2_native_tuned_tp.json`):
+
+| metric | b0v5 |
+|---|---|
+| input tok/s | 25,843.96 |
+| TTFT p50 / p99 (ms) | 1,338.59 / 5,682.21 |
+| TPOT p50 / p99 (ms) | 480.18 / 923.32 |
+| e2e p50 / p99 (ms) | 4,698.70 / 12,055.12 |
+| wall (s) / completed / failed | 162.29 / 1024 / 0 |
+| prompt-stream sha256 | `7e4bd0dd…eefb` |
+
+A reproduction landing outside ~+-15% of 25,844 means the night has drifted and
+the drift, not the arm, is the finding.
+
+---
+
+## 6. WORK ITEMS — map to first e2e pair
+
+Sizes are engineer-hours. Node-hours listed separately.
+
+| # | item | size | eng-h | node-h | depends on |
+|---|---|---|---|---|---|
+| **W0** | **Baseline arm reproduction (§5)** — 6 pairs `native_tuned_tp` x `native_default` | S | 2 | 2.5-3.0 | — (**runs first**) |
+| **W1** | **Source-truth pass** — settle every UNVERIFIED in §7 from the container source + the resolved config dump | S | 4 | 0 | — |
+| **W2** | **G-L0c** — one profiled native TP8 step: the real `W` (exposed AR/layer), and whether the MoE layer pays **one** AR or **two** (§1.2) | S | 3 | 0.5 | W0 |
+| **W2b** | **Filler sizing** — time the shared-expert GEMMs sharded (`S`) and replicated (`R`) at 16,384 rows | S | 3 | 0.5 | W1 |
+| **W3** | TP8 selection/eligibility contract + `maxtok=16384` bucket; delete the all2all-shaped sizing constraints (§2.4) | M | 12-16 | 0 | W1 |
+| **W4** | **TP8 kernel-entry hook** — Option B region hook at `DeepseekV2MoE.forward`, AR-issue site behind a callable; new `apply.py` install mode (§3.3) | **L** | **24-32** | 0 | W1, W3 |
+| **W5** | Weight bind under TP8 — routed likely free (§2.2), shared-expert descriptor is new (§2.3) | M | 10-14 | 0 | W1, W4 |
+| **W6** | TP8 coverage receipts + `analyze_campaign_v5.py` branch so a TP8 arm is not auto-FAILed (§4.2) | S | 6-8 | 0 | — |
+| **W7** | Campaign arm: `serve_flags`/`arm_env`/`apply_command`/`required_receipts`/`numerics_class`/`expected_startups` cases | S | 4-6 | 0 | — |
+| **W8** | **G-L1** — mega owns the TP8 MoE region at 16,384 rows, no comm; assemble from the m25 rig | M | 16-24 | 1.0-1.5 | W3 |
+| **W9** | **G-L2 / Option A** — two-stream replicated-shared-expert filler, host-side, no in-kernel fusion | S-M | 8-12 | 0.5-1.0 | **W2, W2b** (the `R<=W` gate) |
+| **W10** | **G-L3** — metered AR#2 (+ Option C promotion if AR#1 must be metered) | L | 24-32 | 1.0-1.5 | only if `R > W` |
+| **W11** | Accuracy gate for the TP8 arm — new numerics class, bounded rel-err or MLPerf A/B | M | 8-12 | 0.5-1.0 | W4, W5 |
+| **W12** | First e2e pair, `m25` vs `native_tuned_tp`, full protocol | S | 2 | 2.5-3.0 | all |
+
+**Total to first e2e pair: ~102-138 engineer-hours (13-17 engineer-days) plus
+~8-11 node-hours**, rising to **~126-170 engineer-hours** if the `R <= W` gate
+fails and W10's metering becomes a prerequisite rather than a follow-on.
+
+**Riskiest item: W4, the TP8 kernel-entry hook.** Everything else is sized
+against code we can read; W4 is sized against a claim we have *not* verified —
+that the modular-kernel seam we hook today (B1-B3) does not exist on the TP8
+path. If that is wrong, W4 shrinks sharply. If it is right *and* AR#1 also needs
+metering, W4 becomes the Option C layer hook at 36-48 h. That ~2.5x spread is
+the single largest uncertainty in the estimate, and **W1 collapses it for 4
+hours of reading** — which is why W1 is scheduled alongside W0 rather than after
+it.
+
+**Parallelizable:** W0 / W1 / W6 / W7 have no mutual dependencies and can run
+concurrently on day 1; W8 (kernel) runs alongside W3-W5 (shim) once W1 lands;
+W2 and W2b share one node session. **The serial spine is W1 -> W3 -> W4 -> W5 ->
+W11 -> W12**, and it is the schedule.
+
+---
+
+## 7. UNVERIFIED index (what the node recon did not reach)
+
+| # | claim | verification |
+|---|---|---|
+| U1 | AR#1 / AR#2 exact issue sites and line numbers (§1.2) | `grep -n "tensor_model_parallel_all_reduce" .../layers/linear.py` and the MoE forward |
+| U2 | **Does the MoE layer pay one AR or two?** (`_maybe_reduce_shared_expert_output` goes live at `tp_size=8`) (§1.2) | read `moe_runner.py:392-434` + `DeepseekV2MoE.forward` under TP8, or W2's profile |
+| U3 | Routed-expert layout identical under TP8+EP (§2.2) | `FusedMoEParallelConfig.make()`, `FusedMoE.create_weights`, + `server_config_dump.txt` |
+| U4 | Shared-expert TP8 shard shapes (§2.3) | same source read |
+| U5 | Whether TP8+EP takes the non-modular MoE path (**load-bearing**, §3.2) | `use_all2all_kernels` in `fused_moe/config.py`; branch in `FusedMoE.forward_impl` |
+| U6 | `apply.py` internals — what it patches and how it installs (§3.1) | `sed -n 1,200p ~/pf4h_vllm_20260729/*/shim/pf4h_integration/apply.py` |
+| U7 | `coverage_patch.py` counters and markers (§4.2) | `sed -n 1,120p ~/eplb_campaign/coverage_patch.py` |
+| U8 | Resolved cudagraph capture sizes / compile ranges on the vendor arm (§4.3) | `grep -iE "cudagraph\|compile_range\|capture" .../server_config_dump.txt` |
+| U9 | `W` (exposed AR/layer) — DERIVED, never profiler-confirmed (§4.4) | W2 (G-L0c) |
+| U10 | `S` and `R` shared-expert times (§4.4) | W2b |
+
+U2, U5 and U9 are the three that can move a *decision*, not just a number.
