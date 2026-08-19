@@ -40,6 +40,37 @@
  *             cross-session lone-arm contrasts are void) and prints
  *             beta = median(transport) / median(stdrccl) directly.
  *
+ * G-L1/G-L2 ARMS ADDED (-DM25_G1=1; the DEFAULT build is unchanged so the
+ * .text parity receipts of LEDGER_NOTES.md §2.1 still hold). These build the
+ * chunked-AR + shared-expert-filler champion candidate:
+ *   rcclserial : burst1 -> shared-expert filler ON THE CRITICAL PATH ->
+ *             monolithic AR -> burst2. This is the PRODUCTION-STRUCTURED
+ *             baseline: vLLM takes `SharedExpertsOrder.NO_OVERLAP` on ROCm
+ *             (G_L4_INTEGRATION_MAP.md §1.3), so the shared expert is
+ *             serialized in front of the routed region every layer.
+ *   rcclchunk : the `rccl` schedule with the 235 MB AllReduce split into
+ *             `chunks` (argv 8) equal token-chunks issued back to back, one
+ *             ncclGroup per chunk. NO filler — this arm measures the PURE
+ *             CHUNKING TAX (fabric + per-chunk enqueue), which is the
+ *             premise the whole design rests on.
+ *   rcclhybrid_indep  : chunked AR + the filler on a SECOND stream, with no
+ *             dependency on the AR at all. Pure overlap — the UPPER BOUND.
+ *   rcclhybrid_merged : chunked AR + filler on a second stream, with filler
+ *             chunk i gating AR chunk i through an event (the realistic
+ *             variant: G_L4_INTEGRATION_MAP.md §1.5 — AR#1 -> MoE -> AR#2 is
+ *             strictly serial, so the ONLY dependency-free co-resident work
+ *             requires the collective to be token-chunked). Filler chunk 0 is
+ *             exposed by construction; chunks 1..N-1 hide under AR chunks
+ *             0..N-2.
+ *   filleronly: the filler alone — the calibration arm for `k_filler`
+ *             (argv 9), whose target is 1/8 of burst1 (the true
+ *             shared-expert:routed FLOP ratio for this model).
+ *
+ * MULTI-ARM INVOCATION: argv 1 accepts a COMMA-SEPARATED arm list, round-robin
+ * over iterations (`beta` is now just an alias for `transport,stdrccl`). LAW-60
+ * makes this the only valid way to race arms: one binary, one session, arms
+ * alternating inside the invocation.
+ *
  * rho LADDER: `k_inner` (argv 6) scales ONLY the MFMA loop's trip count, so
  * rho = compute:transport is settable without a rebuild. Caveat for R5/Q4:
  * k_inner scales FLOPs and operand-load traffic together (one rotating load
@@ -67,7 +98,9 @@
  *   m25_boundary_bench.hip -o m25_boundary_bench -lrccl
  *   (ledger arm: add -DM25_LEDGER=1 -o m25_boundary_bench_ledger)
  * Run: ./m25_boundary_bench <mode> [tokens=16384] [slab_rows=256]
- *      [iters=7] [depth=4] [k_inner=64] [bps=2]
+ *      [iters=7] [depth=4] [k_inner=64] [bps=2] [chunks=1] [k_filler=auto]
+ *   (k_filler=0 => auto = k_inner/128, which is EXACTLY a 1/8 MFMA-iteration
+ *    budget per block against burst1 — see kFillerItems below)
  */
 
 #include <hip/hip_runtime.h>
@@ -90,6 +123,14 @@
 // pre-instrument source, which is what the .text sha parity gate asserts.
 #ifndef M25_NOCOMPUTE
 #define M25_NOCOMPUTE 0
+#endif
+// M25_G1 gates the G-L1/G-L2 arms. It adds ONE device kernel (`filler_kernel`)
+// and nothing else device-side, so the default build (M25_G1=0) keeps the
+// arm-count-invariant device image the .text parity gate asserts. Everything
+// else the new arms need — token-chunked AllReduce, the second stream, the
+// event chain — is host-side scheduling and costs the device image nothing.
+#ifndef M25_G1
+#define M25_G1 0
 #endif
 
 #if M25_LEDGER
@@ -151,6 +192,18 @@ static constexpr unsigned int kBlocks = 256;
 static constexpr unsigned int kThreads = 256;
 static constexpr unsigned int kDutyBlocks = 32;
 static constexpr unsigned int kReduceSegs = 8;
+
+// ---- G-L1/G-L2 filler geometry -------------------------------------------
+// The filler runs the FULL grid over a 4,096-long item list. That length is
+// the load-bearing choice: burst1 has only nslabs*bps = 128 items over 256
+// blocks, so its duration is ONE item's latency and splitting it into chunks
+// would NOT divide its duration. With 4,096 items every chunk count in
+// {1,2,4,8,16} leaves an integral number of item-waves per block
+// (16/8/4/2/1), so chunk duration IS proportional to chunk size — the
+// property a token-chunked schedule needs to mean anything.
+static constexpr unsigned int kFillerBlocks = 256;
+static constexpr unsigned int kFillerItems = 4096;
+static constexpr unsigned int kMaxChunks = 32;
 
 static constexpr std::uint64_t kSpin = 1u << 20;
 static constexpr unsigned int kAttempts = 512;
@@ -536,6 +589,55 @@ __global__ __launch_bounds__(kThreads, 1) void boundary_kernel(
     M25_LG_EXIT();
 }
 
+#if M25_G1
+/// G-L2 shared-expert stand-in. A dependency-free MFMA load over a contiguous
+/// ITEM RANGE of the token axis, so a token-chunked schedule can gate AR chunk
+/// i on filler chunk i. Each item's burst reads a `span_rows`-row window — the
+/// SAME window size burst1's fragments use (slab_rows/bps), so a filler
+/// iteration costs what a burst1 iteration costs and the 1/8 budget can be set
+/// by iteration count alone.
+///
+/// HONESTY LABEL: like every compute body in this rig this is `mfma_burst`,
+/// not the real shared-expert GEMM, and it writes NO output (the rig's AR
+/// buffer must stay exactly reducible to 36.0 for the verification to remain
+/// live). It models the shared expert's OCCUPANCY and fabric-neutral compute
+/// demand during the collective — which is what the G-L2 question is — not its
+/// epilogue traffic.
+__global__ __launch_bounds__(kThreads, 1) void filler_kernel(
+        const std::byte* __restrict__ src, unsigned int item0,
+        unsigned int item1, unsigned int rows_per_item,
+        unsigned int span_rows, unsigned int total_rows,
+        unsigned int k_filler, rank_report* report) {
+    float acc = 0.f;
+    for (unsigned int i = item0 + blockIdx.x; i < item1; i += gridDim.x) {
+        unsigned int r0 = i * rows_per_item;
+        if (r0 + span_rows > total_rows)
+            r0 = total_rows > span_rows ? total_rows - span_rows : 0u;
+        const unsigned int rows =
+            span_rows < total_rows - r0 ? span_rows : total_rows - r0;
+        acc += mfma_burst(src + static_cast<std::size_t>(r0) * kRowBytes, rows,
+                          k_filler, threadIdx.x);
+    }
+    if (threadIdx.x == 0u) atomicAdd(&report->acc_token, acc);
+}
+#endif
+
+/// Host-side shim so every filler call site compiles at M25_G1=0 (where the
+/// device image must stay identical to the banked one).
+static void launch_filler(hipStream_t s, const std::byte* src,
+                          unsigned int i0, unsigned int i1,
+                          unsigned int rows_per_item, unsigned int span_rows,
+                          unsigned int total_rows, unsigned int k_filler,
+                          rank_report* rep) {
+#if M25_G1
+    filler_kernel<<<kFillerBlocks, kThreads, 0, s>>>(
+        src, i0, i1, rows_per_item, span_rows, total_rows, k_filler, rep);
+#else
+    (void)s; (void)src; (void)i0; (void)i1; (void)rows_per_item;
+    (void)span_rows; (void)total_rows; (void)k_filler; (void)rep;
+#endif
+}
+
 static unsigned short f32_to_bf16_bits(float f) {
     unsigned int u;
     std::memcpy(&u, &f, 4);
@@ -741,26 +843,62 @@ static double us(std::uint64_t ticks) {
 
 // One arm's schedule shape. Everything here is host-side dispatch: no arm
 // adds a kernel instantiation, so the device image is arm-count-invariant.
+enum filler_kind : int {
+    fill_none = 0,   ///< no shared-expert stand-in at all
+    fill_serial = 1, ///< on the critical path, ahead of the AR (production)
+    fill_indep = 2,  ///< second stream, no AR dependency (upper bound)
+    fill_merged = 3, ///< second stream, filler chunk i gates AR chunk i
+    fill_only = 4    ///< the filler alone (k_filler calibration arm)
+};
+
 struct arm_spec {
     int kmode;         ///< mode_compute / mode_phased / mode_fused
     bool zero_kinner;  ///< transport-only arms: k_inner forced to 0
     bool uses_rccl;    ///< enqueues ncclAllReduce at the boundary
     bool kernels;      ///< launches boundary kernels at all
     bool two_launch;   ///< burst1 and burst2 as separate launches
+    bool chunked;      ///< AR split into `chunks` token-chunks (argv 8)
+    int filler;        ///< filler_kind
 };
 
+static const char* filler_name(int f) {
+    switch (f) {
+        case fill_serial: return "serial";
+        case fill_indep:  return "indep";
+        case fill_merged: return "merged";
+        case fill_only:   return "only";
+        default:          return "none";
+    }
+}
+
 static bool arm_lookup(const std::string& a, arm_spec& s) {
-    if (a == "compute")   { s = {mode_compute, false, false, true,  true }; return true; }
-    if (a == "compute0")  { s = {mode_compute, true,  false, true,  true }; return true; }
-    if (a == "phased")    { s = {mode_phased,  false, false, true,  false}; return true; }
-    if (a == "fused")     { s = {mode_fused,   false, false, true,  false}; return true; }
-    if (a == "transport") { s = {mode_phased,  true,  false, true,  false}; return true; }
+    if (a == "compute")   { s = {mode_compute, false, false, true,  true , false, fill_none}; return true; }
+    if (a == "compute0")  { s = {mode_compute, true,  false, true,  true , false, fill_none}; return true; }
+    if (a == "phased")    { s = {mode_phased,  false, false, true,  false, false, fill_none}; return true; }
+    if (a == "fused")     { s = {mode_fused,   false, false, true,  false, false, fill_none}; return true; }
+    if (a == "transport") { s = {mode_phased,  true,  false, true,  false, false, fill_none}; return true; }
     if (a == "transport_fused")
-                          { s = {mode_fused,   true,  false, true,  false}; return true; }
-    if (a == "rccl")      { s = {mode_compute, false, true,  true,  true }; return true; }
-    if (a == "stdrccl")   { s = {mode_compute, false, true,  false, false}; return true; }
+                          { s = {mode_fused,   true,  false, true,  false, false, fill_none}; return true; }
+    if (a == "rccl")      { s = {mode_compute, false, true,  true,  true , false, fill_none}; return true; }
+    if (a == "stdrccl")   { s = {mode_compute, false, true,  false, false, false, fill_none}; return true; }
+#if M25_G1
+    // G-L1/G-L2. Every one of these is host-side scheduling over the SAME
+    // burst1 / AllReduce / burst2 pieces the `rccl` arm already uses.
+    if (a == "rcclserial")        { s = {mode_compute, false, true, true, true, false, fill_serial}; return true; }
+    if (a == "rcclchunk")         { s = {mode_compute, false, true, true, true, true,  fill_none};   return true; }
+    if (a == "rcclhybrid_indep")  { s = {mode_compute, false, true, true, true, true,  fill_indep};  return true; }
+    if (a == "rcclhybrid_merged") { s = {mode_compute, false, true, true, true, true,  fill_merged}; return true; }
+    if (a == "filleronly")        { s = {mode_compute, false, false, false, false, false, fill_only}; return true; }
+#endif
     return false;
 }
+
+static const char* kArmList =
+    "compute compute0 phased fused transport transport_fused rccl stdrccl beta"
+#if M25_G1
+    " rcclserial rcclchunk rcclhybrid_indep rcclhybrid_merged filleronly"
+#endif
+    " (or a comma-separated list of them)";
 
 static const char* env_or(const char* k) {
     const char* v = std::getenv(k);
@@ -775,30 +913,77 @@ int main(int argc, char** argv) {
     const unsigned int depth = argc > 5 ? std::atoi(argv[5]) : 4u;
     const unsigned int k_inner = argc > 6 ? std::atoi(argv[6]) : 64u;
     const unsigned int bps = argc > 7 ? std::atoi(argv[7]) : 2u;
+    const unsigned int chunks = argc > 8 ? std::atoi(argv[8]) : 1u;
+    unsigned int k_filler = argc > 9 ? std::atoi(argv[9]) : 0u;
 
-    // `beta` alternates our standalone transport against RCCL's standalone
-    // all-reduce inside ONE invocation: LAW-60 voids cross-session lone-arm
-    // contrasts, and beta is the ratio of two DIRECT measurements (B4), never
-    // of two wall-minus-floor subtractions.
-    std::string arm_name[2] = {mode, std::string()};
-    int narms = 1;
-    if (mode == "beta") {
-        arm_name[0] = "transport";
-        arm_name[1] = "stdrccl";
-        narms = 2;
+    // argv 1 is a comma-separated ARM LIST, round-robin over iterations.
+    // LAW-60: cross-session lone-arm contrasts are void, so the only valid way
+    // to race arms is inside one invocation with the arms alternating.
+    // `beta` is retained as an alias for the two-arm B4 contrast.
+    std::vector<std::string> arm_name;
+    {
+        std::string m = (mode == "beta") ? std::string("transport,stdrccl")
+                                         : mode;
+        std::size_t p = 0;
+        while (p <= m.size()) {
+            std::size_t q = m.find(',', p);
+            if (q == std::string::npos) q = m.size();
+            if (q > p) arm_name.push_back(m.substr(p, q - p));
+            p = q + 1;
+        }
     }
-    arm_spec spec[2]{};
+    const int narms = static_cast<int>(arm_name.size());
+    if (narms < 1 || narms > 8) {
+        std::fprintf(stderr, "arm list must hold 1..8 arms; got %d\n", narms);
+        return 2;
+    }
+    std::vector<arm_spec> spec(narms);
     for (int a = 0; a < narms; ++a) {
         if (!arm_lookup(arm_name[a], spec[a])) {
-            std::fprintf(stderr,
-                         "unknown mode '%s'; expected one of compute compute0 "
-                         "phased fused transport transport_fused rccl stdrccl "
-                         "beta\n", arm_name[a].c_str());
+            std::fprintf(stderr, "unknown mode '%s'; expected one of %s\n",
+                         arm_name[a].c_str(), kArmList);
             return 2;
         }
     }
-    const bool needs_comm = spec[0].uses_rccl ||
-                            (narms > 1 && spec[1].uses_rccl);
+    bool needs_comm = false, needs_filler = false, any_chunked = false;
+    for (int a = 0; a < narms; ++a) {
+        needs_comm = needs_comm || spec[a].uses_rccl;
+        needs_filler = needs_filler || (spec[a].filler != fill_none);
+        any_chunked = any_chunked || spec[a].chunked;
+    }
+    if (chunks < 1u || chunks > kMaxChunks) {
+        std::fprintf(stderr, "chunks must be in [1,%u]\n", kMaxChunks);
+        return 2;
+    }
+    if (any_chunked && (tokens % chunks) != 0u) {
+        std::fprintf(stderr, "chunks=%u must divide tokens=%u\n", chunks,
+                     tokens);
+        return 2;
+    }
+    // Filler geometry. `span_rows` matches burst1's fragment height so a
+    // filler MFMA iteration costs what a burst1 iteration costs; the item list
+    // must then divide by the chunk count for chunk duration to be
+    // proportional to chunk size.
+    const unsigned int filler_items = kFillerItems;
+    const unsigned int filler_rows_per_item =
+        filler_items ? tokens / filler_items : 0u;
+    const unsigned int span_rows = (slab_rows + bps - 1u) / bps;
+    if (needs_filler) {
+        if (filler_rows_per_item == 0u || (tokens % filler_items) != 0u) {
+            std::fprintf(stderr,
+                         "filler arms need tokens (%u) to be a multiple of "
+                         "%u\n", tokens, filler_items);
+            return 2;
+        }
+        if ((filler_items % chunks) != 0u) {
+            std::fprintf(stderr, "chunks=%u must divide filler items=%u\n",
+                         chunks, filler_items);
+            return 2;
+        }
+        // AUTO: k_inner/128 is exactly a 1/8 MFMA-iteration budget per block
+        // (burst1 = 1 wave x k_inner; filler = 16 waves x k_filler).
+        if (k_filler == 0u) k_filler = k_inner / 128u ? k_inner / 128u : 1u;
+    }
 
     cd::geometry<kWorld> g{tokens, kRowBytes, slab_rows, 0u};
     const unsigned int nslabs = g.num_slabs();
@@ -843,6 +1028,32 @@ int main(int argc, char** argv) {
         const unsigned short b16 = f32_to_bf16_bits(static_cast<float>(r + 1));
         const unsigned int packed = (static_cast<unsigned int>(b16) << 16) | b16;
         fill_bf16<<<256, 256, 0, str[r]>>>(src[r], src_b, packed);
+    }
+    // Second stream + event chain for the filler arms. Created ONLY when an
+    // arm needs them, so no banked arm's setup changes. The filler stream takes
+    // the LEAST priority so the collective's channels keep first claim on the
+    // scheduler — the filler is opportunistic by design.
+    hipStream_t fstr[kWorld] = {};
+    hipEvent_t ev_b1[kWorld] = {};
+    hipEvent_t ev_fend[kWorld] = {};
+    hipEvent_t ev_fc[kWorld][kMaxChunks] = {};
+    if (needs_filler) {
+        for (unsigned int r = 0; r < kWorld; ++r) {
+            HIP_CHECK(hipSetDevice(r));
+            int prio_lo = 0, prio_hi = 0;
+            HIP_CHECK(hipDeviceGetStreamPriorityRange(&prio_lo, &prio_hi));
+            HIP_CHECK(hipStreamCreateWithPriority(&fstr[r],
+                                                  hipStreamNonBlocking,
+                                                  prio_lo));
+            HIP_CHECK(hipEventCreateWithFlags(&ev_b1[r],
+                                              hipEventDisableTiming));
+            HIP_CHECK(hipEventCreateWithFlags(&ev_fend[r],
+                                              hipEventDisableTiming));
+            for (unsigned int c = 0; c < kMaxChunks; ++c) {
+                HIP_CHECK(hipEventCreateWithFlags(&ev_fc[r][c],
+                                                  hipEventDisableTiming));
+            }
+        }
     }
     if (needs_comm) {
         int devs[kWorld];
@@ -938,6 +1149,37 @@ int main(int argc, char** argv) {
                         depth, str[r], pv, tokens, slab_rows, r, epoch, ki,
                         1u, bps, rcell[r], src[r], dstbuf, rep[r],
                         expect_bits M25_LG_A0(r));
+                    if (as.filler == fill_serial) {
+                        // Production structure: shared expert serialized on
+                        // the critical path next to the routed region
+                        // (SharedExpertsOrder.NO_OVERLAP on ROCm).
+                        launch_filler(str[r], src[r], 0u, filler_items,
+                                      filler_rows_per_item, span_rows, tokens,
+                                      k_filler, rep[r]);
+                    } else if (as.filler == fill_indep ||
+                               as.filler == fill_merged) {
+                        // Filler input models the post-AR#1 hidden: available
+                        // before this boundary's collective begins, so the
+                        // filler stream gates only on burst1.
+                        HIP_CHECK(hipEventRecord(ev_b1[r], str[r]));
+                        HIP_CHECK(hipStreamWaitEvent(fstr[r], ev_b1[r], 0));
+                        if (as.filler == fill_indep) {
+                            launch_filler(fstr[r], src[r], 0u, filler_items,
+                                          filler_rows_per_item, span_rows,
+                                          tokens, k_filler, rep[r]);
+                            HIP_CHECK(hipEventRecord(ev_fend[r], fstr[r]));
+                        } else {
+                            const unsigned int ipc = filler_items / chunks;
+                            for (unsigned int c = 0; c < chunks; ++c) {
+                                launch_filler(fstr[r], src[r], c * ipc,
+                                              (c + 1u) * ipc,
+                                              filler_rows_per_item, span_rows,
+                                              tokens, k_filler, rep[r]);
+                                HIP_CHECK(
+                                    hipEventRecord(ev_fc[r][c], fstr[r]));
+                            }
+                        }
+                    }
                     if (!as.uses_rccl) {
                         launch_mode_depth<mode_compute>(
                             depth, str[r], pv, tokens, slab_rows, r, epoch, ki,
@@ -957,14 +1199,40 @@ int main(int argc, char** argv) {
                 }
             }
         }
-        if (as.uses_rccl) {
-            NCCL_CHECK(ncclGroupStart());
+        if (as.filler == fill_only) {
             for (unsigned int r = 0; r < kWorld; ++r) {
-                NCCL_CHECK(ncclAllReduce(stage[r], stage[r],
-                                         logical / 2, ncclBfloat16, ncclSum,
-                                         comms[r], str[r]));
+                HIP_CHECK(hipSetDevice(r));
+                launch_filler(str[r], src[r], 0u, filler_items,
+                              filler_rows_per_item, span_rows, tokens,
+                              k_filler, rep[r]);
             }
-            NCCL_CHECK(ncclGroupEnd());
+        }
+        if (as.uses_rccl) {
+            // Token-chunked issue: chunk c's AllReduce covers a contiguous
+            // byte range; under fill_merged its enqueue waits on filler chunk
+            // c's completion event (the shared-expert output rides the AR, so
+            // filler chunk 0 is exposed by construction and chunks 1..N-1
+            // hide under AR chunks 0..N-2).
+            const unsigned int nch = as.chunked ? chunks : 1u;
+            const std::size_t chunk_bytes =
+                static_cast<std::size_t>(logical) / nch;
+            for (unsigned int c = 0; c < nch; ++c) {
+                if (as.filler == fill_merged) {
+                    for (unsigned int r = 0; r < kWorld; ++r) {
+                        HIP_CHECK(hipSetDevice(r));
+                        HIP_CHECK(
+                            hipStreamWaitEvent(str[r], ev_fc[r][c], 0));
+                    }
+                }
+                NCCL_CHECK(ncclGroupStart());
+                for (unsigned int r = 0; r < kWorld; ++r) {
+                    NCCL_CHECK(ncclAllReduce(
+                        stage[r] + c * chunk_bytes,
+                        stage[r] + c * chunk_bytes, chunk_bytes / 2,
+                        ncclBfloat16, ncclSum, comms[r], str[r]));
+                }
+                NCCL_CHECK(ncclGroupEnd());
+            }
             if (as.kernels && as.two_launch) {
                 for (unsigned int r = 0; r < kWorld; ++r) {
                     HIP_CHECK(hipSetDevice(r));
@@ -978,6 +1246,11 @@ int main(int argc, char** argv) {
         for (unsigned int r = 0; r < kWorld; ++r) {
             HIP_CHECK(hipSetDevice(r));
             HIP_CHECK(hipStreamSynchronize(str[r]));
+            // The layer is not done until the shared-expert stand-in is: the
+            // wall for filler arms is max(main stream, filler stream).
+            if (as.filler == fill_indep || as.filler == fill_merged) {
+                HIP_CHECK(hipStreamSynchronize(fstr[r]));
+            }
         }
         const auto t1 = std::chrono::steady_clock::now();
         walls[ai].push_back(
@@ -1025,10 +1298,10 @@ int main(int argc, char** argv) {
     const bool pass = (errs == 0 && gt == 0 && mt == 0);
     std::printf("BOUNDARY_BENCH_CFG mode=%s depth=%u tokens=%u slab_rows=%u "
                 "k_inner=%u bps=%u iters=%d payload_MB=%.1f ledger=%d "
-                "nocompute=%d\n",
+                "nocompute=%d chunks=%u k_filler=%u\n",
                 mode.c_str(), depth, tokens, slab_rows, k_inner, bps, iters,
                 static_cast<double>(logical) / 1.0e6, M25_LEDGER,
-                M25_NOCOMPUTE);
+                M25_NOCOMPUTE, chunks, k_filler);
     if (needs_comm) {
         std::printf("BOUNDARY_BENCH_RCCLENV NCCL_ALGO=%s NCCL_PROTO=%s "
                     "NCCL_NCHANNELS=%s NCCL_MIN_NCHANNELS=%s "
