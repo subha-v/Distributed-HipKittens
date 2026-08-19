@@ -252,3 +252,29 @@ ledger lands.
 
 Ops rule (recorded): never quote `wall_us_max` on the rccl arm — RCCL's lazy channel setup makes
 the first of 7 iterations 15.8× the median; medians are immune (min/median within 1.5%).
+
+**2026-08-18 (late) — FILLER MICROCOSM: G-L2 GO** (`results/FILLER_MICROCOSM.md` @9fa8d3fa):
+a bare 235 MB `ncclAllReduce` loses **0.00%** wall (worst repeat −0.38%; bar was <10%) while a
+full-GPU MFMA kernel runs beside it in a separate process at **43.9–53.4%** of solo throughput —
+**net +571–695 µs of the exposed AR absorbed free**, clearing G-L2's ≥25% bar conservatively.
+Mechanism card: a 235 MB AR on this fabric is NOT CU-bound — the machine has room for a
+co-resident compute kernel at zero collective cost; the filler design's founding assumption is
+now measured, with its falsifier stated (dAR did not climb with filler intensity; 3 repeats, 2
+configs). Caveat carried: two-process proxy, harsher sharing than the real design. **Design
+consequence: evaluate the TWO-STREAM filler (Option A — shared-expert GEMM on a concurrent
+stream over the AR window, no in-kernel fusion) before the in-kernel variant; it collapses
+G-L2's integration cost.** G-L4 Phase B: GREEN, in flight.
+
+**Same session — B4 CLOSED and two Q10 facts:** direct **β = 1.529** (transport 2,019.3 vs
+stdrccl 1,320.9 µs, no subtraction; concurs with banked 1.506× and the ladder's 1.43–1.60 —
+three methods agree). **I_co is NOT constant:** +209.7 µs at ρ=0.63 → +755.2 µs at ρ=2.38
+(grows 3.6×; the "+335 µs constant tax" is retired — confirms Q10c). **transport_fused −
+transport = +15.0 µs ⇒ the fused protocol's overhead is FREE; the fused arm's ~700 µs deficit
+is entirely a co-residency/scheduling failure**, not protocol — the phase ledger's target is
+now exact.
+
+**Open blocker (operator action):** R7's harness patch `python3 ~/anatomy_g0/fix_ab_py_m20.py
+--apply` (patcher committed as tools/fix_ab_py_m20.py; `--check` ran clean; patches the guard
+at ab.py line 2006) was denied by the agent-session permission classifier 3×; needs the
+operator to run it by hand or approve. R7 relaunch, wall parity, ledger-on cells, and the beta
+arm queue behind node access.
