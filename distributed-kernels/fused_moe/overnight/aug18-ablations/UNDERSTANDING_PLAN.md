@@ -293,3 +293,27 @@ G-L4 W1); (3) weight prefetch. Mechanism cards banked: in-process filler retenti
 stream priority; chunk tax +153/+201/+668 at N=2/4/8; RCCL needs default channels (16ch = +48%
 AR); merged schedules have no interior optimum. The +6–10% e2e projection is revised down
 pending the G-L1 floor measurement.
+
+**2026-08-19 (night) — G-L1 FLOOR, first measurement: our GEMM cores beat AITER's fp8 MoE by
+~29% at the TP8 shapes** (driver `results/gl1_race_v0.py`, container `subvadla_m15pkt`, single
+GPU, T=16,384, E_local=32, top-1-of-32 work-equivalent routing, fp8 blockscale both arms,
+K=20 medians):
+- OURS (packet-installed `n2_phase1+2`, fp8 blockscale, 2 launches): **2,044–2,092 µs**
+  (stable across weight layouts — timing is layout-independent).
+- AITER `fused_moe` fp8 blockscale: **2,854–2,992 µs** (shuffled weights change nothing).
+- AITER bf16 path: 2,122 µs; Triton fallback bf16: 2,523; dense-GEMM roofline (same FLOPs):
+  **1,313 µs**; vLLM glue kernels ≈150 µs.
+Findings: (1) **AITER's fp8-blockscale MoE is SLOWER than its own bf16 path** at these shapes
+(2,854 vs 2,122) — the dequant/scale machinery costs more than the precision saves; (2) our
+fp8 pair beats BOTH AITER arms and sits 1.56× off the dense roofline, so a fused mega (deleting
+the 32 MB a2q inter-phase HBM round-trip + launches) has visible headroom left; (3) prize size:
+**+800–900 µs per layer-chunk** — comparable to the entire exposed-AR pool, workload-independent,
+and it stacks with RCCL untouched.
+CAVEATS (open): correctness of the driver harness is at cos≈0.96 / mean_rel≈0.27 vs a torch
+reference after fixing the weight-shuffle layout (relmax 26 → 0.26) — one systematic detail
+remains (suspects: shuffle variant (16,16) vs kernel expectation, gate/up half order, a2q
+requant semantics); the AITER arm is a direct `aiter.fused_moe` call, not vLLM's dispatch — the
+G-L0c profiled production step remains the ground-truth target; routing is uniform top-1-of-32
+(work-equivalent), skewed routing untested. The n2 phase kernels are the PROVEN serving pair
+(they run attested in production serving via the packet install), so the correctness gap is in
+MY driver's data prep, not the kernels.
