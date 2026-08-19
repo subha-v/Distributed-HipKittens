@@ -1096,17 +1096,22 @@ int main(int argc, char** argv) {
     }
     // [iter][rank] snapshots; analysed at the end for the MEDIAN-wall
     // iteration of each arm (the same iteration the headline wall quotes).
-    std::vector<std::vector<std::vector<cd::ledger_event>>> snap_ev(iters);
-    std::vector<std::vector<std::vector<std::uint32_t>>> snap_cnt(iters);
+    std::vector<std::vector<std::vector<cd::ledger_event>>> snap_ev(
+        static_cast<std::size_t>(iters) * narms);
+    std::vector<std::vector<std::vector<std::uint32_t>>> snap_cnt(
+        static_cast<std::size_t>(iters) * narms);
     int lg_clock_khz = 0;
     (void)hipDeviceGetAttribute(&lg_clock_khz, hipDeviceAttributeWallClockRate, 0);
 #endif
 
-    std::vector<double> walls[2];
-    std::vector<int> wall_iter[2];
+    // `iters` is PER ARM: the arms round-robin so every arm gets `iters`
+    // samples interleaved through the same session window (LAW-60).
+    const int total_iters = iters * narms;
+    std::vector<std::vector<double>> walls(narms);
+    std::vector<std::vector<int>> wall_iter(narms);
     unsigned int rccl_verify_errors = 0;
-    for (int it = 0; it < iters; ++it) {
-        const int ai = (narms > 1) ? (it & 1) : 0;
+    for (int it = 0; it < total_iters; ++it) {
+        const int ai = it % narms;
         const arm_spec& as = spec[ai];
         const unsigned int ki = as.zero_kinner ? 0u : k_inner;
         const std::uint32_t epoch = static_cast<std::uint32_t>(it + 1);
@@ -1310,8 +1315,8 @@ int main(int argc, char** argv) {
                     env_or("NCCL_NCHANNELS"), env_or("NCCL_MIN_NCHANNELS"),
                     env_or("NCCL_MAX_NCHANNELS"));
     }
-    double med[2] = {0.0, 0.0};
-    int med_it[2] = {-1, -1};
+    std::vector<double> med(narms, 0.0);
+    std::vector<int> med_it(narms, -1);
     for (int a = 0; a < narms; ++a) {
         if (walls[a].empty()) continue;
         std::vector<std::size_t> ord(walls[a].size());
