@@ -209,6 +209,24 @@ binding cost of a phase ledger is **not** the timestamp reads, it is the *livene
 variables. Bracket leaves, never whole regions; make the stamps uniform so they land in SGPRs; and
 count events by saturation rather than with a second counter.
 
+### 2.3 Status at handoff
+
+No arm has been executed **by this agent** — the GPUs belonged to the sibling NODE-RUN agent for
+the whole session, and the one guarded smoke attempt correctly aborted itself when its
+`rocm-smi`-idle + no-collective-process precondition went false mid-check (the sibling's relaunch
+landed in that minute).
+
+As of 2026-08-19 01:14Z the sibling is running the new arms from this source
+(`~/anatomy_g0/build/m25_bb_g0l0`: `stdrccl`, `transport`, `compute0`, `transport_fused` at
+`16384 256 7 4 9040 2`). That binary is the **flag-OFF** build — which is the right one for those
+four arms, since all four are host-side dispatch and the flag-OFF device image is byte-identical to
+the pre-instrument build (§2.1). Their walls are therefore valid G-L0a data.
+
+**For the ledger-on cells, rebuild from this commit or later** with `-DM25_LEDGER=1`: the ledger's
+internals changed after the first landing (loop-span events removed, and `count[]` is now a plain
+event count that saturates at `cd::kLedgerCap` rather than a packed `n | dropped<<16`). Parsers
+should read `rings_filled` / `rings_filled_total`, not `dropped`.
+
 ---
 
 ## 3. What could NOT be verified without GPUs
