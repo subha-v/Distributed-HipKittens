@@ -24,7 +24,6 @@ Phase codes (`cdar::ledger_code`, `m25_cdar.cuh`):
 | code | brackets | class |
 |---|---|---|
 | `kernel` / `kernel_end` | CTA entry / exit stamps (degenerate, `t0==t1`) — the slot's time origin | — |
-| `prod_loop`, `tx_loop`, `duty_loop`, `cons_loop` | whole-loop spans | — |
 | `mfma1`, `mfma2` | pre- and post-boundary MFMA bursts (aux = rows) | **compute** |
 | `commit` | ERS remote store issue + its `vmcnt` drain (aux = bytes) | **transport** |
 | `pull` | `mag_pull` remote read (aux = bytes) | **transport** |
@@ -32,6 +31,15 @@ Phase codes (`cdar::ledger_code`, `m25_cdar.cuh`):
 | `drain` | `throttle_vmcnt<0>` + `__syncthreads` + `ers_local_arrive` | **wait** |
 | `reduce` | owner tower reduce (local HBM, deliberately **not** counted as fabric) | — |
 | `certify` | counted arrival + certificate multicast | — |
+| `prod_loop`, `tx_loop`, `duty_loop`, `cons_loop` | **RESERVED, not emitted** — see below | — |
+
+The four whole-loop codes were built, measured, and then **removed**: bracketing a loop means
+holding a uniform `u64` pair live across a large region, and four of them cost SGPR spills in a
+kernel whose scalar file is already saturated at 105 SGPRs before the instrument. The information
+is not lost — a loop's envelope is `first(t0) .. last(t1)` over that loop's own per-iteration phase
+events on the same CTA, which the host already computes and prints (`first_us`/`last_us` per
+phase). A zero-spill instrument beats a redundant event; the enum values stay reserved so no
+existing parser breaks.
 
 **The five LAW-63 guards, and where each is discharged.**
 
@@ -71,19 +79,27 @@ with the transport-only arm below it becomes absolute rather than differential (
 ### 1.3 rho — the `k_inner` ladder (already existed; verified, not rebuilt)
 
 `k_inner` is **argv 6** (`m25_boundary_bench.hip`, default 64) and scales **only** the MFMA loop's
-trip count in `mfma_burst`. No rebuild is needed to walk rho. Two caveats now written into the
-file header:
+trip count in `mfma_burst`. No rebuild is needed to walk rho, and this is now **confirmed working
+in anger**: the sibling runner's G-L0a ladder completed on it
+(`~/anatomy_g0/rho/run_rho_ladder.sh`, results in `rho_ladder.jsonl`) with the session-calibrated
+map
 
-- rho is not `k_inner`; it is the measured ratio. Calibrate it from `wall(compute)` against
-  `wall(transport)` at the same shape (both arms exist in the same binary — see §1.4/§1.5), then
-  pick `k_inner` per rho point. The banked anchor is `k_inner = 2048 ⇒ rho ≈ 0.65`
-  (compute floor 1,439 µs vs collective 2,167–2,214 µs), so the ladder start points are
-  **k_inner ∈ {2048, ~3150, ~6300, ~9450}** for rho ∈ {0.65, 1, 2, 3}; confirm each from the
-  measured `compute` wall in the same session rather than trusting the linearity.
-- `k_inner` scales FLOPs **and** operand-load traffic together (one rotating load per iteration),
-  so intensity and duration are **not** independent here. Q4/M2's `bytes_per_mfma` argv is R5's
-  build item and was deliberately **not** added — adding it would perturb the device image that
-  this session just proved byte-identical.
+| rho (nominal) | `k_inner` |
+|---:|---:|
+| 0.65 | 2048 |
+| 1.0 | 3078 |
+| 2.0 | 6029 |
+| 3.0 | 9040 |
+
+**Use exactly these** — they are already calibrated against this node/session, and re-deriving them
+would break comparability with the four-arm ladder that has already run. The argv order the runner
+used is identical to this rig's: `<mode> <tokens> <slab_rows> <iters> <depth> <k_inner> <bps>` at
+`16384 256 7 4 <k> 2`.
+
+Caveat now written into the file header: `k_inner` scales FLOPs **and** operand-load traffic
+together (one rotating load per iteration), so intensity and duration are **not** independent here.
+Q4/M2's `bytes_per_mfma` argv is R5's build item and was deliberately **not** added — adding it
+would perturb the device image this session proved byte-identical.
 
 ### 1.4 Transport-only arm
 
@@ -140,57 +156,58 @@ the pre-instrument sources extracted from git.
 ./ledger_build_gate.sh <base_src_dir> <new_src_dir> [outdir]
 ```
 
-**Run 1 (thread-0-only stamps).**
+### 2.1 `.text` identity — PASS both ways
 
 ```
-f7d7daa973a2cb7ebdc6cd7218e5dc51ef55698a55fee66d58a642f77cb1d03f  base_off        (.text 65,644 B)
-f7d7daa973a2cb7ebdc6cd7218e5dc51ef55698a55fee66d58a642f77cb1d03f  new_off         (.text 65,644 B)
-76f29c7e2f00643a858c3a967637be823a3e24204a0a5d04c353347ccc9c1e22  new_on          (.text 98,408 B)
-2a4e7eddb5ba3aae136f96095e4e177dd6a908c2d7c5a6e19387288818a2f620  new_nocompute   (.text 46,112 B)
+f7d7daa973a2cb7ebdc6cd7218e5dc51ef55698a55fee66d58a642f77cb1d03f  base_off       (.text 65,644 B)
+f7d7daa973a2cb7ebdc6cd7218e5dc51ef55698a55fee66d58a642f77cb1d03f  new_off        (.text 65,644 B)
+43fa5ed000dfdd4a95e1d663e4e9ac84a426a049a3796d60755f9d3e944673cd  new_on         (.text 85,008 B)
+2a4e7eddb5ba3aae136f96095e4e177dd6a908c2d7c5a6e19387288818a2f620  new_nocompute  (.text 46,112 B)
 
 GATE_TEXT_PARITY  PASS   (M25_LEDGER=0 .text == pre-instrument .text, byte for byte)
 GATE_TEXT_DIFFERS PASS   (M25_LEDGER=1 .text != M25_LEDGER=0 .text)
 ```
 
-**Resource tuple, `boundary_kernel<fused, depth=4>`** (identical for every depth specialization;
-`mode_phased` matches `mode_fused`, `mode_compute` is the small one):
+`base_off` is built from the pre-instrument sources at `2578a72a`. The default build of the
+instrumented file is therefore **provably the same device program** — every new arm is host-side
+dispatch, and every device addition is behind `M25_LEDGER`.
 
-| build | TotalSGPR | VGPR | AGPR | scratch B/lane | occ waves/SIMD | SGPR spill | VGPR spill |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| base (pre-instrument) | 105 | 44 | 4 | 0 | 7 | 0 | 0 |
-| `M25_LEDGER=0` | 105 | 44 | 4 | 0 | 7 | 0 | 0 |
-| `M25_LEDGER=1`, thread-0 stamps | 105 | **77** | 4 | **0** | **5** | **0** | **0** |
-| `M25_LEDGER=1`, CTA-uniform stamps (variant B) | **106** | 51 | 4 | 0 | 7 | **4** | 0 |
+### 2.2 Resource receipt — zero spills, zero scratch, unchanged occupancy
 
-**Chosen: the CTA-uniform variant with the entry/exit stamps demoted to their own degenerate
-events** (see §2.1 for the final numbers). Reading of the trade:
+Depth-4 specialization shown; every other depth specialization is identical.
 
-- The **flag-OFF build is byte-identical** — that is the load-bearing half and it holds in every
-  variant.
-- Thread-0-only stamps cost **+33 VGPRs and zero spills**. The reported occupancy drop 7 → 5
-  waves/SIMD is *achievable* occupancy, not achieved: the kernel is
-  `__launch_bounds__(256, 1)` launched as 256 blocks on 256 CUs, i.e. 1 block/CU = 1 wave/SIMD, so
-  a budget of 5 is still ~5× more headroom than the launch uses. It does not bind.
-- Making the stamps CTA-uniform (all threads read the clock, only thread 0 writes the 24 B record,
-  so the cursor stays in SGPRs) cuts the VGPR cost to +7 and restores the reported occupancy, but
-  pushes the already-saturated scalar file (105 of the ~102 addressable + VCC/FLAT_SCRATCH) into
-  **4 SGPR spills at ScratchSize 0** — i.e. spilled to VGPR lanes via `v_writelane`/`v_readlane`,
-  no memory traffic and no scratch allocation. Demoting the long-lived entry stamp to its own event
-  frees one live pair and was applied to claw that back.
+| kernel | build | TotalSGPR | VGPR | AGPR | scratch B/lane | occ waves/SIMD | SGPR spill | VGPR spill |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| `<compute,4>` | base / `LEDGER=0` | 34 | 16 | 4 | 0 | 8 | 0 | 0 |
+| `<compute,4>` | `LEDGER=1` | 49 | 20 | 4 | **0** | **8** | **0** | **0** |
+| `<phased,4>` | base / `LEDGER=0` | 105 | 44 | 4 | 0 | 7 | 0 | 0 |
+| `<phased,4>` | `LEDGER=1` | 106 | 50 | 4 | **0** | **7** | **0** | **0** |
+| `<fused,4>` | base / `LEDGER=0` | 105 | 44 | 4 | 0 | 7 | 0 | 0 |
+| `<fused,4>` | `LEDGER=1` | 106 | 50 | 4 | **0** | **7** | **0** | **0** |
 
-**Neither variant allocates scratch, and neither spills a VGPR.** The remaining SGPR-lane spill (if
-any survives in §2.1) is the honest residual and is named here rather than hidden.
+**Delta: +1 SGPR, +6 VGPR, +0 AGPR, +0 scratch, +0 spills, occupancy unchanged.**
 
-### 2.1 Final resource receipt
+Getting to zero spills took three structural passes, and the failures are worth recording because
+they are the reusable part:
 
-*(filled from `gate_out3` — see the run log referenced in the commit; if the numbers below read
-`PENDING` the gate did not finish before the session ended and **the first node action next session
-is to re-run `ledger_build_gate.sh`**, which takes ~3 minutes of CPU and no GPU.)*
+1. **Thread-0-only stamps** (the obvious shape) — 0 spills but **+33 VGPRs**, and the compiler's
+   reported occupancy fell 7 → 5 waves/SIMD. Cause: values produced inside `if (threadIdx.x == 0)`
+   are divergent, so the whole cursor and every live timestamp land in *vector* registers.
+2. **CTA-uniform stamps** — every thread reads the clock (the value is uniform, so it lands in
+   SGPRs) and only the 24 B ring write is predicated on thread 0. VGPR cost fell to +7 and
+   occupancy came back, but the scalar file is *already saturated* at 105 SGPRs before the
+   instrument, so it bought **4 SGPR spills**. Demoting the long-lived entry stamp to its own
+   degenerate event halved that to 2; slimming the cursor to two words (compile-time capacity,
+   overflow by saturation instead of a second counter) did **not** clear the last 2.
+3. **Dropping the four whole-loop brackets** — cleared it. Each one held a uniform `u64` pair live
+   across a large region; four of them were the last 2 spills. The information was redundant: a
+   loop's envelope is `first(t0)..last(t1)` over its own per-iteration events, which the host
+   already reports.
 
-| build | TotalSGPR | VGPR | scratch | occ | SGPR spill | VGPR spill |
-|---|---:|---:|---:|---:|---:|---:|
-| base / `M25_LEDGER=0` | 105 | 44 | 0 | 7 | 0 | 0 |
-| `M25_LEDGER=1` | see gate_out3 | | 0 expected | | | |
+The transferable lesson for R2c (the DP-body ledger port): on a saturated occupancy-1 kernel the
+binding cost of a phase ledger is **not** the timestamp reads, it is the *liveness* of the bracket
+variables. Bracket leaves, never whole regions; make the stamps uniform so they land in SGPRs; and
+count events by saturation rather than with a second counter.
 
 ---
 
@@ -198,13 +215,14 @@ is to re-run `ledger_build_gate.sh`**, which takes ~3 minutes of CPU and no GPU.
 
 1. **Wall parity** — the plan's rule is *instrumented-vs-uninstrumented wall parity within the
    noise band, else the arm's spans are void*. This is a runtime check and was not run. It is the
-   **first** thing next session must do (§4, step 0). The t2v6 precedent says the ledger is
-   cost-free; the +VGPR/+SGPR-lane-spill deltas above are the reason to prove it rather than
-   assume it, and LAW-32 (a megakernel made slow purely by the register allocator) is exactly the
-   failure mode being guarded against.
-2. **That the rings never overflow at the shipped shape.** `kLedgerCap = 256` events/CTA/slot was
-   sized against the worst case in the G-L0 matrix (~50 events at `slab_rows=256, bps=2`), but
-   overflow is only *observed*, not proven. `LEDGER_OVERFLOW` fires loudly if it happens.
+   **first** thing next session must do (§4, step 0). The receipts above are as clean as a compile
+   can make them (+1 SGPR, +6 VGPR, zero spills, zero scratch, unchanged occupancy), which is a
+   *reason to expect* parity, not evidence of it — LAW-32 (a megakernel made slow purely by the
+   register allocator) is precisely the failure that resource tuples alone did not predict.
+2. **That the rings never overflow at the shipped shape.** `cd::kLedgerCap = 256` events/CTA/slot
+   was sized against the worst case in the G-L0 matrix (~50 events at `slab_rows=256, bps=2`), but
+   overflow is only *observed*, not proven. A CTA whose `count[]` comes back equal to the cap
+   filled its ring; `LEDGER_OVERFLOW` fires loudly and says the spans are lower bounds.
 3. **That the clock really is 100 MHz on this part** — the `LEDGER_CLOCK` line prints the device's
    own `hipDeviceAttributeWallClockRate` for comparison; nobody has read that line yet.
 4. **Correctness of the new arms end to end** (they reuse the verified CDAR path and the existing
@@ -245,34 +263,54 @@ Pass bar: the ledger build's median wall is inside the rig's own band (which fal
 repeats below at no extra cost). If it is not, **the ledger arm's spans are reported as bounds and
 the perturbation is published as a finding** (kill criterion §6 of the plan).
 
-**Step 1 — G-L0a/G-L0b, the rho × arm matrix, K=3, ledger on.** argv order is
-`<mode> <tokens> <slab_rows> <iters> <depth> <k_inner> <bps>`.
+**Step 1 — G-L0b, the rho × arm matrix, K=3, ledger on.**
+
+*Already done, do not repeat:* the sibling runner completed the **four-arm** G-L0a ladder
+(`compute`, `phased`, `fused`, `rccl` × rho ∈ {0.65, 1, 2, 3} × K=3) —
+`~/anatomy_g0/rho/{run_rho_ladder.sh, rho_ladder.jsonl}`. What is missing is exactly what this
+build adds: the ledger-on repeat of those cells, plus the four new arms.
+
+Reuse the runner's harness verbatim (it already emits the `runs.jsonl` schema, timestamps each
+cell, and classifies `PASS`/`FAIL`/`nooutput`); change only `BIN` to the ledger binary and the arm
+list. argv order is identical: `<mode> <tokens> <slab_rows> <iters> <depth> <k_inner> <bps>`.
 
 ```bash
-# calibrate rho FIRST (compute floor vs transport wall at the same shape)
-./m25_boundary_bench_ledger compute   16384 256 7 4 2048 2
-./m25_boundary_bench_ledger transport 16384 256 7 4 0    2
-# -> rho(k_inner=2048) = wall(compute)/wall(transport); set the ladder from THIS ratio.
-
-for k in 1 2 3; do                     # K=3 repeats
-  for KI in 2048 3150 6300 9450; do    # rho ~ 0.65, 1, 2, 3 (re-derive from the calibration)
-    for ARM in compute phased fused rccl transport; do
+# rho-DEPENDENT cells — ledger on, same k_inner map as the completed ladder
+for k in 1 2 3; do                                 # K=3 repeats
+  for pair in 0.65:2048 1.0:3078 2.0:6029 3.0:9040; do
+    KI=${pair##*:}
+    for ARM in compute phased fused rccl; do
       ./m25_boundary_bench_ledger $ARM 16384 256 7 4 $KI 2
     done
   done
-  ./m25_boundary_bench_ledger compute0 16384 256 7 4 0 2   # residue control, rho-independent
-  ./m25_boundary_bench_ledger stdrccl  16384 256 7 4 0 2   # rho-independent
-  ./m25_boundary_bench_ledger beta     16384 256 8 4 0 2   # direct beta, alternating arms
+done
+
+# rho-INDEPENDENT cells — these arms force k_inner to 0, so ONE cell per repeat
+for k in 1 2 3; do
+  ./m25_boundary_bench_ledger transport       16384 256 7 4 0 2   # direct(ours)
+  ./m25_boundary_bench_ledger transport_fused 16384 256 7 4 0 2
+  ./m25_boundary_bench_ledger compute0        16384 256 7 4 0 2   # residue control
+  ./m25_boundary_bench_ledger stdrccl         16384 256 7 4 0 2   # direct(rccl)
+  ./m25_boundary_bench_ledger beta            16384 256 8 4 0 2   # direct beta
 done
 ```
 
 Notes that matter for the manifest:
-- `transport`, `stdrccl`, `compute0` and `beta` are **rho-independent** — run them once per repeat,
-  not once per rho cell (they ignore `k_inner`).
+- `transport`, `transport_fused`, `compute0`, `stdrccl` and `beta` **ignore `k_inner`** — one cell
+  per repeat, not one per rho point. Running them per-rho only burns node time.
 - `beta` wants an **even** `iters` so both arms get equal n.
 - Every run appends to `runs.jsonl` before the next starts; the first invocation of the session is
   discarded; clocks/temps logged; a hang is a manifest outcome value, not a dropped point.
-- Keep `timestamps`/ledger state **frozen** across any ladder that locates a knee.
+- Keep the ledger flag **frozen** across any ladder that locates a knee (the flag is a build, so
+  this means: do not mix ledger and non-ledger cells inside one comparison).
+
+**What the matrix then yields** (the reason each arm is there):
+- `I_co(phased) = phased − compute − transport`, and the same for `fused` — **absolute**, not the
+  ΔI_co that `h_ledger − h_wall` alone gives (review B5).
+- `beta = transport / stdrccl` from two direct measurements in one binary (review B4).
+- `h_ledger` per rho from `LEDGER_RANKMAX_OVERLAP`, to be read against
+  `h* = 1 − (1 − I_co/T_vendor)/beta` at the **now directly measured** beta — the G-L3 readmission
+  test for fused CDAR.
 
 **Step 2 — Q9's env sweep on the standalone arms** (R9; same binary, no rebuild):
 

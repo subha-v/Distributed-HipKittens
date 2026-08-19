@@ -417,20 +417,27 @@ inline constexpr double kLedgerTickUs = 0.01;
 /// the rest bracket one iteration's phase.
 enum ledger_code : std::uint32_t {
     lg_kernel      = 1u,   ///< CTA entry stamp (t0 == t1); origin of the slot
-    lg_prod_loop   = 2u,   ///< whole producer loop (aux = producer_block)
+    // NOTE: the four *_loop codes are RESERVED, not emitted. Bracketing whole
+    // loops meant holding four uniform u64 pairs live across large regions of
+    // a kernel whose scalar file is already saturated (105 SGPRs before the
+    // instrument), which cost SGPR spills for information the host can
+    // reconstruct exactly: a loop's envelope is first(t0)..last(t1) over that
+    // loop's own per-iteration phase events on the same CTA, which the host
+    // already computes. Zero-spill instrument > redundant event.
+    lg_prod_loop   = 2u,   ///< RESERVED (derive: first/last of mfma1+commit)
     lg_mfma1       = 3u,   ///< one item's pre-boundary MFMA burst (aux = rows)
     lg_commit      = 4u,   ///< ERS remote store/atomic issue (aux = bytes)
     lg_drain       = 5u,   ///< vmcnt drain + local arrive (aux = slab)
-    lg_duty_loop   = 6u,   ///< whole owner-duty loop
+    lg_duty_loop   = 6u,   ///< RESERVED (derive: first/last of gather_wait..certify)
     lg_gather_wait = 7u,   ///< owner gather poll (bracketed OUTSIDE the poll)
     lg_reduce      = 8u,   ///< owner tower reduce (aux = slab)
     lg_certify     = 9u,   ///< counted arrival + certificate multicast
-    lg_cons_loop   = 10u,  ///< whole consume loop
+    lg_cons_loop   = 10u,  ///< RESERVED (derive: first/last of mag_wait..mfma2)
     lg_mag_wait    = 11u,  ///< consumer certificate wait (OUTSIDE the poll)
     lg_pull        = 12u,  ///< mag_pull remote read (aux = bytes)
     lg_verify      = 13u,  ///< verification sample
     lg_mfma2       = 14u,  ///< post-boundary MFMA burst (aux = rows)
-    lg_tx_loop     = 15u,  ///< whole exposed-transport loop (phased arm)
+    lg_tx_loop     = 15u,  ///< RESERVED (derive: first/last of commit+drain)
     lg_kernel_end  = 16u,  ///< CTA exit stamp (t0 == t1)
     lg_code_count  = 17u
 };
@@ -444,19 +451,25 @@ struct ledger_event {
     std::uint32_t aux;
 };
 
-/// Device-side view of one LAUNCH SLOT's ring: `cap` events per CTA.
+/// Ring capacity per CTA per launch slot. Compile-time, NOT a runtime field:
+/// on an occupancy-1 kernel whose scalar file is already saturated (105 of the
+/// addressable SGPRs before the instrument), every long-lived uniform word the
+/// cursor carries is a spill. Worst case in the shipped G-L0 matrix is ~50
+/// events per CTA, so this is an order of magnitude of headroom.
+inline constexpr unsigned int kLedgerCap = 256u;
+
+/// Device-side view of one LAUNCH SLOT's ring.
 struct ledger_view {
     ledger_event* ev;
-    std::uint32_t* count;   ///< [blocks]; low 16 = written, high 16 = dropped
-    unsigned int cap;
+    std::uint32_t* count;   ///< [blocks]; == kLedgerCap means the ring FILLED
 };
 
-/// Per-CTA cursor, register-resident, owned by threadIdx.x == 0.
+/// Per-CTA cursor, register-resident, CTA-uniform (see ledger_mark). Two live
+/// words only — a pointer and a count. Overflow is signalled by saturation
+/// (count == kLedgerCap) rather than by a second counter.
 struct ledger_cursor {
     ledger_event* ring;
-    unsigned int cap;
     unsigned int n;
-    unsigned int dropped;
 };
 
 /// The 100 MHz realtime read. `s_memrealtime` is an SMEM instruction: its
@@ -477,10 +490,8 @@ KITTENS_DISTRIBUTED_DEVICE_INLINE std::uint64_t realtime_now() {
 KITTENS_DISTRIBUTED_DEVICE_INLINE ledger_cursor ledger_open(
         const ledger_view& v, unsigned int block) {
     ledger_cursor c;
-    c.ring = v.ev + static_cast<std::size_t>(block) * v.cap;
-    c.cap = v.cap;
+    c.ring = v.ev + static_cast<std::size_t>(block) * kLedgerCap;
     c.n = 0u;
-    c.dropped = 0u;
     return c;
 }
 
@@ -495,7 +506,7 @@ KITTENS_DISTRIBUTED_DEVICE_INLINE ledger_cursor ledger_open(
 KITTENS_DISTRIBUTED_DEVICE_INLINE void ledger_mark(
         ledger_cursor& c, std::uint32_t code, std::uint64_t t0,
         std::uint64_t t1, std::uint32_t aux, bool store) {
-    if (c.n < c.cap) {
+    if (c.n < kLedgerCap) {
         if (store) {
             ledger_event e;
             e.t0 = t0;
@@ -505,14 +516,12 @@ KITTENS_DISTRIBUTED_DEVICE_INLINE void ledger_mark(
             c.ring[c.n] = e;
         }
         ++c.n;
-    } else {
-        ++c.dropped;
     }
 }
 
 KITTENS_DISTRIBUTED_DEVICE_INLINE void ledger_close(
         const ledger_view& v, unsigned int block, const ledger_cursor& c) {
-    v.count[block] = (c.n & 0xffffu) | (c.dropped << 16);
+    v.count[block] = c.n;
 }
 
 #endif // M25_LEDGER

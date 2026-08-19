@@ -93,11 +93,9 @@
 #endif
 
 #if M25_LEDGER
-// Ring capacity per CTA per launch slot. Worst case in the shipped matrix is
-// ~5 producer items x 3 events + duty 2 x 4 + consume 1 x 4 + 4 loop/kernel
-// spans; 128 leaves an order of magnitude of headroom and any overflow is
-// COUNTED (high 16 bits of count[]) and fails the run loudly.
-static constexpr unsigned int kLedgerCap = 256u;
+// Ring capacity is cd::kLedgerCap (m25_cdar.cuh) — compile-time so the device
+// cursor stays two words wide. A CTA whose count[] comes back EQUAL to the cap
+// filled its ring: its spans are lower bounds and the run says so loudly.
 // Launch slots: the compute and rccl arms cross the boundary in TWO launches
 // (stage 1, stage 2). Slots keep their timestamps apart — LAW-63(e) forbids
 // subtracting stamps written by different launches.
@@ -263,7 +261,6 @@ __global__ __launch_bounds__(kThreads, 1) void boundary_kernel(
 
     if (stage == 2u) {
         // burst2 only: the post-boundary GEMM over already-reduced staging.
-        M25_LG_T0(lg_s2);
         for (unsigned int slab = block; slab < nslabs; slab += kBlocks) {
             const std::byte* dst =
                 staging + static_cast<std::size_t>(slab) * g.slab_bytes();
@@ -271,7 +268,6 @@ __global__ __launch_bounds__(kThreads, 1) void boundary_kernel(
             acc_sink += mfma_burst(dst, g.rows_in(slab), k_inner, threadIdx.x);
             M25_LG_MARK(lg_m2, cd::lg_mfma2, g.rows_in(slab));
         }
-        M25_LG_MARK(lg_s2, cd::lg_cons_loop, 0u);
         if (threadIdx.x == 0u) atomicAdd(&report->acc_token, acc_sink);
         M25_LG_EXIT();
         return;
@@ -290,7 +286,6 @@ __global__ __launch_bounds__(kThreads, 1) void boundary_kernel(
     const unsigned int pfirst =
         (Mode == mode_fused && stage != 1u) ? (block - kDutyBlocks) : block;
     const unsigned int items = nslabs * bps;
-    M25_LG_T0(lg_prod);
     for (unsigned int k = pfirst; producer_block && k < items; k += pstride) {
         const unsigned int slab = (base + k / bps) % nslabs;
         const unsigned int fragment = k % bps;
@@ -378,11 +373,9 @@ __global__ __launch_bounds__(kThreads, 1) void boundary_kernel(
             M25_LG_MARK(lg_dt, cd::lg_drain, prev_slab);
         }
     }
-    M25_LG_MARK(lg_prod, cd::lg_prod_loop, producer_block ? 1u : 0u);
 
     if constexpr (Mode == mode_phased) {
         // The unfused control: identical transport, exposed as a phase.
-        M25_LG_T0(lg_tx);
         for (unsigned int k = block; k < items; k += kBlocks) {
             const unsigned int slab = (base + k / bps) % nslabs;
             const unsigned int fragment = k % bps;
@@ -413,7 +406,6 @@ __global__ __launch_bounds__(kThreads, 1) void boundary_kernel(
             __syncthreads();
             M25_LG_MARK(lg_pa, cd::lg_drain, slab);
         }
-        M25_LG_MARK(lg_tx, cd::lg_tx_loop, 0u);
     }
 
     if (stage == 1u) {
@@ -428,7 +420,6 @@ __global__ __launch_bounds__(kThreads, 1) void boundary_kernel(
             const unsigned int owned =
                 (nslabs > rank ? (nslabs - 1u - rank) / kWorld + 1u : 0u);
             const unsigned int duty_items = owned * kReduceSegs;
-            M25_LG_T0(lg_duty);
             for (unsigned int k = block; k < duty_items; k += kDutyBlocks) {
                 const unsigned int slab = rank + (k / kReduceSegs) * kWorld;
                 const unsigned int seg = k % kReduceSegs;
@@ -494,10 +485,8 @@ __global__ __launch_bounds__(kThreads, 1) void boundary_kernel(
                 }
                 M25_LG_MARK(lg_ct, cd::lg_certify, slab);
             }
-            M25_LG_MARK(lg_duty, cd::lg_duty_loop, 0u);
         }
         // ---- consume + verify
-        M25_LG_T0(lg_cons);
         for (unsigned int slab = block; slab < nslabs; slab += kBlocks) {
             kd::wait_result64 w;
             // LAW-63: bracket OUTSIDE the poll body.
@@ -539,7 +528,6 @@ __global__ __launch_bounds__(kThreads, 1) void boundary_kernel(
             acc_sink += mfma_burst(dst, g.rows_in(slab), k_inner, threadIdx.x);
             M25_LG_MARK(lg_m2b, cd::lg_mfma2, g.rows_in(slab));
         }
-        M25_LG_MARK(lg_cons, cd::lg_cons_loop, 0u);
     }
 
     if (threadIdx.x == 0u) {
@@ -660,7 +648,7 @@ struct rank_slot {
     bool present = false;
     std::uint64_t origin = 0;       ///< min kernel-entry stamp on THIS rank
     std::uint64_t span = 0;         ///< max kernel-exit - origin (ticks)
-    unsigned int dropped = 0;
+    unsigned int filled = 0;   ///< CTAs whose ring saturated
     unsigned int nblocks = 0;
     std::uint64_t n[cd::lg_code_count] = {};
     std::uint64_t sum[cd::lg_code_count] = {};   ///< CTA-ticks (not wall)
@@ -684,8 +672,8 @@ static rank_slot reduce_slot(const std::vector<cd::ledger_event>& ev,
     bool have = false;
     std::uint64_t lo = 0, hi = 0;
     for (unsigned int b = 0; b < kBlocks; ++b) {
-        const unsigned int n = cnt[b] & 0xffffu;
-        rs.dropped += (cnt[b] >> 16);
+        const unsigned int n = cnt[b] < cap ? cnt[b] : cap;
+        if (cnt[b] >= cap) ++rs.filled;   // ring saturated => spans are bounds
         if (n) ++rs.nblocks;
         for (unsigned int i = 0; i < n; ++i) {
             const cd::ledger_event& e = ev[static_cast<std::size_t>(b) * cap + i];
@@ -883,7 +871,7 @@ int main(int argc, char** argv) {
     // ring only ever describes the iteration it was armed for (LAW-63c) and
     // no stamp is ever compared across launches (LAW-63e).
     const std::size_t lg_ev_n =
-        static_cast<std::size_t>(kLedgerLaunches) * kBlocks * kLedgerCap;
+        static_cast<std::size_t>(kLedgerLaunches) * kBlocks * cd::kLedgerCap;
     const std::size_t lg_cnt_n =
         static_cast<std::size_t>(kLedgerLaunches) * kBlocks;
     cd::ledger_event* lg_ev[kWorld];
@@ -934,9 +922,9 @@ int main(int argc, char** argv) {
 #if M25_LEDGER
         cd::ledger_view lv0[kWorld], lv1[kWorld];
         for (unsigned int r = 0; r < kWorld; ++r) {
-            lv0[r] = {lg_ev[r], lg_cnt[r], kLedgerCap};
-            lv1[r] = {lg_ev[r] + static_cast<std::size_t>(kBlocks) * kLedgerCap,
-                      lg_cnt[r] + kBlocks, kLedgerCap};
+            lv0[r] = {lg_ev[r], lg_cnt[r]};
+            lv1[r] = {lg_ev[r] + static_cast<std::size_t>(kBlocks) * cd::kLedgerCap,
+                      lg_cnt[r] + kBlocks};
         }
 #endif
         const auto t0 = std::chrono::steady_clock::now();
@@ -1100,7 +1088,7 @@ int main(int argc, char** argv) {
         const int it = med_it[a];
         for (unsigned int sl = 0; sl < kLedgerLaunches; ++sl) {
             const std::size_t evoff =
-                static_cast<std::size_t>(sl) * kBlocks * kLedgerCap;
+                static_cast<std::size_t>(sl) * kBlocks * cd::kLedgerCap;
             const std::size_t cnoff = static_cast<std::size_t>(sl) * kBlocks;
             std::vector<lgh::rank_slot> rs(kWorld);
             bool any = false;
@@ -1108,20 +1096,20 @@ int main(int argc, char** argv) {
                 std::vector<cd::ledger_event> ev(
                     snap_ev[it][r].begin() + evoff,
                     snap_ev[it][r].begin() + evoff +
-                        static_cast<std::size_t>(kBlocks) * kLedgerCap);
+                        static_cast<std::size_t>(kBlocks) * cd::kLedgerCap);
                 std::vector<std::uint32_t> cn(
                     snap_cnt[it][r].begin() + cnoff,
                     snap_cnt[it][r].begin() + cnoff + kBlocks);
-                rs[r] = lgh::reduce_slot(ev, cn, kLedgerCap);
+                rs[r] = lgh::reduce_slot(ev, cn, cd::kLedgerCap);
                 any = any || rs[r].present;
             }
             if (!any) continue;
             for (unsigned int r = 0; r < kWorld; ++r) {
                 if (!rs[r].present) continue;
                 std::printf("LEDGER arm=%s launch=%u iter=%d rank=%u "
-                            "span_us=%.1f blocks=%u dropped=%u\n",
+                            "span_us=%.1f blocks=%u rings_filled=%u\n",
                             arm_name[a].c_str(), sl, it, r, lgh::us(rs[r].span),
-                            rs[r].nblocks, rs[r].dropped);
+                            rs[r].nblocks, rs[r].filled);
                 for (unsigned int c = 1; c < cd::lg_code_count; ++c) {
                     if (!rs[r].n[c]) continue;
                     std::printf("LEDGER_PHASE arm=%s launch=%u rank=%u "
@@ -1158,7 +1146,7 @@ int main(int argc, char** argv) {
             unsigned int drop = 0;
             for (unsigned int r = 0; r < kWorld; ++r) {
                 if (!rs[r].present) continue;
-                drop += rs[r].dropped;
+                drop += rs[r].filled;
                 if (rs[r].span > mx.span) mx.span = rs[r].span;
                 for (unsigned int c = 0; c < cd::lg_code_count; ++c) {
                     if (rs[r].sum[c] > mx.sum[c]) mx.sum[c] = rs[r].sum[c];
@@ -1170,7 +1158,7 @@ int main(int argc, char** argv) {
                 if (rs[r].u_overlap > mx.u_overlap) mx.u_overlap = rs[r].u_overlap;
             }
             std::printf("LEDGER_RANKMAX arm=%s launch=%u iter=%d span_us=%.1f "
-                        "dropped_total=%u\n", arm_name[a].c_str(), sl, it,
+                        "rings_filled_total=%u\n", arm_name[a].c_str(), sl, it,
                         lgh::us(mx.span), drop);
             for (unsigned int c = 1; c < cd::lg_code_count; ++c) {
                 if (!mx.uni[c] && !mx.sum[c]) continue;
@@ -1188,8 +1176,8 @@ int main(int argc, char** argv) {
                         mut > 0.0 ? lgh::us(mx.u_overlap) / mut : 0.0,
                         mx.span ? mut / lgh::us(mx.span) : 0.0);
             if (drop) {
-                std::printf("LEDGER_OVERFLOW arm=%s launch=%u dropped=%u — "
-                            "spans are LOWER BOUNDS; raise kLedgerCap and "
+                std::printf("LEDGER_OVERFLOW arm=%s launch=%u rings_filled=%u — "
+                            "spans are LOWER BOUNDS; raise cd::kLedgerCap and "
                             "re-run before quoting\n",
                             arm_name[a].c_str(), sl, drop);
             }
