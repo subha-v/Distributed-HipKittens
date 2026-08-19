@@ -15,6 +15,7 @@ and the portable contracts those mechanisms imply.
 | [`03_ABSTRACTIONS.md`](03_ABSTRACTIONS.md) | the data-movement contracts (Iris/IrisX-aligned, hardware-agnostic) — each mapped to the kernel variants that instantiate it and the workload property that governs its parameters |
 | [`04_EVIDENCE_INDEX.md`](04_EVIDENCE_INDEX.md) | pointer table into the primary evidence: design docs, results ledgers, banked laws |
 | [`05_AMD_MASTER_IMPORTS.md`](05_AMD_MASTER_IMPORTS.md) | what lives in `~/repos/amd-master` (abstractions, findings, vLLM integrations) and where |
+| [`06_DRAFT8_RESULTS.md`](06_DRAFT8_RESULTS.md) | slide-by-slide ledger of every number presented in draft8 (incl. the +8.40% C=512 e2e headline), its evidence home, and its current standing |
 
 ## The primary design documents (already in this branch)
 
