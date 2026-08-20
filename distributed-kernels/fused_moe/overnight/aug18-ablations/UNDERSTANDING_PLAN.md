@@ -317,3 +317,16 @@ G-L0c profiled production step remains the ground-truth target; routing is unifo
 (work-equivalent), skewed routing untested. The n2 phase kernels are the PROVEN serving pair
 (they run attested in production serving via the packet install), so the correctness gap is in
 MY driver's data prep, not the kernels.
+
+**2026-08-19 — DECODE TRACE ANALYZED (new evidence; decode was scoped out, now assessed):**
+`results/DECODE_TRACE_ANALYSIS.md`. R1 TP8 graph-mode decode, 792 steps at bs∈{1,4,16}.
+At bs=1: TPOT 10.34 ms, **62% of the token is all-reduce kernel time** (122 × 52 µs for 14 KB
+payloads) — and the same AR kernel runs 13.7 µs at bs=4, so most of it is EP arrival-skew
+absorbed in the AR + rendezvous latency, not transport. ~1,400 kernels/step at ~7 µs avg; 305
+fp8-quant launches/step ≈ 1.4 ms of foldable overhead; MoE GEMMs are weight-streaming slivers
+at the HBM floor. **Verdict: an M15 port attacks the wrong bottleneck at decode** — the decode
+play is Region-4's different base (persistent layer kernel + in-kernel latency AR + epilogue-
+folded quant), ceiling ≈1.8× TPOT at bs=1. Decisive next: θ-F13 (8-rank AR latency at
+14/57/229 KB — aiter vs RCCL vs bare flag-AR), production AR-config sweep at bs=1 (fair
+baseline), rank-skew measurement on a decode shape. All banked transport laws are 235 MB
+bandwidth-regime and do NOT transfer to this regime.
